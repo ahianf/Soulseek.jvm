@@ -6,7 +6,7 @@
 
   <groupId>dev.slsk</groupId>
   <artifactId>slsk-jvm</artifactId>
-  <version>0.0.3</version>
+  <version>0.0.4</version>
   <name>Soulseek.jvm</name>
   <description>A Java library for the Soulseek network.</description>
 
@@ -157,6 +157,9 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-javadoc-plugin</artifactId>
         <version>${maven.javadoc.version}</version>
+        <configuration>
+          <doclint>all,-missing</doclint>
+        </configuration>
         <executions>
           <execution>
             <id>attach-javadocs</id>
