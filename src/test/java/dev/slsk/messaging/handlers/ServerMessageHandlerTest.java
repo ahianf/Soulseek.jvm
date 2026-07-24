@@ -24,8 +24,8 @@ import dev.slsk.UserPresence;
 import dev.slsk.UserStatistics;
 import dev.slsk.UserStatus;
 import dev.slsk.common.Constants;
-import dev.slsk.common.IWaiter;
 import dev.slsk.common.WaitKey;
+import dev.slsk.common.Waiter;
 import dev.slsk.diagnostics.IDiagnosticFactory;
 import dev.slsk.eventargs.PrivateMessageReceivedEventArgs;
 import dev.slsk.eventargs.PrivilegeNotificationReceivedEventArgs;
@@ -743,7 +743,7 @@ class ServerMessageHandlerTest {
 
     private static final class FakeClient implements ServerMessageHandlerClient {
         private final SoulseekClientOptions options;
-        private final IWaiter waiter;
+        private final Waiter waiter;
         private final PeerConnectionManager peer;
         private final DistributedConnectionManager distributed;
         private final ISearchResponder responder;
@@ -755,7 +755,7 @@ class ServerMessageHandlerTest {
 
         private FakeClient(
                 SoulseekClientOptions options,
-                IWaiter waiter,
+                Waiter waiter,
                 PeerConnectionManager peer,
                 DistributedConnectionManager distributed,
                 ISearchResponder responder) {
@@ -777,7 +777,7 @@ class ServerMessageHandlerTest {
         }
 
         @Override
-        public IWaiter getWaiter() {
+        public Waiter getWaiter() {
             return waiter;
         }
 
@@ -854,7 +854,7 @@ class ServerMessageHandlerTest {
         }
     }
 
-    private static final class RecordingWaiter implements IWaiter {
+    private static final class RecordingWaiter implements Waiter {
         private final Map<WaitKey, Object> completed = new HashMap<>();
         private final Map<WaitKey, Throwable> failures = new HashMap<>();
 

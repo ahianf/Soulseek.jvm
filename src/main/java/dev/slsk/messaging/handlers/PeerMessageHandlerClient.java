@@ -4,7 +4,7 @@
 
 package dev.slsk.messaging.handlers;
 
-import dev.slsk.common.IWaiter;
+import dev.slsk.common.Waiter;
 import dev.slsk.options.SoulseekClientOptions;
 import dev.slsk.search.SearchInternal;
 import dev.slsk.transfer.TransferInternal;
@@ -14,7 +14,7 @@ import java.util.Map;
 public interface PeerMessageHandlerClient {
     SoulseekClientOptions getOptions();
 
-    IWaiter getWaiter();
+    Waiter getWaiter();
 
     Map<Integer, SearchInternal> getSearches();
 

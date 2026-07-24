@@ -16,7 +16,7 @@ import dev.slsk.CacheLookupResult;
 import dev.slsk.ISearchResponseCache;
 import dev.slsk.SearchResponseCacheRecord;
 import dev.slsk.common.Constants;
-import dev.slsk.common.IWaiter;
+import dev.slsk.common.DefaultWaiter;
 import dev.slsk.common.WaitKey;
 import dev.slsk.common.Waiter;
 import dev.slsk.diagnostics.DiagnosticEventArgs;
@@ -190,7 +190,7 @@ class ListenerHandlerTest {
         PeerProbe peer = new PeerProbe();
         DistributedProbe distributed = new DistributedProbe();
         SearchResponderProbe search = new SearchResponderProbe();
-        Waiter waiter = new Waiter();
+        DefaultWaiter waiter = new DefaultWaiter();
         SoulseekClientOptions options = options(cache);
         TestListener listener = new TestListener();
         TestClient client = new TestClient(options, listener, peer.proxy, distributed.proxy, waiter, search.proxy);
@@ -240,7 +240,7 @@ class ListenerHandlerTest {
             PeerProbe peer,
             DistributedProbe distributed,
             SearchResponderProbe searchResponder,
-            Waiter waiter,
+            DefaultWaiter waiter,
             RecordingDiagnostic diagnostic,
             DefaultListenerHandler handler)
             implements AutoCloseable {
@@ -255,7 +255,7 @@ class ListenerHandlerTest {
             Listener listener,
             PeerConnectionManager peerConnectionManager,
             DistributedConnectionManager distributedConnectionManager,
-            Waiter waiter,
+            DefaultWaiter waiter,
             ISearchResponder searchResponder)
             implements ListenerHandlerClient {
         @Override
@@ -279,7 +279,7 @@ class ListenerHandlerTest {
         }
 
         @Override
-        public IWaiter getWaiter() {
+        public Waiter getWaiter() {
             return waiter;
         }
 

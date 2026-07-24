@@ -24,8 +24,8 @@ import dev.slsk.SearchStates;
 import dev.slsk.TransferDirection;
 import dev.slsk.UserInfo;
 import dev.slsk.common.Constants;
-import dev.slsk.common.IWaiter;
 import dev.slsk.common.WaitKey;
+import dev.slsk.common.Waiter;
 import dev.slsk.diagnostics.IDiagnosticFactory;
 import dev.slsk.eventargs.DownloadDeniedEventArgs;
 import dev.slsk.eventargs.DownloadFailedEventArgs;
@@ -599,11 +599,11 @@ class PeerMessageHandlerTest {
 
     private static final class FakeClient implements PeerMessageHandlerClient {
         private final SoulseekClientOptions options;
-        private final IWaiter waiter;
+        private final Waiter waiter;
         private final Map<Integer, SearchInternal> searches = new HashMap<>();
         private final Map<Integer, TransferInternal> downloads = new HashMap<>();
 
-        private FakeClient(SoulseekClientOptions options, IWaiter waiter) {
+        private FakeClient(SoulseekClientOptions options, Waiter waiter) {
             this.options = options;
             this.waiter = waiter;
         }
@@ -614,7 +614,7 @@ class PeerMessageHandlerTest {
         }
 
         @Override
-        public IWaiter getWaiter() {
+        public Waiter getWaiter() {
             return waiter;
         }
 
@@ -629,7 +629,7 @@ class PeerMessageHandlerTest {
         }
     }
 
-    private static final class RecordingWaiter implements IWaiter {
+    private static final class RecordingWaiter implements Waiter {
         private final Map<WaitKey, Object> completed = new HashMap<>();
         private final Map<WaitKey, Throwable> failures = new HashMap<>();
 

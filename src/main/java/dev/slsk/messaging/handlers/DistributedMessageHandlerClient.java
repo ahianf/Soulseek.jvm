@@ -4,7 +4,7 @@
 
 package dev.slsk.messaging.handlers;
 
-import dev.slsk.common.IWaiter;
+import dev.slsk.common.Waiter;
 import dev.slsk.network.DistributedConnectionManager;
 import dev.slsk.options.SoulseekClientOptions;
 import dev.slsk.search.ISearchResponder;
@@ -17,7 +17,7 @@ public interface DistributedMessageHandlerClient {
 
     int getNextToken();
 
-    IWaiter getWaiter();
+    Waiter getWaiter();
 
     DistributedConnectionManager getDistributedConnectionManager();
 

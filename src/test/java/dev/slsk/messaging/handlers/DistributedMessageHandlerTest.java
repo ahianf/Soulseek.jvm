@@ -12,8 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationToken;
 import dev.slsk.common.Constants;
-import dev.slsk.common.IWaiter;
 import dev.slsk.common.WaitKey;
+import dev.slsk.common.Waiter;
 import dev.slsk.diagnostics.IDiagnosticFactory;
 import dev.slsk.messaging.MessageBuilder;
 import dev.slsk.messaging.MessageCode;
@@ -257,14 +257,14 @@ class DistributedMessageHandlerTest {
 
     private static final class FakeClient implements DistributedMessageHandlerClient {
         private final SoulseekClientOptions options;
-        private final IWaiter waiter;
+        private final Waiter waiter;
         private final DistributedConnectionManager manager;
         private final ISearchResponder responder;
         private final AtomicInteger token = new AtomicInteger(TOKEN);
 
         private FakeClient(
                 SoulseekClientOptions options,
-                IWaiter waiter,
+                Waiter waiter,
                 DistributedConnectionManager manager,
                 ISearchResponder responder) {
             this.options = options;
@@ -289,7 +289,7 @@ class DistributedMessageHandlerTest {
         }
 
         @Override
-        public IWaiter getWaiter() {
+        public Waiter getWaiter() {
             return waiter;
         }
 
@@ -357,7 +357,7 @@ class DistributedMessageHandlerTest {
         }
     }
 
-    private static final class FakeWaiter implements IWaiter {
+    private static final class FakeWaiter implements Waiter {
         private final Map<WaitKey, CompletableFuture<?>> waits = new HashMap<>();
 
         @Override

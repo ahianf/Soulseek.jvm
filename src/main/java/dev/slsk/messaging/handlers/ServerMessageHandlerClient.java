@@ -5,7 +5,7 @@
 package dev.slsk.messaging.handlers;
 
 import dev.slsk.CancellationToken;
-import dev.slsk.common.IWaiter;
+import dev.slsk.common.Waiter;
 import dev.slsk.network.DistributedConnectionManager;
 import dev.slsk.network.PeerConnectionManager;
 import dev.slsk.options.SoulseekClientOptions;
@@ -21,7 +21,7 @@ public interface ServerMessageHandlerClient {
 
     String getUsername();
 
-    IWaiter getWaiter();
+    Waiter getWaiter();
 
     Map<Integer, SearchInternal> getSearches();
 

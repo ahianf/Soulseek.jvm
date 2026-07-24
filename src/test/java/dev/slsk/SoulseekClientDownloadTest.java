@@ -12,8 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.common.IWaiter;
 import dev.slsk.common.WaitKey;
+import dev.slsk.common.Waiter;
 import dev.slsk.diagnostics.IDiagnosticFactory;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.DuplicateTokenException;
@@ -695,8 +695,8 @@ class SoulseekClientDownloadTest {
         private CompletableFuture<TransferRequest> startRequest = new CompletableFuture<>();
         private final List<WaitKey> cancelled = new ArrayList<>();
         private RuntimeException cancelFailure;
-        private final IWaiter proxy = (IWaiter)
-                Proxy.newProxyInstance(IWaiter.class.getClassLoader(), new Class<?>[] {IWaiter.class}, this::invoke);
+        private final Waiter proxy = (Waiter)
+                Proxy.newProxyInstance(Waiter.class.getClassLoader(), new Class<?>[] {Waiter.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("waitAsync") && arguments != null) {

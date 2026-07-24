@@ -11,9 +11,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.common.IWaiter;
 import dev.slsk.common.TokenBucket;
 import dev.slsk.common.TokenFactory;
+import dev.slsk.common.Waiter;
 import dev.slsk.diagnostics.DiagnosticEventArgs;
 import dev.slsk.diagnostics.DiagnosticEventListener;
 import dev.slsk.eventargs.DistributedChildEventArgs;
@@ -535,7 +535,7 @@ class SoulseekClientTest {
         }
     }
 
-    private static final class RecordingWaiter implements IWaiter {
+    private static final class RecordingWaiter implements Waiter {
         @Override
         public int getDefaultTimeout() {
             return 5_000;

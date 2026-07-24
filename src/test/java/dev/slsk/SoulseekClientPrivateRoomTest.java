@@ -11,8 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import dev.slsk.common.IWaiter;
 import dev.slsk.common.WaitKey;
+import dev.slsk.common.Waiter;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.messages.OutgoingMessage;
@@ -287,8 +287,8 @@ class SoulseekClientPrivateRoomTest {
         private CancellationToken token;
         private CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
         private RuntimeException synchronousFailure;
-        private final IWaiter proxy = (IWaiter)
-                Proxy.newProxyInstance(IWaiter.class.getClassLoader(), new Class<?>[] {IWaiter.class}, this::invoke);
+        private final Waiter proxy = (Waiter)
+                Proxy.newProxyInstance(Waiter.class.getClassLoader(), new Class<?>[] {Waiter.class}, this::invoke);
 
         private WaiterProbe(List<String> sequence) {
             this.sequence = sequence;

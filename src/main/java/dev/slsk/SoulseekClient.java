@@ -5,8 +5,8 @@
 package dev.slsk;
 
 import dev.slsk.common.Constants;
+import dev.slsk.common.DefaultWaiter;
 import dev.slsk.common.IOAdapter;
-import dev.slsk.common.IWaiter;
 import dev.slsk.common.TokenBucket;
 import dev.slsk.common.TokenFactory;
 import dev.slsk.common.WaitKey;
@@ -216,7 +216,7 @@ public class SoulseekClient
 
     private volatile SoulseekClientOptions options;
     private final int minorVersion;
-    private final IWaiter waiter;
+    private final Waiter waiter;
     private final TokenFactory tokenFactory;
     private final Semaphore searchSemaphore;
     private final Semaphore stateSemaphore = new Semaphore(1);
@@ -296,7 +296,7 @@ public class SoulseekClient
             Listener listener,
             ListenerHandler listenerHandler,
             ISearchResponder searchResponder,
-            IWaiter waiter,
+            Waiter waiter,
             TokenFactory tokenFactory,
             IDiagnosticFactory diagnosticFactory,
             IOAdapter ioAdapter,
@@ -310,7 +310,7 @@ public class SoulseekClient
         raiseEventsAsynchronously = this.options.isRaiseEventsAsynchronously();
         this.serverConnection = serverConnection;
         this.listener = listener;
-        this.waiter = waiter == null ? new Waiter(this.options.getMessageTimeout()) : waiter;
+        this.waiter = waiter == null ? new DefaultWaiter(this.options.getMessageTimeout()) : waiter;
         this.tokenFactory = tokenFactory == null ? new TokenFactory(this.options.getStartingToken()) : tokenFactory;
         this.searchSemaphore = new Semaphore(this.options.getMaximumConcurrentSearches());
         this.globalDownloadSemaphore = new Semaphore(this.options.getMaximumConcurrentDownloads());
@@ -2711,7 +2711,7 @@ public class SoulseekClient
     }
 
     @Override
-    public final IWaiter getWaiter() {
+    public final Waiter getWaiter() {
         return waiter;
     }
 

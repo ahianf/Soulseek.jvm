@@ -18,8 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.CancellationToken;
 import dev.slsk.SoulseekClientStates;
 import dev.slsk.common.Constants;
-import dev.slsk.common.IWaiter;
 import dev.slsk.common.WaitKey;
+import dev.slsk.common.Waiter;
 import dev.slsk.diagnostics.IDiagnosticFactory;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.messaging.handlers.DistributedMessageHandler;
@@ -663,7 +663,7 @@ class DistributedConnectionManagerTest {
         }
 
         @Override
-        public IWaiter getWaiter() {
+        public Waiter getWaiter() {
             return waiter;
         }
 
@@ -719,7 +719,7 @@ class DistributedConnectionManagerTest {
         }
     }
 
-    private static final class FakeWaiter implements IWaiter {
+    private static final class FakeWaiter implements Waiter {
         private final Map<WaitKey, CompletableFuture<?>> futures = new HashMap<>();
         private CompletableFuture<?> solicitationFuture =
                 CompletableFuture.failedFuture(new IllegalStateException("No solicitation configured"));

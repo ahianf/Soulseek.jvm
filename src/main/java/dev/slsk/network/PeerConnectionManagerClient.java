@@ -4,7 +4,7 @@
 
 package dev.slsk.network;
 
-import dev.slsk.common.IWaiter;
+import dev.slsk.common.Waiter;
 import dev.slsk.messaging.handlers.PeerMessageHandler;
 import dev.slsk.options.SoulseekClientOptions;
 
@@ -16,7 +16,7 @@ public interface PeerConnectionManagerClient {
 
     int getNextToken();
 
-    IWaiter getWaiter();
+    Waiter getWaiter();
 
     MessageConnection getServerConnection();
 

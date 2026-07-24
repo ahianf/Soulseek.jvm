@@ -10,8 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import dev.slsk.common.IWaiter;
 import dev.slsk.common.WaitKey;
+import dev.slsk.common.Waiter;
 import dev.slsk.diagnostics.DiagnosticLevel;
 import dev.slsk.exceptions.UserEndPointCacheException;
 import dev.slsk.exceptions.UserEndPointException;
@@ -288,8 +288,8 @@ class SoulseekClientEndpointTest {
         private int registrations;
         private CompletableFuture<UserAddressResponse> result = new CompletableFuture<>();
         private Throwable synchronousFailure;
-        private final IWaiter proxy = (IWaiter)
-                Proxy.newProxyInstance(IWaiter.class.getClassLoader(), new Class<?>[] {IWaiter.class}, this::invoke);
+        private final Waiter proxy = (Waiter)
+                Proxy.newProxyInstance(Waiter.class.getClassLoader(), new Class<?>[] {Waiter.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) throws Throwable {
             if (method.getName().equals("waitAsync") && arguments.length == 4) {

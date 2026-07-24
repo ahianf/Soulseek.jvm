@@ -31,9 +31,9 @@ class WaiterTest {
     @Test
     @DisplayName("Constructors retain default timeouts")
     void constructorsRetainDefaultTimeouts() {
-        try (Waiter defaultWaiter = new Waiter();
-                Waiter customWaiter = new Waiter(42)) {
-            assertEquals(Waiter.DEFAULT_TIMEOUT, defaultWaiter.getDefaultTimeout());
+        try (DefaultWaiter defaultWaiter = new DefaultWaiter();
+                DefaultWaiter customWaiter = new DefaultWaiter(42)) {
+            assertEquals(DefaultWaiter.DEFAULT_TIMEOUT, defaultWaiter.getDefaultTimeout());
             assertEquals(42, customWaiter.getDefaultTimeout());
         }
     }
@@ -41,7 +41,7 @@ class WaiterTest {
     @Test
     @DisplayName("Complete dequeues and completes the oldest wait")
     void completeDequeuesAndCompletesOldestWait() {
-        try (Waiter waiter = new Waiter()) {
+        try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("login");
             CompletableFuture<String> first = waiter.waitAsync(key, String.class);
             CompletableFuture<String> second = waiter.waitAsync(key, String.class);
@@ -64,7 +64,7 @@ class WaiterTest {
     @Test
     @DisplayName("Non-generic complete returns null")
     void nonGenericCompleteReturnsNull() {
-        try (Waiter waiter = new Waiter()) {
+        try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("room-list");
             CompletableFuture<Void> wait = waiter.waitAsync(key);
 
@@ -77,7 +77,7 @@ class WaiterTest {
     @Test
     @DisplayName("Disposition of a missing wait does not throw")
     void missingWaitDoesNotThrow() {
-        try (Waiter waiter = new Waiter()) {
+        try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("missing");
 
             assertDoesNotThrow(() -> waiter.complete(key));
@@ -90,7 +90,7 @@ class WaiterTest {
     @Test
     @DisplayName("Cancel dequeues and cancels the oldest wait")
     void cancelDequeuesAndCancelsOldestWait() {
-        try (Waiter waiter = new Waiter()) {
+        try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("login");
             CompletableFuture<Void> wait = waiter.waitAsync(key);
 
@@ -104,7 +104,7 @@ class WaiterTest {
     @Test
     @DisplayName("Manual timeout dequeues with TimeoutException")
     void manualTimeoutDequeuesWithTimeoutException() {
-        try (Waiter waiter = new Waiter()) {
+        try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("login");
             CompletableFuture<Void> wait = waiter.waitAsync(key);
 
@@ -119,7 +119,7 @@ class WaiterTest {
     @Test
     @DisplayName("Automatic timeout dequeues only its oldest wait")
     void automaticTimeoutDequeuesOnlyOldestWait() {
-        try (Waiter waiter = new Waiter(0)) {
+        try (DefaultWaiter waiter = new DefaultWaiter(0)) {
             WaitKey key = new WaitKey("login");
             CompletableFuture<String> first = waiter.waitAsync(key, String.class);
             CompletableFuture<String> second = waiter.waitAsync(key, String.class, 30_000);
@@ -135,7 +135,7 @@ class WaiterTest {
     @Test
     @DisplayName("Caller cancellation dequeues a wait")
     void callerCancellationDequeuesWait() {
-        try (Waiter waiter = new Waiter();
+        try (DefaultWaiter waiter = new DefaultWaiter();
                 CancellationTokenSource source = new CancellationTokenSource()) {
             WaitKey key = new WaitKey("login");
             CompletableFuture<String> wait = waiter.waitAsync(key, String.class, 30_000, source.getToken());
@@ -150,7 +150,7 @@ class WaiterTest {
     @Test
     @DisplayName("Pre-cancelled token is handled after enqueue")
     void preCancelledTokenIsHandledAfterEnqueue() {
-        try (Waiter waiter = new Waiter();
+        try (DefaultWaiter waiter = new DefaultWaiter();
                 CancellationTokenSource source = new CancellationTokenSource()) {
             source.cancel();
             WaitKey key = new WaitKey("login");
@@ -165,7 +165,7 @@ class WaiterTest {
     @Test
     @DisplayName("Cancellation callback preserves source FIFO disposition")
     void cancellationCallbackPreservesFifoDisposition() {
-        try (Waiter waiter = new Waiter();
+        try (DefaultWaiter waiter = new DefaultWaiter();
                 CancellationTokenSource secondSource = new CancellationTokenSource()) {
             WaitKey key = new WaitKey("login");
             CompletableFuture<String> first = waiter.waitAsync(key, String.class, 30_000);
@@ -182,7 +182,7 @@ class WaiterTest {
     @Test
     @DisplayName("Returned future cancellation removes that exact wait")
     void returnedFutureCancellationRemovesExactWait() {
-        try (Waiter waiter = new Waiter()) {
+        try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("login");
             CompletableFuture<String> first = waiter.waitAsync(key, String.class, 30_000);
             CompletableFuture<String> second = waiter.waitAsync(key, String.class, 30_000);
@@ -199,7 +199,7 @@ class WaiterTest {
     @Test
     @DisplayName("Fail preserves the supplied exception")
     void failPreservesSuppliedException() {
-        try (Waiter waiter = new Waiter()) {
+        try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("login");
             CompletableFuture<String> wait = waiter.waitAsync(key, String.class);
             RuntimeException failure = new RuntimeException("failure");
@@ -214,7 +214,7 @@ class WaiterTest {
     @Test
     @DisplayName("Type mismatch throws SoulseekClientException")
     void typeMismatchThrowsSoulseekClientException() {
-        try (Waiter waiter = new Waiter()) {
+        try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("login");
             CompletableFuture<String> wait = waiter.waitAsync(key, String.class);
 
@@ -230,7 +230,7 @@ class WaiterTest {
     @Test
     @DisplayName("WaitIndefinitely uses Integer.MAX_VALUE timeout")
     void waitIndefinitelyUsesMaximumTimeout() {
-        try (Waiter waiter = new Waiter()) {
+        try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("transfer");
             CompletableFuture<String> wait = waiter.waitIndefinitelyAsync(key, String.class);
 
@@ -242,7 +242,7 @@ class WaiterTest {
     @Test
     @DisplayName("Minus one timeout does not schedule expiration")
     void minusOneTimeoutDoesNotScheduleExpiration() {
-        try (Waiter waiter = new Waiter()) {
+        try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("transfer");
             CompletableFuture<String> wait = waiter.waitAsync(key, String.class, -1);
 
@@ -256,7 +256,7 @@ class WaiterTest {
     @Test
     @DisplayName("CancelAll cancels duplicate-key waits")
     void cancelAllCancelsDuplicateKeyWaits() {
-        try (Waiter waiter = new Waiter()) {
+        try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("login");
             CompletableFuture<String> first = waiter.waitAsync(key, String.class, 30_000);
             CompletableFuture<String> second = waiter.waitAsync(key, String.class, 30_000);
@@ -272,7 +272,7 @@ class WaiterTest {
     @Test
     @DisplayName("Close is idempotent, releases waits, and rejects new waits")
     void closeReleasesWaitsAndRejectsNewWaits() {
-        Waiter waiter = new Waiter();
+        DefaultWaiter waiter = new DefaultWaiter();
         CompletableFuture<String> pending = waiter.waitAsync(new WaitKey("login"), String.class, 30_000);
 
         waiter.close();
@@ -289,10 +289,10 @@ class WaiterTest {
     @DisplayName("PendingWait close works before and after registration")
     void pendingWaitCloseWorksBeforeAndAfterRegistration() {
         try (ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor()) {
-            Waiter.PendingWait<String> unregistered =
-                    new Waiter.PendingWait<>(String.class, 30_000, () -> {}, () -> {}, CancellationToken.none());
-            Waiter.PendingWait<String> registered =
-                    new Waiter.PendingWait<>(String.class, 30_000, () -> {}, () -> {}, CancellationToken.none());
+            DefaultWaiter.PendingWait<String> unregistered =
+                    new DefaultWaiter.PendingWait<>(String.class, 30_000, () -> {}, () -> {}, CancellationToken.none());
+            DefaultWaiter.PendingWait<String> registered =
+                    new DefaultWaiter.PendingWait<>(String.class, 30_000, () -> {}, () -> {}, CancellationToken.none());
 
             assertDoesNotThrow(unregistered::close);
             registered.register(scheduler);
@@ -304,7 +304,7 @@ class WaiterTest {
     @DisplayName("Concurrent enqueue and complete does not discard waits")
     void concurrentEnqueueAndCompleteDoesNotDiscardWaits() throws InterruptedException {
         int count = 500;
-        try (Waiter waiter = new Waiter()) {
+        try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("concurrent");
             List<CompletableFuture<Integer>> futures = Collections.synchronizedList(new ArrayList<>());
 
