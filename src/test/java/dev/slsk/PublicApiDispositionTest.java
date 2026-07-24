@@ -9,9 +9,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 class PublicApiDispositionTest {
@@ -53,6 +56,38 @@ class PublicApiDispositionTest {
         }
 
         assertEquals(809, rows);
+        verifyJavaPublicApiDocumentation();
+    }
+
+    private static void verifyJavaPublicApiDocumentation() throws IOException, ClassNotFoundException {
+        String documentation = Files.readString(Path.of("docs", "public-api.md"));
+        int publicTypes = 0;
+
+        for (String packageName : List.of(
+                "dev.slsk", "dev.slsk.diagnostics", "dev.slsk.eventargs", "dev.slsk.exceptions", "dev.slsk.options")) {
+            Path packagePath = Path.of("src", "main", "java", packageName.replace('.', '/'));
+            try (Stream<Path> paths = Files.list(packagePath)) {
+                for (Path path : paths.filter(candidate -> candidate.toString().endsWith(".java"))
+                        .sorted()
+                        .toList()) {
+                    String filename = path.getFileName().toString();
+                    String simpleName = filename.substring(0, filename.length() - ".java".length());
+                    if (simpleName.equals("package-info")) {
+                        continue;
+                    }
+                    Class<?> type = Class.forName(packageName + "." + simpleName);
+                    if (!Modifier.isPublic(type.getModifiers())) {
+                        continue;
+                    }
+                    assertTrue(
+                            documentation.contains("`" + simpleName + "`"),
+                            () -> "Missing public Java type " + type.getName() + " from docs/public-api.md");
+                    publicTypes++;
+                }
+            }
+        }
+
+        assertEquals(141, publicTypes);
     }
 
     private static void verifyMember(Class<?> type, String typeName, String mapping, String row) {
