@@ -66,3 +66,21 @@ abstract class ByteServerMessage extends ServerMessageBase {
         return builder().writeByte(value ? 1 : 0).build();
     }
 }
+
+abstract class StringServerMessage extends ServerMessageBase {
+    private final String value;
+
+    StringServerMessage(MessageCode.Server code, String value) {
+        super(code);
+        this.value = value;
+    }
+
+    final String value() {
+        return value;
+    }
+
+    @Override
+    public final byte[] toByteArray() {
+        return builder().writeString(value).build();
+    }
+}
