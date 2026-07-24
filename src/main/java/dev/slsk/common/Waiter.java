@@ -23,7 +23,7 @@ import java.util.concurrent.TimeoutException;
 /**
  * Correlates asynchronous responses with FIFO waits.
  */
-final class Waiter implements AutoCloseable {
+public final class Waiter implements AutoCloseable {
     static final int DEFAULT_TIMEOUT = 5_000;
 
     private final int defaultTimeout;
@@ -34,7 +34,7 @@ final class Waiter implements AutoCloseable {
     /**
      * Creates a waiter with the source default timeout.
      */
-    Waiter() {
+    public Waiter() {
         this(DEFAULT_TIMEOUT);
     }
 
@@ -43,7 +43,7 @@ final class Waiter implements AutoCloseable {
      *
      * @param defaultTimeout the default timeout in milliseconds
      */
-    Waiter(int defaultTimeout) {
+    public Waiter(int defaultTimeout) {
         this.defaultTimeout = defaultTimeout;
         scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread thread = new Thread(runnable, "soulseek-waiter-timeouts");
@@ -57,7 +57,7 @@ final class Waiter implements AutoCloseable {
      *
      * @return the timeout in milliseconds
      */
-    int getDefaultTimeout() {
+    public int getDefaultTimeout() {
         return defaultTimeout;
     }
 
@@ -66,7 +66,7 @@ final class Waiter implements AutoCloseable {
      *
      * @param key the wait key
      */
-    void cancel(WaitKey key) {
+    public void cancel(WaitKey key) {
         PendingWait<?> wait = dequeue(key);
         if (wait != null) {
             wait.close();
@@ -77,7 +77,7 @@ final class Waiter implements AutoCloseable {
     /**
      * Cancels all pending waits.
      */
-    void cancelAll() {
+    public void cancelAll() {
         List<PendingWait<?>> pending;
 
         synchronized (this) {
@@ -99,7 +99,7 @@ final class Waiter implements AutoCloseable {
      *
      * @param key the wait key
      */
-    void complete(WaitKey key) {
+    public void complete(WaitKey key) {
         complete(key, null);
     }
 
@@ -110,7 +110,7 @@ final class Waiter implements AutoCloseable {
      * @param result the result
      * @param <T> the result type
      */
-    <T> void complete(WaitKey key, T result) {
+    public <T> void complete(WaitKey key, T result) {
         PendingWait<?> wait = dequeue(key);
         if (wait == null) {
             return;
@@ -132,7 +132,7 @@ final class Waiter implements AutoCloseable {
      * @param key the wait key
      * @return whether a wait exists
      */
-    synchronized boolean hasWait(WaitKey key) {
+    public synchronized boolean hasWait(WaitKey key) {
         return waits.containsKey(key);
     }
 
@@ -142,7 +142,7 @@ final class Waiter implements AutoCloseable {
      * @param key the wait key
      * @param exception the failure
      */
-    void fail(WaitKey key, Throwable exception) {
+    public void fail(WaitKey key, Throwable exception) {
         Objects.requireNonNull(exception, "exception");
         PendingWait<?> wait = dequeue(key);
         if (wait != null) {
@@ -156,7 +156,7 @@ final class Waiter implements AutoCloseable {
      *
      * @param key the wait key
      */
-    void timeout(WaitKey key) {
+    public void timeout(WaitKey key) {
         PendingWait<?> wait = dequeue(key);
         if (wait != null) {
             wait.close();
@@ -168,42 +168,42 @@ final class Waiter implements AutoCloseable {
     /**
      * Adds a void wait with the default timeout.
      */
-    CompletableFuture<Void> waitAsync(WaitKey key) {
+    public CompletableFuture<Void> waitAsync(WaitKey key) {
         return waitAsync(key, (Integer) null, null);
     }
 
     /**
      * Adds a void wait.
      */
-    CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout) {
+    public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout) {
         return waitAsync(key, timeout, null);
     }
 
     /**
      * Adds a void wait.
      */
-    CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout, CancellationToken cancellationToken) {
+    public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout, CancellationToken cancellationToken) {
         return waitAsync(key, Void.class, timeout, cancellationToken);
     }
 
     /**
      * Adds a typed wait with the default timeout.
      */
-    <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType) {
+    public <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType) {
         return waitAsync(key, resultType, null, null);
     }
 
     /**
      * Adds a typed wait.
      */
-    <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType, Integer timeout) {
+    public <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType, Integer timeout) {
         return waitAsync(key, resultType, timeout, null);
     }
 
     /**
      * Adds a typed wait.
      */
-    <T> CompletableFuture<T> waitAsync(
+    public <T> CompletableFuture<T> waitAsync(
             WaitKey key, Class<T> resultType, Integer timeout, CancellationToken cancellationToken) {
         Objects.requireNonNull(key, "key");
         Objects.requireNonNull(resultType, "resultType");
@@ -234,28 +234,28 @@ final class Waiter implements AutoCloseable {
     /**
      * Adds a void wait that uses the source's maximum timeout.
      */
-    CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key) {
+    public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key) {
         return waitIndefinitelyAsync(key, (CancellationToken) null);
     }
 
     /**
      * Adds a void wait that uses the source's maximum timeout.
      */
-    CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key, CancellationToken cancellationToken) {
+    public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key, CancellationToken cancellationToken) {
         return waitAsync(key, Void.class, Integer.MAX_VALUE, cancellationToken);
     }
 
     /**
      * Adds a typed wait that uses the source's maximum timeout.
      */
-    <T> CompletableFuture<T> waitIndefinitelyAsync(WaitKey key, Class<T> resultType) {
+    public <T> CompletableFuture<T> waitIndefinitelyAsync(WaitKey key, Class<T> resultType) {
         return waitIndefinitelyAsync(key, resultType, null);
     }
 
     /**
      * Adds a typed wait that uses the source's maximum timeout.
      */
-    <T> CompletableFuture<T> waitIndefinitelyAsync(
+    public <T> CompletableFuture<T> waitIndefinitelyAsync(
             WaitKey key, Class<T> resultType, CancellationToken cancellationToken) {
         return waitAsync(key, resultType, Integer.MAX_VALUE, cancellationToken);
     }

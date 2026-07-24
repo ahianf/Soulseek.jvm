@@ -7,13 +7,13 @@ package dev.slsk.common;
 /**
  * Generates sequential tokens for network operations.
  */
-final class TokenFactory {
+public final class TokenFactory {
     private int current;
 
     /**
      * Creates a token factory starting at zero.
      */
-    TokenFactory() {
+    public TokenFactory() {
         this(0);
     }
 
@@ -22,7 +22,7 @@ final class TokenFactory {
      *
      * @param start the first token to return
      */
-    TokenFactory(int start) {
+    public TokenFactory(int start) {
         current = start;
     }
 
@@ -34,7 +34,7 @@ final class TokenFactory {
      *
      * @return the next token
      */
-    synchronized int nextToken() {
+    public synchronized int nextToken() {
         int result = current;
         current = current == Integer.MAX_VALUE ? 0 : current + 1;
         return result;

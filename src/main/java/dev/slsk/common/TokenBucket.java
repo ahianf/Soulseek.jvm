@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Implements the token-bucket rate-limiting algorithm.
  */
-final class TokenBucket implements AutoCloseable {
+public final class TokenBucket implements AutoCloseable {
     private final ScheduledExecutorService scheduler;
     private final ScheduledFuture<?> resetTask;
     private final ArrayDeque<Request> requests = new ArrayDeque<>();
@@ -32,7 +32,7 @@ final class TokenBucket implements AutoCloseable {
      * @param capacity the bucket capacity
      * @param interval the replenishment interval in milliseconds
      */
-    TokenBucket(long capacity, int interval) {
+    public TokenBucket(long capacity, int interval) {
         if (capacity < 1) {
             throw new IllegalArgumentException("capacity must be greater than or equal to 1");
         }
@@ -55,7 +55,7 @@ final class TokenBucket implements AutoCloseable {
      *
      * @return the capacity
      */
-    synchronized long getCapacity() {
+    public synchronized long getCapacity() {
         return capacity;
     }
 
@@ -74,7 +74,7 @@ final class TokenBucket implements AutoCloseable {
      * @param count the requested token count
      * @return a future containing the provided token count
      */
-    CompletableFuture<Integer> getAsync(int count) {
+    public CompletableFuture<Integer> getAsync(int count) {
         return getAsync(count, CancellationToken.none());
     }
 
@@ -85,7 +85,7 @@ final class TokenBucket implements AutoCloseable {
      * @param cancellationToken the cancellation token
      * @return a future containing the provided token count
      */
-    CompletableFuture<Integer> getAsync(int count, CancellationToken cancellationToken) {
+    public CompletableFuture<Integer> getAsync(int count, CancellationToken cancellationToken) {
         Objects.requireNonNull(cancellationToken, "cancellationToken");
 
         if (cancellationToken.isCancellationRequested()) {
@@ -129,7 +129,7 @@ final class TokenBucket implements AutoCloseable {
      *
      * @param count the tokens to return
      */
-    synchronized void returnTokens(int count) {
+    public synchronized void returnTokens(int count) {
         currentCount += Math.min(Math.max(count, 0), capacity);
     }
 
@@ -138,7 +138,7 @@ final class TokenBucket implements AutoCloseable {
      *
      * @param capacity the new capacity
      */
-    synchronized void setCapacity(long capacity) {
+    public synchronized void setCapacity(long capacity) {
         if (capacity < 1) {
             throw new IllegalArgumentException("capacity must be greater than or equal to 1");
         }

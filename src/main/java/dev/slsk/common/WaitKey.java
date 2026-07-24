@@ -10,7 +10,7 @@ import java.util.StringJoiner;
 /**
  * Uniquely identifies a pending correlated wait.
  */
-final class WaitKey {
+public final class WaitKey {
     private final String token;
     private final Object[] tokenParts;
 
@@ -19,7 +19,7 @@ final class WaitKey {
      *
      * @param tokenParts the parts that make up the key
      */
-    WaitKey(Object... tokenParts) {
+    public WaitKey(Object... tokenParts) {
         this.tokenParts = Objects.requireNonNull(tokenParts, "tokenParts");
         StringJoiner joiner = new StringJoiner(":");
         for (Object part : tokenParts) {
@@ -33,7 +33,7 @@ final class WaitKey {
      *
      * @return the token
      */
-    String getToken() {
+    public String getToken() {
         return token;
     }
 
@@ -42,7 +42,7 @@ final class WaitKey {
      *
      * @return the token parts
      */
-    Object[] getTokenParts() {
+    public Object[] getTokenParts() {
         return tokenParts;
     }
 
