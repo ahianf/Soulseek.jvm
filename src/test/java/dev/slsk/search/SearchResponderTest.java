@@ -47,17 +47,17 @@ class SearchResponderTest {
 
     @Test
     void constructorValidatesClientAndUsesSuppliedDiagnostic() {
-        assertThrows(NullPointerException.class, () -> new SearchResponder(null));
+        assertThrows(NullPointerException.class, () -> new DefaultSearchResponder(null));
         Fixture fixture = fixture(null, null);
         RecordingDiagnostic diagnostic = new RecordingDiagnostic();
-        SearchResponder responder = new SearchResponder(fixture.client, diagnostic);
+        DefaultSearchResponder responder = new DefaultSearchResponder(fixture.client, diagnostic);
         assertSame(diagnostic, responder.getDiagnostic());
     }
 
     @Test
     void defaultDiagnosticRaisesTypedEventsAndAllowsNoListeners() {
         Fixture fixture = fixture(null, null);
-        SearchResponder responder = new SearchResponder(fixture.client);
+        DefaultSearchResponder responder = new DefaultSearchResponder(fixture.client);
         AtomicReference<DiagnosticEventArgs> event = new AtomicReference<>();
         DiagnosticEventListener listener = (sender, args) -> event.set(args);
         responder.addDiagnosticGeneratedListener(listener);
@@ -220,7 +220,7 @@ class SearchResponderTest {
         TestPeerManager manager = new TestPeerManager();
         TestClient client = new TestClient(options, manager, actualCache);
         RecordingDiagnostic diagnostic = new RecordingDiagnostic();
-        return new Fixture(new SearchResponder(client, diagnostic), client, manager, diagnostic);
+        return new Fixture(new DefaultSearchResponder(client, diagnostic), client, manager, diagnostic);
     }
 
     private static SoulseekClientOptions options(SearchResponseResolver resolver, ISearchResponseCache cache) {
@@ -293,7 +293,10 @@ class SearchResponderTest {
     }
 
     private record Fixture(
-            SearchResponder responder, TestClient client, TestPeerManager manager, RecordingDiagnostic diagnostic) {}
+            DefaultSearchResponder responder,
+            TestClient client,
+            TestPeerManager manager,
+            RecordingDiagnostic diagnostic) {}
 
     private static final class TestClient implements SearchResponderClient {
         private final SoulseekClientOptions options;

@@ -7,7 +7,7 @@ package dev.slsk.messaging.handlers;
 import dev.slsk.common.Waiter;
 import dev.slsk.network.DistributedConnectionManager;
 import dev.slsk.options.SoulseekClientOptions;
-import dev.slsk.search.ISearchResponder;
+import dev.slsk.search.SearchResponder;
 
 /** Internal client state consumed by the distributed message handler. */
 public interface DistributedMessageHandlerClient {
@@ -21,5 +21,5 @@ public interface DistributedMessageHandlerClient {
 
     DistributedConnectionManager getDistributedConnectionManager();
 
-    ISearchResponder getSearchResponder();
+    SearchResponder getSearchResponder();
 }

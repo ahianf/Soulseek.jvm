@@ -7,7 +7,7 @@ package dev.slsk.network;
 import dev.slsk.common.Waiter;
 import dev.slsk.network.tcp.Listener;
 import dev.slsk.options.SoulseekClientOptions;
-import dev.slsk.search.ISearchResponder;
+import dev.slsk.search.SearchResponder;
 
 /** Internal client state consumed by the incoming-connection handler. */
 public interface ListenerHandlerClient {
@@ -21,5 +21,5 @@ public interface ListenerHandlerClient {
 
     Waiter getWaiter();
 
-    ISearchResponder getSearchResponder();
+    SearchResponder getSearchResponder();
 }

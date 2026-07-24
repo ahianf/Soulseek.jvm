@@ -9,8 +9,8 @@ import dev.slsk.common.Waiter;
 import dev.slsk.network.DistributedConnectionManager;
 import dev.slsk.network.PeerConnectionManager;
 import dev.slsk.options.SoulseekClientOptions;
-import dev.slsk.search.ISearchResponder;
 import dev.slsk.search.SearchInternal;
+import dev.slsk.search.SearchResponder;
 import dev.slsk.transfer.TransferInternal;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -33,7 +33,7 @@ public interface ServerMessageHandlerClient {
 
     DistributedMessageHandler getDistributedMessageHandler();
 
-    ISearchResponder getSearchResponder();
+    SearchResponder getSearchResponder();
 
     CompletableFuture<Void> acknowledgePrivateMessageAsync(int id, CancellationToken cancellationToken);
 

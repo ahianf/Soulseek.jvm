@@ -29,7 +29,7 @@ import dev.slsk.network.tcp.Listener;
 import dev.slsk.network.tcp.ListenerAcceptedEventListener;
 import dev.slsk.options.ConnectionOptions;
 import dev.slsk.options.SoulseekClientOptions;
-import dev.slsk.search.ISearchResponder;
+import dev.slsk.search.SearchResponder;
 import java.lang.reflect.Proxy;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -256,7 +256,7 @@ class ListenerHandlerTest {
             PeerConnectionManager peerConnectionManager,
             DistributedConnectionManager distributedConnectionManager,
             DefaultWaiter waiter,
-            ISearchResponder searchResponder)
+            SearchResponder searchResponder)
             implements ListenerHandlerClient {
         @Override
         public SoulseekClientOptions getOptions() {
@@ -284,7 +284,7 @@ class ListenerHandlerTest {
         }
 
         @Override
-        public ISearchResponder getSearchResponder() {
+        public SearchResponder getSearchResponder() {
             return searchResponder;
         }
     }
@@ -435,8 +435,8 @@ class ListenerHandlerTest {
 
     private static final class SearchResponderProbe {
         private int responseToken;
-        private final ISearchResponder proxy = (ISearchResponder) Proxy.newProxyInstance(
-                getClass().getClassLoader(), new Class<?>[] {ISearchResponder.class}, (ignored, method, arguments) -> {
+        private final SearchResponder proxy = (SearchResponder) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[] {SearchResponder.class}, (ignored, method, arguments) -> {
                     if (method.getName().equals("tryRespondAsync") && arguments.length == 1) {
                         responseToken = (Integer) arguments[0];
                         return CompletableFuture.completedFuture(true);

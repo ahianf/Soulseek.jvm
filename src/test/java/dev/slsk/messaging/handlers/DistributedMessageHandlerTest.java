@@ -34,7 +34,7 @@ import dev.slsk.network.tcp.ConnectionState;
 import dev.slsk.network.tcp.ConnectionTypes;
 import dev.slsk.options.SoulseekClientOptions;
 import dev.slsk.options.SoulseekClientOptionsPatch;
-import dev.slsk.search.ISearchResponder;
+import dev.slsk.search.SearchResponder;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -259,14 +259,14 @@ class DistributedMessageHandlerTest {
         private final SoulseekClientOptions options;
         private final Waiter waiter;
         private final DistributedConnectionManager manager;
-        private final ISearchResponder responder;
+        private final SearchResponder responder;
         private final AtomicInteger token = new AtomicInteger(TOKEN);
 
         private FakeClient(
                 SoulseekClientOptions options,
                 Waiter waiter,
                 DistributedConnectionManager manager,
-                ISearchResponder responder) {
+                SearchResponder responder) {
             this.options = options;
             this.waiter = waiter;
             this.manager = manager;
@@ -299,7 +299,7 @@ class DistributedMessageHandlerTest {
         }
 
         @Override
-        public ISearchResponder getSearchResponder() {
+        public SearchResponder getSearchResponder() {
             return responder;
         }
     }
@@ -343,8 +343,8 @@ class DistributedMessageHandlerTest {
     }
 
     private static final class ResponderProbe implements InvocationHandler {
-        private final ISearchResponder proxy = (ISearchResponder) Proxy.newProxyInstance(
-                ISearchResponder.class.getClassLoader(), new Class<?>[] {ISearchResponder.class}, this);
+        private final SearchResponder proxy = (SearchResponder) Proxy.newProxyInstance(
+                SearchResponder.class.getClassLoader(), new Class<?>[] {SearchResponder.class}, this);
         private final List<SearchCall> calls = new ArrayList<>();
 
         @Override

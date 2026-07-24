@@ -55,8 +55,8 @@ import dev.slsk.network.TransferConnectionResult;
 import dev.slsk.network.tcp.Connection;
 import dev.slsk.options.SoulseekClientOptions;
 import dev.slsk.options.SoulseekClientOptionsPatch;
-import dev.slsk.search.ISearchResponder;
 import dev.slsk.search.SearchInternal;
+import dev.slsk.search.SearchResponder;
 import dev.slsk.transfer.TransferInternal;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -746,7 +746,7 @@ class ServerMessageHandlerTest {
         private final Waiter waiter;
         private final PeerConnectionManager peer;
         private final DistributedConnectionManager distributed;
-        private final ISearchResponder responder;
+        private final SearchResponder responder;
         private final Map<Integer, SearchInternal> searches = new HashMap<>();
         private final Map<Integer, TransferInternal> downloads = new HashMap<>();
         private final List<Integer> privateAcknowledgements = new ArrayList<>();
@@ -758,7 +758,7 @@ class ServerMessageHandlerTest {
                 Waiter waiter,
                 PeerConnectionManager peer,
                 DistributedConnectionManager distributed,
-                ISearchResponder responder) {
+                SearchResponder responder) {
             this.options = options;
             this.waiter = waiter;
             this.peer = peer;
@@ -836,7 +836,7 @@ class ServerMessageHandlerTest {
         }
 
         @Override
-        public ISearchResponder getSearchResponder() {
+        public SearchResponder getSearchResponder() {
             return responder;
         }
 
@@ -1014,8 +1014,8 @@ class ServerMessageHandlerTest {
     private static final class SearchResponderProbe {
         private final List<Integer> discards = new ArrayList<>();
         private final List<SearchCall> requests = new ArrayList<>();
-        private final ISearchResponder proxy = (ISearchResponder) Proxy.newProxyInstance(
-                ISearchResponder.class.getClassLoader(), new Class<?>[] {ISearchResponder.class}, this::invoke);
+        private final SearchResponder proxy = (SearchResponder) Proxy.newProxyInstance(
+                SearchResponder.class.getClassLoader(), new Class<?>[] {SearchResponder.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             return switch (method.getName()) {

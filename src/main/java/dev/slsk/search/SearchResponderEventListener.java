@@ -9,5 +9,5 @@ import dev.slsk.eventargs.SoulseekClientEventArgs;
 /** Handles a search-responder event. */
 @FunctionalInterface
 public interface SearchResponderEventListener<T extends SoulseekClientEventArgs> {
-    void handle(ISearchResponder sender, T eventArgs);
+    void handle(SearchResponder sender, T eventArgs);
 }

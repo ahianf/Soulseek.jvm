@@ -155,7 +155,7 @@ import dev.slsk.options.TransferOptions;
 import dev.slsk.options.TransferProgressUpdate;
 import dev.slsk.options.TransferStateChange;
 import dev.slsk.options.UploadStreamFactory;
-import dev.slsk.search.ISearchResponder;
+import dev.slsk.search.DefaultSearchResponder;
 import dev.slsk.search.SearchInternal;
 import dev.slsk.search.SearchResponder;
 import dev.slsk.search.SearchResponderClient;
@@ -228,7 +228,7 @@ public class SoulseekClient
     private final TokenBucket downloadTokenBucket;
     private final ConnectionFactory connectionFactory;
     private final ListenerHandler listenerHandler;
-    private final ISearchResponder searchResponder;
+    private final SearchResponder searchResponder;
     private final PeerMessageHandler peerMessageHandler;
     private final DistributedMessageHandler distributedMessageHandler;
     private final PeerConnectionManager peerConnectionManager;
@@ -295,7 +295,7 @@ public class SoulseekClient
             DistributedMessageHandler distributedMessageHandler,
             Listener listener,
             ListenerHandler listenerHandler,
-            ISearchResponder searchResponder,
+            SearchResponder searchResponder,
             Waiter waiter,
             TokenFactory tokenFactory,
             IDiagnosticFactory diagnosticFactory,
@@ -335,7 +335,7 @@ public class SoulseekClient
         GlobalDiagnostic.init(diagnostic);
 
         this.listenerHandler = listenerHandler == null ? new DefaultListenerHandler(this) : listenerHandler;
-        this.searchResponder = searchResponder == null ? new SearchResponder(this) : searchResponder;
+        this.searchResponder = searchResponder == null ? new DefaultSearchResponder(this) : searchResponder;
         this.peerMessageHandler = peerMessageHandler == null ? new DefaultPeerMessageHandler(this) : peerMessageHandler;
         this.distributedMessageHandler = distributedMessageHandler == null
                 ? new DefaultDistributedMessageHandler(this)
@@ -2741,7 +2741,7 @@ public class SoulseekClient
     }
 
     @Override
-    public final ISearchResponder getSearchResponder() {
+    public final SearchResponder getSearchResponder() {
         return searchResponder;
     }
 

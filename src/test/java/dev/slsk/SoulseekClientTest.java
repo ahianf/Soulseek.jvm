@@ -36,8 +36,8 @@ import dev.slsk.network.MessageConnection;
 import dev.slsk.network.PeerConnectionManager;
 import dev.slsk.network.PeerEndpoint;
 import dev.slsk.options.SoulseekClientOptions;
-import dev.slsk.search.ISearchResponder;
 import dev.slsk.search.SearchInternal;
+import dev.slsk.search.SearchResponder;
 import dev.slsk.transfer.TransferInternal;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -468,8 +468,8 @@ class SoulseekClientTest {
 
     private static final class SearchResponderProbe {
         private DiagnosticEventListener diagnostic;
-        private final ISearchResponder proxy = (ISearchResponder) Proxy.newProxyInstance(
-                ISearchResponder.class.getClassLoader(), new Class<?>[] {ISearchResponder.class}, this::invoke);
+        private final SearchResponder proxy = (SearchResponder) Proxy.newProxyInstance(
+                SearchResponder.class.getClassLoader(), new Class<?>[] {SearchResponder.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("addDiagnosticGeneratedListener")) {
