@@ -40,7 +40,9 @@ class LegalComplianceTest {
                 Path.of("pom.xml"),
                 Path.of("examples", "console", "pom.xml"),
                 Path.of("tools", "api-inventory", "Program.cs"),
-                Path.of("tools", "api-inventory", "ApiInventory.csproj"))) {
+                Path.of("tools", "api-inventory", "ApiInventory.csproj"),
+                Path.of("tools", "protocol-vectors", "Program.cs"),
+                Path.of("tools", "protocol-vectors", "ProtocolVectors.csproj"))) {
             String text = Files.readString(path);
             require(path, text, COPYRIGHT, failures);
             require(path, text, SPDX, failures);
