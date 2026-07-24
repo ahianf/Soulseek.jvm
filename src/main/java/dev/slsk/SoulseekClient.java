@@ -41,6 +41,7 @@ import dev.slsk.exceptions.KickedFromServerException;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.RoomJoinForbiddenException;
 import dev.slsk.exceptions.SoulseekClientException;
+import dev.slsk.exceptions.TransferNotFoundException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
 import dev.slsk.exceptions.UserEndPointCacheException;
@@ -61,11 +62,14 @@ import dev.slsk.messaging.handlers.ServerMessageHandlerClient;
 import dev.slsk.messaging.messages.AcknowledgePrivateMessageCommand;
 import dev.slsk.messaging.messages.AcknowledgePrivilegeNotificationCommand;
 import dev.slsk.messaging.messages.CheckPrivilegesRequest;
+import dev.slsk.messaging.messages.FolderContentsRequest;
 import dev.slsk.messaging.messages.GivePrivilegesCommand;
 import dev.slsk.messaging.messages.IOutgoingMessage;
 import dev.slsk.messaging.messages.JoinRoomRequest;
 import dev.slsk.messaging.messages.LeaveRoomRequest;
 import dev.slsk.messaging.messages.NewPassword;
+import dev.slsk.messaging.messages.PlaceInQueueRequest;
+import dev.slsk.messaging.messages.PlaceInQueueResponse;
 import dev.slsk.messaging.messages.PrivateMessageCommand;
 import dev.slsk.messaging.messages.PrivateRoomAddOperator;
 import dev.slsk.messaging.messages.PrivateRoomAddUser;
@@ -114,6 +118,7 @@ import dev.slsk.transfer.TransferInternal;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -898,6 +903,102 @@ public class SoulseekClient
                 RoomList.class,
                 cancellationToken,
                 "Failed to fetch the list of chat rooms from the server: ");
+    }
+
+    public CompletableFuture<List<Directory>> getDirectoryContentsAsync(
+            String requestedUsername, String directoryName) {
+        return getDirectoryContentsAsync(requestedUsername, directoryName, null, CancellationToken.none());
+    }
+
+    public CompletableFuture<List<Directory>> getDirectoryContentsAsync(
+            String requestedUsername, String directoryName, int operationToken) {
+        return getDirectoryContentsAsync(requestedUsername, directoryName, operationToken, CancellationToken.none());
+    }
+
+    public CompletableFuture<List<Directory>> getDirectoryContentsAsync(
+            String requestedUsername, String directoryName, CancellationToken cancellationToken) {
+        return getDirectoryContentsAsync(requestedUsername, directoryName, null, cancellationToken);
+    }
+
+    public CompletableFuture<List<Directory>> getDirectoryContentsAsync(
+            String requestedUsername,
+            String directoryName,
+            Integer operationToken,
+            CancellationToken cancellationToken) {
+        requireText(requestedUsername, "username");
+        requireText(directoryName, "directoryName");
+        requireLoggedIn("fetch directory contents");
+        int tokenValue = operationToken == null ? getNextToken() : operationToken;
+        CancellationToken token = defaultToken(cancellationToken);
+        CompletableFuture<List<Directory>> contentsWait;
+        try {
+            @SuppressWarnings("unchecked")
+            CompletableFuture<List<Directory>> typedWait =
+                    (CompletableFuture<List<Directory>>) (CompletableFuture<?>) waiter.waitAsync(
+                            new WaitKey(MessageCode.Peer.FOLDER_CONTENTS_RESPONSE, requestedUsername, tokenValue),
+                            List.class,
+                            null,
+                            token);
+            contentsWait = typedWait;
+        } catch (Throwable failure) {
+            return mapClientFailure(
+                    CompletableFuture.failedFuture(failure),
+                    "Failed to retrieve directory contents for " + directoryName + " from " + requestedUsername + ": ",
+                    UserOfflineException.class);
+        }
+        CompletableFuture<List<Directory>> operation = getUserEndPointAsync(requestedUsername, token)
+                .thenCompose(endpoint ->
+                        peerConnectionManager.getOrAddMessageConnectionAsync(requestedUsername, endpoint, token))
+                .thenCompose(connection ->
+                        invokeMessageWrite(connection, new FolderContentsRequest(tokenValue, directoryName), token))
+                .thenCompose(ignored -> contentsWait)
+                .thenApply(response -> Collections.unmodifiableList(new ArrayList<>(response)));
+        return mapClientFailure(
+                operation,
+                "Failed to retrieve directory contents for " + directoryName + " from " + requestedUsername + ": ",
+                UserOfflineException.class);
+    }
+
+    public CompletableFuture<Integer> getDownloadPlaceInQueueAsync(String requestedUsername, String filename) {
+        return getDownloadPlaceInQueueAsync(requestedUsername, filename, CancellationToken.none());
+    }
+
+    public CompletableFuture<Integer> getDownloadPlaceInQueueAsync(
+            String requestedUsername, String filename, CancellationToken cancellationToken) {
+        requireText(requestedUsername, "username");
+        requireText(filename, "filename");
+        requireLoggedIn("check download queue position");
+        boolean active = downloads.values().stream()
+                .anyMatch(download -> Objects.equals(download.getUsername(), requestedUsername)
+                        && Objects.equals(download.getFilename(), filename));
+        if (!active) {
+            throw new TransferNotFoundException(
+                    "A download of " + filename + " from user " + requestedUsername + " is not active");
+        }
+        CancellationToken token = defaultToken(cancellationToken);
+        CompletableFuture<PlaceInQueueResponse> responseWait;
+        try {
+            responseWait = waiter.waitAsync(
+                    new WaitKey(MessageCode.Peer.PLACE_IN_QUEUE_RESPONSE, requestedUsername, filename),
+                    PlaceInQueueResponse.class,
+                    null,
+                    token);
+        } catch (Throwable failure) {
+            return mapClientFailure(
+                    CompletableFuture.failedFuture(failure),
+                    "Failed to fetch place in queue for download of " + filename + " from " + requestedUsername + ": ",
+                    UserOfflineException.class);
+        }
+        CompletableFuture<Integer> operation = getUserEndPointAsync(requestedUsername, token)
+                .thenCompose(endpoint ->
+                        peerConnectionManager.getOrAddMessageConnectionAsync(requestedUsername, endpoint, token))
+                .thenCompose(connection -> invokeMessageWrite(connection, new PlaceInQueueRequest(filename), token))
+                .thenCompose(ignored -> responseWait)
+                .thenApply(PlaceInQueueResponse::getPlaceInQueue);
+        return mapClientFailure(
+                operation,
+                "Failed to fetch place in queue for download of " + filename + " from " + requestedUsername + ": ",
+                UserOfflineException.class);
     }
 
     public CompletableFuture<RoomData> joinRoomAsync(String roomName) {

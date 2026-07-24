@@ -13,15 +13,20 @@ import dev.slsk.common.IWaiter;
 import dev.slsk.common.WaitKey;
 import dev.slsk.diagnostics.IDiagnosticFactory;
 import dev.slsk.exceptions.SoulseekClientException;
+import dev.slsk.exceptions.TransferNotFoundException;
 import dev.slsk.exceptions.UserEndPointException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.messaging.MessageCode;
+import dev.slsk.messaging.messages.FolderContentsRequest;
 import dev.slsk.messaging.messages.IOutgoingMessage;
+import dev.slsk.messaging.messages.PlaceInQueueRequest;
+import dev.slsk.messaging.messages.PlaceInQueueResponse;
 import dev.slsk.messaging.messages.UserAddressRequest;
 import dev.slsk.messaging.messages.UserAddressResponse;
 import dev.slsk.messaging.messages.UserInfoRequest;
 import dev.slsk.network.IMessageConnection;
 import dev.slsk.network.IPeerConnectionManager;
+import dev.slsk.transfer.TransferInternal;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.net.InetAddress;
@@ -193,6 +198,134 @@ class SoulseekClientPeerRequestTest {
         fixture.waiter.results.put(UserAddressResponse.class, CompletableFuture.failedFuture(offline));
         assertSame(offline, failureOf(fixture.client.getUserInfoAsync("dave")));
         fixture.close();
+    }
+
+    @Test
+    void directoryContentsUsesTokenCorrelationAndReturnsSnapshot() {
+        Fixture fixture = new Fixture();
+        fixture.waiter.results.put(
+                UserAddressResponse.class,
+                CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));
+        List<Directory> source = new ArrayList<>(List.of(new Directory("shared")));
+        fixture.waiter.results.put(List.class, CompletableFuture.completedFuture(source));
+        CancellationTokenSource cancellationSource = new CancellationTokenSource();
+        CancellationToken cancellationToken = cancellationSource.getToken();
+
+        List<Directory> result = fixture.client
+                .getDirectoryContentsAsync("alice", "shared", 123, cancellationToken)
+                .join();
+
+        assertEquals(1, result.size());
+        source.clear();
+        assertEquals(1, result.size());
+        assertThrows(UnsupportedOperationException.class, () -> result.add(new Directory("other")));
+        assertEquals(new WaitKey(MessageCode.Peer.FOLDER_CONTENTS_RESPONSE, "alice", 123), fixture.waiter.keys.get(0));
+        FolderContentsRequest request = assertInstanceOf(FolderContentsRequest.class, fixture.peer.message);
+        assertEquals(123, request.getToken());
+        assertEquals("shared", request.getDirectoryName());
+        assertSame(cancellationToken, fixture.peer.token);
+        fixture.waiter.tokens.forEach(recorded -> assertSame(cancellationToken, recorded));
+        fixture.close();
+    }
+
+    @Test
+    void queuePlaceRequiresActiveDownloadAndReturnsResponse() {
+        Fixture fixture = new Fixture();
+        fixture.waiter.results.put(
+                UserAddressResponse.class,
+                CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));
+        fixture.waiter.results.put(
+                PlaceInQueueResponse.class, CompletableFuture.completedFuture(new PlaceInQueueResponse("file", 17)));
+        fixture.client.setDownloadsForTest(
+                new HashMap<>(Map.of(1, new TransferInternal(TransferDirection.DOWNLOAD, "alice", "file", 1))));
+        CancellationTokenSource source = new CancellationTokenSource();
+        CancellationToken token = source.getToken();
+
+        int result = fixture.client
+                .getDownloadPlaceInQueueAsync("alice", "file", token)
+                .join();
+
+        assertEquals(17, result);
+        assertEquals(
+                new WaitKey(MessageCode.Peer.PLACE_IN_QUEUE_RESPONSE, "alice", "file"), fixture.waiter.keys.get(0));
+        assertEquals(
+                "file",
+                assertInstanceOf(PlaceInQueueRequest.class, fixture.peer.message)
+                        .getFilename());
+        assertSame(token, fixture.peer.token);
+        fixture.close();
+    }
+
+    @Test
+    void smallPeerQueriesValidateAndMapFailures() {
+        Fixture fixture = new Fixture();
+        for (String bad : new String[] {null, "", " ", "\t"}) {
+            assertThrows(
+                    IllegalArgumentException.class, () -> fixture.client.getDirectoryContentsAsync(bad, "directory"));
+            assertThrows(IllegalArgumentException.class, () -> fixture.client.getDirectoryContentsAsync("alice", bad));
+            assertThrows(
+                    IllegalArgumentException.class, () -> fixture.client.getDownloadPlaceInQueueAsync(bad, "file"));
+            assertThrows(
+                    IllegalArgumentException.class, () -> fixture.client.getDownloadPlaceInQueueAsync("alice", bad));
+        }
+        assertThrows(
+                TransferNotFoundException.class, () -> fixture.client.getDownloadPlaceInQueueAsync("alice", "file"));
+        fixture.client.setDownloadsForTest(new HashMap<>(Map.of(
+                1,
+                new TransferInternal(TransferDirection.DOWNLOAD, "other", "file", 1),
+                2,
+                new TransferInternal(TransferDirection.DOWNLOAD, "alice", "other", 2))));
+        assertThrows(
+                TransferNotFoundException.class, () -> fixture.client.getDownloadPlaceInQueueAsync("alice", "file"));
+
+        fixture.client.setStateForTest(SoulseekClientStates.DISCONNECTED);
+        assertThrows(IllegalStateException.class, () -> fixture.client.getDirectoryContentsAsync("alice", "directory"));
+        assertThrows(IllegalStateException.class, () -> fixture.client.getDownloadPlaceInQueueAsync("alice", "file"));
+        fixture.close();
+    }
+
+    @Test
+    void smallPeerQueriesPreserveSpecialFailuresAndWrapOthers() {
+        Fixture directoryFixture = new Fixture();
+        directoryFixture.waiter.results.put(
+                UserAddressResponse.class,
+                CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));
+        directoryFixture.waiter.results.put(
+                List.class, CompletableFuture.completedFuture(List.of(new Directory("shared"))));
+        TimeoutException timeout = new TimeoutException("timed out");
+        directoryFixture.peer.result = CompletableFuture.failedFuture(timeout);
+        assertSame(timeout, failureOf(directoryFixture.client.getDirectoryContentsAsync("alice", "shared")));
+
+        CancellationException cancellation = new CancellationException("cancelled");
+        directoryFixture.peer.result = CompletableFuture.failedFuture(cancellation);
+        assertSame(cancellation, failureOf(directoryFixture.client.getDirectoryContentsAsync("bob", "shared")));
+
+        RuntimeException expected = new RuntimeException("peer failed");
+        directoryFixture.peer.result = CompletableFuture.failedFuture(expected);
+        SoulseekClientException mapped = assertInstanceOf(
+                SoulseekClientException.class,
+                failureOf(directoryFixture.client.getDirectoryContentsAsync("carol", "shared")));
+        assertSame(expected, mapped.getCause());
+        directoryFixture.close();
+
+        Fixture queueFixture = new Fixture();
+        queueFixture.client.setDownloadsForTest(
+                new HashMap<>(Map.of(1, new TransferInternal(TransferDirection.DOWNLOAD, "alice", "file", 1))));
+        UserOfflineException offline = new UserOfflineException("offline");
+        queueFixture.waiter.results.put(PlaceInQueueResponse.class, new CompletableFuture<>());
+        queueFixture.waiter.results.put(UserAddressResponse.class, CompletableFuture.failedFuture(offline));
+        assertSame(offline, failureOf(queueFixture.client.getDownloadPlaceInQueueAsync("alice", "file")));
+
+        RuntimeException waitFailure = new RuntimeException("wait failed");
+        queueFixture.waiter.results.put(PlaceInQueueResponse.class, CompletableFuture.failedFuture(waitFailure));
+        queueFixture.waiter.results.put(
+                UserAddressResponse.class,
+                CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));
+        SoulseekClientException waitMapped = assertInstanceOf(
+                SoulseekClientException.class,
+                failureOf(queueFixture.client.getDownloadPlaceInQueueAsync("alice", "file")));
+        assertSame(waitFailure, waitMapped.getCause());
+        queueFixture.close();
     }
 
     private static Throwable failureOf(CompletableFuture<?> future) {
