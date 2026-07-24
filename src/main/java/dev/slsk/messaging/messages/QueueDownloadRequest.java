@@ -10,7 +10,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** Requests that a peer queue a file for download. */
-public final class QueueDownloadRequest implements IIncomingMessage, IOutgoingMessage {
+public final class QueueDownloadRequest implements IncomingMessage, OutgoingMessage {
     private final String filename;
 
     /** Creates a queue-download request. */

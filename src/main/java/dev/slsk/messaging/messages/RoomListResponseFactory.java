@@ -12,7 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** Parses the server's public and private chat-room lists. */
-public final class RoomListResponseFactory implements IIncomingMessage {
+public final class RoomListResponseFactory implements IncomingMessage {
     private RoomListResponseFactory() {}
 
     /** Parses a room list. */

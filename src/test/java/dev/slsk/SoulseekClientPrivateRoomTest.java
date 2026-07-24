@@ -15,7 +15,7 @@ import dev.slsk.common.IWaiter;
 import dev.slsk.common.WaitKey;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.messaging.MessageCode;
-import dev.slsk.messaging.messages.IOutgoingMessage;
+import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.messaging.messages.PrivateRoomAddOperator;
 import dev.slsk.messaging.messages.PrivateRoomAddUser;
 import dev.slsk.messaging.messages.PrivateRoomDropMembershipCommand;
@@ -248,11 +248,11 @@ class SoulseekClientPrivateRoomTest {
         CompletableFuture<Void> run();
     }
 
-    private record Case(Operation operation, IOutgoingMessage message, WaitKey waitKey) {}
+    private record Case(Operation operation, OutgoingMessage message, WaitKey waitKey) {}
 
     private static final class ConnectionProbe {
         private final List<String> sequence;
-        private IOutgoingMessage message;
+        private OutgoingMessage message;
         private CancellationToken token;
         private int writeCount;
         private CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
@@ -267,7 +267,7 @@ class SoulseekClientPrivateRoomTest {
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("writeAsync")
                     && arguments.length == 2
-                    && arguments[0] instanceof IOutgoingMessage outgoing) {
+                    && arguments[0] instanceof OutgoingMessage outgoing) {
                 sequence.add("write");
                 writeCount++;
                 message = outgoing;

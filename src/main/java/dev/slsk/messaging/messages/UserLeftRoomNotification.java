@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** Notification that a user left a chat room. */
-public final class UserLeftRoomNotification implements IIncomingMessage {
+public final class UserLeftRoomNotification implements IncomingMessage {
     private final String roomName;
     private final String username;
 

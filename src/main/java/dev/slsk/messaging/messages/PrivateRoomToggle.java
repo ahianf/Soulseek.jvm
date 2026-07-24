@@ -9,7 +9,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** Toggles receipt of private-room invitations. */
-public final class PrivateRoomToggle implements IIncomingMessage, IOutgoingMessage {
+public final class PrivateRoomToggle implements IncomingMessage, OutgoingMessage {
 
     private final boolean acceptInvitations;
 

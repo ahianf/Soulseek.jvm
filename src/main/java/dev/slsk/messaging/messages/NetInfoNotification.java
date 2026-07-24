@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Objects;
 
 /** An incoming list of distributed parent candidates. */
-public final class NetInfoNotification implements IIncomingMessage {
+public final class NetInfoNotification implements IncomingMessage {
     private final int parentCount;
     private final List<NetInfoParent> parents;
 

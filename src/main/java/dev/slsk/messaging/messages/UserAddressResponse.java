@@ -11,7 +11,7 @@ import java.net.InetSocketAddress;
 import java.util.Objects;
 
 /** The response to a request for a peer's network address. */
-public final class UserAddressResponse implements IIncomingMessage {
+public final class UserAddressResponse implements IncomingMessage {
     private final InetAddress ipAddress;
     private final InetSocketAddress ipEndPoint;
     private final int port;

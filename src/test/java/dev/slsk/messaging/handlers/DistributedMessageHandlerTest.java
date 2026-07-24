@@ -24,7 +24,7 @@ import dev.slsk.messaging.messages.DistributedPingRequest;
 import dev.slsk.messaging.messages.DistributedPingResponse;
 import dev.slsk.messaging.messages.DistributedSearchRequest;
 import dev.slsk.messaging.messages.EmbeddedMessage;
-import dev.slsk.messaging.messages.IOutgoingMessage;
+import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.network.IDistributedConnectionManager;
 import dev.slsk.network.IMessageConnection;
 import dev.slsk.network.MessageEventArgs;
@@ -476,7 +476,7 @@ class DistributedMessageHandlerTest {
         private final UUID id = UUID.randomUUID();
         private final ConnectionKey key;
         private final IMessageConnection proxy;
-        private final List<IOutgoingMessage> outgoing = new ArrayList<>();
+        private final List<OutgoingMessage> outgoing = new ArrayList<>();
         private CompletableFuture<Void> writeFuture = CompletableFuture.completedFuture(null);
 
         private ConnectionProbe(String username, InetSocketAddress endpoint) {
@@ -501,7 +501,7 @@ class DistributedMessageHandlerTest {
                 case "getCodeLength" -> 1;
                 case "isServerConnection", "isReadingContinuously" -> false;
                 case "writeAsync" -> {
-                    if (arguments[0] instanceof IOutgoingMessage message) {
+                    if (arguments[0] instanceof OutgoingMessage message) {
                         outgoing.add(message);
                     }
                     yield writeFuture;

@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageBuilder;
 import dev.slsk.messaging.MessageCode;
 
 /** Requests a wishlist search. */
-public final class WishlistSearchRequest implements IOutgoingMessage {
+public final class WishlistSearchRequest implements OutgoingMessage {
     private final String searchText;
     private final int token;
 

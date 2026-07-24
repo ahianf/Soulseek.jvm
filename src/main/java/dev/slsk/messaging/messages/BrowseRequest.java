@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageBuilder;
 import dev.slsk.messaging.MessageCode;
 
 /** Requests the shared file list from a peer. */
-public final class BrowseRequest implements IOutgoingMessage {
+public final class BrowseRequest implements OutgoingMessage {
     /** Creates a browse request. */
     public BrowseRequest() {}
 

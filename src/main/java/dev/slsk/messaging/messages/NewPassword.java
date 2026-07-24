@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** The bidirectional password-change command. */
-public final class NewPassword extends StringServerMessage implements IIncomingMessage {
+public final class NewPassword extends StringServerMessage implements IncomingMessage {
 
     /** Creates a password-change message. */
     public NewPassword(String password) {

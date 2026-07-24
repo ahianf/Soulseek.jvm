@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** An incoming public-chat message. */
-public final class PublicChatMessageNotification implements IIncomingMessage {
+public final class PublicChatMessageNotification implements IncomingMessage {
 
     private final String message;
     private final String roomName;

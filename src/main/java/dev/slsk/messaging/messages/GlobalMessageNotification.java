@@ -7,7 +7,7 @@ package dev.slsk.messaging.messages;
 import dev.slsk.messaging.MessageCode;
 
 /** Parses an incoming global administrator message. */
-public final class GlobalMessageNotification implements IIncomingMessage {
+public final class GlobalMessageNotification implements IncomingMessage {
     private GlobalMessageNotification() {}
 
     /** Parses the global message text. */

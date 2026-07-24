@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** An incoming notification of granted privileges. */
-public final class PrivilegeNotification implements IIncomingMessage {
+public final class PrivilegeNotification implements IncomingMessage {
     private final int id;
     private final String username;
 

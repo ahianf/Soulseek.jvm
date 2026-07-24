@@ -5,4 +5,4 @@
 package dev.slsk.messaging.messages;
 
 /** Marks an incoming protocol message. */
-public interface IIncomingMessage {}
+public interface IncomingMessage {}

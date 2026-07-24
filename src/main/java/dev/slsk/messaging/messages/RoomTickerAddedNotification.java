@@ -9,7 +9,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** Notification that a ticker was added to a chat room. */
-public final class RoomTickerAddedNotification implements IIncomingMessage {
+public final class RoomTickerAddedNotification implements IncomingMessage {
 
     private final String roomName;
     private final RoomTicker ticker;

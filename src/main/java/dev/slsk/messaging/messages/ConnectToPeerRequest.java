@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageBuilder;
 import dev.slsk.messaging.MessageCode;
 
 /** Requests a direct or indirect peer connection. */
-public final class ConnectToPeerRequest implements IOutgoingMessage {
+public final class ConnectToPeerRequest implements OutgoingMessage {
     private final int token;
     private final String type;
     private final String username;

@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageCode;
 import java.util.List;
 
 /** Parses the server's list of excluded search phrases. */
-public final class ExcludedSearchPhrasesNotification implements IIncomingMessage {
+public final class ExcludedSearchPhrasesNotification implements IncomingMessage {
 
     private ExcludedSearchPhrasesNotification() {}
 

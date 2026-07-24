@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.CancellationToken;
 import dev.slsk.exceptions.ConnectionWriteException;
 import dev.slsk.exceptions.MessageException;
-import dev.slsk.messaging.messages.IOutgoingMessage;
+import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.network.tcp.ConnectionKey;
 import dev.slsk.network.tcp.INetworkStream;
 import dev.slsk.network.tcp.ITcpClient;
@@ -195,7 +195,7 @@ class MessageConnectionTest {
     @DisplayName("Message write validates serialization and state")
     void validatesWrite() {
         MessageConnection disconnected = new MessageConnection("alice", ENDPOINT);
-        assertThrows(IllegalArgumentException.class, () -> disconnected.writeAsync((IOutgoingMessage) null));
+        assertThrows(IllegalArgumentException.class, () -> disconnected.writeAsync((OutgoingMessage) null));
         RuntimeException cause = new RuntimeException("broken");
         MessageException serialization = assertThrows(
                 MessageException.class,

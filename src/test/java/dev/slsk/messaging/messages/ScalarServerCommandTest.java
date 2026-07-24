@@ -98,7 +98,7 @@ class ScalarServerCommandTest {
         assertThrows(NullPointerException.class, () -> new SetOnlineStatusCommand(null));
     }
 
-    private static void assertEmpty(IOutgoingMessage message, MessageCode.Server code) {
+    private static void assertEmpty(OutgoingMessage message, MessageCode.Server code) {
         byte[] bytes = message.toByteArray();
         MessageReader<MessageCode.Server> reader = new MessageReader<>(bytes, MessageCode.Server.class);
 
@@ -107,7 +107,7 @@ class ScalarServerCommandTest {
         assertEquals(0, reader.getRemaining());
     }
 
-    private static void assertByte(IOutgoingMessage message, MessageCode.Server code, int value) {
+    private static void assertByte(OutgoingMessage message, MessageCode.Server code, int value) {
         byte[] bytes = message.toByteArray();
         MessageReader<MessageCode.Server> reader = new MessageReader<>(bytes, MessageCode.Server.class);
 
@@ -117,7 +117,7 @@ class ScalarServerCommandTest {
         assertEquals(0, reader.getRemaining());
     }
 
-    private static void assertInteger(IOutgoingMessage message, MessageCode.Server code, int value) {
+    private static void assertInteger(OutgoingMessage message, MessageCode.Server code, int value) {
         byte[] bytes = message.toByteArray();
         MessageReader<MessageCode.Server> reader = new MessageReader<>(bytes, MessageCode.Server.class);
 

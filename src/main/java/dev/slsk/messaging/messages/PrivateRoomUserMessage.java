@@ -9,7 +9,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** Shared data and serialization for private-room user/operator changes. */
-abstract class PrivateRoomUserMessage implements IIncomingMessage, IOutgoingMessage {
+abstract class PrivateRoomUserMessage implements IncomingMessage, OutgoingMessage {
 
     private final MessageCode.Server code;
     private final String roomName;

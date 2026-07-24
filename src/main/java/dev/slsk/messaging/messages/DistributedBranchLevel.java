@@ -10,7 +10,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** Informs distributed children of the current branch level. */
-public final class DistributedBranchLevel implements IIncomingMessage, IOutgoingMessage {
+public final class DistributedBranchLevel implements IncomingMessage, OutgoingMessage {
     private final int level;
 
     /** Creates a branch-level message. */

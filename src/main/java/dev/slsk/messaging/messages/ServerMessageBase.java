@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageBuilder;
 import dev.slsk.messaging.MessageCode;
 
 /** Shared mechanical serialization for scalar server commands. */
-abstract class ServerMessageBase implements IOutgoingMessage {
+abstract class ServerMessageBase implements OutgoingMessage {
     private final MessageCode.Server code;
 
     ServerMessageBase(MessageCode.Server code) {

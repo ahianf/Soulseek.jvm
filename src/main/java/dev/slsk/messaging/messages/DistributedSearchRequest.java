@@ -10,7 +10,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** A distributed file-search request. */
-public final class DistributedSearchRequest implements IIncomingMessage, IOutgoingMessage {
+public final class DistributedSearchRequest implements IncomingMessage, OutgoingMessage {
     private final String query;
     private final int token;
     private final String username;

@@ -67,7 +67,7 @@ class StringServerCommandTest {
         assertEquals(0, reader.getRemaining());
     }
 
-    private static void assertString(IOutgoingMessage message, MessageCode.Server code, String value) {
+    private static void assertString(OutgoingMessage message, MessageCode.Server code, String value) {
         MessageReader<MessageCode.Server> reader = new MessageReader<>(message.toByteArray(), MessageCode.Server.class);
 
         assertEquals(code, reader.readCode());

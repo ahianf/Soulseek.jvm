@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Objects;
 
 /** An incoming list of tickers for a chat room. */
-public final class RoomTickerListNotification implements IIncomingMessage {
+public final class RoomTickerListNotification implements IncomingMessage {
 
     private final String roomName;
     private final int tickerCount;

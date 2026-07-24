@@ -22,7 +22,7 @@ import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
 import dev.slsk.exceptions.TransferSizeMismatchException;
-import dev.slsk.messaging.messages.IOutgoingMessage;
+import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.messaging.messages.TransferRequest;
 import dev.slsk.messaging.messages.TransferResponse;
 import dev.slsk.messaging.messages.UserAddressResponse;
@@ -774,7 +774,7 @@ class SoulseekClientDownloadTest {
     }
 
     private static final class MessageConnectionProbe {
-        private final List<IOutgoingMessage> messages = new ArrayList<>();
+        private final List<OutgoingMessage> messages = new ArrayList<>();
         private final IMessageConnection proxy = (IMessageConnection) Proxy.newProxyInstance(
                 IMessageConnection.class.getClassLoader(), new Class<?>[] {IMessageConnection.class}, this::invoke);
 
@@ -782,7 +782,7 @@ class SoulseekClientDownloadTest {
             if (method.getName().equals("writeAsync")
                     && arguments != null
                     && arguments.length == 2
-                    && arguments[0] instanceof IOutgoingMessage message) {
+                    && arguments[0] instanceof OutgoingMessage message) {
                 messages.add(message);
                 return CompletableFuture.completedFuture(null);
             }

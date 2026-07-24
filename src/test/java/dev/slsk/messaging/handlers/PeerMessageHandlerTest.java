@@ -38,7 +38,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.messages.BrowseRequest;
 import dev.slsk.messaging.messages.FolderContentsRequest;
 import dev.slsk.messaging.messages.FolderContentsResponse;
-import dev.slsk.messaging.messages.IOutgoingMessage;
+import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.messaging.messages.PlaceInQueueRequest;
 import dev.slsk.messaging.messages.PlaceInQueueResponse;
 import dev.slsk.messaging.messages.QueueDownloadRequest;
@@ -725,7 +725,7 @@ class PeerMessageHandlerTest {
 
     private static final class ConnectionProbe {
         private final List<byte[]> bytes = new ArrayList<>();
-        private final List<IOutgoingMessage> outgoing = new ArrayList<>();
+        private final List<OutgoingMessage> outgoing = new ArrayList<>();
         private long rawLength = -1;
         private InputStream rawStream;
         private final IMessageConnection proxy = (IMessageConnection) Proxy.newProxyInstance(
@@ -739,7 +739,7 @@ class PeerMessageHandlerTest {
                 case "writeAsync" -> {
                     if (arguments[0] instanceof byte[] value) {
                         bytes.add(Arrays.copyOf(value, value.length));
-                    } else if (arguments[0] instanceof IOutgoingMessage message) {
+                    } else if (arguments[0] instanceof OutgoingMessage message) {
                         outgoing.add(message);
                     } else if (arguments[0] instanceof Long length) {
                         rawLength = length;

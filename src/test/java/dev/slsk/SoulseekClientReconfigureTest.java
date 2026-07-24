@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.common.TokenBucket;
 import dev.slsk.exceptions.ListenException;
 import dev.slsk.exceptions.SoulseekClientException;
-import dev.slsk.messaging.messages.IOutgoingMessage;
+import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.messaging.messages.PrivateRoomToggle;
 import dev.slsk.messaging.messages.SetListenPortCommand;
 import dev.slsk.network.IDistributedConnectionManager;
@@ -429,7 +429,7 @@ class SoulseekClientReconfigureTest {
     }
 
     private static final class ServerProbe {
-        private final List<IOutgoingMessage> messages = new ArrayList<>();
+        private final List<OutgoingMessage> messages = new ArrayList<>();
         private final List<CancellationToken> tokens = new ArrayList<>();
         private Throwable failure;
         private final IMessageConnection proxy = (IMessageConnection) Proxy.newProxyInstance(
@@ -438,7 +438,7 @@ class SoulseekClientReconfigureTest {
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("writeAsync")
                     && arguments.length == 2
-                    && arguments[0] instanceof IOutgoingMessage outgoing) {
+                    && arguments[0] instanceof OutgoingMessage outgoing) {
                 messages.add(outgoing);
                 tokens.add((CancellationToken) arguments[1]);
                 if (failure != null) {

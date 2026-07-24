@@ -78,12 +78,12 @@ import dev.slsk.messaging.messages.BrowseRequest;
 import dev.slsk.messaging.messages.CheckPrivilegesRequest;
 import dev.slsk.messaging.messages.FolderContentsRequest;
 import dev.slsk.messaging.messages.GivePrivilegesCommand;
-import dev.slsk.messaging.messages.IOutgoingMessage;
 import dev.slsk.messaging.messages.JoinRoomRequest;
 import dev.slsk.messaging.messages.LeaveRoomRequest;
 import dev.slsk.messaging.messages.LoginRequest;
 import dev.slsk.messaging.messages.LoginResponse;
 import dev.slsk.messaging.messages.NewPassword;
+import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.messaging.messages.PlaceInQueueRequest;
 import dev.slsk.messaging.messages.PlaceInQueueResponse;
 import dev.slsk.messaging.messages.PrivateMessageCommand;
@@ -4338,7 +4338,7 @@ public class SoulseekClient
                         await(getUserEndPointAsync(upload.getUsername(), CancellationToken.none()));
                 IMessageConnection messageConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
                         upload.getUsername(), currentEndpoint, CancellationToken.none()));
-                IOutgoingMessage message = upload.getState().hasFlag(TransferStates.CANCELLED)
+                OutgoingMessage message = upload.getState().hasFlag(TransferStates.CANCELLED)
                         ? new UploadDenied(upload.getFilename(), "Cancelled")
                         : new UploadFailed(upload.getFilename());
                 await(invokeMessageWrite(messageConnection, message, CancellationToken.none()));
@@ -4631,12 +4631,12 @@ public class SoulseekClient
     }
 
     private CompletableFuture<Void> writeServerAsync(
-            IOutgoingMessage message, CancellationToken cancellationToken, String failurePrefix) {
+            OutgoingMessage message, CancellationToken cancellationToken, String failurePrefix) {
         return mapClientFailure(invokeServerWrite(message, cancellationToken), failurePrefix);
     }
 
     private CompletableFuture<Void> executeCorrelatedServerCommand(
-            IOutgoingMessage message, WaitKey waitKey, CancellationToken cancellationToken, String failurePrefix) {
+            OutgoingMessage message, WaitKey waitKey, CancellationToken cancellationToken, String failurePrefix) {
         CancellationToken token = defaultToken(cancellationToken);
         CompletableFuture<Void> wait;
         try {
@@ -4650,7 +4650,7 @@ public class SoulseekClient
     }
 
     private <T> CompletableFuture<T> executeCorrelatedServerRequest(
-            IOutgoingMessage message,
+            OutgoingMessage message,
             WaitKey waitKey,
             Class<T> resultType,
             CancellationToken cancellationToken,
@@ -4667,12 +4667,12 @@ public class SoulseekClient
         return mapClientFailure(operation, failurePrefix, preservedFailures);
     }
 
-    private CompletableFuture<Void> invokeServerWrite(IOutgoingMessage message, CancellationToken cancellationToken) {
+    private CompletableFuture<Void> invokeServerWrite(OutgoingMessage message, CancellationToken cancellationToken) {
         return invokeMessageWrite(serverConnection, message, cancellationToken);
     }
 
     private static CompletableFuture<Void> invokeMessageWrite(
-            IMessageConnection connection, IOutgoingMessage message, CancellationToken cancellationToken) {
+            IMessageConnection connection, OutgoingMessage message, CancellationToken cancellationToken) {
         CompletableFuture<Void> operation;
         try {
             operation = connection.writeAsync(message, defaultToken(cancellationToken));

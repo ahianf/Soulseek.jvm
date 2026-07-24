@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageBuilder;
 import dev.slsk.messaging.MessageCode;
 
 /** Joins a chat room. */
-public final class JoinRoomRequest implements IOutgoingMessage {
+public final class JoinRoomRequest implements OutgoingMessage {
     private final boolean isPrivate;
     private final String roomName;
 

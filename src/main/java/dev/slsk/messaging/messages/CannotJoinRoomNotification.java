@@ -7,7 +7,7 @@ package dev.slsk.messaging.messages;
 import dev.slsk.messaging.MessageCode;
 
 /** Reports an unsuccessful attempt to join a chat room. */
-public final class CannotJoinRoomNotification implements IIncomingMessage {
+public final class CannotJoinRoomNotification implements IncomingMessage {
 
     private final String roomName;
 

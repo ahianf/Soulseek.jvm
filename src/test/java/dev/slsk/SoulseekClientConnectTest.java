@@ -21,9 +21,9 @@ import dev.slsk.exceptions.ListenException;
 import dev.slsk.exceptions.LoginRejectedException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.messaging.MessageCode;
-import dev.slsk.messaging.messages.IOutgoingMessage;
 import dev.slsk.messaging.messages.LoginRequest;
 import dev.slsk.messaging.messages.LoginResponse;
+import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.messaging.messages.PrivateRoomToggle;
 import dev.slsk.messaging.messages.SetListenPortCommand;
 import dev.slsk.network.IConnectionFactory;
@@ -332,7 +332,7 @@ class SoulseekClientConnectTest {
     private static final class ConnectionProbe {
         private final List<String> sequence;
         private final List<byte[]> rawMessages = new ArrayList<>();
-        private final List<IOutgoingMessage> outgoingMessages = new ArrayList<>();
+        private final List<OutgoingMessage> outgoingMessages = new ArrayList<>();
         private final List<CancellationToken> tokens = new ArrayList<>();
         private volatile CompletableFuture<Void> connectResult = CompletableFuture.completedFuture(null);
         private volatile CompletableFuture<Void> rawResult = CompletableFuture.completedFuture(null);
@@ -372,7 +372,7 @@ class SoulseekClientConnectTest {
             }
             if (method.getName().equals("writeAsync")
                     && arguments.length == 2
-                    && arguments[0] instanceof IOutgoingMessage message) {
+                    && arguments[0] instanceof OutgoingMessage message) {
                 sequence.add("message");
                 outgoingMessages.add(message);
                 tokens.add((CancellationToken) arguments[1]);

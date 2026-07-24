@@ -5,4 +5,4 @@
 package dev.slsk.messaging.messages;
 
 /** Marks a message used to negotiate a peer connection. */
-public interface IInitializationMessage {}
+public interface InitializationMessage {}

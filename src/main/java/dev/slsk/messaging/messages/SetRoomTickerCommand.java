@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageBuilder;
 import dev.slsk.messaging.MessageCode;
 
 /** Sets a chat-room ticker. */
-public final class SetRoomTickerCommand implements IOutgoingMessage {
+public final class SetRoomTickerCommand implements OutgoingMessage {
     private final String message;
     private final String roomName;
 

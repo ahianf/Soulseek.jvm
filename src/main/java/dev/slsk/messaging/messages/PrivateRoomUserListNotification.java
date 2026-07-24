@@ -9,7 +9,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** Parses the users in a private chat room. */
-public final class PrivateRoomUserListNotification implements IIncomingMessage {
+public final class PrivateRoomUserListNotification implements IncomingMessage {
 
     private PrivateRoomUserListNotification() {}
 

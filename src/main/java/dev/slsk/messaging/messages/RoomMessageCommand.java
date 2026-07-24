@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageBuilder;
 import dev.slsk.messaging.MessageCode;
 
 /** Sends a message to a chat room. */
-public final class RoomMessageCommand implements IOutgoingMessage {
+public final class RoomMessageCommand implements OutgoingMessage {
     private final String message;
     private final String roomName;
 

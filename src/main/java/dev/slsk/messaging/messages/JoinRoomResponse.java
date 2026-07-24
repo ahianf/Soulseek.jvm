@@ -13,7 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** Parses responses to requests to join chat rooms. */
-public final class JoinRoomResponse implements IIncomingMessage {
+public final class JoinRoomResponse implements IncomingMessage {
     private JoinRoomResponse() {}
 
     /** Parses joined-room data. */

@@ -10,7 +10,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** Notification that a user joined a chat room. */
-public final class UserJoinedRoomNotification implements IIncomingMessage {
+public final class UserJoinedRoomNotification implements IncomingMessage {
 
     private final String roomName;
     private final UserData userData;

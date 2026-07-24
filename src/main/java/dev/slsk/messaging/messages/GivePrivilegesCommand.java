@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageBuilder;
 import dev.slsk.messaging.MessageCode;
 
 /** Grants privileges to a user. */
-public final class GivePrivilegesCommand implements IOutgoingMessage {
+public final class GivePrivilegesCommand implements OutgoingMessage {
     private final int days;
     private final String username;
 

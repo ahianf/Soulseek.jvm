@@ -25,7 +25,7 @@ import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.messaging.handlers.IPeerMessageHandler;
 import dev.slsk.messaging.messages.ConnectToPeerRequest;
 import dev.slsk.messaging.messages.ConnectToPeerResponse;
-import dev.slsk.messaging.messages.IOutgoingMessage;
+import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.messaging.messages.PeerInit;
 import dev.slsk.messaging.messages.PierceFirewall;
 import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
@@ -840,7 +840,7 @@ class PeerConnectionManagerTest {
         private final List<MessageConnectionEventListener<MessageEventArgs>> messageWrittenListeners =
                 new ArrayList<>();
         private final List<byte[]> byteWrites = new ArrayList<>();
-        private final List<IOutgoingMessage> outgoingWrites = new ArrayList<>();
+        private final List<OutgoingMessage> outgoingWrites = new ArrayList<>();
         private ConnectionTypes type = ConnectionTypes.NONE;
         private CompletableFuture<Void> connectFuture = CompletableFuture.completedFuture(null);
         private CompletableFuture<Void> writeFuture = CompletableFuture.completedFuture(null);
@@ -912,7 +912,7 @@ class PeerConnectionManagerTest {
                 case "writeAsync" -> {
                     if (arguments[0] instanceof byte[] bytes) {
                         byteWrites.add(Arrays.copyOf(bytes, bytes.length));
-                    } else if (arguments[0] instanceof IOutgoingMessage value) {
+                    } else if (arguments[0] instanceof OutgoingMessage value) {
                         outgoingWrites.add(value);
                     }
                     yield writeFuture;

@@ -10,7 +10,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** Requests the place of a file in a peer's queue. */
-public final class PlaceInQueueRequest implements IIncomingMessage, IOutgoingMessage {
+public final class PlaceInQueueRequest implements IncomingMessage, OutgoingMessage {
     private final String filename;
 
     /** Creates a place-in-queue request. */

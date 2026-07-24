@@ -9,7 +9,7 @@ import dev.slsk.messaging.MessageReader;
 import java.time.Instant;
 
 /** An incoming private message. */
-public final class PrivateMessageNotification implements IIncomingMessage {
+public final class PrivateMessageNotification implements IncomingMessage {
     private final int id;
     private final String message;
     private final boolean replayed;

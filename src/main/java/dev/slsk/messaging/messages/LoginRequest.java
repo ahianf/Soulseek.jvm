@@ -10,7 +10,7 @@ import dev.slsk.messaging.MessageBuilder;
 import dev.slsk.messaging.MessageCode;
 
 /** Logs in to the Soulseek server. */
-public final class LoginRequest implements IOutgoingMessage {
+public final class LoginRequest implements OutgoingMessage {
     private final String hash;
     private final int minorVersion;
     private final String password;

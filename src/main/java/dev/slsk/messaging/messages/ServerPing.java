@@ -7,7 +7,7 @@ package dev.slsk.messaging.messages;
 import dev.slsk.messaging.MessageCode;
 
 /** A bidirectional server ping. */
-public final class ServerPing extends EmptyServerMessage implements IIncomingMessage {
+public final class ServerPing extends EmptyServerMessage implements IncomingMessage {
 
     /** Creates a server ping. */
     public ServerPing() {

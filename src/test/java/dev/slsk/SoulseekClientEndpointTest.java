@@ -17,7 +17,7 @@ import dev.slsk.exceptions.UserEndPointCacheException;
 import dev.slsk.exceptions.UserEndPointException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.messaging.MessageCode;
-import dev.slsk.messaging.messages.IOutgoingMessage;
+import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.messaging.messages.UserAddressRequest;
 import dev.slsk.messaging.messages.UserAddressResponse;
 import dev.slsk.network.IMessageConnection;
@@ -262,7 +262,7 @@ class SoulseekClientEndpointTest {
     }
 
     private static final class ConnectionProbe {
-        private IOutgoingMessage message;
+        private OutgoingMessage message;
         private CancellationToken token;
         private int writes;
         private final IMessageConnection proxy = (IMessageConnection) Proxy.newProxyInstance(
@@ -271,7 +271,7 @@ class SoulseekClientEndpointTest {
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("writeAsync")
                     && arguments.length == 2
-                    && arguments[0] instanceof IOutgoingMessage outgoing) {
+                    && arguments[0] instanceof OutgoingMessage outgoing) {
                 writes++;
                 message = outgoing;
                 token = (CancellationToken) arguments[1];

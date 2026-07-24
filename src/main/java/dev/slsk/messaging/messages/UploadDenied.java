@@ -10,7 +10,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** Notifies a peer that an upload was denied. */
-public final class UploadDenied implements IIncomingMessage, IOutgoingMessage {
+public final class UploadDenied implements IncomingMessage, OutgoingMessage {
     private final String filename;
     private final String message;
 

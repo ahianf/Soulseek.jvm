@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageReader;
 import dev.slsk.messaging.ProtocolCode;
 
 /** Parses a single-integer response without validating its message code. */
-public final class IntegerResponse implements IIncomingMessage {
+public final class IntegerResponse implements IncomingMessage {
     private IntegerResponse() {}
 
     /**

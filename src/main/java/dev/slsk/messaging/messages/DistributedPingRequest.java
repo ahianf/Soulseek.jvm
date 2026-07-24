@@ -10,7 +10,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** A distributed ping request. */
-public final class DistributedPingRequest implements IIncomingMessage, IOutgoingMessage {
+public final class DistributedPingRequest implements IncomingMessage, OutgoingMessage {
     /** Creates a ping request. */
     public DistributedPingRequest() {}
 

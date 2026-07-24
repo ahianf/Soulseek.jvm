@@ -32,7 +32,7 @@ import dev.slsk.messaging.messages.DistributedBranchLevel;
 import dev.slsk.messaging.messages.DistributedBranchRoot;
 import dev.slsk.messaging.messages.DistributedSearchRequest;
 import dev.slsk.messaging.messages.HaveNoParentsCommand;
-import dev.slsk.messaging.messages.IOutgoingMessage;
+import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.messaging.messages.PeerInit;
 import dev.slsk.messaging.messages.PierceFirewall;
 import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
@@ -901,7 +901,7 @@ class DistributedConnectionManagerTest {
                 new ArrayList<>();
         private final List<MessageConnectionEventListener<MessageEventArgs>> messageReadListeners = new ArrayList<>();
         private final List<byte[]> byteWrites = new ArrayList<>();
-        private final List<IOutgoingMessage> outgoingWrites = new ArrayList<>();
+        private final List<OutgoingMessage> outgoingWrites = new ArrayList<>();
         private ConnectionTypes type = ConnectionTypes.NONE;
         private ConnectionState state = ConnectionState.CONNECTED;
         private CompletableFuture<Void> connectFuture = CompletableFuture.completedFuture(null);
@@ -980,7 +980,7 @@ class DistributedConnectionManagerTest {
                         if (onByteWrite != null) {
                             onByteWrite.run();
                         }
-                    } else if (arguments[0] instanceof IOutgoingMessage value) {
+                    } else if (arguments[0] instanceof OutgoingMessage value) {
                         outgoingWrites.add(value);
                     }
                     yield writeFuture;

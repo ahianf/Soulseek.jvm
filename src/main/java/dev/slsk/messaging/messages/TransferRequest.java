@@ -12,7 +12,7 @@ import dev.slsk.messaging.MessageReader;
 import java.util.Objects;
 
 /** Requests a file transfer from a peer. */
-public final class TransferRequest implements IIncomingMessage, IOutgoingMessage {
+public final class TransferRequest implements IncomingMessage, OutgoingMessage {
     private final TransferDirection direction;
     private final String filename;
     private final long fileSize;

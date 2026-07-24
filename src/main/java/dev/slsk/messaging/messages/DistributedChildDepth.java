@@ -10,7 +10,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** Informs a distributed parent of its child's depth. */
-public final class DistributedChildDepth implements IIncomingMessage, IOutgoingMessage {
+public final class DistributedChildDepth implements IncomingMessage, OutgoingMessage {
     private final int depth;
 
     /** Creates a child-depth message. */

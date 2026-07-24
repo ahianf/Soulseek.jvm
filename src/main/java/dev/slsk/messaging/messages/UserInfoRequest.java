@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageBuilder;
 import dev.slsk.messaging.MessageCode;
 
 /** Requests information about a user from a peer. */
-public class UserInfoRequest implements IOutgoingMessage {
+public class UserInfoRequest implements OutgoingMessage {
     /** Creates a user-info request. */
     public UserInfoRequest() {}
 

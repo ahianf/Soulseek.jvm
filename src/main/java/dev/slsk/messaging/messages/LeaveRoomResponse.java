@@ -7,7 +7,7 @@ package dev.slsk.messaging.messages;
 import dev.slsk.messaging.MessageCode;
 
 /** The response to a request to leave a chat room. */
-public final class LeaveRoomResponse implements IIncomingMessage {
+public final class LeaveRoomResponse implements IncomingMessage {
     private final String roomName;
 
     /** Creates a leave-room response. */

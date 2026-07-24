@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** A file-search request routed by the server. */
-public final class ServerSearchRequest implements IIncomingMessage {
+public final class ServerSearchRequest implements IncomingMessage {
     private final String query;
     private final int token;
     private final String username;

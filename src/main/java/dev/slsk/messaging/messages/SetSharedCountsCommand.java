@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageBuilder;
 import dev.slsk.messaging.MessageCode;
 
 /** Reports the number of shared directories and files. */
-public final class SetSharedCountsCommand implements IOutgoingMessage {
+public final class SetSharedCountsCommand implements OutgoingMessage {
     private final int directoryCount;
     private final int fileCount;
 

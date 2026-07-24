@@ -8,7 +8,7 @@ import dev.slsk.CancellationToken;
 import dev.slsk.common.CommonUtils;
 import dev.slsk.common.EventDispatch;
 import dev.slsk.exceptions.MessageException;
-import dev.slsk.messaging.messages.IOutgoingMessage;
+import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.network.tcp.Connection;
 import dev.slsk.network.tcp.ConnectionDataEventArgs;
 import dev.slsk.network.tcp.ConnectionEventListener;
@@ -148,7 +148,7 @@ public final class MessageConnection extends Connection implements IMessageConne
     }
 
     @Override
-    public CompletableFuture<Void> writeAsync(IOutgoingMessage message, CancellationToken cancellationToken) {
+    public CompletableFuture<Void> writeAsync(OutgoingMessage message, CancellationToken cancellationToken) {
         if (message == null) {
             throw new IllegalArgumentException("The specified message is null");
         }

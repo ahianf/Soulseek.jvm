@@ -11,7 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** Parses a private room and the users over whom this user has rights. */
-public final class PrivateRoomOwnedListNotification implements IIncomingMessage {
+public final class PrivateRoomOwnedListNotification implements IncomingMessage {
 
     private PrivateRoomOwnedListNotification() {}
 

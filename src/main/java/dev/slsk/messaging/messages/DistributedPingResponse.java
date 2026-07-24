@@ -10,7 +10,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** A distributed ping response. */
-public final class DistributedPingResponse implements IIncomingMessage, IOutgoingMessage {
+public final class DistributedPingResponse implements IncomingMessage, OutgoingMessage {
     private final int token;
 
     /** Creates a ping response. */

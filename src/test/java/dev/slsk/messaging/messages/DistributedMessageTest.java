@@ -133,7 +133,7 @@ class DistributedMessageTest {
     @Test
     @DisplayName("Distributed messages retain incoming and outgoing markers")
     void distributedMessagesRetainMarkers() {
-        IOutgoingMessage[] messages = {
+        OutgoingMessage[] messages = {
             new DistributedBranchLevel(1),
             new DistributedBranchRoot("u"),
             new DistributedChildDepth(1),
@@ -142,8 +142,8 @@ class DistributedMessageTest {
             new DistributedSearchRequest("u", 1, "q")
         };
 
-        for (IOutgoingMessage message : messages) {
-            assertInstanceOf(IIncomingMessage.class, message);
+        for (OutgoingMessage message : messages) {
+            assertInstanceOf(IncomingMessage.class, message);
         }
     }
 }

@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Objects;
 
 /** The response to a peer folder-contents request. */
-public final class FolderContentsResponse implements IIncomingMessage, IOutgoingMessage {
+public final class FolderContentsResponse implements IncomingMessage, OutgoingMessage {
     private final int directoryCount;
     private final String directoryName;
     private final List<Directory> directories;

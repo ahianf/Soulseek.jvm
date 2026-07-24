@@ -9,7 +9,7 @@ import dev.slsk.messaging.MessageCode;
 import java.net.InetAddress;
 
 /** Reports the current distributed parent's IP address. */
-public final class ParentsIPCommand implements IOutgoingMessage {
+public final class ParentsIPCommand implements OutgoingMessage {
     private final InetAddress ipAddress;
 
     public ParentsIPCommand() {

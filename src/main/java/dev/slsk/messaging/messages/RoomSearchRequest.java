@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageBuilder;
 import dev.slsk.messaging.MessageCode;
 
 /** Requests a search from all members of a room. */
-public final class RoomSearchRequest implements IOutgoingMessage {
+public final class RoomSearchRequest implements OutgoingMessage {
     private final String roomName;
     private final String searchText;
     private final int token;

@@ -10,7 +10,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** A peer response to a transfer request. */
-public final class TransferResponse implements IIncomingMessage, IOutgoingMessage {
+public final class TransferResponse implements IncomingMessage, OutgoingMessage {
     private final long fileSize;
     private final boolean isAllowed;
     private final String message;

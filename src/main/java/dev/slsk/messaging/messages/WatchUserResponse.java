@@ -10,7 +10,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** The response to a request to watch a user. */
-public final class WatchUserResponse implements IIncomingMessage {
+public final class WatchUserResponse implements IncomingMessage {
     private final boolean exists;
     private final UserData userData;
     private final String username;

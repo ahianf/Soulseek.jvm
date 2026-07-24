@@ -10,7 +10,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** Informs distributed children of the current branch root. */
-public final class DistributedBranchRoot implements IIncomingMessage, IOutgoingMessage {
+public final class DistributedBranchRoot implements IncomingMessage, OutgoingMessage {
     private final String username;
 
     /** Creates a branch-root message. */

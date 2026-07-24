@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageBuilder;
 import dev.slsk.messaging.MessageCode;
 
 /** Requests a search from one user. */
-public final class UserSearchRequest implements IOutgoingMessage {
+public final class UserSearchRequest implements OutgoingMessage {
     private final String searchText;
     private final int token;
     private final String username;

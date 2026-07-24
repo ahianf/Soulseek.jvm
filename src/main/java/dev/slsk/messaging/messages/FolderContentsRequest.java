@@ -10,7 +10,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** Requests the contents of a directory from a peer. */
-public final class FolderContentsRequest implements IIncomingMessage, IOutgoingMessage {
+public final class FolderContentsRequest implements IncomingMessage, OutgoingMessage {
     private final String directoryName;
     private final int token;
 

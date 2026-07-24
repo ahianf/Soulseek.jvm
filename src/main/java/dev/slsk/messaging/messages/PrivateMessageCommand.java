@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageBuilder;
 import dev.slsk.messaging.MessageCode;
 
 /** Sends a private message. */
-public final class PrivateMessageCommand implements IOutgoingMessage {
+public final class PrivateMessageCommand implements OutgoingMessage {
     private final String message;
     private final String username;
 

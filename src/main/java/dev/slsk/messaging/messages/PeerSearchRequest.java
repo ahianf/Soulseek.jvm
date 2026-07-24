@@ -9,7 +9,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** A search request received directly from a peer. */
-public final class PeerSearchRequest implements IIncomingMessage {
+public final class PeerSearchRequest implements IncomingMessage {
     private final String query;
     private final int token;
 

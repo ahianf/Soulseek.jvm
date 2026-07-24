@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageCode;
 import java.util.List;
 
 /** Parses the server's privileged-user list. */
-public final class PrivilegedUserListNotification implements IIncomingMessage {
+public final class PrivilegedUserListNotification implements IncomingMessage {
 
     private PrivilegedUserListNotification() {}
 

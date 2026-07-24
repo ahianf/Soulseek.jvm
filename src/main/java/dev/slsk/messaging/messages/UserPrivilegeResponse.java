@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** The response to a request for a user's privilege status. */
-public final class UserPrivilegeResponse implements IIncomingMessage {
+public final class UserPrivilegeResponse implements IncomingMessage {
     private final boolean privileged;
     private final String username;
 

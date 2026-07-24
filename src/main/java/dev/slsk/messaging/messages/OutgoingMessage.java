@@ -5,7 +5,7 @@
 package dev.slsk.messaging.messages;
 
 /** A protocol message that can be serialized for a connection. */
-public interface IOutgoingMessage {
+public interface OutgoingMessage {
     /**
      * Serializes this message.
      *

@@ -9,7 +9,7 @@ import dev.slsk.messaging.MessageReader;
 import java.net.InetAddress;
 
 /** The response to a login request. */
-public final class LoginResponse implements IIncomingMessage {
+public final class LoginResponse implements IncomingMessage {
     private final String hash;
     private final InetAddress ipAddress;
     private final boolean supporter;

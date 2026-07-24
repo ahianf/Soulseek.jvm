@@ -8,7 +8,7 @@ import dev.slsk.messaging.MessageBuilder;
 import dev.slsk.messaging.MessageCode;
 
 /** Requests a distributed search. */
-public final class SearchRequest implements IOutgoingMessage {
+public final class SearchRequest implements OutgoingMessage {
     private final String searchText;
     private final int token;
 

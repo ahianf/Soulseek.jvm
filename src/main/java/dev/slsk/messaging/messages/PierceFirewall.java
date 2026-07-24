@@ -10,7 +10,7 @@ import dev.slsk.messaging.MessageReader;
 import java.util.Optional;
 
 /** Pierces the local firewall to initiate a connection. */
-public final class PierceFirewall implements IInitializationMessage {
+public final class PierceFirewall implements InitializationMessage {
     private final int token;
 
     /** Creates a firewall-piercing message. */

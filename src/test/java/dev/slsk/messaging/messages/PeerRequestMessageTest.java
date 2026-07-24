@@ -59,7 +59,7 @@ class PeerRequestMessageTest {
         assertEquals("query", direct.getQuery());
         assertEquals(-17, parsed.getToken());
         assertEquals("query", parsed.getQuery());
-        assertInstanceOf(IIncomingMessage.class, direct);
+        assertInstanceOf(IncomingMessage.class, direct);
     }
 
     @Test
@@ -133,15 +133,15 @@ class PeerRequestMessageTest {
     @Test
     @DisplayName("Bidirectional peer messages retain both markers")
     void bidirectionalMessagesRetainMarkers() {
-        IOutgoingMessage[] messages = {
+        OutgoingMessage[] messages = {
             new FolderContentsRequest(1, "d"),
             new PlaceInQueueRequest("f"),
             new PlaceInQueueResponse("f", 1),
             new QueueDownloadRequest("f")
         };
 
-        for (IOutgoingMessage message : messages) {
-            assertInstanceOf(IIncomingMessage.class, message);
+        for (OutgoingMessage message : messages) {
+            assertInstanceOf(IncomingMessage.class, message);
         }
     }
 

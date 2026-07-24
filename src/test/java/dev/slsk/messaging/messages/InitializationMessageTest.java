@@ -87,8 +87,8 @@ class InitializationMessageTest {
     @Test
     @DisplayName("Initialization messages implement the source marker")
     void initializationMessagesImplementMarker() {
-        assertTrue(new PeerInit("u", "P", 1) instanceof IInitializationMessage);
-        assertTrue(new PierceFirewall(1) instanceof IInitializationMessage);
+        assertTrue(new PeerInit("u", "P", 1) instanceof InitializationMessage);
+        assertTrue(new PierceFirewall(1) instanceof InitializationMessage);
     }
 
     private static byte[] peerInitBytes(String username, String connectionType, int token) {

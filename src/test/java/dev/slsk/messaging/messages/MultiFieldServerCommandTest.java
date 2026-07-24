@@ -121,7 +121,7 @@ class MultiFieldServerCommandTest {
     }
 
     private static void assertTwoStrings(
-            IOutgoingMessage message, MessageCode.Server code, String first, String second) {
+            OutgoingMessage message, MessageCode.Server code, String first, String second) {
         MessageReader<MessageCode.Server> reader = reader(message);
         assertEquals(code, reader.readCode());
         assertEquals(first, reader.readString());
@@ -129,7 +129,7 @@ class MultiFieldServerCommandTest {
         assertEquals(0, reader.getRemaining());
     }
 
-    private static void assertTokenQuery(IOutgoingMessage message, MessageCode.Server code, int token, String query) {
+    private static void assertTokenQuery(OutgoingMessage message, MessageCode.Server code, int token, String query) {
         MessageReader<MessageCode.Server> reader = reader(message);
         assertEquals(code, reader.readCode());
         assertEquals(token, reader.readInteger());
@@ -138,7 +138,7 @@ class MultiFieldServerCommandTest {
     }
 
     private static void assertScopedSearch(
-            IOutgoingMessage message, MessageCode.Server code, String scope, int token, String query) {
+            OutgoingMessage message, MessageCode.Server code, String scope, int token, String query) {
         MessageReader<MessageCode.Server> reader = reader(message);
         assertEquals(code, reader.readCode());
         assertEquals(scope, reader.readString());
@@ -147,7 +147,7 @@ class MultiFieldServerCommandTest {
         assertEquals(0, reader.getRemaining());
     }
 
-    private static MessageReader<MessageCode.Server> reader(IOutgoingMessage message) {
+    private static MessageReader<MessageCode.Server> reader(OutgoingMessage message) {
         return new MessageReader<>(message.toByteArray(), MessageCode.Server.class);
     }
 }

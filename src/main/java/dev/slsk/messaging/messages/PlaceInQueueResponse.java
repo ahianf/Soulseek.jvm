@@ -10,7 +10,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** Reports the current place of a file in a peer's queue. */
-public final class PlaceInQueueResponse implements IIncomingMessage, IOutgoingMessage {
+public final class PlaceInQueueResponse implements IncomingMessage, OutgoingMessage {
     private final String filename;
     private final int placeInQueue;
 

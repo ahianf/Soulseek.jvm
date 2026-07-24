@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.messaging.messages.AcknowledgePrivateMessageCommand;
 import dev.slsk.messaging.messages.AcknowledgePrivilegeNotificationCommand;
-import dev.slsk.messaging.messages.IOutgoingMessage;
+import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.messaging.messages.PrivateMessageCommand;
 import dev.slsk.messaging.messages.RoomMessageCommand;
 import dev.slsk.messaging.messages.SendUploadSpeedCommand;
@@ -238,7 +238,7 @@ class SoulseekClientCommandTest {
     }
 
     private static final class ConnectionProbe {
-        private final List<IOutgoingMessage> messages = new ArrayList<>();
+        private final List<OutgoingMessage> messages = new ArrayList<>();
         private final List<CancellationToken> tokens = new ArrayList<>();
         private CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
         private RuntimeException synchronousFailure;
@@ -248,7 +248,7 @@ class SoulseekClientCommandTest {
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("writeAsync")
                     && arguments.length == 2
-                    && arguments[0] instanceof IOutgoingMessage message) {
+                    && arguments[0] instanceof OutgoingMessage message) {
                 messages.add(message);
                 tokens.add((CancellationToken) arguments[1]);
                 if (synchronousFailure != null) {

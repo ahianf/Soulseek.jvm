@@ -7,7 +7,7 @@ package dev.slsk.messaging.messages;
 import dev.slsk.messaging.MessageCode;
 
 /** Parses notification of a newly privileged user. */
-public final class PrivilegedUserNotification implements IIncomingMessage {
+public final class PrivilegedUserNotification implements IncomingMessage {
     private PrivilegedUserNotification() {}
 
     /** Parses the privileged username. */

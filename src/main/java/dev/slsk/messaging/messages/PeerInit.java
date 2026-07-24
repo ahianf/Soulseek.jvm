@@ -10,7 +10,7 @@ import dev.slsk.messaging.MessageReader;
 import java.util.Optional;
 
 /** Initiates a peer connection. */
-public final class PeerInit implements IInitializationMessage {
+public final class PeerInit implements InitializationMessage {
     private final String connectionType;
     private final int token;
     private final String username;

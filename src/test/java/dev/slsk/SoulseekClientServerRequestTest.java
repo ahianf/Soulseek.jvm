@@ -489,7 +489,7 @@ class SoulseekClientServerRequestTest {
     }
 
     private static final class ConnectionProbe {
-        private dev.slsk.messaging.messages.IOutgoingMessage message;
+        private dev.slsk.messaging.messages.OutgoingMessage message;
         private CancellationToken token;
         private int writeCount;
         private CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
@@ -500,7 +500,7 @@ class SoulseekClientServerRequestTest {
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("writeAsync")
                     && arguments.length == 2
-                    && arguments[0] instanceof dev.slsk.messaging.messages.IOutgoingMessage outgoing) {
+                    && arguments[0] instanceof dev.slsk.messaging.messages.OutgoingMessage outgoing) {
                 writeCount++;
                 message = outgoing;
                 token = (CancellationToken) arguments[1];

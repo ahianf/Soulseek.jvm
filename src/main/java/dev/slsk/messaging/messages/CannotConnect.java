@@ -9,7 +9,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** Reports an unsuccessful peer-connection attempt. */
-public final class CannotConnect implements IIncomingMessage, IOutgoingMessage {
+public final class CannotConnect implements IncomingMessage, OutgoingMessage {
 
     private final int token;
     private final String username;

@@ -16,7 +16,7 @@ import java.util.Objects;
 /**
  * A server message intended for forwarding to the distributed network.
  */
-public final class EmbeddedMessage implements IIncomingMessage {
+public final class EmbeddedMessage implements IncomingMessage {
     private final MessageCode.Distributed distributedCode;
     private final byte[] distributedMessage;
 

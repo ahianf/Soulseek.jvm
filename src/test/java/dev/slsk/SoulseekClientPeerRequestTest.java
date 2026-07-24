@@ -22,7 +22,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.handlers.BrowseResponseConnection;
 import dev.slsk.messaging.messages.BrowseRequest;
 import dev.slsk.messaging.messages.FolderContentsRequest;
-import dev.slsk.messaging.messages.IOutgoingMessage;
+import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.messaging.messages.PlaceInQueueRequest;
 import dev.slsk.messaging.messages.PlaceInQueueResponse;
 import dev.slsk.messaging.messages.UserAddressRequest;
@@ -521,7 +521,7 @@ class SoulseekClientPeerRequestTest {
     }
 
     private static final class ConnectionProbe {
-        private IOutgoingMessage message;
+        private OutgoingMessage message;
         private CancellationToken token;
         private CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
         private RuntimeException synchronousFailure;
@@ -533,7 +533,7 @@ class SoulseekClientPeerRequestTest {
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("writeAsync")
                     && arguments.length == 2
-                    && arguments[0] instanceof IOutgoingMessage outgoing) {
+                    && arguments[0] instanceof OutgoingMessage outgoing) {
                 message = outgoing;
                 token = (CancellationToken) arguments[1];
                 if (synchronousFailure != null) {

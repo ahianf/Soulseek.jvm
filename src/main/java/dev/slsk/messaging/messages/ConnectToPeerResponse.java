@@ -11,7 +11,7 @@ import java.net.InetSocketAddress;
 import java.util.Objects;
 
 /** A server response soliciting a peer connection. */
-public final class ConnectToPeerResponse implements IIncomingMessage {
+public final class ConnectToPeerResponse implements IncomingMessage {
     private final InetAddress ipAddress;
     private final InetSocketAddress ipEndPoint;
     private final boolean privileged;

@@ -10,7 +10,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 
 /** Notifies a peer that an upload failed. */
-public final class UploadFailed implements IIncomingMessage, IOutgoingMessage {
+public final class UploadFailed implements IncomingMessage, OutgoingMessage {
     private final String filename;
 
     /** Creates an upload-failed message. */
