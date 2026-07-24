@@ -310,6 +310,22 @@ class SoulseekClientDownloadTest {
     }
 
     @Test
+    void enqueueReturnsCompletedDownloadWhenPeerAcceptsImmediately() {
+        try (Fixture fixture = new Fixture()) {
+            fixture.transfer.data = new byte[] {1, 2};
+            fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(17, 2));
+
+            CompletableFuture<Transfer> download = fixture.client
+                    .enqueueDownloadAsync(
+                            "alice", "file", outputFactory(), 2L, 0, 17, options(), CancellationSignal.none())
+                    .orTimeout(1, java.util.concurrent.TimeUnit.SECONDS)
+                    .join();
+
+            assertTrue(download.join().getState().contains(TransferState.SUCCEEDED));
+        }
+    }
+
+    @Test
     void enqueuePropagatesFailureBeforeRemoteQueueing() {
         try (Fixture fixture = new Fixture()) {
             TransferRejectedException rejection = new TransferRejectedException("rejected");

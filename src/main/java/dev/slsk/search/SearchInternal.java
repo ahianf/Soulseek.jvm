@@ -11,6 +11,7 @@ import dev.slsk.SearchQuery;
 import dev.slsk.SearchResponse;
 import dev.slsk.SearchScope;
 import dev.slsk.SearchState;
+import dev.slsk.common.NetworkExecutor;
 import dev.slsk.options.SearchOptions;
 import java.util.List;
 import java.util.Objects;
@@ -285,8 +286,13 @@ public final class SearchInternal implements AutoCloseable {
 
     private void resetTimeout() {
         stopTimeout();
+        // Time out on the scheduler, but run completion (which raises the state-changed
+        // event and the caller's stateChanged callback) on a virtual thread so a blocking
+        // callback cannot stall this timer thread.
         timeoutTask = timerExecutor.schedule(
-                () -> complete(SearchState.TIMED_OUT), options.getSearchTimeout(), TimeUnit.MILLISECONDS);
+                () -> NetworkExecutor.executor().execute(() -> complete(SearchState.TIMED_OUT)),
+                options.getSearchTimeout(),
+                TimeUnit.MILLISECONDS);
     }
 
     private void stopTimeout() {

@@ -383,7 +383,11 @@ public final class DefaultWaiter implements Waiter {
                 return;
             }
 
-            ScheduledFuture<?> task = scheduler.schedule(timeoutAction, timeout, TimeUnit.MILLISECONDS);
+            // The scheduler only times out; the completion (and any continuation the
+            // caller chained on the wait future) runs on a virtual thread so a blocking
+            // continuation can never stall this single timer thread and every other wait.
+            ScheduledFuture<?> task = scheduler.schedule(
+                    () -> NetworkExecutor.executor().execute(timeoutAction), timeout, TimeUnit.MILLISECONDS);
             synchronized (this) {
                 if (closed) {
                     task.cancel(false);

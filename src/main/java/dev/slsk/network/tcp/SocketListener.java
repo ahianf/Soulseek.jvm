@@ -5,12 +5,12 @@
 package dev.slsk.network.tcp;
 
 import dev.slsk.common.CommonUtils;
+import dev.slsk.common.NetworkExecutor;
 import dev.slsk.options.ConnectionOptions;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /** Listens for client connections for TCP network services. */
@@ -71,7 +71,7 @@ public final class SocketListener implements Listener {
     public void start() {
         tcpListener.start();
         listening = true;
-        CommonUtils.forget(CompletableFuture.runAsync(this::listenContinuously));
+        CommonUtils.forget(NetworkExecutor.runAsync(this::listenContinuously));
     }
 
     @Override
@@ -83,7 +83,7 @@ public final class SocketListener implements Listener {
     private void listenContinuously() {
         while (listening) {
             Socket client = tcpListener.acceptTcpClientAsync().join();
-            CommonUtils.forget(CompletableFuture.runAsync(() -> raiseAccepted(client)));
+            CommonUtils.forget(NetworkExecutor.runAsync(() -> raiseAccepted(client)));
         }
     }
 

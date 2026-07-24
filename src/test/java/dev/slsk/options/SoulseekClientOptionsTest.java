@@ -146,6 +146,19 @@ class SoulseekClientOptionsTest {
     }
 
     @Test
+    void configuresListenerPortAndMessageTimeout() {
+        SoulseekClientOptions options = new SoulseekClientOptions(true, null, 50_001, 15_000);
+
+        assertTrue(options.isEnableListener());
+        assertEquals(50_001, options.getListenPort());
+        assertEquals(15_000, options.getMessageTimeout());
+        assertThrows(IllegalArgumentException.class, () -> new SoulseekClientOptions(true, null, 50_001, 0));
+
+        SoulseekClientOptions traced = new SoulseekClientOptions(true, null, 50_001, 15_000, DiagnosticLevel.DEBUG);
+        assertEquals(DiagnosticLevel.DEBUG, traced.getMinimumDiagnosticLevel());
+    }
+
+    @Test
     void validatesInSourceOrder() {
         IllegalArgumentException port = assertThrows(IllegalArgumentException.class, () -> complete(1023, -1, 0, 0, 0));
         assertTrue(port.getMessage().startsWith("listenPort"));

@@ -7,6 +7,7 @@ package dev.slsk;
 import dev.slsk.common.Constants;
 import dev.slsk.common.DefaultWaiter;
 import dev.slsk.common.IOAdapter;
+import dev.slsk.common.NetworkExecutor;
 import dev.slsk.common.TokenBucket;
 import dev.slsk.common.TokenFactory;
 import dev.slsk.common.WaitKey;
@@ -3495,7 +3496,7 @@ final class DefaultSoulseekClient
     private static void completeDownloadEnqueue(CompletableFuture<Boolean> enqueued, TransferState state) {
         if (state.equals(TransferState.QUEUED.or(TransferState.REMOTELY))) {
             enqueued.complete(true);
-        } else if (state.contains(TransferState.COMPLETED) && !state.contains(TransferState.SUCCEEDED)) {
+        } else if (state.contains(TransferState.COMPLETED)) {
             enqueued.complete(false);
         }
     }
@@ -3538,7 +3539,7 @@ final class DefaultSoulseekClient
 
         DownloadOperation operation =
                 new DownloadOperation(download, outputStreamFactory, operationOptions, cancellationSignal, uniqueKey);
-        return CompletableFuture.supplyAsync(operation::execute);
+        return NetworkExecutor.supplyAsync(operation::execute);
     }
 
     private final class DownloadOperation {
@@ -4000,7 +4001,7 @@ final class DefaultSoulseekClient
 
         UploadOperation operation =
                 new UploadOperation(upload, inputStreamFactory, operationOptions, cancellationSignal, uniqueKey);
-        return CompletableFuture.supplyAsync(operation::execute);
+        return NetworkExecutor.supplyAsync(operation::execute);
     }
 
     private static String uploadUniqueKey(String requestedUsername, String remoteFilename) {
@@ -4587,7 +4588,7 @@ final class DefaultSoulseekClient
         CompletableFuture<Void> result = new CompletableFuture<>();
         CancellationSubscription registration = cancellationSignal.register(
                 () -> result.completeExceptionally(new CancellationException("The operation was cancelled")));
-        CompletableFuture.runAsync(() -> {
+        NetworkExecutor.runAsync(() -> {
             try {
                 while (!result.isDone()) {
                     cancellationSignal.throwIfCancellationRequested();

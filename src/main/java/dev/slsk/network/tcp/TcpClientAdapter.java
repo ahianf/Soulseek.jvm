@@ -5,6 +5,7 @@
 package dev.slsk.network.tcp;
 
 import dev.slsk.CancellationSignal;
+import dev.slsk.common.NetworkExecutor;
 import dev.slsk.exceptions.ProxyException;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -62,7 +63,7 @@ final class TcpClientAdapter implements TcpClient {
     public CompletableFuture<Void> connectAsync(InetAddress address, int port) {
         Objects.requireNonNull(address, "address");
         validatePort(port, "port");
-        return CompletableFuture.runAsync(() -> {
+        return NetworkExecutor.runAsync(() -> {
             try {
                 socket.connect(new InetSocketAddress(address, port));
             } catch (IOException exception) {
@@ -94,7 +95,7 @@ final class TcpClientAdapter implements TcpClient {
             throw new IllegalArgumentException("The password length must be less than or equal to " + "255 characters");
         }
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
-        return CompletableFuture.supplyAsync(() -> connectThroughProxyInternal(
+        return NetworkExecutor.supplyAsync(() -> connectThroughProxyInternal(
                 proxyAddress, proxyPort, destinationAddress, destinationPort, token, username, password));
     }
 

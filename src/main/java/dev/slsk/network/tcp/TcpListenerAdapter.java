@@ -4,6 +4,7 @@
 
 package dev.slsk.network.tcp;
 
+import dev.slsk.common.NetworkExecutor;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
@@ -46,7 +47,7 @@ final class TcpListenerAdapter implements TcpListener {
         if (accepted != null) {
             return CompletableFuture.completedFuture(accepted);
         }
-        return CompletableFuture.supplyAsync(() -> {
+        return NetworkExecutor.supplyAsync(() -> {
             try {
                 return serverSocket.accept();
             } catch (IOException exception) {

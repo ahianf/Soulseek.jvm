@@ -6,6 +6,7 @@ package dev.slsk.network.tcp;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.CancellationSubscription;
+import dev.slsk.common.NetworkExecutor;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -62,7 +63,7 @@ final class NetworkStreamAdapter implements NetworkStream {
             return cancelledFuture();
         }
         return observeCancellation(
-                CompletableFuture.supplyAsync(() -> {
+                NetworkExecutor.supplyAsync(() -> {
                     token.throwIfCancellationRequested();
                     try {
                         int bytesRead = inputStream.read(buffer, offset, size);
@@ -85,7 +86,7 @@ final class NetworkStreamAdapter implements NetworkStream {
             return cancelledFuture();
         }
         return observeCancellation(
-                CompletableFuture.runAsync(() -> {
+                NetworkExecutor.runAsync(() -> {
                     token.throwIfCancellationRequested();
                     try {
                         outputStream.write(buffer, offset, size);
@@ -108,11 +109,26 @@ final class NetworkStreamAdapter implements NetworkStream {
         }
     }
 
-    private static <T> CompletableFuture<T> observeCancellation(
-            CompletableFuture<T> operation, CancellationSignal token) {
-        CancellationSubscription registration = token.register(() -> operation.cancel(false));
+    private <T> CompletableFuture<T> observeCancellation(CompletableFuture<T> operation, CancellationSignal token) {
+        // A blocking InputStream/OutputStream call cannot be interrupted; cancelling the
+        // future alone leaves the socket read parked until some other layer closes it.
+        // Close the socket here so cancellation aborts the in-flight I/O on its own. This
+        // matches the port's model in which a cancelled transfer/message read tears the
+        // connection down; close() is idempotent with the owning connection's disconnect.
+        CancellationSubscription registration = token.register(() -> {
+            operation.cancel(false);
+            closeQuietly();
+        });
         operation.whenComplete((ignored, exception) -> registration.close());
         return operation;
+    }
+
+    private void closeQuietly() {
+        try {
+            socket.close();
+        } catch (IOException ignored) {
+            // Best-effort abort of the blocked read/write.
+        }
     }
 
     private static <T> CompletableFuture<T> cancelledFuture() {

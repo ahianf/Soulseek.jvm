@@ -7,6 +7,7 @@ package dev.slsk.network.tcp;
 import dev.slsk.CancellationSignal;
 import dev.slsk.CancellationSubscription;
 import dev.slsk.common.EventDispatch;
+import dev.slsk.common.NetworkExecutor;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.ConnectionReadException;
 import dev.slsk.exceptions.ConnectionWriteDroppedException;
@@ -39,8 +40,10 @@ import java.util.concurrent.TimeoutException;
 
 /** Provides client connections for TCP network services. */
 public class SocketConnection implements Connection {
-    private static final ExecutorService IO_EXECUTOR =
-            Executors.newCachedThreadPool(daemonFactory("soulseek-connection-io"));
+    // Blocking socket reads/writes are dispatched on virtual threads so a parked
+    // read unmounts its carrier instead of pinning a bounded pool worker; see
+    // NetworkExecutor for why the common pool is unusable here.
+    private static final ExecutorService IO_EXECUTOR = NetworkExecutor.executor();
     private static final ScheduledExecutorService TIMER_EXECUTOR =
             Executors.newScheduledThreadPool(2, daemonFactory("soulseek-connection-timer"));
 

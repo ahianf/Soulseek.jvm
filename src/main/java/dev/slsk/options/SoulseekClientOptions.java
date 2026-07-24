@@ -174,6 +174,37 @@ public class SoulseekClientOptions {
 
     /** Creates options through the listener port. */
     public SoulseekClientOptions(boolean enableListener, InetAddress listenIpAddress, int listenPort) {
+        this(enableListener, listenIpAddress, listenPort, DEFAULT_MESSAGE_TIMEOUT);
+    }
+
+    /**
+     * Creates options through the listener port and message timeout.
+     *
+     * @param enableListener whether to accept inbound peer connections
+     * @param listenIpAddress the local listener address, or {@code null} for all addresses
+     * @param listenPort the local listener port advertised to the network
+     * @param messageTimeout the timeout in milliseconds for correlated server messages
+     */
+    public SoulseekClientOptions(
+            boolean enableListener, InetAddress listenIpAddress, int listenPort, int messageTimeout) {
+        this(enableListener, listenIpAddress, listenPort, messageTimeout, DiagnosticLevel.INFO);
+    }
+
+    /**
+     * Creates options through listener, message-timeout, and diagnostic settings.
+     *
+     * @param enableListener whether to accept inbound peer connections
+     * @param listenIpAddress the local listener address, or {@code null} for all addresses
+     * @param listenPort the local listener port advertised to the network
+     * @param messageTimeout the timeout in milliseconds for correlated server messages
+     * @param minimumDiagnosticLevel the minimum diagnostic event level to emit
+     */
+    public SoulseekClientOptions(
+            boolean enableListener,
+            InetAddress listenIpAddress,
+            int listenPort,
+            int messageTimeout,
+            DiagnosticLevel minimumDiagnosticLevel) {
         this(
                 enableListener,
                 listenIpAddress,
@@ -187,11 +218,11 @@ public class SoulseekClientOptions {
                 Integer.MAX_VALUE,
                 Integer.MAX_VALUE,
                 true,
-                DEFAULT_MESSAGE_TIMEOUT,
+                messageTimeout,
                 true,
                 true,
                 false,
-                DiagnosticLevel.INFO,
+                minimumDiagnosticLevel,
                 0,
                 null,
                 null,
@@ -277,6 +308,9 @@ public class SoulseekClientOptions {
 
         this.maximumDownloadSpeed = maximumDownloadSpeed;
         this.deduplicateSearchRequests = deduplicateSearchRequests;
+        if (messageTimeout <= 0) {
+            throw new IllegalArgumentException("messageTimeout must be greater than zero");
+        }
         this.messageTimeout = messageTimeout;
         this.autoAcknowledgePrivateMessages = autoAcknowledgePrivateMessages;
         this.autoAcknowledgePrivilegeNotifications = autoAcknowledgePrivilegeNotifications;

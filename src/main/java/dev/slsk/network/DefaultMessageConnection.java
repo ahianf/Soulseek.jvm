@@ -7,6 +7,7 @@ package dev.slsk.network;
 import dev.slsk.CancellationSignal;
 import dev.slsk.common.CommonUtils;
 import dev.slsk.common.EventDispatch;
+import dev.slsk.common.NetworkExecutor;
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.network.tcp.ConnectionDataEvent;
@@ -169,7 +170,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
             }
             readingContinuously = true;
         }
-        return CompletableFuture.runAsync(() -> {
+        return NetworkExecutor.runAsync(() -> {
             byte[][] codeHolder = new byte[1][];
             ConnectionEventListener<ConnectionDataEvent> payloadProgress = (sender, args) ->
                     raiseMessageDataRead(codeHolder[0], args.getCurrentLength(), args.getTotalLength());
@@ -254,7 +255,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
     private static void dispatch(Runnable event, CancellationSignal cancellationSignal) {
         if (EventDispatch.isAsynchronous()) {
             if (!cancellationSignal.isCancellationRequested()) {
-                CompletableFuture.runAsync(event);
+                NetworkExecutor.runAsync(event);
             }
         } else {
             event.run();
