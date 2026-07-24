@@ -12,7 +12,7 @@ import java.net.Socket;
 import java.util.concurrent.CompletableFuture;
 
 /** Provides client connections for TCP network services. */
-interface ITcpClient extends AutoCloseable {
+public interface ITcpClient extends AutoCloseable {
     /** Address and port reported by a SOCKS proxy after connection. */
     record ProxyEndpoint(String proxyAddress, int proxyPort) {}
 
