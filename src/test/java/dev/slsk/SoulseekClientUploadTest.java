@@ -648,14 +648,19 @@ class SoulseekClientUploadTest {
             future.join();
             throw new AssertionError("Expected the future to fail");
         } catch (CancellationException failure) {
-            return failure;
+            return unwrapCompletionFailure(failure);
         } catch (CompletionException failure) {
-            Throwable current = failure;
-            while (current instanceof CompletionException && current.getCause() != null) {
-                current = current.getCause();
-            }
-            return current;
+            return unwrapCompletionFailure(failure);
         }
+    }
+
+    private static Throwable unwrapCompletionFailure(Throwable failure) {
+        Throwable current = failure;
+        while ((current instanceof CompletionException || current instanceof CancellationException)
+                && current.getCause() != null) {
+            current = current.getCause();
+        }
+        return current;
     }
 
     private static Object defaultValue(Class<?> type) {
