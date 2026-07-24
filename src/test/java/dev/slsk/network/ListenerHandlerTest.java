@@ -21,7 +21,7 @@ import dev.slsk.common.WaitKey;
 import dev.slsk.common.Waiter;
 import dev.slsk.diagnostics.DiagnosticEventArgs;
 import dev.slsk.diagnostics.DiagnosticLevel;
-import dev.slsk.diagnostics.IDiagnosticFactory;
+import dev.slsk.diagnostics.DiagnosticSink;
 import dev.slsk.messaging.messages.PeerInit;
 import dev.slsk.messaging.messages.PierceFirewall;
 import dev.slsk.network.tcp.Connection;
@@ -464,7 +464,7 @@ class ListenerHandlerTest {
         }
     }
 
-    private static final class RecordingDiagnostic implements IDiagnosticFactory {
+    private static final class RecordingDiagnostic implements DiagnosticSink {
         private final java.util.ArrayList<String> debug = new java.util.ArrayList<>();
 
         @Override

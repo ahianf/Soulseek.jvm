@@ -4,11 +4,11 @@
 
 package dev.slsk.network;
 
-import dev.slsk.diagnostics.IDiagnosticGenerator;
+import dev.slsk.diagnostics.DiagnosticSource;
 import dev.slsk.network.tcp.Connection;
 import dev.slsk.network.tcp.Listener;
 
 /** Handles connections accepted by the TCP listener. */
-public interface ListenerHandler extends IDiagnosticGenerator {
+public interface ListenerHandler extends DiagnosticSource {
     void handleConnection(Listener sender, Connection connection);
 }

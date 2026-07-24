@@ -7,7 +7,7 @@ package dev.slsk;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.diagnostics.IDiagnosticGenerator;
+import dev.slsk.diagnostics.DiagnosticSource;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import org.junit.jupiter.api.Test;
@@ -17,7 +17,7 @@ class ISoulseekClientTest {
     void concreteClientImplementsTheCompleteInterfaceSurface() throws NoSuchMethodException {
         assertTrue(ISoulseekClient.class.isAssignableFrom(SoulseekClient.class));
         assertTrue(AutoCloseable.class.isAssignableFrom(ISoulseekClient.class));
-        assertTrue(IDiagnosticGenerator.class.isAssignableFrom(ISoulseekClient.class));
+        assertTrue(DiagnosticSource.class.isAssignableFrom(ISoulseekClient.class));
 
         for (Method method : ISoulseekClient.class.getMethods()) {
             Method implementation = SoulseekClient.class.getMethod(method.getName(), method.getParameterTypes());

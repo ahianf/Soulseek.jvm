@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.common.WaitKey;
 import dev.slsk.common.Waiter;
-import dev.slsk.diagnostics.IDiagnosticFactory;
+import dev.slsk.diagnostics.DiagnosticSink;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.DuplicateTokenException;
 import dev.slsk.exceptions.DuplicateTransferException;
@@ -660,7 +660,7 @@ class SoulseekClientDownloadTest {
             this(null);
         }
 
-        private Fixture(IDiagnosticFactory diagnostic) {
+        private Fixture(DiagnosticSink diagnostic) {
             client = new SoulseekClient(
                     9999,
                     null,
@@ -1009,8 +1009,8 @@ class SoulseekClientDownloadTest {
 
     private static final class DiagnosticProbe {
         private final List<String> warnings = new ArrayList<>();
-        private final IDiagnosticFactory proxy = (IDiagnosticFactory) Proxy.newProxyInstance(
-                IDiagnosticFactory.class.getClassLoader(), new Class<?>[] {IDiagnosticFactory.class}, this::invoke);
+        private final DiagnosticSink proxy = (DiagnosticSink) Proxy.newProxyInstance(
+                DiagnosticSink.class.getClassLoader(), new Class<?>[] {DiagnosticSink.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("warning")) {

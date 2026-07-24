@@ -18,7 +18,7 @@ class GlobalDiagnosticTest {
     void delegatesAndClears() {
         List<DiagnosticEventArgs> events = new ArrayList<>();
         RuntimeException exception = new RuntimeException("broken");
-        GlobalDiagnostic.init(new DiagnosticFactory(DiagnosticLevel.TRACE, events::add));
+        GlobalDiagnostic.init(new FilteringDiagnosticSink(DiagnosticLevel.TRACE, events::add));
         try {
             GlobalDiagnostic.trace("trace");
             GlobalDiagnostic.trace("trace-ex", exception);

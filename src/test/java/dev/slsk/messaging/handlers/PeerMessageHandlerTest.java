@@ -26,7 +26,7 @@ import dev.slsk.UserInfo;
 import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
 import dev.slsk.common.Waiter;
-import dev.slsk.diagnostics.IDiagnosticFactory;
+import dev.slsk.diagnostics.DiagnosticSink;
 import dev.slsk.eventargs.DownloadDeniedEventArgs;
 import dev.slsk.eventargs.DownloadFailedEventArgs;
 import dev.slsk.exceptions.DownloadEnqueueException;
@@ -767,7 +767,7 @@ class PeerMessageHandlerTest {
         }
     }
 
-    private static final class RecordingDiagnostic implements IDiagnosticFactory {
+    private static final class RecordingDiagnostic implements DiagnosticSink {
         private final List<String> messages = new ArrayList<>();
         private final List<String> warnings = new ArrayList<>();
 

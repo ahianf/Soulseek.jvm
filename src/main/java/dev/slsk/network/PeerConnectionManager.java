@@ -5,7 +5,7 @@
 package dev.slsk.network;
 
 import dev.slsk.CancellationToken;
-import dev.slsk.diagnostics.IDiagnosticGenerator;
+import dev.slsk.diagnostics.DiagnosticSource;
 import dev.slsk.messaging.messages.ConnectToPeerResponse;
 import dev.slsk.network.tcp.Connection;
 import java.net.InetSocketAddress;
@@ -14,7 +14,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /** Manages peer message and transfer connections. */
-public interface PeerConnectionManager extends AutoCloseable, IDiagnosticGenerator {
+public interface PeerConnectionManager extends AutoCloseable, DiagnosticSource {
     /** Returns a snapshot of established peer message connections. */
     List<PeerEndpoint> getMessageConnections();
 

@@ -5,7 +5,7 @@
 package dev.slsk.diagnostics;
 
 /** Generates diagnostic message events. */
-public interface IDiagnosticGenerator {
+public interface DiagnosticSource {
     /** Adds a diagnostic event listener. */
     void addDiagnosticGeneratedListener(DiagnosticEventListener listener);
 

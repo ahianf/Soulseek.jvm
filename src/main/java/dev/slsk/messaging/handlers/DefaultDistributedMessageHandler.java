@@ -8,8 +8,8 @@ import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
 import dev.slsk.diagnostics.DiagnosticEventArgs;
 import dev.slsk.diagnostics.DiagnosticEventListener;
-import dev.slsk.diagnostics.DiagnosticFactory;
-import dev.slsk.diagnostics.IDiagnosticFactory;
+import dev.slsk.diagnostics.DiagnosticSink;
+import dev.slsk.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 import dev.slsk.messaging.messages.DistributedBranchLevel;
@@ -30,7 +30,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /** Handles incoming messages from distributed connections. */
 public final class DefaultDistributedMessageHandler implements DistributedMessageHandler {
     private final DistributedMessageHandlerClient client;
-    private final IDiagnosticFactory diagnostic;
+    private final DiagnosticSink diagnostic;
     private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
     private volatile String deduplicationHash;
 
@@ -40,11 +40,10 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     }
 
     /** Creates a handler. */
-    public DefaultDistributedMessageHandler(
-            DistributedMessageHandlerClient client, IDiagnosticFactory diagnosticFactory) {
+    public DefaultDistributedMessageHandler(DistributedMessageHandlerClient client, DiagnosticSink diagnosticFactory) {
         this.client = Objects.requireNonNull(client, "client");
         diagnostic = diagnosticFactory == null
-                ? new DiagnosticFactory(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
     }
 

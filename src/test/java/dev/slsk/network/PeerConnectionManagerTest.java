@@ -20,7 +20,7 @@ import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
 import dev.slsk.common.Waiter;
 import dev.slsk.diagnostics.DiagnosticEventListener;
-import dev.slsk.diagnostics.IDiagnosticFactory;
+import dev.slsk.diagnostics.DiagnosticSink;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.messaging.handlers.PeerMessageHandler;
 import dev.slsk.messaging.messages.ConnectToPeerRequest;
@@ -780,7 +780,7 @@ class PeerConnectionManagerTest {
         }
     }
 
-    private static final class RecordingDiagnostic implements IDiagnosticFactory {
+    private static final class RecordingDiagnostic implements DiagnosticSink {
         private final List<String> messages = new ArrayList<>();
 
         private boolean contains(String value) {

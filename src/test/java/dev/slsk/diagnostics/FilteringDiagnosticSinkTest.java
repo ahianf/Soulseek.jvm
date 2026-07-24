@@ -20,12 +20,12 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-class DiagnosticFactoryTest {
+class FilteringDiagnosticSinkTest {
     @Test
     @DisplayName("Diagnostic factory retains constructor data")
     void constructs() {
         Consumer<DiagnosticEventArgs> handler = ignored -> {};
-        DiagnosticFactory factory = new DiagnosticFactory(DiagnosticLevel.DEBUG, handler);
+        FilteringDiagnosticSink factory = new FilteringDiagnosticSink(DiagnosticLevel.DEBUG, handler);
 
         assertEquals(DiagnosticLevel.DEBUG, factory.getMinimumLevel());
         assertSame(handler, factory.getEventHandler());
@@ -35,7 +35,7 @@ class DiagnosticFactoryTest {
     @DisplayName("Every diagnostic method preserves level and exception")
     void raisesEveryMessageForm() {
         List<DiagnosticEventArgs> events = new ArrayList<>();
-        DiagnosticFactory factory = new DiagnosticFactory(DiagnosticLevel.TRACE, events::add);
+        FilteringDiagnosticSink factory = new FilteringDiagnosticSink(DiagnosticLevel.TRACE, events::add);
         RuntimeException exception = new RuntimeException("broken");
 
         factory.trace("trace");
@@ -61,7 +61,7 @@ class DiagnosticFactoryTest {
     @DisplayName("Minimum level filters source ordering")
     void filtersByMinimumLevel(DiagnosticLevel minimum, int count) {
         List<DiagnosticEventArgs> events = new ArrayList<>();
-        DiagnosticFactory factory = new DiagnosticFactory(minimum, events::add);
+        FilteringDiagnosticSink factory = new FilteringDiagnosticSink(minimum, events::add);
 
         factory.trace("message");
         factory.debug("message");

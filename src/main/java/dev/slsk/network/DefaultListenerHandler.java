@@ -10,8 +10,8 @@ import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
 import dev.slsk.diagnostics.DiagnosticEventArgs;
 import dev.slsk.diagnostics.DiagnosticEventListener;
-import dev.slsk.diagnostics.DiagnosticFactory;
-import dev.slsk.diagnostics.IDiagnosticFactory;
+import dev.slsk.diagnostics.DiagnosticSink;
+import dev.slsk.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.messaging.messages.PeerInit;
 import dev.slsk.messaging.messages.PierceFirewall;
@@ -29,7 +29,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /** Handles incoming connections established by the TCP listener. */
 public final class DefaultListenerHandler implements ListenerHandler {
     private final ListenerHandlerClient client;
-    private final IDiagnosticFactory diagnostic;
+    private final DiagnosticSink diagnostic;
     private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
 
     /** Creates a handler with its default diagnostic factory. */
@@ -38,10 +38,10 @@ public final class DefaultListenerHandler implements ListenerHandler {
     }
 
     /** Creates a handler. */
-    public DefaultListenerHandler(ListenerHandlerClient client, IDiagnosticFactory diagnosticFactory) {
+    public DefaultListenerHandler(ListenerHandlerClient client, DiagnosticSink diagnosticFactory) {
         this.client = Objects.requireNonNull(client, "client");
         diagnostic = diagnosticFactory == null
-                ? new DiagnosticFactory(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
     }
 
@@ -100,7 +100,7 @@ public final class DefaultListenerHandler implements ListenerHandler {
         });
     }
 
-    IDiagnosticFactory getDiagnostic() {
+    DiagnosticSink getDiagnostic() {
         return diagnostic;
     }
 

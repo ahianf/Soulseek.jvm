@@ -4,7 +4,7 @@
 
 package dev.slsk;
 
-import dev.slsk.diagnostics.IDiagnosticGenerator;
+import dev.slsk.diagnostics.DiagnosticSource;
 import dev.slsk.eventargs.BrowseProgressUpdatedEventArgs;
 import dev.slsk.eventargs.DistributedChildEventArgs;
 import dev.slsk.eventargs.DistributedParentEventArgs;
@@ -49,7 +49,7 @@ import java.util.function.Consumer;
  * progressive overloads ending in a canonical overload that accepts a
  * {@link CancellationToken}.</p>
  */
-public interface ISoulseekClient extends AutoCloseable, IDiagnosticGenerator {
+public interface ISoulseekClient extends AutoCloseable, DiagnosticSource {
     String getAddress();
 
     DistributedNetworkInfo getDistributedNetwork();

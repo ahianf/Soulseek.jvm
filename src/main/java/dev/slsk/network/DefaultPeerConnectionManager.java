@@ -11,8 +11,8 @@ import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
 import dev.slsk.diagnostics.DiagnosticEventArgs;
 import dev.slsk.diagnostics.DiagnosticEventListener;
-import dev.slsk.diagnostics.DiagnosticFactory;
-import dev.slsk.diagnostics.IDiagnosticFactory;
+import dev.slsk.diagnostics.DiagnosticSink;
+import dev.slsk.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.messaging.handlers.PeerMessageHandler;
 import dev.slsk.messaging.messages.ConnectToPeerRequest;
@@ -43,7 +43,7 @@ import java.util.function.Supplier;
 public final class DefaultPeerConnectionManager implements PeerConnectionManager {
     private final PeerConnectionManagerClient client;
     private final ConnectionFactory connectionFactory;
-    private final IDiagnosticFactory diagnostic;
+    private final DiagnosticSink diagnostic;
     private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
     private final ConcurrentHashMap<String, CompletableFuture<MessageConnection>> messageConnections =
             new ConcurrentHashMap<>();
@@ -63,13 +63,11 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
 
     /** Creates a manager. */
     public DefaultPeerConnectionManager(
-            PeerConnectionManagerClient client,
-            ConnectionFactory connectionFactory,
-            IDiagnosticFactory diagnosticFactory) {
+            PeerConnectionManagerClient client, ConnectionFactory connectionFactory, DiagnosticSink diagnosticFactory) {
         this.client = Objects.requireNonNull(client, "client");
         this.connectionFactory = connectionFactory == null ? new DefaultConnectionFactory() : connectionFactory;
         diagnostic = diagnosticFactory == null
-                ? new DiagnosticFactory(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
     }
 

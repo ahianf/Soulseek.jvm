@@ -6,7 +6,7 @@ package dev.slsk.network;
 
 import dev.slsk.CancellationToken;
 import dev.slsk.DistributedNetworkInfo;
-import dev.slsk.diagnostics.IDiagnosticGenerator;
+import dev.slsk.diagnostics.DiagnosticSource;
 import dev.slsk.eventargs.DistributedChildEventArgs;
 import dev.slsk.eventargs.DistributedParentEventArgs;
 import dev.slsk.messaging.messages.ConnectToPeerResponse;
@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /** Manages distributed-network parent and child connections. */
-public interface DistributedConnectionManager extends AutoCloseable, IDiagnosticGenerator {
+public interface DistributedConnectionManager extends AutoCloseable, DiagnosticSource {
     void addChildAddedListener(DistributedManagerEventListener<DistributedChildEventArgs> listener);
 
     void removeChildAddedListener(DistributedManagerEventListener<DistributedChildEventArgs> listener);

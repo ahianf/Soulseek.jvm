@@ -7,12 +7,12 @@ package dev.slsk.diagnostics;
 import java.util.function.Consumer;
 
 /** Creates filtered diagnostic messages. */
-public final class DiagnosticFactory implements IDiagnosticFactory {
+public final class FilteringDiagnosticSink implements DiagnosticSink {
     private final Consumer<DiagnosticEventArgs> eventHandler;
     private final DiagnosticLevel minimumLevel;
 
     /** Creates a diagnostic factory. */
-    public DiagnosticFactory(DiagnosticLevel minimumLevel, Consumer<DiagnosticEventArgs> eventHandler) {
+    public FilteringDiagnosticSink(DiagnosticLevel minimumLevel, Consumer<DiagnosticEventArgs> eventHandler) {
         this.minimumLevel = minimumLevel;
         this.eventHandler = eventHandler;
     }

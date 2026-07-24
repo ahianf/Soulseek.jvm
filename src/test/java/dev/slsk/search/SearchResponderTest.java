@@ -20,7 +20,7 @@ import dev.slsk.SearchResponseCacheRecord;
 import dev.slsk.diagnostics.DiagnosticEventArgs;
 import dev.slsk.diagnostics.DiagnosticEventListener;
 import dev.slsk.diagnostics.DiagnosticLevel;
-import dev.slsk.diagnostics.IDiagnosticFactory;
+import dev.slsk.diagnostics.DiagnosticSink;
 import dev.slsk.eventargs.SearchRequestEventArgs;
 import dev.slsk.eventargs.SearchRequestResponseEventArgs;
 import dev.slsk.messaging.messages.ConnectToPeerResponse;
@@ -369,7 +369,7 @@ class SearchResponderTest {
         }
     }
 
-    private static final class RecordingDiagnostic implements IDiagnosticFactory {
+    private static final class RecordingDiagnostic implements DiagnosticSink {
         private final java.util.ArrayList<String> debug = new java.util.ArrayList<>();
         private Throwable lastThrowable;
         private Throwable lastWarningThrowable;

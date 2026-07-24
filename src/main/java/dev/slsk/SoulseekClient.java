@@ -12,9 +12,9 @@ import dev.slsk.common.TokenFactory;
 import dev.slsk.common.WaitKey;
 import dev.slsk.common.Waiter;
 import dev.slsk.diagnostics.DiagnosticEventListener;
-import dev.slsk.diagnostics.DiagnosticFactory;
+import dev.slsk.diagnostics.DiagnosticSink;
+import dev.slsk.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.diagnostics.GlobalDiagnostic;
-import dev.slsk.diagnostics.IDiagnosticFactory;
 import dev.slsk.eventargs.BrowseProgressUpdatedEventArgs;
 import dev.slsk.eventargs.DistributedChildEventArgs;
 import dev.slsk.eventargs.DistributedParentEventArgs;
@@ -234,7 +234,7 @@ public class SoulseekClient
     private final PeerConnectionManager peerConnectionManager;
     private final DistributedConnectionManager distributedConnectionManager;
     private final ServerMessageHandler serverMessageHandler;
-    private final IDiagnosticFactory diagnostic;
+    private final DiagnosticSink diagnostic;
     private volatile ClientListenerFactory clientListenerFactory = SocketListener::new;
     private final AtomicBoolean closed = new AtomicBoolean();
     private final ScheduledExecutorService cleanupScheduler;
@@ -298,7 +298,7 @@ public class SoulseekClient
             SearchResponder searchResponder,
             Waiter waiter,
             TokenFactory tokenFactory,
-            IDiagnosticFactory diagnosticFactory,
+            DiagnosticSink diagnosticFactory,
             IOAdapter ioAdapter,
             TokenBucket uploadTokenBucket,
             TokenBucket downloadTokenBucket) {
@@ -328,7 +328,7 @@ public class SoulseekClient
         }
 
         diagnostic = diagnosticFactory == null
-                ? new DiagnosticFactory(
+                ? new FilteringDiagnosticSink(
                         this.options.getMinimumDiagnosticLevel(),
                         eventArgs -> raise(Event.DIAGNOSTIC_GENERATED, eventArgs))
                 : diagnosticFactory;

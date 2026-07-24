@@ -14,8 +14,8 @@ import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
 import dev.slsk.diagnostics.DiagnosticEventArgs;
 import dev.slsk.diagnostics.DiagnosticEventListener;
-import dev.slsk.diagnostics.DiagnosticFactory;
-import dev.slsk.diagnostics.IDiagnosticFactory;
+import dev.slsk.diagnostics.DiagnosticSink;
+import dev.slsk.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.eventargs.DistributedChildEventArgs;
 import dev.slsk.eventargs.DistributedParentEventArgs;
 import dev.slsk.exceptions.ConnectionException;
@@ -68,7 +68,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
 
     private final DistributedConnectionManagerClient client;
     private final ConnectionFactory connectionFactory;
-    private final IDiagnosticFactory diagnostic;
+    private final DiagnosticSink diagnostic;
     private final ScheduledExecutorService scheduler;
     private final ScheduledFuture<?> watchdog;
     private final AtomicReference<ScheduledFuture<?>> statusDebounce = new AtomicReference<>();
@@ -123,11 +123,11 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     public DefaultDistributedConnectionManager(
             DistributedConnectionManagerClient client,
             ConnectionFactory connectionFactory,
-            IDiagnosticFactory diagnosticFactory) {
+            DiagnosticSink diagnosticFactory) {
         this.client = Objects.requireNonNull(client, "client");
         this.connectionFactory = connectionFactory == null ? new DefaultConnectionFactory() : connectionFactory;
         diagnostic = diagnosticFactory == null
-                ? new DiagnosticFactory(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
         scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread thread = new Thread(runnable, "soulseek-distributed-status");

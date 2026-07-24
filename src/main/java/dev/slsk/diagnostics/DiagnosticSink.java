@@ -5,7 +5,7 @@
 package dev.slsk.diagnostics;
 
 /** Creates diagnostic messages. */
-public interface IDiagnosticFactory {
+public interface DiagnosticSink {
     void trace(String message);
 
     void trace(String message, Throwable exception);

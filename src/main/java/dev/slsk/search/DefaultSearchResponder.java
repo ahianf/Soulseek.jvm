@@ -13,8 +13,8 @@ import dev.slsk.SearchResponse;
 import dev.slsk.SearchResponseCacheRecord;
 import dev.slsk.diagnostics.DiagnosticEventArgs;
 import dev.slsk.diagnostics.DiagnosticEventListener;
-import dev.slsk.diagnostics.DiagnosticFactory;
-import dev.slsk.diagnostics.IDiagnosticFactory;
+import dev.slsk.diagnostics.DiagnosticSink;
+import dev.slsk.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.eventargs.SearchRequestEventArgs;
 import dev.slsk.eventargs.SearchRequestResponseEventArgs;
 import dev.slsk.network.MessageConnection;
@@ -28,7 +28,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /** Responds to incoming search requests. */
 public final class DefaultSearchResponder implements SearchResponder {
     private final SearchResponderClient client;
-    private final IDiagnosticFactory diagnostic;
+    private final DiagnosticSink diagnostic;
     private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<SearchResponderEventListener<SearchRequestEventArgs>> requestListeners =
             new CopyOnWriteArrayList<>();
@@ -43,10 +43,10 @@ public final class DefaultSearchResponder implements SearchResponder {
     }
 
     /** Creates a responder. */
-    public DefaultSearchResponder(SearchResponderClient client, IDiagnosticFactory diagnosticFactory) {
+    public DefaultSearchResponder(SearchResponderClient client, DiagnosticSink diagnosticFactory) {
         this.client = Objects.requireNonNull(client, "client");
         diagnostic = diagnosticFactory == null
-                ? new DiagnosticFactory(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
     }
 
@@ -210,7 +210,7 @@ public final class DefaultSearchResponder implements SearchResponder {
                 });
     }
 
-    IDiagnosticFactory getDiagnostic() {
+    DiagnosticSink getDiagnostic() {
         return diagnostic;
     }
 

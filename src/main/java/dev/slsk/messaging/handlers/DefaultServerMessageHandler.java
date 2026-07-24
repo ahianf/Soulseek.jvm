@@ -16,8 +16,8 @@ import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
 import dev.slsk.diagnostics.DiagnosticEventArgs;
 import dev.slsk.diagnostics.DiagnosticEventListener;
-import dev.slsk.diagnostics.DiagnosticFactory;
-import dev.slsk.diagnostics.IDiagnosticFactory;
+import dev.slsk.diagnostics.DiagnosticSink;
+import dev.slsk.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.eventargs.PrivateMessageReceivedEventArgs;
 import dev.slsk.eventargs.PrivilegeNotificationReceivedEventArgs;
 import dev.slsk.eventargs.PublicChatMessageReceivedEventArgs;
@@ -90,7 +90,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /** Handles incoming messages from the server connection. */
 public final class DefaultServerMessageHandler implements ServerMessageHandler {
     private final ServerMessageHandlerClient client;
-    private final IDiagnosticFactory diagnostic;
+    private final DiagnosticSink diagnostic;
     private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
     private final Map<ServerMessageEvent, CopyOnWriteArrayList<ServerMessageHandlerEventListener<?>>> listeners =
             new EnumMap<>(ServerMessageEvent.class);
@@ -101,10 +101,10 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     }
 
     /** Creates a handler. */
-    public DefaultServerMessageHandler(ServerMessageHandlerClient client, IDiagnosticFactory diagnosticFactory) {
+    public DefaultServerMessageHandler(ServerMessageHandlerClient client, DiagnosticSink diagnosticFactory) {
         this.client = Objects.requireNonNull(client, "client");
         diagnostic = diagnosticFactory == null
-                ? new DiagnosticFactory(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
         for (ServerMessageEvent event : ServerMessageEvent.values()) {
             listeners.put(event, new CopyOnWriteArrayList<>());

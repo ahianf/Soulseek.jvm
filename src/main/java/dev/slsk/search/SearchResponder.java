@@ -4,13 +4,13 @@
 
 package dev.slsk.search;
 
-import dev.slsk.diagnostics.IDiagnosticGenerator;
+import dev.slsk.diagnostics.DiagnosticSource;
 import dev.slsk.eventargs.SearchRequestEventArgs;
 import dev.slsk.eventargs.SearchRequestResponseEventArgs;
 import java.util.concurrent.CompletableFuture;
 
 /** Responds to incoming search requests. */
-public interface SearchResponder extends IDiagnosticGenerator {
+public interface SearchResponder extends DiagnosticSource {
     void addRequestReceivedListener(SearchResponderEventListener<SearchRequestEventArgs> listener);
 
     void removeRequestReceivedListener(SearchResponderEventListener<SearchRequestEventArgs> listener);

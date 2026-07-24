@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.diagnostics.IDiagnosticFactory;
+import dev.slsk.diagnostics.DiagnosticSink;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
@@ -107,8 +107,8 @@ class SoulseekClientCleanupTest {
 
     private static final class DiagnosticProbe {
         private final List<String> debugMessages = new ArrayList<>();
-        private final IDiagnosticFactory proxy = (IDiagnosticFactory) Proxy.newProxyInstance(
-                IDiagnosticFactory.class.getClassLoader(), new Class<?>[] {IDiagnosticFactory.class}, this::invoke);
+        private final DiagnosticSink proxy = (DiagnosticSink) Proxy.newProxyInstance(
+                DiagnosticSink.class.getClassLoader(), new Class<?>[] {DiagnosticSink.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("debug")) {

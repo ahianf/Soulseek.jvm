@@ -16,8 +16,8 @@ import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
 import dev.slsk.diagnostics.DiagnosticEventArgs;
 import dev.slsk.diagnostics.DiagnosticEventListener;
-import dev.slsk.diagnostics.DiagnosticFactory;
-import dev.slsk.diagnostics.IDiagnosticFactory;
+import dev.slsk.diagnostics.DiagnosticSink;
+import dev.slsk.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.eventargs.DownloadDeniedEventArgs;
 import dev.slsk.eventargs.DownloadFailedEventArgs;
 import dev.slsk.exceptions.DownloadEnqueueException;
@@ -55,7 +55,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /** Handles incoming messages from peer connections. */
 public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     private final PeerMessageHandlerClient client;
-    private final IDiagnosticFactory diagnostic;
+    private final DiagnosticSink diagnostic;
     private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<PeerMessageHandlerEventListener<DownloadDeniedEventArgs>>
             downloadDeniedListeners = new CopyOnWriteArrayList<>();
@@ -68,10 +68,10 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     /** Creates a handler. */
-    public DefaultPeerMessageHandler(PeerMessageHandlerClient client, IDiagnosticFactory diagnosticFactory) {
+    public DefaultPeerMessageHandler(PeerMessageHandlerClient client, DiagnosticSink diagnosticFactory) {
         this.client = Objects.requireNonNull(client, "client");
         diagnostic = diagnosticFactory == null
-                ? new DiagnosticFactory(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
     }
 

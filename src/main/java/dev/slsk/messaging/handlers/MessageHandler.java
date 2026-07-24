@@ -4,12 +4,12 @@
 
 package dev.slsk.messaging.handlers;
 
-import dev.slsk.diagnostics.IDiagnosticGenerator;
+import dev.slsk.diagnostics.DiagnosticSource;
 import dev.slsk.network.MessageConnection;
 import dev.slsk.network.MessageEventArgs;
 
 /** Handles incoming and outgoing protocol messages. */
-public interface MessageHandler extends IDiagnosticGenerator {
+public interface MessageHandler extends DiagnosticSource {
     void handleMessageRead(MessageConnection sender, MessageEventArgs eventArgs);
 
     void handleMessageRead(MessageConnection sender, byte[] message);
