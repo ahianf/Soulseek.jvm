@@ -184,7 +184,7 @@ class DistributedConnectionManagerTest {
         assertEquals("Superseded.", first.lastDisconnectMessage);
         assertEquals(1, first.closeCount);
         assertEquals(1, fixture.manager.getChildren().size());
-        assertEquals(endpoint(42002), fixture.manager.getChildren().getFirst().ipEndPoint());
+        assertEquals(endpoint(42002), fixture.manager.getChildren().getFirst().ipEndpoint());
         assertTrue(fixture.diagnostic.contains("Updated child"));
     }
 
@@ -684,25 +684,25 @@ class DistributedConnectionManagerTest {
 
         @Override
         public MessageConnection getDistributedConnection(
-                String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
+                String username, InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient) {
             if (tcpClient != null) {
                 assertNotNull(distributedHandoff);
                 return distributedHandoff.messageConnection();
             }
-            ConnectionProbe connection = distributedDirect.get(ipEndPoint);
+            ConnectionProbe connection = distributedDirect.get(ipEndpoint);
             assertNotNull(connection, "No distributed connection for endpoint");
             return connection.messageConnection();
         }
 
         @Override
         public MessageConnection getMessageConnection(
-                String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
+                String username, InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient) {
             throw new AssertionError("unexpected peer connection");
         }
 
         @Override
         public MessageConnection getServerConnection(
-                InetSocketAddress ipEndPoint,
+                InetSocketAddress ipEndpoint,
                 ConnectionEventListener<Void> connectedEventHandler,
                 ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
                 MessageConnectionEventListener<MessageEventArgs> messageReadEventHandler,
@@ -714,7 +714,7 @@ class DistributedConnectionManagerTest {
 
         @Override
         public Connection getTransferConnection(
-                InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
+                InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient) {
             throw new AssertionError("unexpected transfer connection");
         }
     }
@@ -956,7 +956,7 @@ class DistributedConnectionManagerTest {
             return switch (method.getName()) {
                 case "getId" -> id;
                 case "getInactiveTime" -> Duration.ZERO;
-                case "getIpEndPoint" -> endpoint;
+                case "getIpEndpoint" -> endpoint;
                 case "getKey" -> new ConnectionKey(username, endpoint);
                 case "getOptions" -> new ConnectionOptions();
                 case "getState" -> state;

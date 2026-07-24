@@ -186,7 +186,7 @@ class SoulseekClientReconfigureTest {
         SoulseekClientOptionsPatch patch = patch(false, null, null, false, false, 7, 50, 70, true, null, null, null);
         patch = new SoulseekClientOptionsPatch(
                 patch.getEnableListener(),
-                patch.getListenIPAddress(),
+                patch.getListenIpAddress(),
                 patch.getListenPort(),
                 patch.getEnableDistributedNetwork(),
                 patch.getAcceptDistributedChildren(),

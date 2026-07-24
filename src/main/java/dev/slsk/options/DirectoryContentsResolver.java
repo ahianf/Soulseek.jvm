@@ -15,11 +15,11 @@ public interface DirectoryContentsResolver {
      * Resolves directory contents.
      *
      * @param username the requesting username
-     * @param endPoint the requesting endpoint
+     * @param endpoint the requesting endpoint
      * @param token the request token
      * @param directoryName the requested directory name
      * @return the asynchronous directory sequence
      */
     CompletableFuture<Iterable<Directory>> resolve(
-            String username, InetSocketAddress endPoint, int token, String directoryName);
+            String username, InetSocketAddress endpoint, int token, String directoryName);
 }

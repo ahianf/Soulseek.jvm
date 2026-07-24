@@ -47,7 +47,7 @@ class ConnectionValueTypesTest {
         ConnectionKey key = new ConnectionKey(endpoint);
 
         assertNull(key.getUsername());
-        assertSame(endpoint, key.getIpEndPoint());
+        assertSame(endpoint, key.getIpEndpoint());
     }
 
     @Test
@@ -57,7 +57,7 @@ class ConnectionValueTypesTest {
         ConnectionKey key = new ConnectionKey("alice", endpoint);
 
         assertEquals("alice", key.getUsername());
-        assertSame(endpoint, key.getIpEndPoint());
+        assertSame(endpoint, key.getIpEndpoint());
     }
 
     @Test

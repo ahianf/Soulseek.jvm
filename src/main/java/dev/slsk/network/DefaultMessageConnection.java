@@ -40,32 +40,32 @@ public final class DefaultMessageConnection extends SocketConnection implements 
     private volatile boolean readingContinuously;
 
     /** Creates a server connection with source defaults. */
-    public DefaultMessageConnection(InetSocketAddress ipEndPoint) {
-        this(ipEndPoint, null, 4, null);
+    public DefaultMessageConnection(InetSocketAddress ipEndpoint) {
+        this(ipEndpoint, null, 4, null);
     }
 
     /** Creates a server connection. */
     public DefaultMessageConnection(
-            InetSocketAddress ipEndPoint, ConnectionOptions options, int codeLength, TcpClient tcpClient) {
-        super(ipEndPoint, options, tcpClient);
+            InetSocketAddress ipEndpoint, ConnectionOptions options, int codeLength, TcpClient tcpClient) {
+        super(ipEndpoint, options, tcpClient);
         this.codeLength = codeLength;
         username = "";
         bindConnectedReadLoop();
     }
 
     /** Creates a peer connection with source defaults. */
-    public DefaultMessageConnection(String username, InetSocketAddress ipEndPoint) {
-        this(username, ipEndPoint, null, 4, null);
+    public DefaultMessageConnection(String username, InetSocketAddress ipEndpoint) {
+        this(username, ipEndpoint, null, 4, null);
     }
 
     /** Creates a peer connection. */
     public DefaultMessageConnection(
             String username,
-            InetSocketAddress ipEndPoint,
+            InetSocketAddress ipEndpoint,
             ConnectionOptions options,
             int codeLength,
             TcpClient tcpClient) {
-        super(ipEndPoint, options, tcpClient);
+        super(ipEndpoint, options, tcpClient);
         this.codeLength = codeLength;
         if (isNullOrWhiteSpace(username)) {
             throw new IllegalArgumentException(
@@ -127,7 +127,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
 
     @Override
     public ConnectionKey getKey() {
-        return new ConnectionKey(username, getIpEndPoint());
+        return new ConnectionKey(username, getIpEndpoint());
     }
 
     @Override

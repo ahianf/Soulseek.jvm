@@ -31,10 +31,10 @@ public interface PeerConnectionManager extends AutoCloseable, DiagnosticSource {
     CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(ConnectToPeerResponse connectToPeerResponse);
 
     CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
-            String username, InetSocketAddress ipEndPoint, CancellationToken cancellationToken);
+            String username, InetSocketAddress ipEndpoint, CancellationToken cancellationToken);
 
     CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
-            String username, InetSocketAddress ipEndPoint, int solicitationToken, CancellationToken cancellationToken);
+            String username, InetSocketAddress ipEndpoint, int solicitationToken, CancellationToken cancellationToken);
 
     CompletableFuture<TransferConnectionResult> getTransferConnectionAsync(
             String username, int token, Connection incomingConnection);
@@ -42,7 +42,7 @@ public interface PeerConnectionManager extends AutoCloseable, DiagnosticSource {
     CompletableFuture<TransferConnectionResult> getTransferConnectionAsync(ConnectToPeerResponse connectToPeerResponse);
 
     CompletableFuture<Connection> getTransferConnectionAsync(
-            String username, InetSocketAddress ipEndPoint, int token, CancellationToken cancellationToken);
+            String username, InetSocketAddress ipEndpoint, int token, CancellationToken cancellationToken);
 
     void removeAndDisposeAll();
 

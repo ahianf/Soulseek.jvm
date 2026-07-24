@@ -72,7 +72,7 @@ class ConnectionServerResponseTest {
         InetAddress address = InetAddress.getByName("127.1.2.3");
         InetSocketAddress endpoint = new InetSocketAddress(address, 2234);
         ConnectToPeerResponse direct = new ConnectToPeerResponse("alice", "D", endpoint, -42, true);
-        assertSame(endpoint, direct.getIpEndPoint());
+        assertSame(endpoint, direct.getIpEndpoint());
 
         ConnectToPeerResponse parsed = ConnectToPeerResponse.fromByteArray(new MessageBuilder()
                 .writeCode(MessageCode.Server.CONNECT_TO_PEER)

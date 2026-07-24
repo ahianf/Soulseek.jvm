@@ -13,9 +13,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CacheLookupResult;
-import dev.slsk.ISearchResponseCache;
-import dev.slsk.IUserEndPointCache;
+import dev.slsk.SearchResponseCache;
 import dev.slsk.SearchResponseCacheRecord;
+import dev.slsk.UserEndpointCache;
 import dev.slsk.diagnostics.DiagnosticLevel;
 import java.net.InetAddress;
 import java.util.concurrent.CompletableFuture;
@@ -29,8 +29,8 @@ class SoulseekClientOptionsTest {
         ConnectionOptions transfer = new ConnectionOptions();
         ConnectionOptions incoming = new ConnectionOptions();
         ConnectionOptions distributed = new ConnectionOptions();
-        IUserEndPointCache userCache = new TestUserCache();
-        ISearchResponseCache searchCache = new TestSearchCache();
+        UserEndpointCache userCache = new TestUserCache();
+        SearchResponseCache searchCache = new TestSearchCache();
         SearchResponseResolver searchResolver = (user, token, query) -> CompletableFuture.completedFuture(null);
         BrowseResponseResolver browseResolver = (user, endpoint) -> CompletableFuture.completedFuture(null);
         DirectoryContentsResolver directoryResolver =
@@ -75,7 +75,7 @@ class SoulseekClientOptionsTest {
                 true);
 
         assertFalse(options.isEnableListener());
-        assertSame(address, options.getListenIPAddress());
+        assertSame(address, options.getListenIpAddress());
         assertEquals(1234, options.getListenPort());
         assertFalse(options.isEnableDistributedNetwork());
         assertFalse(options.isAcceptDistributedChildren());
@@ -97,7 +97,7 @@ class SoulseekClientOptionsTest {
         assertSame(transfer, options.getTransferConnectionOptions());
         assertSame(incoming, options.getIncomingConnectionOptions());
         assertSame(distributed, options.getDistributedConnectionOptions());
-        assertSame(userCache, options.getUserEndPointCache());
+        assertSame(userCache, options.getUserEndpointCache());
         assertSame(searchResolver, options.getSearchResponseResolver());
         assertSame(searchCache, options.getSearchResponseCache());
         assertSame(browseResolver, options.getBrowseResponseResolver());
@@ -114,7 +114,7 @@ class SoulseekClientOptionsTest {
         SoulseekClientOptions options = new SoulseekClientOptions();
 
         assertTrue(options.isEnableListener());
-        assertEquals("0.0.0.0", options.getListenIPAddress().getHostAddress());
+        assertEquals("0.0.0.0", options.getListenIpAddress().getHostAddress());
         assertEquals(50_000, options.getListenPort());
         assertTrue(options.isEnableDistributedNetwork());
         assertTrue(options.isAcceptDistributedChildren());
@@ -235,7 +235,7 @@ class SoulseekClientOptionsTest {
     @Test
     void prefixOverloadsPreserveTrailingDefaults() {
         assertEquals(
-                "0.0.0.0", new SoulseekClientOptions(false).getListenIPAddress().getHostAddress());
+                "0.0.0.0", new SoulseekClientOptions(false).getListenIpAddress().getHostAddress());
         assertEquals(50_000, new SoulseekClientOptions(false, InetAddress.getLoopbackAddress()).getListenPort());
         assertTrue(
                 new SoulseekClientOptions(false, InetAddress.getLoopbackAddress(), 1234).isEnableDistributedNetwork());
@@ -278,27 +278,27 @@ class SoulseekClientOptionsTest {
                 true);
     }
 
-    private static final class TestUserCache implements IUserEndPointCache {
+    private static final class TestUserCache implements UserEndpointCache {
         @Override
-        public CacheLookupResult<java.net.InetSocketAddress> tryGet(String username) {
+        public CacheLookupResult<java.net.InetSocketAddress> lookup(String username) {
             return CacheLookupResult.notFound();
         }
 
         @Override
-        public void addOrUpdate(String username, java.net.InetSocketAddress endPoint) {}
+        public void put(String username, java.net.InetSocketAddress endpoint) {}
     }
 
-    private static final class TestSearchCache implements ISearchResponseCache {
+    private static final class TestSearchCache implements SearchResponseCache {
         @Override
-        public void addOrUpdate(int responseToken, SearchResponseCacheRecord response) {}
+        public void put(int responseToken, SearchResponseCacheRecord response) {}
 
         @Override
-        public CacheLookupResult<SearchResponseCacheRecord> tryGet(int responseToken) {
+        public CacheLookupResult<SearchResponseCacheRecord> lookup(int responseToken) {
             return CacheLookupResult.notFound();
         }
 
         @Override
-        public CacheLookupResult<SearchResponseCacheRecord> tryRemove(int responseToken) {
+        public CacheLookupResult<SearchResponseCacheRecord> remove(int responseToken) {
             return CacheLookupResult.notFound();
         }
     }

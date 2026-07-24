@@ -52,7 +52,7 @@ public interface Connection extends AutoCloseable {
     Duration getInactiveTime();
 
     /** Returns the remote endpoint. */
-    InetSocketAddress getIpEndPoint();
+    InetSocketAddress getIpEndpoint();
 
     /** Returns the connection key. */
     ConnectionKey getKey();

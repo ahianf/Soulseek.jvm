@@ -38,7 +38,7 @@ class TransferInternalTest {
         assertEquals(42, transfer.getToken());
         assertSame(options, transfer.getOptions());
         assertNull(transfer.getConnection());
-        assertNull(transfer.getIpEndPoint());
+        assertNull(transfer.getIpEndpoint());
         assertNull(transfer.getRemoteToken());
         assertNull(transfer.getSize());
         assertEquals(TransferStates.NONE, transfer.getState());
@@ -64,7 +64,7 @@ class TransferInternalTest {
         transfer.setConnection(connection);
 
         assertSame(connection, transfer.getConnection());
-        assertEquals(endpoint, transfer.getIpEndPoint());
+        assertEquals(endpoint, transfer.getIpEndpoint());
         connection.close();
     }
 

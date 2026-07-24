@@ -31,7 +31,7 @@ class ProxyOptionsTest {
         assertEquals("user", options.getUsername());
         assertEquals("password", options.getPassword());
         assertEquals(InetAddress.getByName("127.0.0.1"), options.getIpAddress());
-        assertEquals(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 1234), options.getIpEndPoint());
+        assertEquals(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 1234), options.getIpEndpoint());
     }
 
     @Test

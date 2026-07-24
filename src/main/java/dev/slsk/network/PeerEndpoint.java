@@ -10,6 +10,6 @@ import java.net.InetSocketAddress;
  * A peer username and endpoint.
  *
  * @param username the peer username
- * @param ipEndPoint the peer endpoint
+ * @param ipEndpoint the peer endpoint
  */
-public record PeerEndpoint(String username, InetSocketAddress ipEndPoint) {}
+public record PeerEndpoint(String username, InetSocketAddress ipEndpoint) {}

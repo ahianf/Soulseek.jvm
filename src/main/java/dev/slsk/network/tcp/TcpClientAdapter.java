@@ -54,7 +54,7 @@ final class TcpClientAdapter implements TcpClient {
     }
 
     @Override
-    public InetSocketAddress getRemoteEndPoint() {
+    public InetSocketAddress getRemoteEndpoint() {
         return (InetSocketAddress) socket.getRemoteSocketAddress();
     }
 

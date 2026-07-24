@@ -20,5 +20,5 @@ public interface SearchResponderClient {
 
     int getNextToken();
 
-    CompletableFuture<InetSocketAddress> getUserEndPointAsync(String username, CancellationToken cancellationToken);
+    CompletableFuture<InetSocketAddress> getUserEndpointAsync(String username, CancellationToken cancellationToken);
 }

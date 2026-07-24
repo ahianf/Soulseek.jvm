@@ -15,7 +15,7 @@ import java.net.UnknownHostException;
 public class ProxyOptions {
     private final String address;
     private final InetAddress ipAddress;
-    private final InetSocketAddress ipEndPoint;
+    private final InetSocketAddress ipEndpoint;
     private final String password;
     private final int port;
     private final String username;
@@ -84,7 +84,7 @@ public class ProxyOptions {
         this.address = address;
         this.ipAddress = resolvedAddress;
         this.port = port;
-        this.ipEndPoint = new InetSocketAddress(resolvedAddress, port);
+        this.ipEndpoint = new InetSocketAddress(resolvedAddress, port);
         this.username = username;
         this.password = password;
     }
@@ -112,8 +112,8 @@ public class ProxyOptions {
      *
      * @return the resolved endpoint
      */
-    public final InetSocketAddress getIpEndPoint() {
-        return ipEndPoint;
+    public final InetSocketAddress getIpEndpoint() {
+        return ipEndpoint;
     }
 
     /**

@@ -121,7 +121,7 @@ class SoulseekClientConnectTest {
         assertEquals(new InetSocketAddress(LOOPBACK, 2271), fixture.factory.endpoint);
         assertSame(fixture.options.getServerConnectionOptions(), fixture.factory.options);
         assertEquals("127.0.0.1", fixture.client.getAddress());
-        assertEquals(new InetSocketAddress(LOOPBACK, 2271), fixture.client.getIpEndPoint());
+        assertEquals(new InetSocketAddress(LOOPBACK, 2271), fixture.client.getIpEndpoint());
         assertEquals("alice", fixture.client.getUsername());
         assertEquals(loggedIn(), fixture.client.getState());
 

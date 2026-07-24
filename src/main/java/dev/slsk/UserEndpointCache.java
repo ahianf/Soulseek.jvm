@@ -7,20 +7,20 @@ package dev.slsk;
 import java.net.InetSocketAddress;
 
 /** A cache for user endpoints. */
-public interface IUserEndPointCache {
+public interface UserEndpointCache {
     /**
      * Attempts to fetch the endpoint cached for a username.
      *
      * @param username the username
      * @return a result containing the cached endpoint when present
      */
-    CacheLookupResult<InetSocketAddress> tryGet(String username);
+    CacheLookupResult<InetSocketAddress> lookup(String username);
 
     /**
      * Adds or updates the endpoint cached for a username.
      *
      * @param username the username
-     * @param endPoint the endpoint to cache
+     * @param endpoint the endpoint to cache
      */
-    void addOrUpdate(String username, InetSocketAddress endPoint);
+    void put(String username, InetSocketAddress endpoint);
 }

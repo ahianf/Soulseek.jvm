@@ -14,9 +14,9 @@ public interface PlaceInQueueResolver {
      * Resolves the place in queue.
      *
      * @param username the requesting username
-     * @param endPoint the requesting endpoint
+     * @param endpoint the requesting endpoint
      * @param filename the requested filename
      * @return the nullable queue position
      */
-    CompletableFuture<Integer> resolve(String username, InetSocketAddress endPoint, String filename);
+    CompletableFuture<Integer> resolve(String username, InetSocketAddress endpoint, String filename);
 }

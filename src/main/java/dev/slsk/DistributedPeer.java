@@ -10,6 +10,6 @@ import java.net.InetSocketAddress;
  * The named Java representation of the C# distributed-peer tuple.
  *
  * @param username the peer username
- * @param ipEndPoint the peer endpoint
+ * @param ipEndpoint the peer endpoint
  */
-public record DistributedPeer(String username, InetSocketAddress ipEndPoint) {}
+public record DistributedPeer(String username, InetSocketAddress ipEndpoint) {}

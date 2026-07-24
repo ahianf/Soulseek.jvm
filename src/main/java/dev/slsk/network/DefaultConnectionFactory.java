@@ -16,19 +16,19 @@ import java.net.InetSocketAddress;
 public final class DefaultConnectionFactory implements ConnectionFactory {
     @Override
     public MessageConnection getDistributedConnection(
-            String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
-        return new DefaultMessageConnection(username, ipEndPoint, defaultOptions(options), 1, tcpClient);
+            String username, InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient) {
+        return new DefaultMessageConnection(username, ipEndpoint, defaultOptions(options), 1, tcpClient);
     }
 
     @Override
     public MessageConnection getMessageConnection(
-            String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
-        return new DefaultMessageConnection(username, ipEndPoint, defaultOptions(options), 4, tcpClient);
+            String username, InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient) {
+        return new DefaultMessageConnection(username, ipEndpoint, defaultOptions(options), 4, tcpClient);
     }
 
     @Override
     public MessageConnection getServerConnection(
-            InetSocketAddress ipEndPoint,
+            InetSocketAddress ipEndpoint,
             ConnectionEventListener<Void> connectedEventHandler,
             ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
             MessageConnectionEventListener<MessageEventArgs> messageReadEventHandler,
@@ -36,7 +36,7 @@ public final class DefaultConnectionFactory implements ConnectionFactory {
             ConnectionOptions options,
             TcpClient tcpClient) {
         DefaultMessageConnection connection = new DefaultMessageConnection(
-                ipEndPoint, defaultOptions(options).withoutInactivityTimeout(), 4, tcpClient);
+                ipEndpoint, defaultOptions(options).withoutInactivityTimeout(), 4, tcpClient);
         if (connectedEventHandler != null) {
             connection.addConnectedListener(connectedEventHandler);
         }
@@ -54,8 +54,8 @@ public final class DefaultConnectionFactory implements ConnectionFactory {
 
     @Override
     public Connection getTransferConnection(
-            InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
-        return new SocketConnection(ipEndPoint, defaultOptions(options), tcpClient);
+            InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient) {
+        return new SocketConnection(ipEndpoint, defaultOptions(options), tcpClient);
     }
 
     private static ConnectionOptions defaultOptions(ConnectionOptions options) {

@@ -65,7 +65,7 @@ class SoulseekClientTest {
             assertSame(options, client.getOptions());
             assertEquals(SoulseekClientStates.DISCONNECTED, client.getState());
             assertNull(client.getUsername());
-            assertNull(client.getIpEndPoint());
+            assertNull(client.getIpEndpoint());
             assertNull(client.getIpAddress());
             assertNull(client.getPort());
             assertNull(client.getServerInfo().getParentMinSpeed());
@@ -75,7 +75,7 @@ class SoulseekClientTest {
     @Test
     void endpointAndTransferPropertiesReturnSnapshots() {
         Fixture fixture = new Fixture();
-        fixture.client.setIpEndPointForTest(ENDPOINT);
+        fixture.client.setIpEndpointForTest(ENDPOINT);
         Map<Integer, TransferInternal> downloads = new HashMap<>();
         Map<Integer, TransferInternal> uploads = new HashMap<>();
         downloads.put(1, new TransferInternal(TransferDirection.DOWNLOAD, "d", "download", 1));
@@ -85,7 +85,7 @@ class SoulseekClientTest {
         List<Transfer> downloadSnapshot = fixture.client.getDownloads();
         List<Transfer> uploadSnapshot = fixture.client.getUploads();
 
-        assertEquals(ENDPOINT, fixture.client.getIpEndPoint());
+        assertEquals(ENDPOINT, fixture.client.getIpEndpoint());
         assertEquals(ENDPOINT.getAddress(), fixture.client.getIpAddress());
         assertEquals(ENDPOINT.getPort(), fixture.client.getPort());
         assertEquals("download", fixture.client.getDownloads().getFirst().getFilename());
@@ -512,7 +512,7 @@ class SoulseekClientTest {
                 case "getChildLimit" -> childLimit;
                 case "canAcceptChildren" -> canAccept;
                 case "getParent" -> parent;
-                case "hasParent" -> parent != null && parent.ipEndPoint() != null;
+                case "hasParent" -> parent != null && parent.ipEndpoint() != null;
                 case "getChildren" -> children;
                 case "getAverageBroadcastLatency" -> averageLatency;
                 case "removeAndDisposeAll" -> {

@@ -14,31 +14,31 @@ import java.net.InetSocketAddress;
 /** Creates protocol and transfer connections. */
 public interface ConnectionFactory {
     MessageConnection getDistributedConnection(
-            String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient);
+            String username, InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient);
 
-    default MessageConnection getDistributedConnection(String username, InetSocketAddress ipEndPoint) {
-        return getDistributedConnection(username, ipEndPoint, null, null);
+    default MessageConnection getDistributedConnection(String username, InetSocketAddress ipEndpoint) {
+        return getDistributedConnection(username, ipEndpoint, null, null);
     }
 
     default MessageConnection getDistributedConnection(
-            String username, InetSocketAddress ipEndPoint, ConnectionOptions options) {
-        return getDistributedConnection(username, ipEndPoint, options, null);
+            String username, InetSocketAddress ipEndpoint, ConnectionOptions options) {
+        return getDistributedConnection(username, ipEndpoint, options, null);
     }
 
     MessageConnection getMessageConnection(
-            String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient);
+            String username, InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient);
 
-    default MessageConnection getMessageConnection(String username, InetSocketAddress ipEndPoint) {
-        return getMessageConnection(username, ipEndPoint, null, null);
+    default MessageConnection getMessageConnection(String username, InetSocketAddress ipEndpoint) {
+        return getMessageConnection(username, ipEndpoint, null, null);
     }
 
     default MessageConnection getMessageConnection(
-            String username, InetSocketAddress ipEndPoint, ConnectionOptions options) {
-        return getMessageConnection(username, ipEndPoint, options, null);
+            String username, InetSocketAddress ipEndpoint, ConnectionOptions options) {
+        return getMessageConnection(username, ipEndpoint, options, null);
     }
 
     MessageConnection getServerConnection(
-            InetSocketAddress ipEndPoint,
+            InetSocketAddress ipEndpoint,
             ConnectionEventListener<Void> connectedEventHandler,
             ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
             MessageConnectionEventListener<MessageEventArgs> messageReadEventHandler,
@@ -47,13 +47,13 @@ public interface ConnectionFactory {
             TcpClient tcpClient);
 
     default MessageConnection getServerConnection(
-            InetSocketAddress ipEndPoint,
+            InetSocketAddress ipEndpoint,
             ConnectionEventListener<Void> connectedEventHandler,
             ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
             MessageConnectionEventListener<MessageEventArgs> messageReadEventHandler,
             MessageConnectionEventListener<MessageEventArgs> messageWrittenEventHandler) {
         return getServerConnection(
-                ipEndPoint,
+                ipEndpoint,
                 connectedEventHandler,
                 disconnectedEventHandler,
                 messageReadEventHandler,
@@ -63,14 +63,14 @@ public interface ConnectionFactory {
     }
 
     default MessageConnection getServerConnection(
-            InetSocketAddress ipEndPoint,
+            InetSocketAddress ipEndpoint,
             ConnectionEventListener<Void> connectedEventHandler,
             ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
             MessageConnectionEventListener<MessageEventArgs> messageReadEventHandler,
             MessageConnectionEventListener<MessageEventArgs> messageWrittenEventHandler,
             ConnectionOptions options) {
         return getServerConnection(
-                ipEndPoint,
+                ipEndpoint,
                 connectedEventHandler,
                 disconnectedEventHandler,
                 messageReadEventHandler,
@@ -79,13 +79,13 @@ public interface ConnectionFactory {
                 null);
     }
 
-    Connection getTransferConnection(InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient);
+    Connection getTransferConnection(InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient);
 
-    default Connection getTransferConnection(InetSocketAddress ipEndPoint) {
-        return getTransferConnection(ipEndPoint, null, null);
+    default Connection getTransferConnection(InetSocketAddress ipEndpoint) {
+        return getTransferConnection(ipEndpoint, null, null);
     }
 
-    default Connection getTransferConnection(InetSocketAddress ipEndPoint, ConnectionOptions options) {
-        return getTransferConnection(ipEndPoint, options, null);
+    default Connection getTransferConnection(InetSocketAddress ipEndpoint, ConnectionOptions options) {
+        return getTransferConnection(ipEndpoint, options, null);
     }
 }

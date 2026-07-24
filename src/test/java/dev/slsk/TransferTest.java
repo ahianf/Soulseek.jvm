@@ -53,7 +53,7 @@ class TransferTest {
         assertEquals(startTime, transfer.getStartTime());
         assertEquals(endTime, transfer.getEndTime());
         assertEquals(24, transfer.getRemoteToken());
-        assertSame(endpoint, transfer.getIpEndPoint());
+        assertSame(endpoint, transfer.getIpEndpoint());
         assertSame(exception, transfer.getException());
         assertEquals(600, transfer.getBytesRemaining());
         assertEquals(Duration.ofDays(1), transfer.getElapsedTime());
@@ -73,7 +73,7 @@ class TransferTest {
         assertNull(transfer.getStartTime());
         assertNull(transfer.getEndTime());
         assertNull(transfer.getRemoteToken());
-        assertNull(transfer.getIpEndPoint());
+        assertNull(transfer.getIpEndpoint());
         assertNull(transfer.getException());
         assertEquals(0, transfer.getPercentComplete());
         assertNull(transfer.getElapsedTime());
@@ -123,7 +123,7 @@ class TransferTest {
                                 end,
                                 5,
                                 endpoint)
-                        .getIpEndPoint());
+                        .getIpEndpoint());
     }
 
     @Test

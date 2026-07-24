@@ -22,7 +22,7 @@ class DistributedEventArgsTest {
         DistributedParentEventArgs args = new DistributedParentEventArgs("alice", endpoint, 2, "root");
 
         assertEquals("alice", args.getUsername());
-        assertSame(endpoint, args.getIpEndPoint());
+        assertSame(endpoint, args.getIpEndpoint());
         assertEquals(2, args.getBranchLevel());
         assertEquals("root", args.getBranchRoot());
         assertFalse(args.isBranchRoot());
@@ -48,7 +48,7 @@ class DistributedEventArgsTest {
         assertFalse(child.isBranchRoot());
         assertNull(root.getUsername());
         assertNull(root.getBranchRoot());
-        assertNull(root.getIpEndPoint());
+        assertNull(root.getIpEndpoint());
     }
 
     @Test
@@ -58,6 +58,6 @@ class DistributedEventArgsTest {
         DistributedChildEventArgs args = new DistributedChildEventArgs("alice", endpoint);
 
         assertEquals("alice", args.getUsername());
-        assertSame(endpoint, args.getIpEndPoint());
+        assertSame(endpoint, args.getIpEndpoint());
     }
 }

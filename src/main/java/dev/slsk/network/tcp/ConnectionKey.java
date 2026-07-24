@@ -8,22 +8,22 @@ import java.net.InetSocketAddress;
 
 /** Uniquely identifies a TCP connection instance. */
 public final class ConnectionKey {
-    private final InetSocketAddress ipEndPoint;
+    private final InetSocketAddress ipEndpoint;
     private final String username;
 
     /** Creates an endpoint-only key. */
-    public ConnectionKey(InetSocketAddress ipEndPoint) {
-        this(null, ipEndPoint);
+    public ConnectionKey(InetSocketAddress ipEndpoint) {
+        this(null, ipEndpoint);
     }
 
     /** Creates a username-and-endpoint key. */
-    public ConnectionKey(String username, InetSocketAddress ipEndPoint) {
+    public ConnectionKey(String username, InetSocketAddress ipEndpoint) {
         this.username = username;
-        this.ipEndPoint = ipEndPoint;
+        this.ipEndpoint = ipEndpoint;
     }
 
-    public InetSocketAddress getIpEndPoint() {
-        return ipEndPoint;
+    public InetSocketAddress getIpEndpoint() {
+        return ipEndpoint;
     }
 
     public String getUsername() {
@@ -49,11 +49,11 @@ public final class ConnectionKey {
     private String sourceString() {
         String address = "";
         String port = "";
-        if (ipEndPoint != null) {
-            address = ipEndPoint.getAddress() == null
-                    ? ipEndPoint.getHostString()
-                    : ipEndPoint.getAddress().getHostAddress();
-            port = Integer.toString(ipEndPoint.getPort());
+        if (ipEndpoint != null) {
+            address = ipEndpoint.getAddress() == null
+                    ? ipEndpoint.getHostString()
+                    : ipEndpoint.getAddress().getHostAddress();
+            port = Integer.toString(ipEndpoint.getPort());
         }
         return (username == null ? "" : username) + ":" + address + ":" + port;
     }

@@ -14,9 +14,9 @@ public interface EnqueueDownloadCallback {
      * Enqueues or rejects a download.
      *
      * @param username the requesting username
-     * @param endPoint the requesting endpoint
+     * @param endpoint the requesting endpoint
      * @param filename the requested filename
      * @return completion of the enqueue operation
      */
-    CompletableFuture<Void> enqueue(String username, InetSocketAddress endPoint, String filename);
+    CompletableFuture<Void> enqueue(String username, InetSocketAddress endpoint, String filename);
 }

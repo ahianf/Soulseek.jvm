@@ -5,8 +5,8 @@
 package dev.slsk.options;
 
 import dev.slsk.BrowseResponse;
-import dev.slsk.ISearchResponseCache;
-import dev.slsk.IUserEndPointCache;
+import dev.slsk.SearchResponseCache;
+import dev.slsk.UserEndpointCache;
 import dev.slsk.UserInfo;
 import dev.slsk.diagnostics.DiagnosticLevel;
 import java.net.InetAddress;
@@ -40,7 +40,7 @@ public class SoulseekClientOptions {
     private final boolean enableListener;
     private final EnqueueDownloadCallback enqueueDownload;
     private final ConnectionOptions incomingConnectionOptions;
-    private final InetAddress listenIPAddress;
+    private final InetAddress listenIpAddress;
     private final int listenPort;
     private final int maximumConcurrentDownloads;
     private final int maximumConcurrentSearches;
@@ -53,12 +53,12 @@ public class SoulseekClientOptions {
     private final ConnectionOptions peerConnectionOptions;
     private final PlaceInQueueResolver placeInQueueResolver;
     private final boolean raiseEventsAsynchronously;
-    private final ISearchResponseCache searchResponseCache;
+    private final SearchResponseCache searchResponseCache;
     private final SearchResponseResolver searchResponseResolver;
     private final ConnectionOptions serverConnectionOptions;
     private final int startingToken;
     private final ConnectionOptions transferConnectionOptions;
-    private final IUserEndPointCache userEndPointCache;
+    private final UserEndpointCache userEndpointCache;
     private final UserInfoResolver userInfoResolver;
 
     /** Creates options with source defaults. */
@@ -136,10 +136,10 @@ public class SoulseekClientOptions {
     }
 
     /** Creates options through the listener address. */
-    public SoulseekClientOptions(boolean enableListener, InetAddress listenIPAddress) {
+    public SoulseekClientOptions(boolean enableListener, InetAddress listenIpAddress) {
         this(
                 enableListener,
-                listenIPAddress,
+                listenIpAddress,
                 DEFAULT_LISTEN_PORT,
                 true,
                 true,
@@ -173,10 +173,10 @@ public class SoulseekClientOptions {
     }
 
     /** Creates options through the listener port. */
-    public SoulseekClientOptions(boolean enableListener, InetAddress listenIPAddress, int listenPort) {
+    public SoulseekClientOptions(boolean enableListener, InetAddress listenIpAddress, int listenPort) {
         this(
                 enableListener,
-                listenIPAddress,
+                listenIpAddress,
                 listenPort,
                 true,
                 true,
@@ -212,7 +212,7 @@ public class SoulseekClientOptions {
     /** Creates complete client options. */
     public SoulseekClientOptions(
             boolean enableListener,
-            InetAddress listenIPAddress,
+            InetAddress listenIpAddress,
             int listenPort,
             boolean enableDistributedNetwork,
             boolean acceptDistributedChildren,
@@ -234,9 +234,9 @@ public class SoulseekClientOptions {
             ConnectionOptions transferConnectionOptions,
             ConnectionOptions incomingConnectionOptions,
             ConnectionOptions distributedConnectionOptions,
-            IUserEndPointCache userEndPointCache,
+            UserEndpointCache userEndpointCache,
             SearchResponseResolver searchResponseResolver,
-            ISearchResponseCache searchResponseCache,
+            SearchResponseCache searchResponseCache,
             BrowseResponseResolver browseResponseResolver,
             DirectoryContentsResolver directoryContentsResolver,
             UserInfoResolver userInfoResolver,
@@ -244,7 +244,7 @@ public class SoulseekClientOptions {
             PlaceInQueueResolver placeInQueueResolver,
             boolean raiseEventsAsynchronously) {
         this.enableListener = enableListener;
-        this.listenIPAddress = listenIPAddress == null ? wildcardAddress() : listenIPAddress;
+        this.listenIpAddress = listenIpAddress == null ? wildcardAddress() : listenIpAddress;
         this.listenPort = listenPort;
 
         if (listenPort < 1024 || listenPort > 65_535) {
@@ -296,7 +296,7 @@ public class SoulseekClientOptions {
         this.distributedConnectionOptions =
                 distributedConnectionOptions == null ? new ConnectionOptions() : distributedConnectionOptions;
 
-        this.userEndPointCache = userEndPointCache;
+        this.userEndpointCache = userEndpointCache;
         this.searchResponseResolver = searchResponseResolver;
         this.searchResponseCache = searchResponseCache;
         this.browseResponseResolver = browseResponseResolver == null
@@ -321,7 +321,7 @@ public class SoulseekClientOptions {
 
         return new SoulseekClientOptions(
                 patch.getEnableListener() == null ? enableListener : patch.getEnableListener(),
-                patch.getListenIPAddress() == null ? listenIPAddress : patch.getListenIPAddress(),
+                patch.getListenIpAddress() == null ? listenIpAddress : patch.getListenIpAddress(),
                 patch.getListenPort() == null ? listenPort : patch.getListenPort(),
                 patch.getEnableDistributedNetwork() == null
                         ? enableDistributedNetwork
@@ -363,7 +363,7 @@ public class SoulseekClientOptions {
                 patch.getDistributedConnectionOptions() == null
                         ? distributedConnectionOptions
                         : patch.getDistributedConnectionOptions(),
-                patch.getUserEndPointCache() == null ? userEndPointCache : patch.getUserEndPointCache(),
+                patch.getUserEndpointCache() == null ? userEndpointCache : patch.getUserEndpointCache(),
                 patch.getSearchResponseResolver() == null ? searchResponseResolver : patch.getSearchResponseResolver(),
                 patch.getSearchResponseCache() == null ? searchResponseCache : patch.getSearchResponseCache(),
                 patch.getBrowseResponseResolver() == null ? browseResponseResolver : patch.getBrowseResponseResolver(),
@@ -442,8 +442,8 @@ public class SoulseekClientOptions {
     }
 
     /** Returns the listener IP address. */
-    public final InetAddress getListenIPAddress() {
-        return listenIPAddress;
+    public final InetAddress getListenIpAddress() {
+        return listenIpAddress;
     }
 
     /** Returns the listener port. */
@@ -507,7 +507,7 @@ public class SoulseekClientOptions {
     }
 
     /** Returns the search response cache, or {@code null}. */
-    public final ISearchResponseCache getSearchResponseCache() {
+    public final SearchResponseCache getSearchResponseCache() {
         return searchResponseCache;
     }
 
@@ -532,8 +532,8 @@ public class SoulseekClientOptions {
     }
 
     /** Returns the user endpoint cache, or {@code null}. */
-    public final IUserEndPointCache getUserEndPointCache() {
-        return userEndPointCache;
+    public final UserEndpointCache getUserEndpointCache() {
+        return userEndpointCache;
     }
 
     /** Returns the user information resolver. */

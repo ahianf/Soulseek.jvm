@@ -15,8 +15,8 @@ public interface UserInfoResolver {
      * Resolves user information.
      *
      * @param username the requesting username
-     * @param endPoint the requesting endpoint
+     * @param endpoint the requesting endpoint
      * @return the asynchronous response
      */
-    CompletableFuture<UserInfo> resolve(String username, InetSocketAddress endPoint);
+    CompletableFuture<UserInfo> resolve(String username, InetSocketAddress endpoint);
 }

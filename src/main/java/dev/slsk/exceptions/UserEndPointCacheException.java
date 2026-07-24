@@ -5,18 +5,18 @@
 package dev.slsk.exceptions;
 
 /** Represents errors involving the user endpoint cache. */
-public class UserEndPointCacheException extends UserEndPointException {
+public class UserEndpointCacheException extends UserEndpointException {
     private static final long serialVersionUID = 1L;
 
-    public UserEndPointCacheException() {
+    public UserEndpointCacheException() {
         super();
     }
 
-    public UserEndPointCacheException(String message) {
+    public UserEndpointCacheException(String message) {
         super(message);
     }
 
-    public UserEndPointCacheException(String message, Throwable cause) {
+    public UserEndpointCacheException(String message, Throwable cause) {
         super(message, cause);
     }
 }

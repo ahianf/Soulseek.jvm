@@ -270,7 +270,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         MessageConnection current = parentConnection;
         return current == null
                 ? new PeerEndpoint("", null)
-                : new PeerEndpoint(current.getUsername(), current.getIpEndPoint());
+                : new PeerEndpoint(current.getUsername(), current.getIpEndpoint());
     }
 
     @Override
@@ -282,7 +282,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     public CompletableFuture<Void> addOrUpdateChildConnectionAsync(String username, Connection incomingConnection) {
         Objects.requireNonNull(incomingConnection, "incomingConnection");
         if (!canAcceptChildren()) {
-            diagnostic.debug(rejectionMessage(username, incomingConnection.getIpEndPoint()));
+            diagnostic.debug(rejectionMessage(username, incomingConnection.getIpEndpoint()));
             incomingConnection.close();
             return updateStatusAsync();
         }
@@ -295,14 +295,14 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                 Throwable cause = unwrap(failure);
                 String message = "Failed to establish an inbound direct child connection "
                         + "to " + username + " ("
-                        + incomingConnection.getIpEndPoint() + "): "
+                        + incomingConnection.getIpEndpoint() + "): "
                         + message(cause);
                 diagnostic.debug(message + " (type: "
                         + incomingConnection.getType() + ", id: "
                         + incomingConnection.getId() + ")");
                 diagnostic.debug("Purging child connection cache of failed connection to "
                         + username + " ("
-                        + incomingConnection.getIpEndPoint() + ")");
+                        + incomingConnection.getIpEndpoint() + ")");
                 childConnections.remove(username);
                 throw new CompletionException(new ConnectionException(message, cause));
             }
@@ -346,7 +346,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         CancellationTokenSource cancellation = new CancellationTokenSource();
         List<CompletableFuture<ParentCandidate>> tasks = snapshot.stream()
                 .map(candidate -> getParentCandidateConnectionAsync(
-                        candidate.username(), candidate.ipEndPoint(), cancellation.getToken()))
+                        candidate.username(), candidate.ipEndpoint(), cancellation.getToken()))
                 .toList();
 
         CompletableFuture<Void> settled = CompletableFuture.allOf(
@@ -379,16 +379,16 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                     parentConnection.addMessageReadListener(handler::handleMessageRead);
                     parentConnection.addMessageWrittenListener(handler::handleMessageWritten);
                     diagnostic.debug("Parent connection to " + parentConnection.getUsername()
-                            + " (" + parentConnection.getIpEndPoint()
+                            + " (" + parentConnection.getIpEndpoint()
                             + ") established. (type: " + parentConnection.getType()
                             + ", id: " + parentConnection.getId() + ")");
                     diagnostic.info("Adopted parent connection to "
                             + parentConnection.getUsername() + " ("
-                            + parentConnection.getIpEndPoint() + ")");
+                            + parentConnection.getIpEndpoint() + ")");
                     demoteFromBranchRoot();
                     DistributedParentEventArgs eventArgs = new DistributedParentEventArgs(
                             parentConnection.getUsername(),
-                            parentConnection.getIpEndPoint(),
+                            parentConnection.getIpEndpoint(),
                             parentBranchLevel,
                             parentBranchRoot);
                     parentAdoptedListeners.forEach(listener -> listener.handle(this, eventArgs));
@@ -397,7 +397,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                     parentCandidates = successful.stream()
                             .map(candidate -> new PeerEndpoint(
                                     candidate.connection().getUsername(),
-                                    candidate.connection().getIpEndPoint()))
+                                    candidate.connection().getIpEndpoint()))
                             .toList();
                     diagnostic.debug("Connected parent candidates not selected: "
                             + (parentCandidates.isEmpty()
@@ -410,7 +410,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                     successful.forEach(candidate -> {
                         diagnostic.debug("Disconnecting parent candidate connection to "
                                 + candidate.connection().getUsername() + " ("
-                                + candidate.connection().getIpEndPoint() + ")");
+                                + candidate.connection().getIpEndpoint() + ")");
                         candidate.connection().disconnect("Not selected.");
                         candidate.connection().close();
                     });
@@ -459,7 +459,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     @Override
     public CompletableFuture<Void> getOrAddChildConnectionAsync(ConnectToPeerResponse response) {
         if (!canAcceptChildren()) {
-            diagnostic.debug(rejectionMessage(response.getUsername(), response.getIpEndPoint()));
+            diagnostic.debug(rejectionMessage(response.getUsername(), response.getIpEndpoint()));
             return updateStatusAsync();
         }
 
@@ -472,7 +472,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
             if (failure == null) {
                 if (cached.get()) {
                     diagnostic.debug("Child connection from " + response.getUsername()
-                            + " (" + response.getIpEndPoint()
+                            + " (" + response.getIpEndpoint()
                             + ") for token " + response.getToken()
                             + " ignored; connection already exists.");
                 }
@@ -482,12 +482,12 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
             Throwable cause = unwrap(failure);
             String message = "Failed to establish an inbound indirect child connection "
                     + "to " + response.getUsername() + " ("
-                    + response.getIpEndPoint() + "): " + message(cause);
+                    + response.getIpEndpoint() + "): " + message(cause);
             diagnostic.debug(message);
             if (!(cause instanceof CancellationException)) {
                 diagnostic.debug("Purging child connection cache of failed connection to "
                         + response.getUsername() + " ("
-                        + response.getIpEndPoint() + ").");
+                        + response.getIpEndpoint() + ").");
                 CompletableFuture<MessageConnection> removedRecord = childConnections.remove(response.getUsername());
                 if (removedRecord != null) {
                     removedRecord.handle((removed, ignored) -> {
@@ -680,16 +680,16 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     private CompletableFuture<MessageConnection> establishDirectChild(
             String username, Connection incomingConnection, CompletableFuture<MessageConnection> cached) {
         diagnostic.debug("Inbound child connection to " + username + " ("
-                + incomingConnection.getIpEndPoint()
+                + incomingConnection.getIpEndpoint()
                 + ") accepted. (type: " + incomingConnection.getType()
                 + ", id: " + incomingConnection.getId());
         MessageConnection connection = connectionFactory.getDistributedConnection(
                 username,
-                incomingConnection.getIpEndPoint(),
+                incomingConnection.getIpEndpoint(),
                 client.getOptions().getDistributedConnectionOptions(),
                 incomingConnection.handoffTcpClient());
         diagnostic.debug("Inbound child connection to " + username + " ("
-                + connection.getIpEndPoint() + ") handed off. (old: "
+                + connection.getIpEndpoint() + ") handed off. (old: "
                 + incomingConnection.getId() + ", new: "
                 + connection.getId() + ")");
         incomingConnection.close();
@@ -709,7 +709,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                 if (old != null) {
                     old.removeDisconnectedListener(childDisconnectedListener);
                     diagnostic.debug("Superseding existing child connection to "
-                            + username + " (" + old.getIpEndPoint()
+                            + username + " (" + old.getIpEndpoint()
                             + ") (old: " + incomingConnection.getId()
                             + ", new: " + connection.getId());
                     old.disconnect("Superseded.");
@@ -730,16 +730,16 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                     .writeAsync(getBranchInformation())
                     .thenApply(value -> {
                         connection.addDisconnectedListener(childDisconnectedListener);
-                        children.put(username, connection.getIpEndPoint());
+                        children.put(username, connection.getIpEndpoint());
                         diagnostic.debug("Child connection to " + connection.getUsername()
-                                + " (" + connection.getIpEndPoint()
+                                + " (" + connection.getIpEndpoint()
                                 + ") established. (type: "
                                 + connection.getType() + ", id: "
                                 + connection.getId() + ")");
                         diagnostic.info((superseded.get() ? "Updated" : "Added")
                                 + " child connection to "
                                 + connection.getUsername() + " ("
-                                + connection.getIpEndPoint() + ")");
+                                + connection.getIpEndpoint() + ")");
                         if (!superseded.get()) {
                             raiseChildAdded(connection);
                             raiseStateChanged();
@@ -757,11 +757,11 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
 
     private CompletableFuture<MessageConnection> establishIndirectChild(ConnectToPeerResponse response) {
         diagnostic.debug("Attempting inbound indirect child connection to "
-                + response.getUsername() + " (" + response.getIpEndPoint()
+                + response.getUsername() + " (" + response.getIpEndpoint()
                 + ") for token " + response.getToken());
         MessageConnection connection = connectionFactory.getDistributedConnection(
                 response.getUsername(),
-                response.getIpEndPoint(),
+                response.getIpEndpoint(),
                 client.getOptions().getDistributedConnectionOptions());
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.INDIRECT));
         attachChildMessageListeners(connection);
@@ -782,13 +782,13 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                         throw new CompletionException(unwrap(failure));
                     }
                     connection.addDisconnectedListener(childDisconnectedListener);
-                    children.put(response.getUsername(), connection.getIpEndPoint());
+                    children.put(response.getUsername(), connection.getIpEndpoint());
                     diagnostic.debug("Child connection to " + connection.getUsername() + " ("
-                            + connection.getIpEndPoint()
+                            + connection.getIpEndpoint()
                             + ") established. (type: " + connection.getType()
                             + ", id: " + connection.getId() + ")");
                     diagnostic.info("Added child connection to " + connection.getUsername() + " ("
-                            + connection.getIpEndPoint() + ")");
+                            + connection.getIpEndpoint() + ")");
                     raiseChildAdded(connection);
                     raiseStateChanged();
                     updateStatusEventuallyAsync();
@@ -797,13 +797,13 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     }
 
     private CompletableFuture<ParentCandidate> getParentCandidateConnectionAsync(
-            String username, InetSocketAddress ipEndPoint, CancellationToken cancellationToken) {
+            String username, InetSocketAddress ipEndpoint, CancellationToken cancellationToken) {
         LinkedCancellation directCancellation = new LinkedCancellation(cancellationToken);
         LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationToken);
         diagnostic.debug("Attempting simultaneous direct and indirect parent candidate " + "connections to " + username
-                + " (" + ipEndPoint + ")");
+                + " (" + ipEndpoint + ")");
         CompletableFuture<MessageConnection> direct =
-                getParentCandidateConnectionDirectAsync(username, ipEndPoint, directCancellation.token());
+                getParentCandidateConnectionDirectAsync(username, ipEndpoint, directCancellation.token());
         CompletableFuture<MessageConnection> indirect =
                 getParentCandidateConnectionIndirectAsync(username, indirectCancellation.token());
 
@@ -813,7 +813,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                     MessageConnection connection = winner.value();
                     diagnostic.debug((directWon ? "Direct" : "Indirect")
                             + " parent candidate connection to " + username + " ("
-                            + ipEndPoint
+                            + ipEndpoint
                             + ") established first, attempting to cancel "
                             + (directWon ? "indirect" : "direct") + " connection.");
                     (directWon ? indirectCancellation : directCancellation).cancel();
@@ -838,7 +838,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                     }
                     diagnostic.debug((directWon ? "Direct" : "Indirect")
                             + " parent candidate connection to " + username + " ("
-                            + ipEndPoint + ") initialized.  Waiting for branch "
+                            + ipEndpoint + ") initialized.  Waiting for branch "
                             + "information and first search request. (id: "
                             + connection.getId() + ")");
                     return negotiation.thenCompose(ignored -> initialization).handle((branch, failure) -> {
@@ -848,14 +848,14 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                             Throwable cause = unwrap(failure);
                             String message = "Failed to negotiate parent candidate "
                                     + "connection to " + username + " ("
-                                    + ipEndPoint + "): " + message(cause);
+                                    + ipEndpoint + "): " + message(cause);
                             diagnostic.debug(
                                     message + " (type: " + connection.getType() + ", id: " + connection.getId() + ")");
                             connection.close();
                             throw new CompletionException(new ConnectionException(message, cause));
                         }
                         diagnostic.debug("Parent candidate connection to " + username + " ("
-                                + ipEndPoint + ") established. (type: "
+                                + ipEndpoint + ") established. (type: "
                                 + connection.getType() + ", id: "
                                 + connection.getId() + ")");
                         return new ParentCandidate(connection, branch.level(), branch.root());
@@ -871,7 +871,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                         }
                         String message = "Failed to establish a direct or indirect parent "
                                 + "candidate connection to " + username + " ("
-                                + ipEndPoint + ")";
+                                + ipEndpoint + ")";
                         diagnostic.debug(message);
                         throw new CompletionException(new ConnectionException(message));
                     }
@@ -880,23 +880,23 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     }
 
     private CompletableFuture<MessageConnection> getParentCandidateConnectionDirectAsync(
-            String username, InetSocketAddress ipEndPoint, CancellationToken cancellationToken) {
-        diagnostic.debug("Attempting direct parent candidate connection to " + username + " (" + ipEndPoint + ")");
+            String username, InetSocketAddress ipEndpoint, CancellationToken cancellationToken) {
+        diagnostic.debug("Attempting direct parent candidate connection to " + username + " (" + ipEndpoint + ")");
         MessageConnection connection = connectionFactory.getDistributedConnection(
-                username, ipEndPoint, client.getOptions().getDistributedConnectionOptions());
+                username, ipEndpoint, client.getOptions().getDistributedConnectionOptions());
         connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT));
         connection.addDisconnectedListener(parentCandidateDisconnectedListener);
         return connection.connectAsync(cancellationToken).handle((ignored, failure) -> {
             if (failure != null) {
                 diagnostic.debug("Failed to establish a direct parent candidate "
                         + "connection to " + username + " ("
-                        + ipEndPoint + "): "
+                        + ipEndpoint + "): "
                         + message(unwrap(failure)));
                 connection.close();
                 throw new CompletionException(unwrap(failure));
             }
             diagnostic.debug("Direct parent candidate connection to " + username
-                    + " (" + connection.getIpEndPoint()
+                    + " (" + connection.getIpEndpoint()
                     + ") established. (type: " + connection.getType()
                     + ", id: " + connection.getId() + ")");
             return connection;
@@ -928,17 +928,17 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                     try {
                         MessageConnection connection = connectionFactory.getDistributedConnection(
                                 username,
-                                accepted.getIpEndPoint(),
+                                accepted.getIpEndpoint(),
                                 client.getOptions().getDistributedConnectionOptions(),
                                 accepted.handoffTcpClient());
                         diagnostic.debug("Indirect parent candidate connection to " + username
-                                + " (" + accepted.getIpEndPoint()
+                                + " (" + accepted.getIpEndpoint()
                                 + ") handed off. (old: " + accepted.getId()
                                 + ", new: " + connection.getId() + ")");
                         connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.INDIRECT));
                         connection.addDisconnectedListener(parentCandidateDisconnectedListener);
                         diagnostic.debug("Indirect parent candidate connection to " + username
-                                + " (" + connection.getIpEndPoint()
+                                + " (" + connection.getIpEndpoint()
                                 + ") established. (type: "
                                 + connection.getType() + ", id: "
                                 + connection.getId() + ")");
@@ -999,7 +999,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                                 new ConnectionException("Failed to retrieve branch info from parent "
                                         + "candidate connection to "
                                         + connection.getUsername() + " ("
-                                        + connection.getIpEndPoint()
+                                        + connection.getIpEndpoint()
                                         + "); one or more required messages was not "
                                         + "received. (id: " + connection.getId() + ")"));
                     }
@@ -1018,15 +1018,15 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         childConnections.remove(connection.getUsername());
         children.remove(connection.getUsername());
         diagnostic.debug("Child connection to " + connection.getUsername() + " ("
-                + connection.getIpEndPoint() + ") disconnected: "
+                + connection.getIpEndpoint() + ") disconnected: "
                 + eventArgs.getMessage() + " (type: "
                 + connection.getType() + ", id: "
                 + connection.getId() + ")");
         diagnostic.info("Child connection to " + connection.getUsername() + " ("
-                + connection.getIpEndPoint() + ") disconnected"
+                + connection.getIpEndpoint() + ") disconnected"
                 + (eventArgs.getMessage() == null ? "." : ": " + eventArgs.getMessage()));
         DistributedChildEventArgs childEvent =
-                new DistributedChildEventArgs(connection.getUsername(), connection.getIpEndPoint());
+                new DistributedChildEventArgs(connection.getUsername(), connection.getIpEndpoint());
         childDisconnectedListeners.forEach(listener -> listener.handle(this, childEvent));
         raiseStateChanged();
         connection.close();
@@ -1036,7 +1036,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     private void parentCandidateDisconnected(Connection sender, ConnectionDisconnectedEventArgs eventArgs) {
         MessageConnection connection = (MessageConnection) sender;
         diagnostic.debug("Parent candidate connection to " + connection.getUsername()
-                + " (" + connection.getIpEndPoint() + ") disconnected: "
+                + " (" + connection.getIpEndpoint() + ") disconnected: "
                 + eventArgs.getMessage() + " (type: "
                 + connection.getType() + ", id: "
                 + connection.getId() + ")");
@@ -1046,15 +1046,15 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     private void parentDisconnected(Connection sender, ConnectionDisconnectedEventArgs eventArgs) {
         MessageConnection connection = (MessageConnection) sender;
         diagnostic.debug("Parent connection to " + connection.getUsername() + " ("
-                + connection.getIpEndPoint() + ") disconnected: "
+                + connection.getIpEndpoint() + ") disconnected: "
                 + eventArgs.getMessage() + " (type: "
                 + connection.getType() + ", id: "
                 + connection.getId() + ")");
         diagnostic.info("Parent connection to " + connection.getUsername() + " ("
-                + connection.getIpEndPoint() + ") disconnected"
+                + connection.getIpEndpoint() + ") disconnected"
                 + (eventArgs.getMessage() == null ? "." : ": " + eventArgs.getMessage()) + ".");
         DistributedParentEventArgs parentEvent = new DistributedParentEventArgs(
-                connection.getUsername(), connection.getIpEndPoint(), parentBranchLevel, parentBranchRoot);
+                connection.getUsername(), connection.getIpEndpoint(), parentBranchLevel, parentBranchRoot);
         parentDisconnectedListeners.forEach(listener -> listener.handle(this, parentEvent));
         parentConnection = null;
         parentBranchLevel = 0;
@@ -1097,7 +1097,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
 
     private void raiseChildAdded(MessageConnection connection) {
         DistributedChildEventArgs eventArgs =
-                new DistributedChildEventArgs(connection.getUsername(), connection.getIpEndPoint());
+                new DistributedChildEventArgs(connection.getUsername(), connection.getIpEndpoint());
         childAddedListeners.forEach(listener -> listener.handle(this, eventArgs));
     }
 
@@ -1110,9 +1110,9 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                 getChildLimit(),
                 canAcceptChildren(),
                 getChildren().stream()
-                        .map(child -> new DistributedPeer(child.username(), child.ipEndPoint()))
+                        .map(child -> new DistributedPeer(child.username(), child.ipEndpoint()))
                         .toList(),
-                new DistributedPeer(getParent().username(), getParent().ipEndPoint()),
+                new DistributedPeer(getParent().username(), getParent().ipEndpoint()),
                 hasParent());
         stateChangedListeners.forEach(listener -> listener.handle(this, info));
     }

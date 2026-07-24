@@ -6,10 +6,10 @@ package dev.slsk.search;
 
 import dev.slsk.CacheLookupResult;
 import dev.slsk.CancellationToken;
-import dev.slsk.ISearchResponseCache;
 import dev.slsk.RawSearchResponse;
 import dev.slsk.SearchQuery;
 import dev.slsk.SearchResponse;
+import dev.slsk.SearchResponseCache;
 import dev.slsk.SearchResponseCacheRecord;
 import dev.slsk.diagnostics.DiagnosticEventArgs;
 import dev.slsk.diagnostics.DiagnosticEventListener;
@@ -94,12 +94,12 @@ public final class DefaultSearchResponder implements SearchResponder {
 
     @Override
     public boolean tryDiscard(int responseToken) {
-        ISearchResponseCache cache = client.getOptions().getSearchResponseCache();
+        SearchResponseCache cache = client.getOptions().getSearchResponseCache();
         if (cache == null) {
             return false;
         }
         try {
-            CacheLookupResult<SearchResponseCacheRecord> result = cache.tryRemove(responseToken);
+            CacheLookupResult<SearchResponseCacheRecord> result = cache.remove(responseToken);
             if (result.found()) {
                 SearchResponseCacheRecord record = result.value();
                 diagnostic.debug("Discarded cached search response " + responseToken
@@ -156,14 +156,14 @@ public final class DefaultSearchResponder implements SearchResponder {
 
     @Override
     public CompletableFuture<Boolean> tryRespondAsync(int responseToken) {
-        ISearchResponseCache cache = client.getOptions().getSearchResponseCache();
+        SearchResponseCache cache = client.getOptions().getSearchResponseCache();
         if (cache == null) {
             return CompletableFuture.completedFuture(false);
         }
 
         CacheLookupResult<SearchResponseCacheRecord> lookup;
         try {
-            lookup = cache.tryRemove(responseToken);
+            lookup = cache.remove(responseToken);
         } catch (Throwable failure) {
             diagnostic.warning(
                     "Error retrieving cached search response " + responseToken + ": " + message(failure), failure);
@@ -221,7 +221,7 @@ public final class DefaultSearchResponder implements SearchResponder {
 
         CompletableFuture<InetSocketAddress> endpointFuture;
         try {
-            endpointFuture = client.getUserEndPointAsync(username, CancellationToken.none());
+            endpointFuture = client.getUserEndpointAsync(username, CancellationToken.none());
         } catch (Throwable failure) {
             endpointFuture = CompletableFuture.failedFuture(failure);
         }
@@ -284,12 +284,12 @@ public final class DefaultSearchResponder implements SearchResponder {
 
     private void cacheUndelivered(
             int responseToken, String username, int token, String query, SearchResponse response) {
-        ISearchResponseCache cache = client.getOptions().getSearchResponseCache();
+        SearchResponseCache cache = client.getOptions().getSearchResponseCache();
         if (cache == null) {
             return;
         }
         try {
-            cache.addOrUpdate(responseToken, new SearchResponseCacheRecord(username, token, query, response));
+            cache.put(responseToken, new SearchResponseCacheRecord(username, token, query, response));
             diagnostic.debug("Failed to connect to " + username
                     + " with solicitation token " + responseToken
                     + " to deliver search results for query '" + query

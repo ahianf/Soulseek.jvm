@@ -16,7 +16,7 @@ import dev.slsk.eventargs.BrowseProgressUpdatedEventArgs;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferNotFoundException;
-import dev.slsk.exceptions.UserEndPointException;
+import dev.slsk.exceptions.UserEndpointException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.handlers.BrowseResponseConnection;
@@ -164,7 +164,7 @@ class SoulseekClientPeerRequestTest {
 
         SoulseekClientException outer =
                 assertInstanceOf(SoulseekClientException.class, failureOf(fixture.client.connectToUserAsync("alice")));
-        UserEndPointException endpoint = assertInstanceOf(UserEndPointException.class, outer.getCause());
+        UserEndpointException endpoint = assertInstanceOf(UserEndpointException.class, outer.getCause());
         assertSame(endpointFailure, endpoint.getCause());
 
         fixture.server.synchronousFailure = null;

@@ -130,8 +130,8 @@ public final class TransferInternal {
     }
 
     /** Returns the transfer endpoint, or {@code null}. */
-    public synchronized InetSocketAddress getIpEndPoint() {
-        return connection == null ? null : connection.getIpEndPoint();
+    public synchronized InetSocketAddress getIpEndpoint() {
+        return connection == null ? null : connection.getIpEndpoint();
     }
 
     /** Returns the transfer options. */
@@ -277,7 +277,7 @@ public final class TransferInternal {
                 startTime,
                 endTime,
                 remoteToken,
-                getIpEndPoint(),
+                getIpEndpoint(),
                 exception);
     }
 

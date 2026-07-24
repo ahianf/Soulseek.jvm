@@ -73,7 +73,7 @@ class ListenerTest {
                 assertTrue(raised.await(2, TimeUnit.SECONDS));
                 assertSame(listener, sender.get());
                 assertEquals(ConnectionState.CONNECTED, accepted.get().getState());
-                assertEquals(peer.getLocalPort(), accepted.get().getIpEndPoint().getPort());
+                assertEquals(peer.getLocalPort(), accepted.get().getIpEndpoint().getPort());
             } finally {
                 listener.stop();
                 if (accepted.get() != null) {

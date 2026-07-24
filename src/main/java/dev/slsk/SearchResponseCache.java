@@ -5,14 +5,14 @@
 package dev.slsk;
 
 /** A cache for undelivered search responses. */
-public interface ISearchResponseCache {
+public interface SearchResponseCache {
     /**
      * Adds or updates a response and its context.
      *
      * @param responseToken the delivery-response token
      * @param response the response and routing context
      */
-    void addOrUpdate(int responseToken, SearchResponseCacheRecord response);
+    void put(int responseToken, SearchResponseCacheRecord response);
 
     /**
      * Attempts to fetch a cached response.
@@ -20,7 +20,7 @@ public interface ISearchResponseCache {
      * @param responseToken the delivery-response token
      * @return the lookup result
      */
-    CacheLookupResult<SearchResponseCacheRecord> tryGet(int responseToken);
+    CacheLookupResult<SearchResponseCacheRecord> lookup(int responseToken);
 
     /**
      * Attempts to remove a cached response.
@@ -28,5 +28,5 @@ public interface ISearchResponseCache {
      * @param responseToken the delivery-response token
      * @return the removal result
      */
-    CacheLookupResult<SearchResponseCacheRecord> tryRemove(int responseToken);
+    CacheLookupResult<SearchResponseCacheRecord> remove(int responseToken);
 }

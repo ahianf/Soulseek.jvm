@@ -72,7 +72,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
         if (code != MessageCode.Distributed.PING) {
             diagnostic.debug("Distributed child message received: " + code + " from "
                     + connection.getUsername() + " ("
-                    + connection.getIpEndPoint() + ") (id: "
+                    + connection.getIpEndpoint() + ") (id: "
                     + connection.getId() + ")");
         }
 
@@ -84,7 +84,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                 default -> {
                     diagnostic.debug("Unhandled distributed child message: " + code
                             + " from " + connection.getUsername() + " ("
-                            + connection.getIpEndPoint() + "); "
+                            + connection.getIpEndpoint() + "); "
                             + message.length + " bytes");
                     yield CompletableFuture.completedFuture(null);
                 }
@@ -98,7 +98,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                 diagnostic.warning(
                         "Error handling distributed child message: " + code
                                 + " from " + connection.getUsername() + " ("
-                                + connection.getIpEndPoint() + "); "
+                                + connection.getIpEndpoint() + "); "
                                 + message(cause),
                         cause);
             }
@@ -113,7 +113,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
         if (code != MessageCode.Distributed.PING) {
             diagnostic.debug("Distributed child message sent: " + code + " to "
                     + connection.getUsername() + " ("
-                    + connection.getIpEndPoint() + ") (id: "
+                    + connection.getIpEndpoint() + ") (id: "
                     + connection.getId() + ")");
         }
     }
@@ -135,7 +135,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                 && code != MessageCode.Distributed.PING) {
             diagnostic.debug("Distributed message received: " + code + " from "
                     + connection.getUsername() + " ("
-                    + connection.getIpEndPoint() + ") (id: "
+                    + connection.getIpEndpoint() + ") (id: "
                     + connection.getId() + ")");
         } else if (client.getOptions().isDeduplicateSearchRequests()) {
             String current = Base64.getEncoder().encodeToString(message);
@@ -181,7 +181,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                 default -> {
                     diagnostic.debug("Unhandled distributed message: " + code + " from "
                             + connection.getUsername() + " ("
-                            + connection.getIpEndPoint() + "); "
+                            + connection.getIpEndpoint() + "); "
                             + message.length + " bytes");
                     yield CompletableFuture.completedFuture(null);
                 }
@@ -195,7 +195,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                 diagnostic.warning(
                         "Error handling distributed message: " + code + " from "
                                 + connection.getUsername() + " ("
-                                + connection.getIpEndPoint() + "); "
+                                + connection.getIpEndpoint() + "); "
                                 + message(cause),
                         cause);
             }
@@ -251,7 +251,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
             diagnostic.debug("Unhandled embedded message: "
                     + MessageCode.Distributed.EMBEDDED_MESSAGE + " from "
                     + connection.getUsername() + " ("
-                    + connection.getIpEndPoint() + "); "
+                    + connection.getIpEndpoint() + "); "
                     + message.length + " bytes");
             return CompletableFuture.completedFuture(null);
         }
@@ -278,7 +278,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
 
     private boolean isParent(MessageConnection connection) {
         return Objects.equals(
-                new PeerEndpoint(connection.getUsername(), connection.getIpEndPoint()),
+                new PeerEndpoint(connection.getUsername(), connection.getIpEndpoint()),
                 client.getDistributedConnectionManager().getParent());
     }
 

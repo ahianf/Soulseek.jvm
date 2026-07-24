@@ -473,7 +473,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 case Constants.ConnectionType.PEER -> {
                     diagnostic.debug("Received message ConnectToPeer request from "
                             + response.getUsername() + " ("
-                            + response.getIpEndPoint() + ")");
+                            + response.getIpEndpoint() + ")");
                     yield client.getPeerConnectionManager()
                             .getOrAddMessageConnectionAsync(response)
                             .thenApply(ignored -> null);
@@ -481,7 +481,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 case Constants.ConnectionType.DISTRIBUTED -> {
                     diagnostic.debug("Received distributed ConnectToPeer request from "
                             + response.getUsername() + " ("
-                            + response.getIpEndPoint() + ")");
+                            + response.getIpEndpoint() + ")");
                     yield client.getDistributedConnectionManager().getOrAddChildConnectionAsync(response);
                 }
                 default ->
@@ -496,7 +496,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 Throwable cause = unwrap(failure);
                 diagnostic.debug("Error handling ConnectToPeer response from "
                         + response.getUsername() + " ("
-                        + response.getIpEndPoint() + "): "
+                        + response.getIpEndpoint() + "): "
                         + failureMessage(cause));
             }
             return null;
@@ -506,7 +506,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     private CompletableFuture<Void> handleTransferConnection(ConnectToPeerResponse response) {
         diagnostic.debug("Received transfer ConnectToPeer request from "
                 + response.getUsername() + " ("
-                + response.getIpEndPoint() + ") for remote token "
+                + response.getIpEndpoint() + ") for remote token "
                 + response.getToken());
         boolean expected = !client.getDownloadDictionary().isEmpty()
                 && client.getDownloadDictionary().values().stream()
@@ -514,7 +514,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         if (!expected) {
             return CompletableFuture.failedFuture(new SoulseekClientException("Unexpected transfer request from "
                     + response.getUsername() + " ("
-                    + response.getIpEndPoint() + "); Ignored"));
+                    + response.getIpEndpoint() + "); Ignored"));
         }
         return client.getPeerConnectionManager()
                 .getTransferConnectionAsync(response)
@@ -530,7 +530,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         if (download == null) {
             diagnostic.debug("Transfer ConnectToPeer request from "
                     + response.getUsername() + " ("
-                    + response.getIpEndPoint() + ") for remote token "
+                    + response.getIpEndpoint() + ") for remote token "
                     + response.getToken()
                     + " does not match any waiting downloads, discarding.");
             result.connection().disconnect("Unknown transfer");
@@ -539,7 +539,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         Connection connection = result.connection();
         diagnostic.debug("Solicited inbound transfer connection to "
                 + download.getUsername() + " ("
-                + connection.getIpEndPoint() + ") for token "
+                + connection.getIpEndpoint() + ") for token "
                 + download.getToken() + " (remote: "
                 + download.getRemoteToken() + ") established. (id: "
                 + connection.getId() + ")");

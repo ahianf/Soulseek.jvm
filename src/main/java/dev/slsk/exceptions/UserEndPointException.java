@@ -5,18 +5,18 @@
 package dev.slsk.exceptions;
 
 /** Represents errors resolving a user's network endpoint. */
-public class UserEndPointException extends SoulseekClientException {
+public class UserEndpointException extends SoulseekClientException {
     private static final long serialVersionUID = 1L;
 
-    public UserEndPointException() {
+    public UserEndpointException() {
         super();
     }
 
-    public UserEndPointException(String message) {
+    public UserEndpointException(String message) {
         super(message);
     }
 
-    public UserEndPointException(String message, Throwable cause) {
+    public UserEndpointException(String message, Throwable cause) {
         super(message, cause);
     }
 }

@@ -145,7 +145,7 @@ class TcpAdapterTest {
             });
             client.connectAsync(LOOPBACK, server.getLocalPort()).get(3, TimeUnit.SECONDS);
             assertTrue(client.isConnected());
-            assertEquals(server.getLocalPort(), client.getRemoteEndPoint().getPort());
+            assertEquals(server.getLocalPort(), client.getRemoteEndpoint().getPort());
 
             try (NetworkStream stream = client.getStream()) {
                 assertEquals(-1, stream.getReadTimeout());

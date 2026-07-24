@@ -23,7 +23,7 @@ public interface TcpClient extends AutoCloseable {
     boolean isConnected();
 
     /** Returns the client remote endpoint. */
-    InetSocketAddress getRemoteEndPoint();
+    InetSocketAddress getRemoteEndpoint();
 
     /** Connects the client to a remote endpoint. */
     CompletableFuture<Void> connectAsync(InetAddress address, int port);

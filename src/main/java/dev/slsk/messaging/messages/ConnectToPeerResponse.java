@@ -13,7 +13,7 @@ import java.util.Objects;
 /** A server response soliciting a peer connection. */
 public final class ConnectToPeerResponse implements IncomingMessage {
     private final InetAddress ipAddress;
-    private final InetSocketAddress ipEndPoint;
+    private final InetSocketAddress ipEndpoint;
     private final boolean privileged;
     private final int port;
     private final int token;
@@ -32,7 +32,7 @@ public final class ConnectToPeerResponse implements IncomingMessage {
         this.username = username;
         this.type = type;
         this.token = token;
-        this.ipEndPoint = Objects.requireNonNull(endpoint, "endpoint");
+        this.ipEndpoint = Objects.requireNonNull(endpoint, "endpoint");
         this.privileged = isPrivileged;
         this.ipAddress = endpoint.getAddress();
         this.port = endpoint.getPort();
@@ -42,8 +42,8 @@ public final class ConnectToPeerResponse implements IncomingMessage {
         return ipAddress;
     }
 
-    public InetSocketAddress getIpEndPoint() {
-        return ipEndPoint;
+    public InetSocketAddress getIpEndpoint() {
+        return ipEndpoint;
     }
 
     public boolean isPrivileged() {

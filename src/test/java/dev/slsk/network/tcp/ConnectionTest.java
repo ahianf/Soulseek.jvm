@@ -52,7 +52,7 @@ class ConnectionTest {
     @DisplayName("SocketConnection construction preserves defaults and identity")
     void constructsWithDefaults() {
         try (SocketConnection connection = new SocketConnection(ENDPOINT)) {
-            assertSame(ENDPOINT, connection.getIpEndPoint());
+            assertSame(ENDPOINT, connection.getIpEndpoint());
             assertEquals(new ConnectionKey(ENDPOINT), connection.getKey());
             assertEquals(ConnectionState.PENDING, connection.getState());
             assertEquals(ConnectionTypes.NONE, connection.getType());
@@ -522,7 +522,7 @@ class ConnectionTest {
         }
 
         @Override
-        public InetSocketAddress getRemoteEndPoint() {
+        public InetSocketAddress getRemoteEndpoint() {
             return ENDPOINT;
         }
 

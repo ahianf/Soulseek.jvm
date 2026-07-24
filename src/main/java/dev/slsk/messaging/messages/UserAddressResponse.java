@@ -13,7 +13,7 @@ import java.util.Objects;
 /** The response to a request for a peer's network address. */
 public final class UserAddressResponse implements IncomingMessage {
     private final InetAddress ipAddress;
-    private final InetSocketAddress ipEndPoint;
+    private final InetSocketAddress ipEndpoint;
     private final int port;
     private final String username;
 
@@ -25,7 +25,7 @@ public final class UserAddressResponse implements IncomingMessage {
     /** Creates an address response from an endpoint. */
     public UserAddressResponse(String username, InetSocketAddress endpoint) {
         this.username = username;
-        this.ipEndPoint = Objects.requireNonNull(endpoint, "endpoint");
+        this.ipEndpoint = Objects.requireNonNull(endpoint, "endpoint");
         this.ipAddress = endpoint.getAddress();
         this.port = endpoint.getPort();
     }
@@ -34,8 +34,8 @@ public final class UserAddressResponse implements IncomingMessage {
         return ipAddress;
     }
 
-    public InetSocketAddress getIpEndPoint() {
-        return ipEndPoint;
+    public InetSocketAddress getIpEndpoint() {
+        return ipEndpoint;
     }
 
     public int getPort() {

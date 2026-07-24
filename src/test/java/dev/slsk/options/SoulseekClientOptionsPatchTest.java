@@ -10,9 +10,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.slsk.CacheLookupResult;
-import dev.slsk.ISearchResponseCache;
-import dev.slsk.IUserEndPointCache;
+import dev.slsk.SearchResponseCache;
 import dev.slsk.SearchResponseCacheRecord;
+import dev.slsk.UserEndpointCache;
 import java.net.InetAddress;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
@@ -25,8 +25,8 @@ class SoulseekClientOptionsPatchTest {
         ConnectionOptions transfer = new ConnectionOptions();
         ConnectionOptions incoming = new ConnectionOptions();
         ConnectionOptions distributed = new ConnectionOptions();
-        IUserEndPointCache userCache = new TestUserCache();
-        ISearchResponseCache searchCache = new TestSearchCache();
+        UserEndpointCache userCache = new TestUserCache();
+        SearchResponseCache searchCache = new TestSearchCache();
         SearchResponseResolver searchResolver = (user, token, query) -> CompletableFuture.completedFuture(null);
         BrowseResponseResolver browseResolver = (user, endpoint) -> CompletableFuture.completedFuture(null);
         DirectoryContentsResolver directoryResolver =
@@ -64,7 +64,7 @@ class SoulseekClientOptionsPatchTest {
                 place);
 
         assertEquals(false, patch.getEnableListener());
-        assertSame(address, patch.getListenIPAddress());
+        assertSame(address, patch.getListenIpAddress());
         assertEquals(1234, patch.getListenPort());
         assertEquals(false, patch.getEnableDistributedNetwork());
         assertEquals(false, patch.getAcceptDistributedChildren());
@@ -80,7 +80,7 @@ class SoulseekClientOptionsPatchTest {
         assertSame(transfer, patch.getTransferConnectionOptions());
         assertSame(incoming, patch.getIncomingConnectionOptions());
         assertSame(distributed, patch.getDistributedConnectionOptions());
-        assertSame(userCache, patch.getUserEndPointCache());
+        assertSame(userCache, patch.getUserEndpointCache());
         assertSame(searchResolver, patch.getSearchResponseResolver());
         assertSame(searchCache, patch.getSearchResponseCache());
         assertSame(browseResolver, patch.getBrowseResponseResolver());
@@ -95,7 +95,7 @@ class SoulseekClientOptionsPatchTest {
         SoulseekClientOptionsPatch patch = new SoulseekClientOptionsPatch();
 
         assertNull(patch.getEnableListener());
-        assertNull(patch.getListenIPAddress());
+        assertNull(patch.getListenIpAddress());
         assertNull(patch.getListenPort());
         assertNull(patch.getServerConnectionOptions());
         assertNull(patch.getTransferConnectionOptions());
@@ -131,32 +131,32 @@ class SoulseekClientOptionsPatchTest {
     void prefixOverloadsPreserveTrailingNulls() throws Exception {
         InetAddress address = InetAddress.getLoopbackAddress();
 
-        assertNull(new SoulseekClientOptionsPatch(false).getListenIPAddress());
+        assertNull(new SoulseekClientOptionsPatch(false).getListenIpAddress());
         assertNull(new SoulseekClientOptionsPatch(false, address).getListenPort());
         assertNull(new SoulseekClientOptionsPatch(false, address, 1234).getEnableDistributedNetwork());
     }
 
-    private static final class TestUserCache implements IUserEndPointCache {
+    private static final class TestUserCache implements UserEndpointCache {
         @Override
-        public CacheLookupResult<java.net.InetSocketAddress> tryGet(String username) {
+        public CacheLookupResult<java.net.InetSocketAddress> lookup(String username) {
             return CacheLookupResult.notFound();
         }
 
         @Override
-        public void addOrUpdate(String username, java.net.InetSocketAddress endPoint) {}
+        public void put(String username, java.net.InetSocketAddress endpoint) {}
     }
 
-    private static final class TestSearchCache implements ISearchResponseCache {
+    private static final class TestSearchCache implements SearchResponseCache {
         @Override
-        public void addOrUpdate(int responseToken, SearchResponseCacheRecord response) {}
+        public void put(int responseToken, SearchResponseCacheRecord response) {}
 
         @Override
-        public CacheLookupResult<SearchResponseCacheRecord> tryGet(int responseToken) {
+        public CacheLookupResult<SearchResponseCacheRecord> lookup(int responseToken) {
             return CacheLookupResult.notFound();
         }
 
         @Override
-        public CacheLookupResult<SearchResponseCacheRecord> tryRemove(int responseToken) {
+        public CacheLookupResult<SearchResponseCacheRecord> remove(int responseToken) {
             return CacheLookupResult.notFound();
         }
     }

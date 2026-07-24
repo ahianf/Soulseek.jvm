@@ -119,7 +119,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         MessageCode.Peer code = new MessageReader<>(message, MessageCode.Peer.class).readCode();
         diagnostic.debug("Peer message received: " + code + " from "
                 + connection.getUsername() + " ("
-                + connection.getIpEndPoint() + ") (id: "
+                + connection.getIpEndpoint() + ") (id: "
                 + connection.getId() + ")");
 
         CompletableFuture<Void> operation;
@@ -187,7 +187,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 default -> {
                     diagnostic.debug("Unhandled peer message: " + code + " from "
                             + connection.getUsername() + " ("
-                            + connection.getIpEndPoint() + "); "
+                            + connection.getIpEndpoint() + "); "
                             + message.length + " bytes");
                     yield completed();
                 }
@@ -201,7 +201,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 diagnostic.warning(
                         "Error handling peer message: " + code + " from "
                                 + connection.getUsername() + " ("
-                                + connection.getIpEndPoint() + "); "
+                                + connection.getIpEndpoint() + "); "
                                 + message(cause),
                         cause);
             }
@@ -225,7 +225,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
             diagnostic.warning(
                     "Error handling peer message: " + code + " from "
                             + connection.getUsername() + " ("
-                            + connection.getIpEndPoint() + "); "
+                            + connection.getIpEndpoint() + "); "
                             + message(failure),
                     failure);
         }
@@ -235,7 +235,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     public void handleMessageWritten(MessageConnection connection, MessageEventArgs eventArgs) {
         MessageCode.Peer code = new MessageReader<>(eventArgs.getMessage(), MessageCode.Peer.class).readCode();
         diagnostic.debug("Peer message sent: " + code + " ("
-                + connection.getIpEndPoint() + ") (id: "
+                + connection.getIpEndpoint() + ") (id: "
                 + connection.getId() + ")");
     }
 
@@ -265,7 +265,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         try {
             resolved = client.getOptions()
                     .getUserInfoResolver()
-                    .resolve(connection.getUsername(), connection.getIpEndPoint());
+                    .resolve(connection.getUsername(), connection.getIpEndpoint());
         } catch (Throwable failure) {
             resolved = CompletableFuture.failedFuture(failure);
         }
@@ -277,7 +277,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                     diagnostic.warning("Failed to resolve user info response: " + message(cause), cause);
                     return new SoulseekClientOptions()
                             .getUserInfoResolver()
-                            .resolve(connection.getUsername(), connection.getIpEndPoint());
+                            .resolve(connection.getUsername(), connection.getIpEndpoint());
                 })
                 .thenCompose(future -> future)
                 .thenCompose(info -> connection.writeAsync(info.toByteArray()))
@@ -325,7 +325,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         try {
             resolved = client.getOptions()
                     .getBrowseResponseResolver()
-                    .resolve(connection.getUsername(), connection.getIpEndPoint());
+                    .resolve(connection.getUsername(), connection.getIpEndpoint());
         } catch (Throwable failure) {
             resolved = CompletableFuture.failedFuture(failure);
         }
@@ -337,7 +337,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                     diagnostic.warning("Failed to resolve browse response: " + message(cause), cause);
                     return new SoulseekClientOptions()
                             .getBrowseResponseResolver()
-                            .resolve(connection.getUsername(), connection.getIpEndPoint());
+                            .resolve(connection.getUsername(), connection.getIpEndpoint());
                 })
                 .thenCompose(future -> future)
                 .thenCompose(response -> {
@@ -359,7 +359,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                     .getDirectoryContentsResolver()
                     .resolve(
                             connection.getUsername(),
-                            connection.getIpEndPoint(),
+                            connection.getIpEndpoint(),
                             request.getToken(),
                             request.getDirectoryName());
         } catch (Throwable failure) {
@@ -388,7 +388,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
 
     private CompletableFuture<Void> handleQueueDownload(MessageConnection connection, byte[] message) {
         QueueDownloadRequest request = QueueDownloadRequest.fromByteArray(message);
-        return tryEnqueueDownloadAsync(connection.getUsername(), connection.getIpEndPoint(), request.getFilename())
+        return tryEnqueueDownloadAsync(connection.getUsername(), connection.getIpEndpoint(), request.getFilename())
                 .thenCompose(result -> result.rejected()
                         ? connection.writeAsync(new UploadDenied(request.getFilename(), result.message()))
                         : trySendPlaceInQueueAsync(connection, request.getFilename()));
@@ -417,7 +417,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
             return connection.writeAsync(new TransferResponse(request.getToken(), "Cancelled"));
         }
 
-        return tryEnqueueDownloadAsync(connection.getUsername(), connection.getIpEndPoint(), request.getFilename())
+        return tryEnqueueDownloadAsync(connection.getUsername(), connection.getIpEndpoint(), request.getFilename())
                 .thenCompose(result -> {
                     if (result.rejected()) {
                         return connection
@@ -482,7 +482,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         try {
             resolved = client.getOptions()
                     .getPlaceInQueueResolver()
-                    .resolve(connection.getUsername(), connection.getIpEndPoint(), filename);
+                    .resolve(connection.getUsername(), connection.getIpEndpoint(), filename);
         } catch (Throwable failure) {
             resolved = CompletableFuture.failedFuture(failure);
         }

@@ -14,8 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.CacheLookupResult;
 import dev.slsk.CancellationToken;
 import dev.slsk.File;
-import dev.slsk.ISearchResponseCache;
 import dev.slsk.SearchResponse;
+import dev.slsk.SearchResponseCache;
 import dev.slsk.SearchResponseCacheRecord;
 import dev.slsk.diagnostics.DiagnosticEventArgs;
 import dev.slsk.diagnostics.DiagnosticEventListener;
@@ -223,7 +223,7 @@ class SearchResponderTest {
         return new Fixture(new DefaultSearchResponder(client, diagnostic), client, manager, diagnostic);
     }
 
-    private static SoulseekClientOptions options(SearchResponseResolver resolver, ISearchResponseCache cache) {
+    private static SoulseekClientOptions options(SearchResponseResolver resolver, SearchResponseCache cache) {
         return new SoulseekClientOptions(
                 true,
                 null,
@@ -326,7 +326,7 @@ class SearchResponderTest {
         }
 
         @Override
-        public CompletableFuture<InetSocketAddress> getUserEndPointAsync(
+        public CompletableFuture<InetSocketAddress> getUserEndpointAsync(
                 String username, CancellationToken cancellationToken) {
             if (endpointFailure != null) {
                 return CompletableFuture.failedFuture(endpointFailure);
@@ -335,7 +335,7 @@ class SearchResponderTest {
         }
     }
 
-    private static final class TestCache implements ISearchResponseCache {
+    private static final class TestCache implements SearchResponseCache {
         private CacheLookupResult<SearchResponseCacheRecord> removed = CacheLookupResult.notFound();
         private RuntimeException throwOnRemove;
         private RuntimeException throwOnAdd;
@@ -345,7 +345,7 @@ class SearchResponderTest {
         private SearchResponseCacheRecord added;
 
         @Override
-        public void addOrUpdate(int responseToken, SearchResponseCacheRecord response) {
+        public void put(int responseToken, SearchResponseCacheRecord response) {
             if (throwOnAdd != null) {
                 throw throwOnAdd;
             }
@@ -355,12 +355,12 @@ class SearchResponderTest {
         }
 
         @Override
-        public CacheLookupResult<SearchResponseCacheRecord> tryGet(int responseToken) {
+        public CacheLookupResult<SearchResponseCacheRecord> lookup(int responseToken) {
             return CacheLookupResult.notFound();
         }
 
         @Override
-        public CacheLookupResult<SearchResponseCacheRecord> tryRemove(int responseToken) {
+        public CacheLookupResult<SearchResponseCacheRecord> remove(int responseToken) {
             if (throwOnRemove != null) {
                 throw throwOnRemove;
             }
@@ -447,14 +447,14 @@ class SearchResponderTest {
 
         @Override
         public CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
-                String username, InetSocketAddress ipEndPoint, CancellationToken cancellationToken) {
-            return getOrAddMessageConnectionAsync(username, ipEndPoint, 0, cancellationToken);
+                String username, InetSocketAddress ipEndpoint, CancellationToken cancellationToken) {
+            return getOrAddMessageConnectionAsync(username, ipEndpoint, 0, cancellationToken);
         }
 
         @Override
         public CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
                 String username,
-                InetSocketAddress ipEndPoint,
+                InetSocketAddress ipEndpoint,
                 int solicitationToken,
                 CancellationToken cancellationToken) {
             lastUsername = username;
@@ -478,7 +478,7 @@ class SearchResponderTest {
 
         @Override
         public CompletableFuture<Connection> getTransferConnectionAsync(
-                String username, InetSocketAddress ipEndPoint, int token, CancellationToken cancellationToken) {
+                String username, InetSocketAddress ipEndpoint, int token, CancellationToken cancellationToken) {
             return unsupported();
         }
 

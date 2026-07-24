@@ -62,7 +62,7 @@ public final class DefaultListenerHandler implements ListenerHandler {
 
     CompletableFuture<Void> handleConnectionAsync(Connection connection) {
         diagnostic.debug("Accepted incoming connection from "
-                + connection.getIpEndPoint().getAddress().getHostAddress()
+                + connection.getIpEndpoint().getAddress().getHostAddress()
                 + " on " + client.getListener().getIpAddress()
                 + ":" + client.getListener().getPort()
                 + " (id: " + connection.getId() + ")");
@@ -90,8 +90,8 @@ public final class DefaultListenerHandler implements ListenerHandler {
             if (failure != null) {
                 Throwable cause = unwrap(failure);
                 diagnostic.debug("Failed to initialize direct connection from "
-                        + connection.getIpEndPoint().getAddress().getHostAddress()
-                        + ":" + connection.getIpEndPoint().getPort()
+                        + connection.getIpEndpoint().getAddress().getHostAddress()
+                        + ":" + connection.getIpEndpoint().getPort()
                         + ": " + message(cause));
                 connection.disconnect(null, asException(cause));
                 connection.close();
@@ -123,7 +123,7 @@ public final class DefaultListenerHandler implements ListenerHandler {
     private CompletableFuture<Void> handlePeerInit(Connection connection, PeerInit peerInit) {
         diagnostic.debug("PeerInit for connection type " + peerInit.getConnectionType()
                 + " received from " + peerInit.getUsername() + " ("
-                + connection.getIpEndPoint().getAddress().getHostAddress()
+                + connection.getIpEndpoint().getAddress().getHostAddress()
                 + ":" + client.getListener().getPort()
                 + ") (id: " + connection.getId() + ")");
 
@@ -143,7 +143,7 @@ public final class DefaultListenerHandler implements ListenerHandler {
                             diagnostic.debug("Unexpected transfer connection for token "
                                     + peerInit.getToken() + " from "
                                     + peerInit.getUsername() + " ("
-                                    + connection.getIpEndPoint().getAddress().getHostAddress()
+                                    + connection.getIpEndpoint().getAddress().getHostAddress()
                                     + ":" + client.getListener().getPort()
                                     + ") (id: " + connection.getId() + ")");
                             result.connection().disconnect("Transfer connection rejected: unknown token");
@@ -164,7 +164,7 @@ public final class DefaultListenerHandler implements ListenerHandler {
         if (username != null) {
             diagnostic.debug("Peer PierceFirewall with token " + token
                     + " received from " + username + " ("
-                    + connection.getIpEndPoint().getAddress().getHostAddress()
+                    + connection.getIpEndpoint().getAddress().getHostAddress()
                     + ":" + client.getListener().getPort()
                     + ") (id: " + connection.getId() + ")");
             client.getWaiter()
@@ -178,7 +178,7 @@ public final class DefaultListenerHandler implements ListenerHandler {
         if (username != null) {
             diagnostic.debug("Distributed PierceFirewall with token " + token
                     + " received from " + username + " ("
-                    + connection.getIpEndPoint().getAddress().getHostAddress()
+                    + connection.getIpEndpoint().getAddress().getHostAddress()
                     + ":" + client.getListener().getPort()
                     + ") (id: " + connection.getId() + ")");
             client.getWaiter()
@@ -190,12 +190,12 @@ public final class DefaultListenerHandler implements ListenerHandler {
 
         if (client.getOptions().getSearchResponseCache() != null) {
             CacheLookupResult<SearchResponseCacheRecord> lookup =
-                    client.getOptions().getSearchResponseCache().tryGet(token);
+                    client.getOptions().getSearchResponseCache().lookup(token);
             if (lookup.found()) {
                 SearchResponseCacheRecord record = lookup.value();
                 diagnostic.debug("PierceFirewall matching pending search response "
                         + "received from " + record.username() + " ("
-                        + connection.getIpEndPoint().getAddress().getHostAddress()
+                        + connection.getIpEndpoint().getAddress().getHostAddress()
                         + ":" + client.getListener().getPort()
                         + ") (id: " + connection.getId() + ")");
                 return client.getPeerConnectionManager()
@@ -208,8 +208,8 @@ public final class DefaultListenerHandler implements ListenerHandler {
         return CompletableFuture.failedFuture(
                 new ConnectionException("Unknown PierceFirewall attempt with token " + token
                         + " from "
-                        + connection.getIpEndPoint().getAddress().getHostAddress()
-                        + ":" + connection.getIpEndPoint().getPort()
+                        + connection.getIpEndpoint().getAddress().getHostAddress()
+                        + ":" + connection.getIpEndpoint().getPort()
                         + " (id: " + connection.getId() + ")"));
     }
 

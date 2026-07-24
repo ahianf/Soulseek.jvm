@@ -734,7 +734,7 @@ class PeerMessageHandlerTest {
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             return switch (method.getName()) {
                 case "getUsername" -> USERNAME;
-                case "getIpEndPoint" -> ENDPOINT;
+                case "getIpEndpoint" -> ENDPOINT;
                 case "getId" -> UUID.fromString("00000000-0000-0000-0000-000000000001");
                 case "writeAsync" -> {
                     if (arguments[0] instanceof byte[] value) {

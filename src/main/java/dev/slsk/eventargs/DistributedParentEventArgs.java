@@ -13,7 +13,7 @@ import java.util.Objects;
 public class DistributedParentEventArgs extends SoulseekClientEventArgs {
     private final int branchLevel;
     private final String branchRoot;
-    private final InetSocketAddress ipEndPoint;
+    private final InetSocketAddress ipEndpoint;
     private final boolean branchRootNode;
     private final String username;
 
@@ -21,14 +21,14 @@ public class DistributedParentEventArgs extends SoulseekClientEventArgs {
      * Creates distributed-parent event arguments.
      *
      * @param username the username associated with the connection
-     * @param ipEndPoint the connection endpoint
+     * @param ipEndpoint the connection endpoint
      * @param branchLevel the parent's branch level
      * @param branchRoot the root of the distributed branch
      */
     public DistributedParentEventArgs(
-            String username, InetSocketAddress ipEndPoint, int branchLevel, String branchRoot) {
+            String username, InetSocketAddress ipEndpoint, int branchLevel, String branchRoot) {
         this.username = username;
-        this.ipEndPoint = ipEndPoint;
+        this.ipEndpoint = ipEndpoint;
         this.branchLevel = branchLevel;
         this.branchRoot = branchRoot;
         this.branchRootNode = Objects.equals(username, branchRoot) && branchLevel == 0;
@@ -57,8 +57,8 @@ public class DistributedParentEventArgs extends SoulseekClientEventArgs {
      *
      * @return the IP endpoint
      */
-    public final InetSocketAddress getIpEndPoint() {
-        return ipEndPoint;
+    public final InetSocketAddress getIpEndpoint() {
+        return ipEndpoint;
     }
 
     /**

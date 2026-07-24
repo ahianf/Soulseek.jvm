@@ -21,7 +21,7 @@ public class Transfer {
     private final Instant endTime;
     private final Throwable exception;
     private final String filename;
-    private final InetSocketAddress ipEndPoint;
+    private final InetSocketAddress ipEndpoint;
     private final double percentComplete;
     private final Duration remainingTime;
     private final Integer remoteToken;
@@ -279,7 +279,7 @@ public class Transfer {
      * @param startTime the UTC transfer start time
      * @param endTime the UTC transfer end time
      * @param remoteToken the peer's transfer token
-     * @param ipEndPoint the remote connection endpoint
+     * @param ipEndpoint the remote connection endpoint
      */
     public Transfer(
             TransferDirection direction,
@@ -294,7 +294,7 @@ public class Transfer {
             Instant startTime,
             Instant endTime,
             Integer remoteToken,
-            InetSocketAddress ipEndPoint) {
+            InetSocketAddress ipEndpoint) {
         this(
                 direction,
                 username,
@@ -308,7 +308,7 @@ public class Transfer {
                 startTime,
                 endTime,
                 remoteToken,
-                ipEndPoint,
+                ipEndpoint,
                 null);
     }
 
@@ -327,7 +327,7 @@ public class Transfer {
      * @param startTime the UTC transfer start time
      * @param endTime the UTC transfer end time
      * @param remoteToken the peer's transfer token
-     * @param ipEndPoint the remote connection endpoint
+     * @param ipEndpoint the remote connection endpoint
      * @param exception the failure exception
      */
     public Transfer(
@@ -343,7 +343,7 @@ public class Transfer {
             Instant startTime,
             Instant endTime,
             Integer remoteToken,
-            InetSocketAddress ipEndPoint,
+            InetSocketAddress ipEndpoint,
             Throwable exception) {
         this.direction = Objects.requireNonNull(direction, "direction");
         this.username = username;
@@ -357,7 +357,7 @@ public class Transfer {
         this.startTime = startTime;
         this.endTime = endTime;
         this.remoteToken = remoteToken;
-        this.ipEndPoint = ipEndPoint;
+        this.ipEndpoint = ipEndpoint;
         this.exception = exception;
 
         bytesRemaining = size - bytesTransferred;
@@ -443,8 +443,8 @@ public class Transfer {
      *
      * @return the endpoint, or {@code null}
      */
-    public final InetSocketAddress getIpEndPoint() {
-        return ipEndPoint;
+    public final InetSocketAddress getIpEndpoint() {
+        return ipEndpoint;
     }
 
     /**

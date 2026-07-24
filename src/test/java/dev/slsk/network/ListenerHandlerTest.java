@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CacheLookupResult;
-import dev.slsk.ISearchResponseCache;
+import dev.slsk.SearchResponseCache;
 import dev.slsk.SearchResponseCacheRecord;
 import dev.slsk.common.Constants;
 import dev.slsk.common.DefaultWaiter;
@@ -199,7 +199,7 @@ class ListenerHandlerTest {
                 client, peer, distributed, search, waiter, diagnostic, new DefaultListenerHandler(client, diagnostic));
     }
 
-    private static SoulseekClientOptions options(ISearchResponseCache cache) {
+    private static SoulseekClientOptions options(SearchResponseCache cache) {
         return new SoulseekClientOptions(
                 true,
                 null,
@@ -336,7 +336,7 @@ class ListenerHandlerTest {
             proxy = (Connection) Proxy.newProxyInstance(
                     getClass().getClassLoader(), new Class<?>[] {Connection.class}, (ignored, method, arguments) -> {
                         return switch (method.getName()) {
-                            case "getIpEndPoint" -> endpoint;
+                            case "getIpEndpoint" -> endpoint;
                             case "getId" -> id;
                             case "readAsync" -> reads.removeFirst();
                             case "disconnect" -> {
@@ -445,21 +445,21 @@ class ListenerHandlerTest {
                 });
     }
 
-    private static final class TestCache implements ISearchResponseCache {
+    private static final class TestCache implements SearchResponseCache {
         private CacheLookupResult<SearchResponseCacheRecord> lookup = CacheLookupResult.notFound();
         private int lastLookupToken;
 
         @Override
-        public void addOrUpdate(int responseToken, SearchResponseCacheRecord response) {}
+        public void put(int responseToken, SearchResponseCacheRecord response) {}
 
         @Override
-        public CacheLookupResult<SearchResponseCacheRecord> tryGet(int responseToken) {
+        public CacheLookupResult<SearchResponseCacheRecord> lookup(int responseToken) {
             lastLookupToken = responseToken;
             return lookup;
         }
 
         @Override
-        public CacheLookupResult<SearchResponseCacheRecord> tryRemove(int responseToken) {
+        public CacheLookupResult<SearchResponseCacheRecord> remove(int responseToken) {
             return CacheLookupResult.notFound();
         }
     }

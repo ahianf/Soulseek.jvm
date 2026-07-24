@@ -491,7 +491,7 @@ class DistributedMessageHandlerTest {
         public Object invoke(Object ignored, Method method, Object[] arguments) {
             return switch (method.getName()) {
                 case "getUsername" -> username;
-                case "getIpEndPoint" -> endpoint;
+                case "getIpEndpoint" -> endpoint;
                 case "getId" -> id;
                 case "getKey" -> key;
                 case "getInactiveTime" -> Duration.ZERO;

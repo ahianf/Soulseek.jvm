@@ -92,8 +92,8 @@ class ExceptionHierarchyTest {
                 TransferRejectedException.class,
                 TransferReportedFailedException.class,
                 TransferStreamException.class,
-                UserEndPointCacheException.class,
-                UserEndPointException.class,
+                UserEndpointCacheException.class,
+                UserEndpointException.class,
                 UserNotFoundException.class,
                 UserOfflineException.class);
     }
@@ -124,8 +124,8 @@ class ExceptionHierarchyTest {
                 Arguments.of(TransferReportedFailedException.class, SoulseekClientException.class),
                 Arguments.of(TransferSizeMismatchException.class, SoulseekClientException.class),
                 Arguments.of(TransferStreamException.class, SoulseekClientException.class),
-                Arguments.of(UserEndPointCacheException.class, UserEndPointException.class),
-                Arguments.of(UserEndPointException.class, SoulseekClientException.class),
+                Arguments.of(UserEndpointCacheException.class, UserEndpointException.class),
+                Arguments.of(UserEndpointException.class, SoulseekClientException.class),
                 Arguments.of(UserNotFoundException.class, SoulseekClientException.class),
                 Arguments.of(UserOfflineException.class, SoulseekClientException.class));
     }

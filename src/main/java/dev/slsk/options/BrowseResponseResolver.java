@@ -15,8 +15,8 @@ public interface BrowseResponseResolver {
      * Resolves a browse response.
      *
      * @param username the requesting username
-     * @param endPoint the requesting endpoint
+     * @param endpoint the requesting endpoint
      * @return the asynchronous response
      */
-    CompletableFuture<BrowseResponse> resolve(String username, InetSocketAddress endPoint);
+    CompletableFuture<BrowseResponse> resolve(String username, InetSocketAddress endpoint);
 }

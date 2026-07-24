@@ -10,18 +10,18 @@ import java.net.InetSocketAddress;
  * Event arguments raised when a distributed child connection changes.
  */
 public class DistributedChildEventArgs extends SoulseekClientEventArgs {
-    private final InetSocketAddress ipEndPoint;
+    private final InetSocketAddress ipEndpoint;
     private final String username;
 
     /**
      * Creates distributed-child event arguments.
      *
      * @param username the username associated with the connection
-     * @param ipEndPoint the connection endpoint
+     * @param ipEndpoint the connection endpoint
      */
-    public DistributedChildEventArgs(String username, InetSocketAddress ipEndPoint) {
+    public DistributedChildEventArgs(String username, InetSocketAddress ipEndpoint) {
         this.username = username;
-        this.ipEndPoint = ipEndPoint;
+        this.ipEndpoint = ipEndpoint;
     }
 
     /**
@@ -29,8 +29,8 @@ public class DistributedChildEventArgs extends SoulseekClientEventArgs {
      *
      * @return the IP endpoint
      */
-    public final InetSocketAddress getIpEndPoint() {
-        return ipEndPoint;
+    public final InetSocketAddress getIpEndpoint() {
+        return ipEndpoint;
     }
 
     /**

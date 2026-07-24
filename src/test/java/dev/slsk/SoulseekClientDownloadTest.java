@@ -792,7 +792,7 @@ class SoulseekClientDownloadTest {
             if (method.getName().equals("getId")) {
                 return UUID.randomUUID();
             }
-            if (method.getName().equals("getIpEndPoint")) {
+            if (method.getName().equals("getIpEndpoint")) {
                 return ENDPOINT;
             }
             return defaultValue(method.getReturnType());
@@ -893,7 +893,7 @@ class SoulseekClientDownloadTest {
             if (method.getName().equals("getId")) {
                 return UUID.randomUUID();
             }
-            if (method.getName().equals("getIpEndPoint")) {
+            if (method.getName().equals("getIpEndpoint")) {
                 return ENDPOINT;
             }
             return defaultValue(method.getReturnType());

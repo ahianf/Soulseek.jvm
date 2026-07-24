@@ -58,7 +58,7 @@ public interface ISoulseekClient extends AutoCloseable, DiagnosticSource {
 
     InetAddress getIpAddress();
 
-    InetSocketAddress getIpEndPoint();
+    InetSocketAddress getIpEndpoint();
 
     int getMajorVersion();
 
@@ -552,9 +552,9 @@ public interface ISoulseekClient extends AutoCloseable, DiagnosticSource {
 
     CompletableFuture<RoomList> getRoomListAsync(CancellationToken cancellationToken);
 
-    CompletableFuture<InetSocketAddress> getUserEndPointAsync(String username);
+    CompletableFuture<InetSocketAddress> getUserEndpointAsync(String username);
 
-    CompletableFuture<InetSocketAddress> getUserEndPointAsync(String username, CancellationToken cancellationToken);
+    CompletableFuture<InetSocketAddress> getUserEndpointAsync(String username, CancellationToken cancellationToken);
 
     CompletableFuture<UserInfo> getUserInfoAsync(String username);
 

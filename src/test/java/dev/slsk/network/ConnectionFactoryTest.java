@@ -40,7 +40,7 @@ class ConnectionFactoryTest {
         ConnectionOptions options = new ConnectionOptions(1, 2, 3, 4, -1);
         try (Connection connection = new DefaultConnectionFactory().getTransferConnection(ENDPOINT, options, null)) {
             assertTrue(connection instanceof SocketConnection);
-            assertSame(ENDPOINT, connection.getIpEndPoint());
+            assertSame(ENDPOINT, connection.getIpEndpoint());
             assertSame(options, connection.getOptions());
         }
 
@@ -145,7 +145,7 @@ class ConnectionFactoryTest {
         }
 
         @Override
-        public InetSocketAddress getRemoteEndPoint() {
+        public InetSocketAddress getRemoteEndpoint() {
             return ENDPOINT;
         }
 

@@ -67,24 +67,24 @@ public class SocketConnection implements Connection {
     private ScheduledFuture<?> inactivityTask;
     private ScheduledFuture<?> watchdogTask;
 
-    protected InetSocketAddress ipEndPoint;
+    protected InetSocketAddress ipEndpoint;
     protected final ConnectionOptions options;
     protected volatile NetworkStream stream;
     protected volatile TcpClient tcpClient;
 
     /** Creates a connection with source defaults. */
-    public SocketConnection(InetSocketAddress ipEndPoint) {
-        this(ipEndPoint, null, null);
+    public SocketConnection(InetSocketAddress ipEndpoint) {
+        this(ipEndpoint, null, null);
     }
 
     /** Creates a connection with the supplied options. */
-    public SocketConnection(InetSocketAddress ipEndPoint, ConnectionOptions options) {
-        this(ipEndPoint, options, null);
+    public SocketConnection(InetSocketAddress ipEndpoint, ConnectionOptions options) {
+        this(ipEndpoint, options, null);
     }
 
     /** Creates a connection over an optional existing TCP client. */
-    public SocketConnection(InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
-        this.ipEndPoint = ipEndPoint;
+    public SocketConnection(InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient) {
+        this.ipEndpoint = ipEndpoint;
         this.options = options == null ? new ConnectionOptions() : options;
         this.tcpClient = tcpClient == null ? new TcpClientAdapter() : tcpClient;
         writeQueueSemaphore = new Semaphore(this.options.getWriteQueueSize());
@@ -165,13 +165,13 @@ public class SocketConnection implements Connection {
     }
 
     @Override
-    public InetSocketAddress getIpEndPoint() {
-        return ipEndPoint;
+    public InetSocketAddress getIpEndpoint() {
+        return ipEndpoint;
     }
 
     @Override
     public ConnectionKey getKey() {
-        return new ConnectionKey(ipEndPoint);
+        return new ConnectionKey(ipEndpoint);
     }
 
     @Override
@@ -208,22 +208,22 @@ public class SocketConnection implements Connection {
         }
         CancellationToken token = cancellationToken == null ? CancellationToken.none() : cancellationToken;
 
-        changeState(ConnectionState.CONNECTING, "Connecting to " + formatEndpoint(ipEndPoint), null);
+        changeState(ConnectionState.CONNECTING, "Connecting to " + formatEndpoint(ipEndpoint), null);
 
         CompletableFuture<?> connectTask;
         try {
             ProxyOptions proxy = options.getProxyOptions();
             if (proxy != null) {
                 connectTask = tcpClient.connectThroughProxyAsync(
-                        proxy.getIpEndPoint().getAddress(),
-                        proxy.getIpEndPoint().getPort(),
-                        ipEndPoint.getAddress(),
-                        ipEndPoint.getPort(),
+                        proxy.getIpEndpoint().getAddress(),
+                        proxy.getIpEndpoint().getPort(),
+                        ipEndpoint.getAddress(),
+                        ipEndpoint.getPort(),
                         proxy.getUsername(),
                         proxy.getPassword(),
                         token);
             } else {
-                connectTask = tcpClient.connectAsync(ipEndPoint.getAddress(), ipEndPoint.getPort());
+                connectTask = tcpClient.connectAsync(ipEndpoint.getAddress(), ipEndpoint.getPort());
             }
         } catch (Exception exception) {
             return connectFailureFuture(exception);
@@ -263,7 +263,7 @@ public class SocketConnection implements Connection {
                 startTimers();
                 stream = tcpClient.getStream();
                 setStreamTimeouts();
-                changeState(ConnectionState.CONNECTED, "Connected to " + formatEndpoint(ipEndPoint), null);
+                changeState(ConnectionState.CONNECTED, "Connected to " + formatEndpoint(ipEndpoint), null);
                 return null;
             } catch (Exception exception) {
                 throw handleConnectFailure(exception);
@@ -482,7 +482,7 @@ public class SocketConnection implements Connection {
             }
             throw new ConnectionReadException(
                     "Failed to read " + length + " bytes from "
-                            + formatEndpoint(ipEndPoint) + ": "
+                            + formatEndpoint(ipEndpoint) + ": "
                             + actual.getMessage(),
                     actual);
         }
@@ -499,7 +499,7 @@ public class SocketConnection implements Connection {
             writeQueueFull = true;
             disconnect("The write buffer is full", null);
             throw new ConnectionWriteDroppedException(
-                    "Dropped buffered message to " + formatEndpoint(ipEndPoint) + "; the write buffer is full");
+                    "Dropped buffered message to " + formatEndpoint(ipEndpoint) + "; the write buffer is full");
         }
         acquire(writeSemaphore, cancellationToken);
 
@@ -539,7 +539,7 @@ public class SocketConnection implements Connection {
             }
             throw new ConnectionWriteException(
                     "Failed to write " + length + " bytes to "
-                            + formatEndpoint(ipEndPoint) + ": "
+                            + formatEndpoint(ipEndpoint) + ": "
                             + actual.getMessage(),
                     actual);
         } finally {
@@ -657,7 +657,7 @@ public class SocketConnection implements Connection {
             return actual;
         }
         return new ConnectionException(
-                "Failed to connect to " + formatEndpoint(ipEndPoint) + ": " + actual.getMessage(), actual);
+                "Failed to connect to " + formatEndpoint(ipEndpoint) + ": " + actual.getMessage(), actual);
     }
 
     private static void acquire(Semaphore semaphore, CancellationToken cancellationToken) {

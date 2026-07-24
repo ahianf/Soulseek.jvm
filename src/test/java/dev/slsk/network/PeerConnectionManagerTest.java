@@ -622,13 +622,13 @@ class PeerConnectionManagerTest {
 
         @Override
         public MessageConnection getDistributedConnection(
-                String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
+                String username, InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient) {
             throw new AssertionError("unexpected distributed connection");
         }
 
         @Override
         public MessageConnection getMessageConnection(
-                String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
+                String username, InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient) {
             if (tcpClient != null) {
                 assertNotNull(messageHandoff);
                 return messageHandoff.messageConnection();
@@ -640,7 +640,7 @@ class PeerConnectionManagerTest {
 
         @Override
         public MessageConnection getServerConnection(
-                InetSocketAddress ipEndPoint,
+                InetSocketAddress ipEndpoint,
                 ConnectionEventListener<Void> connectedEventHandler,
                 ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
                 MessageConnectionEventListener<MessageEventArgs> messageReadEventHandler,
@@ -652,7 +652,7 @@ class PeerConnectionManagerTest {
 
         @Override
         public Connection getTransferConnection(
-                InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
+                InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient) {
             if (tcpClient != null) {
                 assertNotNull(transferHandoff);
                 return transferHandoff.connection();
@@ -891,7 +891,7 @@ class PeerConnectionManagerTest {
             return switch (name) {
                 case "getId" -> id;
                 case "getInactiveTime" -> Duration.ZERO;
-                case "getIpEndPoint" -> endpoint;
+                case "getIpEndpoint" -> endpoint;
                 case "getKey" -> new ConnectionKey(username, endpoint);
                 case "getOptions" -> new ConnectionOptions();
                 case "getState" -> ConnectionState.CONNECTED;

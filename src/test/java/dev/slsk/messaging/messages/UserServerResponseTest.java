@@ -32,11 +32,11 @@ class UserServerResponseTest {
         UserAddressResponse fromEndpoint = new UserAddressResponse("alice", endpoint);
         UserAddressResponse fromParts = new UserAddressResponse("alice", address, 2234);
 
-        assertSame(endpoint, fromEndpoint.getIpEndPoint());
+        assertSame(endpoint, fromEndpoint.getIpEndpoint());
         assertEquals(address, fromEndpoint.getIpAddress());
         assertEquals(2234, fromEndpoint.getPort());
         assertEquals("alice", fromParts.getUsername());
-        assertEquals(endpoint, fromParts.getIpEndPoint());
+        assertEquals(endpoint, fromParts.getIpEndpoint());
     }
 
     @Test

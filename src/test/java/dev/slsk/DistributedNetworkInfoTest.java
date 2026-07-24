@@ -52,7 +52,7 @@ class DistributedNetworkInfoTest {
         assertFalse(info.isCanAcceptChildren());
         assertFalse(info.isHasParent());
         assertNull(info.getParent().username());
-        assertNull(info.getParent().ipEndPoint());
+        assertNull(info.getParent().ipEndpoint());
     }
 
     @Test

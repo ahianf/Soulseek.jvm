@@ -56,8 +56,8 @@ import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
 import dev.slsk.exceptions.TransferSizeMismatchException;
 import dev.slsk.exceptions.TransferStreamException;
-import dev.slsk.exceptions.UserEndPointCacheException;
-import dev.slsk.exceptions.UserEndPointException;
+import dev.slsk.exceptions.UserEndpointCacheException;
+import dev.slsk.exceptions.UserEndpointException;
 import dev.slsk.exceptions.UserNotFoundException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.messaging.MessageCode;
@@ -244,7 +244,7 @@ public class SoulseekClient
     private volatile MessageConnection serverConnection;
     private volatile Listener listener;
     private volatile String address;
-    private volatile InetSocketAddress ipEndPoint;
+    private volatile InetSocketAddress ipEndpoint;
     private volatile String username;
     private volatile ServerInfo serverInfo = new ServerInfo();
     private volatile SoulseekClientStates state = SoulseekClientStates.DISCONNECTED;
@@ -378,11 +378,11 @@ public class SoulseekClient
         List<DistributedPeer> children = distributedConnectionManager.getChildren() == null
                 ? null
                 : distributedConnectionManager.getChildren().stream()
-                        .map(peer -> new DistributedPeer(peer.username(), peer.ipEndPoint()))
+                        .map(peer -> new DistributedPeer(peer.username(), peer.ipEndpoint()))
                         .toList();
         DistributedPeer parentSnapshot = parent == null
                 ? new DistributedPeer("", null)
-                : new DistributedPeer(parent.username(), parent.ipEndPoint());
+                : new DistributedPeer(parent.username(), parent.ipEndpoint());
         return new DistributedNetworkInfo(
                 distributedConnectionManager.getAverageBroadcastLatency(),
                 distributedConnectionManager.getBranchLevel(),
@@ -402,12 +402,12 @@ public class SoulseekClient
 
     /** Returns the connected server IP address, or {@code null}. */
     public final InetAddress getIpAddress() {
-        return ipEndPoint == null ? null : ipEndPoint.getAddress();
+        return ipEndpoint == null ? null : ipEndpoint.getAddress();
     }
 
     /** Returns the connected server endpoint, or {@code null}. */
-    public final InetSocketAddress getIpEndPoint() {
-        return ipEndPoint;
+    public final InetSocketAddress getIpEndpoint() {
+        return ipEndpoint;
     }
 
     /** Returns the configured client options. */
@@ -418,7 +418,7 @@ public class SoulseekClient
 
     /** Returns the connected server port, or {@code null}. */
     public final Integer getPort() {
-        return ipEndPoint == null ? null : ipEndPoint.getPort();
+        return ipEndpoint == null ? null : ipEndpoint.getPort();
     }
 
     /** Returns the accumulated server information. */
@@ -1000,11 +1000,11 @@ public class SoulseekClient
             Listener probe = null;
             try {
                 probe = clientListenerFactory.create(
-                        options.getListenIPAddress(), options.getListenPort(), options.getIncomingConnectionOptions());
+                        options.getListenIpAddress(), options.getListenPort(), options.getIncomingConnectionOptions());
                 probe.start();
             } catch (Throwable failure) {
                 throw new ListenException("Failed to start listening on "
-                        + options.getListenIPAddress() + ":"
+                        + options.getListenIpAddress() + ":"
                         + options.getListenPort()
                         + "; the IP and/or port may be in use or "
                         + "are otherwise unavailable");
@@ -1059,7 +1059,7 @@ public class SoulseekClient
                     UserOfflineException.class);
         }
 
-        CompletableFuture<BrowseResponseConnection> setup = getUserEndPointAsync(requestedUsername, token)
+        CompletableFuture<BrowseResponseConnection> setup = getUserEndpointAsync(requestedUsername, token)
                 .thenCompose(endpoint ->
                         peerConnectionManager.getOrAddMessageConnectionAsync(requestedUsername, endpoint, token))
                 .thenCompose(connection -> invokeMessageWrite(connection, new BrowseRequest(), token))
@@ -1124,7 +1124,7 @@ public class SoulseekClient
         requireText(requestedUsername, "username");
         requireLoggedIn("connect to other users");
         CancellationToken token = defaultToken(cancellationToken);
-        CompletableFuture<Void> operation = getUserEndPointAsync(requestedUsername, token)
+        CompletableFuture<Void> operation = getUserEndpointAsync(requestedUsername, token)
                 .thenCompose(endpoint -> {
                     if (invalidateCache
                             && peerConnectionManager.tryInvalidateMessageConnectionCache(requestedUsername)) {
@@ -1207,7 +1207,7 @@ public class SoulseekClient
                     "Failed to retrieve directory contents for " + directoryName + " from " + requestedUsername + ": ",
                     UserOfflineException.class);
         }
-        CompletableFuture<List<Directory>> operation = getUserEndPointAsync(requestedUsername, token)
+        CompletableFuture<List<Directory>> operation = getUserEndpointAsync(requestedUsername, token)
                 .thenCompose(endpoint ->
                         peerConnectionManager.getOrAddMessageConnectionAsync(requestedUsername, endpoint, token))
                 .thenCompose(connection ->
@@ -1250,7 +1250,7 @@ public class SoulseekClient
                     "Failed to fetch place in queue for download of " + filename + " from " + requestedUsername + ": ",
                     UserOfflineException.class);
         }
-        CompletableFuture<Integer> operation = getUserEndPointAsync(requestedUsername, token)
+        CompletableFuture<Integer> operation = getUserEndpointAsync(requestedUsername, token)
                 .thenCompose(endpoint ->
                         peerConnectionManager.getOrAddMessageConnectionAsync(requestedUsername, endpoint, token))
                 .thenCompose(connection -> invokeMessageWrite(connection, new PlaceInQueueRequest(filename), token))
@@ -1397,7 +1397,7 @@ public class SoulseekClient
                     "Failed to retrieve information for user " + requestedUsername + ": ",
                     UserOfflineException.class);
         }
-        CompletableFuture<UserInfo> operation = getUserEndPointAsync(requestedUsername, token)
+        CompletableFuture<UserInfo> operation = getUserEndpointAsync(requestedUsername, token)
                 .thenCompose(endpoint ->
                         peerConnectionManager.getOrAddMessageConnectionAsync(requestedUsername, endpoint, token))
                 .thenCompose(connection -> invokeMessageWrite(connection, new UserInfoRequest(), token))
@@ -1505,12 +1505,12 @@ public class SoulseekClient
     public CompletableFuture<Boolean> reconfigureOptionsAsync(
             SoulseekClientOptionsPatch patch, CancellationToken cancellationToken) {
         Objects.requireNonNull(patch, "patch");
-        boolean addressChanged = patch.getListenIPAddress() != null
-                && !patch.getListenIPAddress().equals(options.getListenIPAddress());
+        boolean addressChanged = patch.getListenIpAddress() != null
+                && !patch.getListenIpAddress().equals(options.getListenIpAddress());
         boolean portChanged = patch.getListenPort() != null && patch.getListenPort() != options.getListenPort();
         if (addressChanged || portChanged) {
             InetAddress newAddress =
-                    patch.getListenIPAddress() == null ? options.getListenIPAddress() : patch.getListenIPAddress();
+                    patch.getListenIpAddress() == null ? options.getListenIpAddress() : patch.getListenIpAddress();
             int newPort = patch.getListenPort() == null ? options.getListenPort() : patch.getListenPort();
             Listener probe = null;
             try {
@@ -2451,26 +2451,26 @@ public class SoulseekClient
                 "Failed to acknowledge privilege notification with ID " + privilegeNotificationId + ": ");
     }
 
-    public CompletableFuture<InetSocketAddress> getUserEndPointAsync(String requestedUsername) {
-        return getUserEndPointAsync(requestedUsername, CancellationToken.none());
+    public CompletableFuture<InetSocketAddress> getUserEndpointAsync(String requestedUsername) {
+        return getUserEndpointAsync(requestedUsername, CancellationToken.none());
     }
 
     @Override
-    public CompletableFuture<InetSocketAddress> getUserEndPointAsync(
+    public CompletableFuture<InetSocketAddress> getUserEndpointAsync(
             String requestedUsername, CancellationToken cancellationToken) {
         requireText(requestedUsername, "username");
         requireLoggedIn("fetch user endpoint");
         CancellationToken token = defaultToken(cancellationToken);
-        IUserEndPointCache cache = options.getUserEndPointCache();
+        UserEndpointCache cache = options.getUserEndpointCache();
         if (cache != null) {
             CacheLookupResult<InetSocketAddress> cached = tryCacheGet(cache, requestedUsername);
             if (cached.found()) {
-                diagnostic.debug("EndPoint cache HIT for " + requestedUsername + ": " + cached.value());
+                diagnostic.debug("Endpoint cache HIT for " + requestedUsername + ": " + cached.value());
                 return CompletableFuture.completedFuture(cached.value());
             }
         }
         CompletableFuture<InetSocketAddress> request = endpointRequests.computeIfAbsent(
-                requestedUsername, ignored -> retrieveUserEndPoint(requestedUsername, token, cache));
+                requestedUsername, ignored -> retrieveUserEndpoint(requestedUsername, token, cache));
         request.whenComplete((result, failure) -> endpointRequests.remove(requestedUsername, request));
         return request;
     }
@@ -2812,8 +2812,8 @@ public class SoulseekClient
         listener = value;
     }
 
-    void setIpEndPointForTest(InetSocketAddress value) {
-        ipEndPoint = value;
+    void setIpEndpointForTest(InetSocketAddress value) {
+        ipEndpoint = value;
     }
 
     void setDownloadsForTest(Map<Integer, TransferInternal> value) {
@@ -3046,7 +3046,7 @@ public class SoulseekClient
 
     private CompletableFuture<Void> connectInternalAsync(
             String requestedAddress,
-            InetSocketAddress requestedEndPoint,
+            InetSocketAddress requestedEndpoint,
             String requestedUsername,
             String password,
             CancellationToken cancellationToken) {
@@ -3058,7 +3058,7 @@ public class SoulseekClient
                         attempt = CompletableFuture.completedFuture(null);
                     } else {
                         attempt = performConnectAsync(
-                                requestedAddress, requestedEndPoint, requestedUsername, password, cancellationToken);
+                                requestedAddress, requestedEndpoint, requestedUsername, password, cancellationToken);
                     }
                     return attempt.whenComplete((result, failure) -> stateSemaphore.release());
                 });
@@ -3083,7 +3083,7 @@ public class SoulseekClient
 
     private CompletableFuture<Void> performConnectAsync(
             String requestedAddress,
-            InetSocketAddress requestedEndPoint,
+            InetSocketAddress requestedEndpoint,
             String requestedUsername,
             String password,
             CancellationToken cancellationToken) {
@@ -3092,15 +3092,15 @@ public class SoulseekClient
 
             if (options.isEnableListener()) {
                 listener = clientListenerFactory.create(
-                        options.getListenIPAddress(), options.getListenPort(), options.getIncomingConnectionOptions());
+                        options.getListenIpAddress(), options.getListenPort(), options.getIncomingConnectionOptions());
                 listener.addAcceptedListener(listenerHandler::handleConnection);
                 listener.start();
             }
 
             serverConnection = connectionFactory.getServerConnection(
-                    requestedEndPoint,
+                    requestedEndpoint,
                     (sender, eventArgs) ->
-                            changeState(SoulseekClientStates.CONNECTED, "Connected to " + ipEndPoint, null),
+                            changeState(SoulseekClientStates.CONNECTED, "Connected to " + ipEndpoint, null),
                     (sender, eventArgs) -> disconnect(eventArgs.getMessage(), eventArgs.getException()),
                     serverMessageHandler::handleMessageRead,
                     serverMessageHandler::handleMessageWritten,
@@ -3114,7 +3114,7 @@ public class SoulseekClient
             }
             return connectOperation.thenCompose(ignored -> {
                 address = requestedAddress;
-                ipEndPoint = requestedEndPoint;
+                ipEndpoint = requestedEndpoint;
                 changeState(SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGING_IN), "Logging in", null);
                 return loginAsync(requestedUsername, password, cancellationToken);
             });
@@ -3220,8 +3220,8 @@ public class SoulseekClient
 
         boolean enableListenerChanged =
                 patch.getEnableListener() != null && patch.getEnableListener() != options.isEnableListener();
-        boolean listenAddressChanged = patch.getListenIPAddress() != null
-                && !patch.getListenIPAddress().equals(options.getListenIPAddress());
+        boolean listenAddressChanged = patch.getListenIpAddress() != null
+                && !patch.getListenIpAddress().equals(options.getListenIpAddress());
         boolean listenPortChanged = patch.getListenPort() != null && patch.getListenPort() != options.getListenPort();
         boolean incomingConnectionOptionsChanged = patch.getIncomingConnectionOptions() != null
                 && patch.getIncomingConnectionOptions() != options.getIncomingConnectionOptions();
@@ -3235,7 +3235,7 @@ public class SoulseekClient
             options = options.with(listenerPatch(patch));
             if (wasListening && options.isEnableListener()) {
                 listener = clientListenerFactory.create(
-                        options.getListenIPAddress(), options.getListenPort(), options.getIncomingConnectionOptions());
+                        options.getListenIpAddress(), options.getListenPort(), options.getIncomingConnectionOptions());
                 listener.addAcceptedListener(listenerHandler::handleConnection);
                 listener.start();
             }
@@ -3275,7 +3275,7 @@ public class SoulseekClient
     private static SoulseekClientOptionsPatch listenerPatch(SoulseekClientOptionsPatch patch) {
         return new SoulseekClientOptionsPatch(
                 patch.getEnableListener(),
-                patch.getListenIPAddress(),
+                patch.getListenIpAddress(),
                 patch.getListenPort(),
                 null,
                 null,
@@ -3576,7 +3576,7 @@ public class SoulseekClient
                 await(acquirePermit(globalDownloadSemaphore, cancellationToken));
                 globalPermit.set(true);
 
-                endpoint = await(getUserEndPointAsync(download.getUsername(), cancellationToken));
+                endpoint = await(getUserEndpointAsync(download.getUsername(), cancellationToken));
                 MessageConnection peerConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
                         download.getUsername(), endpoint, cancellationToken));
 
@@ -4076,7 +4076,7 @@ public class SoulseekClient
                 await(acquirePermit(globalUploadSemaphore, cancellationToken));
                 globalPermit.set(true);
 
-                endpoint = await(getUserEndPointAsync(upload.getUsername(), cancellationToken));
+                endpoint = await(getUserEndpointAsync(upload.getUsername(), cancellationToken));
                 MessageConnection messageConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
                         upload.getUsername(), endpoint, cancellationToken));
 
@@ -4336,7 +4336,7 @@ public class SoulseekClient
         private void notifyUploadFailure() {
             try {
                 InetSocketAddress currentEndpoint =
-                        await(getUserEndPointAsync(upload.getUsername(), CancellationToken.none()));
+                        await(getUserEndpointAsync(upload.getUsername(), CancellationToken.none()));
                 MessageConnection messageConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
                         upload.getUsername(), currentEndpoint, CancellationToken.none()));
                 OutgoingMessage message = upload.getState().hasFlag(TransferStates.CANCELLED)
@@ -4683,8 +4683,8 @@ public class SoulseekClient
         return operation;
     }
 
-    private CompletableFuture<InetSocketAddress> retrieveUserEndPoint(
-            String requestedUsername, CancellationToken cancellationToken, IUserEndPointCache cache) {
+    private CompletableFuture<InetSocketAddress> retrieveUserEndpoint(
+            String requestedUsername, CancellationToken cancellationToken, UserEndpointCache cache) {
         CompletableFuture<UserAddressResponse> wait;
         try {
             wait = waiter.waitAsync(
@@ -4693,7 +4693,7 @@ public class SoulseekClient
                     null,
                     cancellationToken);
         } catch (Throwable failure) {
-            return mapUserEndPointFailure(CompletableFuture.failedFuture(failure), requestedUsername);
+            return mapUserEndpointFailure(CompletableFuture.failedFuture(failure), requestedUsername);
         }
         CompletableFuture<InetSocketAddress> operation = invokeServerWrite(
                         new UserAddressRequest(requestedUsername), cancellationToken)
@@ -4702,25 +4702,25 @@ public class SoulseekClient
                     if (response.getIpAddress().isAnyLocalAddress()) {
                         throw new UserOfflineException("User " + requestedUsername + " appears to be offline");
                     }
-                    InetSocketAddress result = response.getIpEndPoint();
+                    InetSocketAddress result = response.getIpEndpoint();
                     if (cache != null) {
                         try {
-                            cache.addOrUpdate(requestedUsername, result);
+                            cache.put(requestedUsername, result);
                         } catch (Throwable failure) {
-                            throw new UserEndPointCacheException(
+                            throw new UserEndpointCacheException(
                                     "Exception retrieving or updating user "
                                             + "endpoint cache: "
                                             + failureMessage(failure),
                                     failure);
                         }
-                        diagnostic.debug("EndPoint cache MISS for " + requestedUsername + ": " + result);
+                        diagnostic.debug("Endpoint cache MISS for " + requestedUsername + ": " + result);
                     }
                     return result;
                 });
-        return mapUserEndPointFailure(operation, requestedUsername);
+        return mapUserEndpointFailure(operation, requestedUsername);
     }
 
-    private static CompletableFuture<InetSocketAddress> mapUserEndPointFailure(
+    private static CompletableFuture<InetSocketAddress> mapUserEndpointFailure(
             CompletableFuture<InetSocketAddress> operation, String requestedUsername) {
         return operation.handle((result, failure) -> {
             if (failure == null) {
@@ -4728,22 +4728,21 @@ public class SoulseekClient
             }
             Throwable cause = unwrap(failure);
             if (cause instanceof UserOfflineException
-                    || cause instanceof UserEndPointCacheException
+                    || cause instanceof UserEndpointCacheException
                     || cause instanceof CancellationException
                     || cause instanceof TimeoutException) {
                 throw new CompletionException(cause);
             }
-            throw new CompletionException(new UserEndPointException(
+            throw new CompletionException(new UserEndpointException(
                     "Failed to retrieve endpoint for user " + requestedUsername + ": " + failureMessage(cause), cause));
         });
     }
 
-    private static CacheLookupResult<InetSocketAddress> tryCacheGet(
-            IUserEndPointCache cache, String requestedUsername) {
+    private static CacheLookupResult<InetSocketAddress> tryCacheGet(UserEndpointCache cache, String requestedUsername) {
         try {
-            return cache.tryGet(requestedUsername);
+            return cache.lookup(requestedUsername);
         } catch (Throwable failure) {
-            throw new UserEndPointCacheException(
+            throw new UserEndpointCacheException(
                     "Exception retrieving or updating user endpoint cache: " + failureMessage(failure), failure);
         }
     }

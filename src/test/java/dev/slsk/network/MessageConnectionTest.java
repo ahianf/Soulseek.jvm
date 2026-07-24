@@ -289,7 +289,7 @@ class MessageConnectionTest {
         }
 
         @Override
-        public InetSocketAddress getRemoteEndPoint() {
+        public InetSocketAddress getRemoteEndpoint() {
             return ENDPOINT;
         }
 
