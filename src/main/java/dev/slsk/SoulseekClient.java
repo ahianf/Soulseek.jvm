@@ -43,6 +43,7 @@ import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
 import dev.slsk.exceptions.UserEndPointCacheException;
 import dev.slsk.exceptions.UserEndPointException;
+import dev.slsk.exceptions.UserNotFoundException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.handlers.DistributedMessageHandler;
@@ -79,6 +80,11 @@ import dev.slsk.messaging.messages.StopPublicChatCommand;
 import dev.slsk.messaging.messages.UnwatchUserCommand;
 import dev.slsk.messaging.messages.UserAddressRequest;
 import dev.slsk.messaging.messages.UserAddressResponse;
+import dev.slsk.messaging.messages.UserPrivilegesRequest;
+import dev.slsk.messaging.messages.UserStatisticsRequest;
+import dev.slsk.messaging.messages.UserStatusRequest;
+import dev.slsk.messaging.messages.WatchUserRequest;
+import dev.slsk.messaging.messages.WatchUserResponse;
 import dev.slsk.network.ConnectionFactory;
 import dev.slsk.network.DistributedConnectionManager;
 import dev.slsk.network.DistributedConnectionManagerClient;
@@ -843,6 +849,78 @@ public class SoulseekClient
                 "Failed to get privileges: ");
     }
 
+    public CompletableFuture<Boolean> getUserPrivilegedAsync(String requestedUsername) {
+        return getUserPrivilegedAsync(requestedUsername, CancellationToken.none());
+    }
+
+    public CompletableFuture<Boolean> getUserPrivilegedAsync(
+            String requestedUsername, CancellationToken cancellationToken) {
+        requireText(requestedUsername, "username");
+        requireLoggedIn("check user privileges");
+        return executeCorrelatedServerRequest(
+                new UserPrivilegesRequest(requestedUsername),
+                new WaitKey(MessageCode.Server.USER_PRIVILEGES, requestedUsername),
+                Boolean.class,
+                cancellationToken,
+                "Failed to get privileges for " + requestedUsername + ": ",
+                UserOfflineException.class);
+    }
+
+    public CompletableFuture<UserStatistics> getUserStatisticsAsync(String requestedUsername) {
+        return getUserStatisticsAsync(requestedUsername, CancellationToken.none());
+    }
+
+    public CompletableFuture<UserStatistics> getUserStatisticsAsync(
+            String requestedUsername, CancellationToken cancellationToken) {
+        requireText(requestedUsername, "username");
+        requireLoggedIn("fetch user statistics");
+        return executeCorrelatedServerRequest(
+                new UserStatisticsRequest(requestedUsername),
+                new WaitKey(MessageCode.Server.GET_USER_STATS, requestedUsername),
+                UserStatistics.class,
+                cancellationToken,
+                "Failed to retrieve statistics for user " + username + ": ");
+    }
+
+    public CompletableFuture<UserStatus> getUserStatusAsync(String requestedUsername) {
+        return getUserStatusAsync(requestedUsername, CancellationToken.none());
+    }
+
+    public CompletableFuture<UserStatus> getUserStatusAsync(
+            String requestedUsername, CancellationToken cancellationToken) {
+        requireText(requestedUsername, "username");
+        requireLoggedIn("fetch user status");
+        return executeCorrelatedServerRequest(
+                new UserStatusRequest(requestedUsername),
+                new WaitKey(MessageCode.Server.GET_STATUS, requestedUsername),
+                UserStatus.class,
+                cancellationToken,
+                "Failed to retrieve status for user " + username + ": ",
+                UserOfflineException.class);
+    }
+
+    public CompletableFuture<UserData> watchUserAsync(String requestedUsername) {
+        return watchUserAsync(requestedUsername, CancellationToken.none());
+    }
+
+    public CompletableFuture<UserData> watchUserAsync(String requestedUsername, CancellationToken cancellationToken) {
+        requireText(requestedUsername, "username");
+        requireLoggedIn("add users");
+        return executeCorrelatedServerRequest(
+                        new WatchUserRequest(requestedUsername),
+                        new WaitKey(MessageCode.Server.WATCH_USER, requestedUsername),
+                        WatchUserResponse.class,
+                        cancellationToken,
+                        "Failed to watch user " + requestedUsername + ": ",
+                        UserNotFoundException.class)
+                .thenApply(response -> {
+                    if (!response.isExists()) {
+                        throw new UserNotFoundException("User " + requestedUsername + " does not exist");
+                    }
+                    return response.getUserData();
+                });
+    }
+
     public CompletableFuture<Void> grantUserPrivilegesAsync(String requestedUsername, int days) {
         return grantUserPrivilegesAsync(requestedUsername, days, CancellationToken.none());
     }
@@ -1493,16 +1571,17 @@ public class SoulseekClient
             WaitKey waitKey,
             Class<T> resultType,
             CancellationToken cancellationToken,
-            String failurePrefix) {
+            String failurePrefix,
+            Class<? extends Throwable>... preservedFailures) {
         CancellationToken token = defaultToken(cancellationToken);
         CompletableFuture<T> wait;
         try {
             wait = waiter.waitAsync(waitKey, resultType, null, token);
         } catch (Throwable failure) {
-            return mapClientFailure(CompletableFuture.failedFuture(failure), failurePrefix);
+            return mapClientFailure(CompletableFuture.failedFuture(failure), failurePrefix, preservedFailures);
         }
         CompletableFuture<T> operation = invokeServerWrite(message, token).thenCompose(ignored -> wait);
-        return mapClientFailure(operation, failurePrefix);
+        return mapClientFailure(operation, failurePrefix, preservedFailures);
     }
 
     private CompletableFuture<Void> invokeServerWrite(IOutgoingMessage message, CancellationToken cancellationToken) {
@@ -1574,7 +1653,8 @@ public class SoulseekClient
         return token == null ? CancellationToken.none() : token;
     }
 
-    private static <T> CompletableFuture<T> mapClientFailure(CompletableFuture<T> operation, String prefix) {
+    private static <T> CompletableFuture<T> mapClientFailure(
+            CompletableFuture<T> operation, String prefix, Class<? extends Throwable>... preservedFailures) {
         return operation.handle((result, failure) -> {
             if (failure == null) {
                 return result;
@@ -1582,6 +1662,11 @@ public class SoulseekClient
             Throwable cause = unwrap(failure);
             if (cause instanceof CancellationException || cause instanceof TimeoutException) {
                 throw new CompletionException(cause);
+            }
+            for (Class<? extends Throwable> preserved : preservedFailures) {
+                if (preserved.isInstance(cause)) {
+                    throw new CompletionException(cause);
+                }
             }
             throw new CompletionException(new SoulseekClientException(prefix + failureMessage(cause), cause));
         });

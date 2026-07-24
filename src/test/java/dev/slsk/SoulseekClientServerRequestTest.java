@@ -14,11 +14,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.common.IWaiter;
 import dev.slsk.common.WaitKey;
 import dev.slsk.exceptions.SoulseekClientException;
+import dev.slsk.exceptions.UserNotFoundException;
+import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.messages.CheckPrivilegesRequest;
 import dev.slsk.messaging.messages.GivePrivilegesCommand;
 import dev.slsk.messaging.messages.NewPassword;
 import dev.slsk.messaging.messages.ServerPing;
+import dev.slsk.messaging.messages.UserPrivilegesRequest;
+import dev.slsk.messaging.messages.UserStatisticsRequest;
+import dev.slsk.messaging.messages.UserStatusRequest;
+import dev.slsk.messaging.messages.WatchUserRequest;
+import dev.slsk.messaging.messages.WatchUserResponse;
 import dev.slsk.network.IMessageConnection;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -120,6 +127,89 @@ class SoulseekClientServerRequestTest {
     }
 
     @Test
+    void userLookupsReturnTypedCorrelatedResponses() {
+        WaiterProbe waiter = new WaiterProbe();
+        ConnectionProbe connection = new ConnectionProbe();
+        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+            CancellationTokenSource source = new CancellationTokenSource();
+            CancellationToken token = source.getToken();
+
+            waiter.result = CompletableFuture.completedFuture(true);
+            assertTrue(client.getUserPrivilegedAsync("alice", token).join());
+            assertEquals(new WaitKey(MessageCode.Server.USER_PRIVILEGES, "alice"), waiter.key);
+            assertSame(Boolean.class, waiter.resultType);
+            assertEquals(
+                    "alice",
+                    assertInstanceOf(UserPrivilegesRequest.class, connection.message)
+                            .getUsername());
+
+            UserStatistics statistics = new UserStatistics("alice", 10, 20, 30, 40);
+            waiter.result = CompletableFuture.completedFuture(statistics);
+            assertSame(statistics, client.getUserStatisticsAsync("alice", token).join());
+            assertEquals(new WaitKey(MessageCode.Server.GET_USER_STATS, "alice"), waiter.key);
+            assertSame(UserStatistics.class, waiter.resultType);
+            assertEquals(
+                    "alice",
+                    assertInstanceOf(UserStatisticsRequest.class, connection.message)
+                            .getUsername());
+
+            UserStatus status = new UserStatus("alice", UserPresence.AWAY, true);
+            waiter.result = CompletableFuture.completedFuture(status);
+            assertSame(status, client.getUserStatusAsync("alice", token).join());
+            assertEquals(new WaitKey(MessageCode.Server.GET_STATUS, "alice"), waiter.key);
+            assertSame(UserStatus.class, waiter.resultType);
+            assertEquals(
+                    "alice",
+                    assertInstanceOf(UserStatusRequest.class, connection.message)
+                            .getUsername());
+            assertSame(token, waiter.token);
+            assertSame(token, connection.token);
+        }
+    }
+
+    @Test
+    void watchUserReturnsDataOrReportsMissingUser() {
+        WaiterProbe waiter = new WaiterProbe();
+        ConnectionProbe connection = new ConnectionProbe();
+        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+            UserData data = new UserData("alice", UserPresence.ONLINE, 10, 20, 30, 40, "CL");
+            waiter.result = CompletableFuture.completedFuture(new WatchUserResponse("alice", true, data));
+
+            assertSame(data, client.watchUserAsync("alice").join());
+            assertEquals(new WaitKey(MessageCode.Server.WATCH_USER, "alice"), waiter.key);
+            assertSame(WatchUserResponse.class, waiter.resultType);
+            assertEquals(
+                    "alice",
+                    assertInstanceOf(WatchUserRequest.class, connection.message).getUsername());
+
+            waiter.result = CompletableFuture.completedFuture(new WatchUserResponse("missing", false));
+            assertInstanceOf(UserNotFoundException.class, failureOf(client.watchUserAsync("missing")));
+        }
+    }
+
+    @Test
+    void preservesUserSpecificFailuresRequiredBySource() {
+        WaiterProbe waiter = new WaiterProbe();
+        ConnectionProbe connection = new ConnectionProbe();
+        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+            UserOfflineException offline = new UserOfflineException("offline");
+            waiter.result = CompletableFuture.failedFuture(offline);
+            assertSame(offline, failureOf(client.getUserPrivilegedAsync("alice")));
+            assertSame(offline, failureOf(client.getUserStatusAsync("alice")));
+
+            UserNotFoundException notFound = new UserNotFoundException("missing");
+            waiter.result = CompletableFuture.failedFuture(notFound);
+            assertSame(notFound, failureOf(client.watchUserAsync("alice")));
+
+            RuntimeException expected = new RuntimeException("statistics failed");
+            waiter.result = CompletableFuture.failedFuture(expected);
+            SoulseekClientException mapped =
+                    assertInstanceOf(SoulseekClientException.class, failureOf(client.getUserStatisticsAsync("alice")));
+            assertSame(expected, mapped.getCause());
+        }
+    }
+
+    @Test
     void validatesArgumentsAndLoginStateInSourceOrder() {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
@@ -130,12 +220,22 @@ class SoulseekClientServerRequestTest {
             }
             assertThrows(IllegalArgumentException.class, () -> client.grantUserPrivilegesAsync("user", 0));
             assertThrows(IllegalArgumentException.class, () -> client.grantUserPrivilegesAsync("user", -1));
+            for (String bad : new String[] {null, "", " ", "\t"}) {
+                assertThrows(IllegalArgumentException.class, () -> client.getUserPrivilegedAsync(bad));
+                assertThrows(IllegalArgumentException.class, () -> client.getUserStatisticsAsync(bad));
+                assertThrows(IllegalArgumentException.class, () -> client.getUserStatusAsync(bad));
+                assertThrows(IllegalArgumentException.class, () -> client.watchUserAsync(bad));
+            }
 
             client.setStateForTest(SoulseekClientStates.DISCONNECTED);
             assertThrows(IllegalStateException.class, () -> client.changePasswordAsync("password"));
             assertThrows(IllegalStateException.class, client::getPrivilegesAsync);
             assertThrows(IllegalStateException.class, client::pingServerAsync);
             assertThrows(IllegalStateException.class, () -> client.grantUserPrivilegesAsync("user", 1));
+            assertThrows(IllegalStateException.class, () -> client.getUserPrivilegedAsync("user"));
+            assertThrows(IllegalStateException.class, () -> client.getUserStatisticsAsync("user"));
+            assertThrows(IllegalStateException.class, () -> client.getUserStatusAsync("user"));
+            assertThrows(IllegalStateException.class, () -> client.watchUserAsync("user"));
             assertThrows(IllegalArgumentException.class, () -> client.changePasswordAsync(null));
             assertThrows(IllegalArgumentException.class, () -> client.grantUserPrivilegesAsync(null, 0));
         }
@@ -150,7 +250,11 @@ class SoulseekClientServerRequestTest {
                     () -> client.changePasswordAsync("password"),
                     client::getPrivilegesAsync,
                     client::pingServerAsync,
-                    () -> client.grantUserPrivilegesAsync("user", 1));
+                    () -> client.grantUserPrivilegesAsync("user", 1),
+                    () -> client.getUserPrivilegedAsync("user"),
+                    () -> client.getUserStatisticsAsync("user"),
+                    () -> client.getUserStatusAsync("user"),
+                    () -> client.watchUserAsync("user"));
             for (Operation operation : operations) {
                 RuntimeException expected = new RuntimeException("write failed");
                 connection.synchronousFailure = expected;
@@ -177,7 +281,13 @@ class SoulseekClientServerRequestTest {
         ConnectionProbe connection = new ConnectionProbe();
         try (SoulseekClient client = loggedInClient(connection, waiter)) {
             List<Operation> operations = List.of(
-                    () -> client.changePasswordAsync("password"), client::getPrivilegesAsync, client::pingServerAsync);
+                    () -> client.changePasswordAsync("password"),
+                    client::getPrivilegesAsync,
+                    client::pingServerAsync,
+                    () -> client.getUserPrivilegedAsync("user"),
+                    () -> client.getUserStatisticsAsync("user"),
+                    () -> client.getUserStatusAsync("user"),
+                    () -> client.watchUserAsync("user"));
             for (Operation operation : operations) {
                 RuntimeException expected = new RuntimeException("wait failed");
                 waiter.result = CompletableFuture.failedFuture(expected);
