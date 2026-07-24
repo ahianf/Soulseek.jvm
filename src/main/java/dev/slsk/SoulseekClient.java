@@ -1765,11 +1765,16 @@ public class SoulseekClient
 
     private CompletableFuture<InetSocketAddress> retrieveUserEndPoint(
             String requestedUsername, CancellationToken cancellationToken, IUserEndPointCache cache) {
-        CompletableFuture<UserAddressResponse> wait = waiter.waitAsync(
-                new dev.slsk.common.WaitKey(MessageCode.Server.GET_PEER_ADDRESS, requestedUsername),
-                UserAddressResponse.class,
-                null,
-                cancellationToken);
+        CompletableFuture<UserAddressResponse> wait;
+        try {
+            wait = waiter.waitAsync(
+                    new dev.slsk.common.WaitKey(MessageCode.Server.GET_PEER_ADDRESS, requestedUsername),
+                    UserAddressResponse.class,
+                    null,
+                    cancellationToken);
+        } catch (Throwable failure) {
+            return mapUserEndPointFailure(CompletableFuture.failedFuture(failure), requestedUsername);
+        }
         CompletableFuture<InetSocketAddress> operation = invokeServerWrite(
                         new UserAddressRequest(requestedUsername), cancellationToken)
                 .thenCompose(ignored -> wait)
@@ -1792,6 +1797,11 @@ public class SoulseekClient
                     }
                     return result;
                 });
+        return mapUserEndPointFailure(operation, requestedUsername);
+    }
+
+    private static CompletableFuture<InetSocketAddress> mapUserEndPointFailure(
+            CompletableFuture<InetSocketAddress> operation, String requestedUsername) {
         return operation.handle((result, failure) -> {
             if (failure == null) {
                 return result;
