@@ -4,7 +4,9 @@
 
 package dev.slsk.common;
 
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
@@ -35,6 +37,17 @@ public class IOAdapter {
      */
     public FileChannel getFileChannel(String path, OpenOption... options) throws IOException {
         return FileChannel.open(Path.of(path), options);
+    }
+
+    /**
+     * Opens a seekable file input stream.
+     *
+     * @param path the path to open
+     * @return the input stream
+     * @throws IOException when the file cannot be opened
+     */
+    public InputStream getInputStream(String path) throws IOException {
+        return new FileInputStream(path);
     }
 
     /**

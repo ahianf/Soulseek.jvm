@@ -12,7 +12,14 @@ import dev.slsk.Transfer;
 public class TransferProgressUpdatedEventArgs extends TransferEventArgs {
     private final long previousBytesTransferred;
 
-    TransferProgressUpdatedEventArgs(long previousBytesTransferred, Transfer transfer) {
+    /**
+     * Creates transfer-progress event arguments.
+     *
+     * <p>The C# constructor is assembly-internal. This Java constructor is
+     * public because package visibility cannot span the client and
+     * event-argument packages.</p>
+     */
+    public TransferProgressUpdatedEventArgs(long previousBytesTransferred, Transfer transfer) {
         super(transfer);
         this.previousBytesTransferred = previousBytesTransferred;
     }

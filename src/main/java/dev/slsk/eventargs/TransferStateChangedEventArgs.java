@@ -14,7 +14,14 @@ import java.util.Objects;
 public class TransferStateChangedEventArgs extends TransferEventArgs {
     private final TransferStates previousState;
 
-    TransferStateChangedEventArgs(TransferStates previousState, Transfer transfer) {
+    /**
+     * Creates transfer-state event arguments.
+     *
+     * <p>The C# constructor is assembly-internal. This Java constructor is
+     * public because package visibility cannot span the client and
+     * event-argument packages.</p>
+     */
+    public TransferStateChangedEventArgs(TransferStates previousState, Transfer transfer) {
         super(transfer);
         this.previousState = Objects.requireNonNull(previousState, "previousState");
     }

@@ -40,16 +40,21 @@ import dev.slsk.eventargs.TransferStateChangedEventArgs;
 import dev.slsk.eventargs.UserCannotConnectEventArgs;
 import dev.slsk.exceptions.AddressException;
 import dev.slsk.exceptions.ConnectionException;
+import dev.slsk.exceptions.ConnectionReadException;
 import dev.slsk.exceptions.DuplicateTokenException;
+import dev.slsk.exceptions.DuplicateTransferException;
 import dev.slsk.exceptions.KickedFromServerException;
 import dev.slsk.exceptions.ListenException;
 import dev.slsk.exceptions.LoginRejectedException;
+import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.RoomJoinForbiddenException;
 import dev.slsk.exceptions.SoulseekClientException;
+import dev.slsk.exceptions.TransferException;
 import dev.slsk.exceptions.TransferNotFoundException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
+import dev.slsk.exceptions.TransferStreamException;
 import dev.slsk.exceptions.UserEndPointCacheException;
 import dev.slsk.exceptions.UserEndPointException;
 import dev.slsk.exceptions.UserNotFoundException;
@@ -100,7 +105,11 @@ import dev.slsk.messaging.messages.SetRoomTickerCommand;
 import dev.slsk.messaging.messages.SetSharedCountsCommand;
 import dev.slsk.messaging.messages.StartPublicChatCommand;
 import dev.slsk.messaging.messages.StopPublicChatCommand;
+import dev.slsk.messaging.messages.TransferRequest;
+import dev.slsk.messaging.messages.TransferResponse;
 import dev.slsk.messaging.messages.UnwatchUserCommand;
+import dev.slsk.messaging.messages.UploadDenied;
+import dev.slsk.messaging.messages.UploadFailed;
 import dev.slsk.messaging.messages.UserAddressRequest;
 import dev.slsk.messaging.messages.UserAddressResponse;
 import dev.slsk.messaging.messages.UserInfoRequest;
@@ -124,25 +133,44 @@ import dev.slsk.network.ListenerHandlerClient;
 import dev.slsk.network.PeerConnectionManager;
 import dev.slsk.network.PeerConnectionManagerClient;
 import dev.slsk.network.PeerEndpoint;
+import dev.slsk.network.tcp.ConnectionDataEventArgs;
+import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
+import dev.slsk.network.tcp.ConnectionEventListener;
+import dev.slsk.network.tcp.IConnection;
 import dev.slsk.network.tcp.IListener;
 import dev.slsk.network.tcp.Listener;
 import dev.slsk.options.BrowseOptions;
 import dev.slsk.options.BrowseProgress;
 import dev.slsk.options.ConnectionOptions;
+import dev.slsk.options.PositionableInputStream;
 import dev.slsk.options.SearchOptions;
 import dev.slsk.options.SearchResponseReceived;
 import dev.slsk.options.SearchStateChange;
 import dev.slsk.options.SoulseekClientOptions;
 import dev.slsk.options.SoulseekClientOptionsPatch;
+import dev.slsk.options.TransferOptions;
+import dev.slsk.options.TransferProgressUpdate;
+import dev.slsk.options.TransferStateChange;
+import dev.slsk.options.UploadStreamFactory;
 import dev.slsk.search.ISearchResponder;
 import dev.slsk.search.SearchInternal;
 import dev.slsk.search.SearchResponder;
 import dev.slsk.search.SearchResponderClient;
 import dev.slsk.transfer.TransferInternal;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FilterInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -186,6 +214,7 @@ public class SoulseekClient
     private final TokenFactory tokenFactory;
     private final Semaphore searchSemaphore;
     private final Semaphore stateSemaphore = new Semaphore(1);
+    private final Semaphore globalUploadSemaphore;
     private final IOAdapter ioAdapter;
     private final TokenBucket uploadTokenBucket;
     private final TokenBucket downloadTokenBucket;
@@ -216,6 +245,7 @@ public class SoulseekClient
     private volatile Map<Integer, SearchInternal> searches = new ConcurrentHashMap<>();
     private final Map<String, Boolean> uniqueKeys = new ConcurrentHashMap<>();
     private final Map<String, CompletableFuture<InetSocketAddress>> endpointRequests = new ConcurrentHashMap<>();
+    private final Map<String, Semaphore> uploadSemaphores = new ConcurrentHashMap<>();
 
     /** Creates a client with default options. */
     public SoulseekClient(int minorVersion) {
@@ -275,6 +305,7 @@ public class SoulseekClient
         this.waiter = waiter == null ? new Waiter(this.options.getMessageTimeout()) : waiter;
         this.tokenFactory = tokenFactory == null ? new TokenFactory(this.options.getStartingToken()) : tokenFactory;
         this.searchSemaphore = new Semaphore(this.options.getMaximumConcurrentSearches());
+        this.globalUploadSemaphore = new Semaphore(this.options.getMaximumConcurrentUploads());
         this.ioAdapter = ioAdapter == null ? new IOAdapter() : ioAdapter;
         this.uploadTokenBucket = uploadTokenBucket == null
                 ? new TokenBucket((this.options.getMaximumUploadSpeed() * 1024L) / 10, 100)
@@ -1489,6 +1520,308 @@ public class SoulseekClient
         return reconfigureOptionsInternalAsync(patch, defaultToken(cancellationToken));
     }
 
+    /** Uploads a local file to a peer. */
+    public CompletableFuture<Transfer> uploadAsync(
+            String requestedUsername, String remoteFilename, String localFilename) {
+        return uploadAsync(requestedUsername, remoteFilename, localFilename, null, null, CancellationToken.none());
+    }
+
+    /** Uploads a local file to a peer with a specific token. */
+    public CompletableFuture<Transfer> uploadAsync(
+            String requestedUsername, String remoteFilename, String localFilename, Integer token) {
+        return uploadAsync(requestedUsername, remoteFilename, localFilename, token, null, CancellationToken.none());
+    }
+
+    /** Uploads a local file with cancellation. */
+    public CompletableFuture<Transfer> uploadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            String localFilename,
+            CancellationToken cancellationToken) {
+        return uploadAsync(requestedUsername, remoteFilename, localFilename, null, null, cancellationToken);
+    }
+
+    /** Uploads a local file using the supplied options. */
+    public CompletableFuture<Transfer> uploadAsync(
+            String requestedUsername, String remoteFilename, String localFilename, TransferOptions transferOptions) {
+        return uploadAsync(
+                requestedUsername, remoteFilename, localFilename, null, transferOptions, CancellationToken.none());
+    }
+
+    /** Uploads a local file to a peer using the supplied options. */
+    public CompletableFuture<Transfer> uploadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            String localFilename,
+            Integer token,
+            TransferOptions transferOptions) {
+        return uploadAsync(
+                requestedUsername, remoteFilename, localFilename, token, transferOptions, CancellationToken.none());
+    }
+
+    /** Uploads a local file to a peer. */
+    public CompletableFuture<Transfer> uploadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            String localFilename,
+            Integer token,
+            TransferOptions transferOptions,
+            CancellationToken cancellationToken) {
+        requireText(requestedUsername, "username");
+        requireText(remoteFilename, "remoteFilename");
+        requireText(localFilename, "localFilename");
+        if (!ioAdapter.exists(localFilename)) {
+            throw new UncheckedIOException(
+                    new FileNotFoundException("The local file does not exist: " + localFilename));
+        }
+        requireLoggedIn("upload files");
+        try (InputStream ignored = ioAdapter.getInputStream(localFilename)) {
+            // Probe readability before allocating a transfer token.
+        } catch (IOException failure) {
+            throw new UncheckedIOException(
+                    "The local file " + localFilename + " could not be opened for reading: " + failureMessage(failure),
+                    failure);
+        }
+
+        int transferToken = token == null ? getNextToken() : token;
+        validateUploadUniqueness(requestedUsername, remoteFilename, transferToken);
+        TransferOptions options = transferOptions == null ? new TransferOptions() : transferOptions;
+        TransferOptions fileOptions = options.withDisposalOptions(true, null);
+        long size;
+        try {
+            size = ioAdapter.getFileInfo(localFilename).size();
+        } catch (IOException failure) {
+            return CompletableFuture.failedFuture(new UncheckedIOException(failure));
+        }
+        return uploadFromStreamAsync(
+                requestedUsername,
+                remoteFilename,
+                size,
+                ignoredOffset -> {
+                    try {
+                        return CompletableFuture.completedFuture(ioAdapter.getInputStream(localFilename));
+                    } catch (IOException failure) {
+                        return CompletableFuture.failedFuture(new UncheckedIOException(failure));
+                    }
+                },
+                transferToken,
+                fileOptions,
+                defaultToken(cancellationToken));
+    }
+
+    /** Uploads data supplied by an asynchronous stream factory. */
+    public CompletableFuture<Transfer> uploadAsync(
+            String requestedUsername, String remoteFilename, long size, UploadStreamFactory inputStreamFactory) {
+        return uploadAsync(
+                requestedUsername, remoteFilename, size, inputStreamFactory, null, null, CancellationToken.none());
+    }
+
+    /** Uploads stream data with a specific transfer token. */
+    public CompletableFuture<Transfer> uploadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            long size,
+            UploadStreamFactory inputStreamFactory,
+            Integer token) {
+        return uploadAsync(
+                requestedUsername, remoteFilename, size, inputStreamFactory, token, null, CancellationToken.none());
+    }
+
+    /** Uploads stream data with cancellation. */
+    public CompletableFuture<Transfer> uploadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            long size,
+            UploadStreamFactory inputStreamFactory,
+            CancellationToken cancellationToken) {
+        return uploadAsync(requestedUsername, remoteFilename, size, inputStreamFactory, null, null, cancellationToken);
+    }
+
+    /** Uploads stream data using the supplied options. */
+    public CompletableFuture<Transfer> uploadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            long size,
+            UploadStreamFactory inputStreamFactory,
+            TransferOptions transferOptions) {
+        return uploadAsync(
+                requestedUsername,
+                remoteFilename,
+                size,
+                inputStreamFactory,
+                null,
+                transferOptions,
+                CancellationToken.none());
+    }
+
+    /** Uploads stream data using the supplied transfer options. */
+    public CompletableFuture<Transfer> uploadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            long size,
+            UploadStreamFactory inputStreamFactory,
+            Integer token,
+            TransferOptions transferOptions) {
+        return uploadAsync(
+                requestedUsername,
+                remoteFilename,
+                size,
+                inputStreamFactory,
+                token,
+                transferOptions,
+                CancellationToken.none());
+    }
+
+    /** Uploads data supplied by an asynchronous stream factory. */
+    public CompletableFuture<Transfer> uploadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            long size,
+            UploadStreamFactory inputStreamFactory,
+            Integer token,
+            TransferOptions transferOptions,
+            CancellationToken cancellationToken) {
+        requireText(requestedUsername, "username");
+        requireText(remoteFilename, "remoteFilename");
+        if (size < 0) {
+            throw new IllegalArgumentException("size must be greater than or equal to zero");
+        }
+        Objects.requireNonNull(inputStreamFactory, "inputStreamFactory");
+        requireLoggedIn("upload files");
+        int transferToken = token == null ? getNextToken() : token;
+        validateUploadUniqueness(requestedUsername, remoteFilename, transferToken);
+        return uploadFromStreamAsync(
+                requestedUsername,
+                remoteFilename,
+                size,
+                inputStreamFactory,
+                transferToken,
+                transferOptions == null ? new TransferOptions() : transferOptions,
+                defaultToken(cancellationToken));
+    }
+
+    /** Enqueues a local-file upload and returns its nested completion future. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+            String requestedUsername, String remoteFilename, String localFilename) {
+        return enqueueUploadAsync(
+                requestedUsername, remoteFilename, localFilename, null, null, CancellationToken.none());
+    }
+
+    /** Enqueues a local-file upload with a specific token. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+            String requestedUsername, String remoteFilename, String localFilename, Integer token) {
+        return enqueueUploadAsync(
+                requestedUsername, remoteFilename, localFilename, token, null, CancellationToken.none());
+    }
+
+    /** Enqueues a local-file upload with cancellation. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            String localFilename,
+            CancellationToken cancellationToken) {
+        return enqueueUploadAsync(requestedUsername, remoteFilename, localFilename, null, null, cancellationToken);
+    }
+
+    /** Enqueues a local-file upload using supplied options. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            String localFilename,
+            Integer token,
+            TransferOptions transferOptions) {
+        return enqueueUploadAsync(
+                requestedUsername, remoteFilename, localFilename, token, transferOptions, CancellationToken.none());
+    }
+
+    /** Enqueues a local-file upload. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            String localFilename,
+            Integer token,
+            TransferOptions transferOptions,
+            CancellationToken cancellationToken) {
+        CompletableFuture<Boolean> enqueued = new CompletableFuture<>();
+        TransferOptions options = (transferOptions == null ? new TransferOptions() : transferOptions)
+                .withAdditionalStateChanged(change -> {
+                    if (change.transfer().getState().equals(TransferStates.QUEUED.or(TransferStates.LOCALLY))) {
+                        enqueued.complete(true);
+                    }
+                });
+        CompletableFuture<Transfer> upload =
+                uploadAsync(requestedUsername, remoteFilename, localFilename, token, options, cancellationToken);
+        return enqueued.thenApply(ignored -> upload);
+    }
+
+    /** Enqueues a stream-factory upload. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+            String requestedUsername, String remoteFilename, long size, UploadStreamFactory inputStreamFactory) {
+        return enqueueUploadAsync(
+                requestedUsername, remoteFilename, size, inputStreamFactory, null, null, CancellationToken.none());
+    }
+
+    /** Enqueues a stream-factory upload with a specific token. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            long size,
+            UploadStreamFactory inputStreamFactory,
+            Integer token) {
+        return enqueueUploadAsync(
+                requestedUsername, remoteFilename, size, inputStreamFactory, token, null, CancellationToken.none());
+    }
+
+    /** Enqueues a stream-factory upload with cancellation. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            long size,
+            UploadStreamFactory inputStreamFactory,
+            CancellationToken cancellationToken) {
+        return enqueueUploadAsync(
+                requestedUsername, remoteFilename, size, inputStreamFactory, null, null, cancellationToken);
+    }
+
+    /** Enqueues a stream-factory upload using supplied options. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            long size,
+            UploadStreamFactory inputStreamFactory,
+            Integer token,
+            TransferOptions transferOptions) {
+        return enqueueUploadAsync(
+                requestedUsername,
+                remoteFilename,
+                size,
+                inputStreamFactory,
+                token,
+                transferOptions,
+                CancellationToken.none());
+    }
+
+    /** Enqueues a stream-factory upload. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            long size,
+            UploadStreamFactory inputStreamFactory,
+            Integer token,
+            TransferOptions transferOptions,
+            CancellationToken cancellationToken) {
+        CompletableFuture<Boolean> enqueued = new CompletableFuture<>();
+        TransferOptions options = (transferOptions == null ? new TransferOptions() : transferOptions)
+                .withAdditionalStateChanged(change -> {
+                    if (change.transfer().getState().equals(TransferStates.QUEUED.or(TransferStates.LOCALLY))) {
+                        enqueued.complete(true);
+                    }
+                });
+        CompletableFuture<Transfer> upload = uploadAsync(
+                requestedUsername, remoteFilename, size, inputStreamFactory, token, options, cancellationToken);
+        return enqueued.thenApply(ignored -> upload);
+    }
+
     public CompletableFuture<Void> addPrivateRoomModeratorAsync(String roomName, String requestedUsername) {
         return addPrivateRoomModeratorAsync(roomName, requestedUsername, CancellationToken.none());
     }
@@ -2693,6 +3026,543 @@ public class SoulseekClient
 
     private CompletableFuture<Void> acquireSearchPermit(CancellationToken cancellationToken) {
         return acquirePermit(searchSemaphore, cancellationToken);
+    }
+
+    private void validateUploadUniqueness(String requestedUsername, String remoteFilename, int token) {
+        if (uploads.containsKey(token) || downloads.containsKey(token)) {
+            throw new DuplicateTokenException("The specified or generated token " + token + " is already in progress");
+        }
+        boolean duplicate = uploads.values().stream()
+                .anyMatch(upload -> Objects.equals(upload.getUsername(), requestedUsername)
+                        && Objects.equals(upload.getFilename(), remoteFilename));
+        if (duplicate || uniqueKeys.containsKey(uploadUniqueKey(requestedUsername, remoteFilename))) {
+            throw new DuplicateTransferException("An active or queued upload of "
+                    + remoteFilename + " to " + requestedUsername
+                    + " is already in progress");
+        }
+    }
+
+    private CompletableFuture<Transfer> uploadFromStreamAsync(
+            String requestedUsername,
+            String remoteFilename,
+            long size,
+            UploadStreamFactory inputStreamFactory,
+            int token,
+            TransferOptions transferOptions,
+            CancellationToken cancellationToken) {
+        TransferOptions operationOptions = transferOptions == null ? new TransferOptions() : transferOptions;
+        TransferInternal upload = new TransferInternal(
+                TransferDirection.UPLOAD, requestedUsername, remoteFilename, token, operationOptions);
+        upload.setSize(size);
+        String uniqueKey = uploadUniqueKey(requestedUsername, remoteFilename);
+
+        if (uniqueKeys.putIfAbsent(uniqueKey, true) != null) {
+            return CompletableFuture.failedFuture(new DuplicateTransferException(
+                    "Duplicate upload of " + remoteFilename + " to " + requestedUsername + " aborted"));
+        }
+        if (uploads.putIfAbsent(token, upload) != null) {
+            uniqueKeys.remove(uniqueKey);
+            return CompletableFuture.failedFuture(new DuplicateTransferException(
+                    "Duplicate upload of " + remoteFilename + " to " + requestedUsername + " aborted"));
+        }
+
+        UploadOperation operation =
+                new UploadOperation(upload, inputStreamFactory, operationOptions, cancellationToken, uniqueKey);
+        return CompletableFuture.supplyAsync(operation::execute);
+    }
+
+    private static String uploadUniqueKey(String requestedUsername, String remoteFilename) {
+        return "Upload:" + requestedUsername + ":" + remoteFilename;
+    }
+
+    private final class UploadOperation {
+        private final TransferInternal upload;
+        private final UploadStreamFactory inputStreamFactory;
+        private final TransferOptions transferOptions;
+        private final CancellationToken cancellationToken;
+        private final String uniqueKey;
+        private final AtomicBoolean perUserPermit = new AtomicBoolean();
+        private final AtomicBoolean slot = new AtomicBoolean();
+        private final AtomicBoolean globalPermit = new AtomicBoolean();
+        private final CompletableFuture<Void> disconnected = new CompletableFuture<>();
+        private TransferStates lastState = TransferStates.NONE;
+        private Semaphore perUserSemaphore;
+        private InetSocketAddress endpoint;
+        private IConnection connection;
+        private InputStream inputStream;
+        private PositionTrackingInputStream trackingStream;
+        private ConnectionEventListener<ConnectionDataEventArgs> dataWrittenListener;
+        private ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedListener;
+
+        private UploadOperation(
+                TransferInternal upload,
+                UploadStreamFactory inputStreamFactory,
+                TransferOptions transferOptions,
+                CancellationToken cancellationToken,
+                String uniqueKey) {
+            this.upload = upload;
+            this.inputStreamFactory = inputStreamFactory;
+            this.transferOptions = transferOptions;
+            this.cancellationToken = cancellationToken;
+            this.uniqueKey = uniqueKey;
+        }
+
+        private Transfer execute() {
+            try {
+                perUserSemaphore = uploadSemaphores.computeIfAbsent(
+                        upload.getUsername(), ignored -> new Semaphore(options.getMaximumConcurrentUploadsPerUser()));
+                CompletableFuture<Void> perUserWait = acquirePermit(perUserSemaphore, cancellationToken);
+
+                updateState(TransferStates.QUEUED.or(TransferStates.LOCALLY));
+
+                await(perUserWait);
+                perUserPermit.set(true);
+                diagnostic.debug("Upload semaphore for file "
+                        + filenameOnly(upload.getFilename()) + " to "
+                        + upload.getUsername() + " acquired");
+
+                try {
+                    await(transferOptions.getSlotAwaiter().awaitSlotAsync(upload.toTransfer(), cancellationToken));
+                    slot.set(true);
+                } catch (Throwable failure) {
+                    Throwable cause = unwrap(failure);
+                    if (cause instanceof CancellationException) {
+                        throw cause;
+                    }
+                    throw new TransferException(
+                            "Failed to acquire an upload slot for file "
+                                    + filenameOnly(upload.getFilename())
+                                    + " to " + upload.getUsername() + ": "
+                                    + failureMessage(cause),
+                            cause);
+                }
+
+                await(acquirePermit(globalUploadSemaphore, cancellationToken));
+                globalPermit.set(true);
+
+                endpoint = await(getUserEndPointAsync(upload.getUsername(), cancellationToken));
+                IMessageConnection messageConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
+                        upload.getUsername(), endpoint, cancellationToken));
+
+                CompletableFuture<TransferResponse> transferRequestAcknowledged = waiter.waitAsync(
+                        new WaitKey(MessageCode.Peer.TRANSFER_RESPONSE, upload.getUsername(), upload.getToken()),
+                        TransferResponse.class,
+                        options.getPeerConnectionOptions().getInactivityTimeout(),
+                        cancellationToken);
+                await(invokeMessageWrite(
+                        messageConnection,
+                        new TransferRequest(
+                                TransferDirection.UPLOAD, upload.getToken(), upload.getFilename(), upload.getSize()),
+                        cancellationToken));
+                updateState(TransferStates.REQUESTED);
+
+                TransferResponse acknowledgement = await(transferRequestAcknowledged);
+                if (!acknowledgement.isAllowed()) {
+                    throw new TransferRejectedException("Transfer rejected: " + acknowledgement.getMessage());
+                }
+
+                updateState(TransferStates.INITIALIZING);
+                connection = await(peerConnectionManager.getTransferConnectionAsync(
+                        upload.getUsername(), endpoint, upload.getToken(), cancellationToken));
+                upload.setConnection(connection);
+                bindConnectionEvents();
+
+                readStartOffset();
+                if (upload.getStartOffset() > upload.getSize()) {
+                    throw new TransferException("Requested start offset of "
+                            + upload.getStartOffset()
+                            + " bytes exceeds file length of "
+                            + upload.getSize() + " bytes");
+                }
+
+                inputStream = Objects.requireNonNull(
+                        await(inputStreamFactory.openAsync(upload.getStartOffset())), "inputStreamFactory result");
+                positionInputStream();
+                trackingStream = new PositionTrackingInputStream(
+                        inputStream, determinePosition(inputStream, upload.getStartOffset()));
+
+                updateState(TransferStates.IN_PROGRESS);
+                updateProgress(upload.getStartOffset());
+                writeAndAwaitDisconnectRace();
+                linger();
+
+                updateProgress(currentStreamPosition());
+                updateState(TransferStates.COMPLETED.or(TransferStates.SUCCEEDED));
+                return upload.toTransfer();
+            } catch (Throwable failure) {
+                Throwable cause = unwrap(failure);
+                handleFailure(cause);
+                throw new CompletionException(mapUploadFailure(cause));
+            } finally {
+                cleanup();
+            }
+        }
+
+        private void bindConnectionEvents() {
+            dataWrittenListener =
+                    (sender, eventArgs) -> updateProgress(upload.getStartOffset() + eventArgs.getCurrentLength());
+            disconnectedListener = (sender, eventArgs) -> {
+                Throwable failure = eventArgs.getException();
+                if (failure instanceof CancellationException || failure instanceof TimeoutException) {
+                    disconnected.completeExceptionally(failure);
+                } else {
+                    disconnected.completeExceptionally(
+                            new ConnectionException("Transfer failed: " + eventArgs.getMessage(), failure));
+                }
+            };
+            connection.addDataWrittenListener(dataWrittenListener);
+            connection.addDisconnectedListener(disconnectedListener);
+        }
+
+        private void readStartOffset() {
+            try {
+                byte[] bytes = await(connection.readAsync(8, cancellationToken));
+                if (bytes.length != 8) {
+                    throw new IOException("Expected 8 bytes but received " + bytes.length);
+                }
+                upload.setStartOffset(
+                        ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).getLong());
+            } catch (Throwable failure) {
+                Throwable cause = unwrap(failure);
+                if (cause instanceof CancellationException || cause instanceof TimeoutException) {
+                    throw new CompletionException(cause);
+                }
+                throw new MessageReadException("Failed to read transfer start offset: " + failureMessage(cause), cause);
+            }
+        }
+
+        private void positionInputStream() {
+            if (upload.getStartOffset() <= 0 || !transferOptions.isSeekInputStreamAutomatically()) {
+                return;
+            }
+            try {
+                seekInputStream(inputStream, upload.getStartOffset());
+            } catch (IOException failure) {
+                throw new TransferStreamException(
+                        "Requested non-zero start offset but input " + "stream does not support seeking", failure);
+            }
+        }
+
+        private void writeAndAwaitDisconnectRace() {
+            long remaining = upload.getSize() - upload.getStartOffset();
+            CompletableFuture<Void> write = remaining == 0
+                    ? CompletableFuture.completedFuture(null)
+                    : connection.writeAsync(
+                            remaining,
+                            trackingStream,
+                            (requestedBytes, governorToken) -> transferOptions
+                                    .getGovernor()
+                                    .grantAsync(upload.toTransfer(), requestedBytes, governorToken)
+                                    .thenCompose(granted -> uploadTokenBucket.getAsync(
+                                            Math.min(requestedBytes, granted), cancellationToken)),
+                            (attemptedBytes, grantedBytes, transferredBytes) -> {
+                                if (transferOptions.getReporter() != null) {
+                                    transferOptions
+                                            .getReporter()
+                                            .report(
+                                                    upload.toTransfer(),
+                                                    attemptedBytes,
+                                                    grantedBytes,
+                                                    transferredBytes);
+                                }
+                                uploadTokenBucket.returnTokens(grantedBytes - transferredBytes);
+                            },
+                            cancellationToken);
+            CompletableFuture<Object> first = CompletableFuture.anyOf(write, disconnected);
+            await(first);
+            if (disconnected.isCompletedExceptionally() && !write.isDone()) {
+                await(disconnected);
+            }
+            await(write);
+        }
+
+        private void linger() {
+            long deadline = System.nanoTime()
+                    + TimeUnit.MILLISECONDS.toNanos(Math.max(0, transferOptions.getMaximumLingerTime()));
+            try {
+                while (!cancellationToken.isCancellationRequested()) {
+                    long remainingNanos = deadline - System.nanoTime();
+                    if (remainingNanos <= 0) {
+                        connection.disconnect("Transfer complete, maximum linger " + "time exceeded");
+                        return;
+                    }
+                    long remainingMillis = Math.max(1, TimeUnit.NANOSECONDS.toMillis(remainingNanos));
+                    try {
+                        await(connection
+                                .readAsync(1, cancellationToken)
+                                .orTimeout(remainingMillis, TimeUnit.MILLISECONDS));
+                    } catch (Throwable failure) {
+                        Throwable cause = unwrap(failure);
+                        if (cause instanceof TimeoutException) {
+                            connection.disconnect("Transfer complete, maximum " + "linger time exceeded");
+                            return;
+                        }
+                        throw failure;
+                    }
+                    await(CompletableFuture.runAsync(
+                            () -> {}, CompletableFuture.delayedExecutor(100, TimeUnit.MILLISECONDS)));
+                }
+                cancellationToken.throwIfCancellationRequested();
+            } catch (Throwable failure) {
+                if (!(unwrap(failure) instanceof ConnectionReadException)) {
+                    throw failure;
+                }
+            }
+        }
+
+        private void handleFailure(Throwable failure) {
+            if (failure instanceof TransferRejectedException) {
+                upload.setException(failure);
+                updateState(TransferStates.COMPLETED.or(TransferStates.REJECTED));
+                return;
+            }
+            if (failure instanceof CancellationException) {
+                disconnectTransfer("Transfer cancelled", failure);
+                upload.setException(failure);
+                updateProgress(currentStreamPosition());
+                updateState(TransferStates.COMPLETED.or(TransferStates.CANCELLED));
+                return;
+            }
+            if (failure instanceof TimeoutException) {
+                disconnectTransfer("Transfer timed out", failure);
+                upload.setException(failure);
+                updateProgress(currentStreamPosition());
+                updateState(TransferStates.COMPLETED.or(TransferStates.TIMED_OUT));
+                return;
+            }
+            disconnectTransfer("Transfer error", failure);
+            upload.setException(failure);
+            updateProgress(currentStreamPosition());
+            updateState(TransferStates.COMPLETED.or(TransferStates.ERRORED));
+        }
+
+        private Throwable mapUploadFailure(Throwable failure) {
+            if (failure instanceof TransferRejectedException
+                    || failure instanceof CancellationException
+                    || failure instanceof TimeoutException
+                    || failure instanceof UserOfflineException) {
+                return failure;
+            }
+            return new SoulseekClientException(
+                    "Failed to upload file " + upload.getFilename()
+                            + " to user " + upload.getUsername() + ": "
+                            + failureMessage(failure),
+                    failure);
+        }
+
+        private void disconnectTransfer(String message, Throwable failure) {
+            if (connection != null) {
+                connection.disconnect(
+                        message, failure instanceof Exception exception ? exception : new RuntimeException(failure));
+            }
+        }
+
+        private void cleanup() {
+            try {
+                unbindConnectionEvents();
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    } catch (Throwable ignored) {
+                        // Best-effort connection cleanup.
+                    }
+                }
+                currentStreamPosition();
+                if (transferOptions.isDisposeInputStreamOnCompletion() && inputStream != null) {
+                    try {
+                        inputStream.close();
+                    } catch (Throwable ignored) {
+                        // Best-effort stream cleanup.
+                    }
+                }
+                if (!upload.getState().hasFlag(TransferStates.SUCCEEDED)) {
+                    notifyUploadFailure();
+                }
+            } finally {
+                releasePermits();
+                uploads.remove(upload.getToken(), upload);
+                uniqueKeys.remove(uniqueKey);
+            }
+        }
+
+        private void unbindConnectionEvents() {
+            if (connection == null) {
+                return;
+            }
+            if (dataWrittenListener != null) {
+                connection.removeDataWrittenListener(dataWrittenListener);
+            }
+            if (disconnectedListener != null) {
+                connection.removeDisconnectedListener(disconnectedListener);
+            }
+        }
+
+        private void notifyUploadFailure() {
+            try {
+                InetSocketAddress currentEndpoint =
+                        await(getUserEndPointAsync(upload.getUsername(), CancellationToken.none()));
+                IMessageConnection messageConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
+                        upload.getUsername(), currentEndpoint, CancellationToken.none()));
+                IOutgoingMessage message = upload.getState().hasFlag(TransferStates.CANCELLED)
+                        ? new UploadDenied(upload.getFilename(), "Cancelled")
+                        : new UploadFailed(upload.getFilename());
+                await(invokeMessageWrite(messageConnection, message, CancellationToken.none()));
+            } catch (Throwable ignored) {
+                // Failure notification is intentionally best effort.
+            }
+        }
+
+        private void releasePermits() {
+            if (perUserPermit.compareAndSet(true, false)) {
+                perUserSemaphore.release();
+            }
+            if (slot.compareAndSet(true, false) && transferOptions.getSlotReleased() != null) {
+                try {
+                    Thread.sleep(10);
+                    transferOptions.getSlotReleased().onSlotReleased(upload.toTransfer());
+                } catch (InterruptedException failure) {
+                    Thread.currentThread().interrupt();
+                } catch (Throwable ignored) {
+                    // Slot-release callbacks cannot block cleanup.
+                }
+            }
+            if (globalPermit.compareAndSet(true, false)) {
+                globalUploadSemaphore.release();
+            }
+        }
+
+        private void updateState(TransferStates state) {
+            upload.setState(state);
+            Transfer transfer = upload.toTransfer();
+            TransferStateChangedEventArgs eventArgs = new TransferStateChangedEventArgs(lastState, transfer);
+            TransferStates previous = lastState;
+            lastState = state;
+            if (transferOptions.getStateChanged() != null) {
+                transferOptions.getStateChanged().onStateChanged(new TransferStateChange(previous, transfer));
+            }
+            raise(Event.TRANSFER_STATE_CHANGED, eventArgs);
+        }
+
+        private void updateProgress(long bytesUploaded) {
+            long previous = upload.getBytesTransferred();
+            upload.updateProgress(bytesUploaded);
+            Transfer transfer = upload.toTransfer();
+            if (transferOptions.getProgressUpdated() != null) {
+                transferOptions.getProgressUpdated().onProgressUpdated(new TransferProgressUpdate(previous, transfer));
+            }
+            raise(Event.TRANSFER_PROGRESS_UPDATED, new TransferProgressUpdatedEventArgs(previous, transfer));
+        }
+
+        private long currentStreamPosition() {
+            if (trackingStream != null) {
+                return trackingStream.getPosition();
+            }
+            if (inputStream != null) {
+                try {
+                    return determinePosition(inputStream, 0);
+                } catch (Throwable ignored) {
+                    return 0;
+                }
+            }
+            return 0;
+        }
+    }
+
+    private static void seekInputStream(InputStream stream, long position) throws IOException {
+        if (stream instanceof PositionableInputStream positionable) {
+            positionable.setPosition(position);
+            return;
+        }
+        if (stream instanceof FileInputStream fileInputStream) {
+            fileInputStream.getChannel().position(position);
+            return;
+        }
+        if (stream instanceof ByteArrayInputStream) {
+            stream.reset();
+            skipFully(stream, position);
+            return;
+        }
+        throw new IOException("Input stream is not seekable");
+    }
+
+    private static void skipFully(InputStream stream, long count) throws IOException {
+        long remaining = count;
+        while (remaining > 0) {
+            long skipped = stream.skip(remaining);
+            if (skipped <= 0) {
+                if (stream.read() < 0) {
+                    throw new IOException("Input stream ended before position " + count);
+                }
+                skipped = 1;
+            }
+            remaining -= skipped;
+        }
+    }
+
+    private static long determinePosition(InputStream stream, long fallback) throws IOException {
+        if (stream instanceof PositionableInputStream positionable) {
+            return positionable.getPosition();
+        }
+        if (stream instanceof FileInputStream fileInputStream) {
+            return fileInputStream.getChannel().position();
+        }
+        return fallback;
+    }
+
+    private static String filenameOnly(String filename) {
+        try {
+            Path path = Path.of(filename);
+            Path leaf = path.getFileName();
+            return leaf == null ? filename : leaf.toString();
+        } catch (Throwable ignored) {
+            return filename;
+        }
+    }
+
+    private static <T> T await(CompletableFuture<T> future) {
+        try {
+            return future.join();
+        } catch (Throwable failure) {
+            throw new CompletionException(unwrap(failure));
+        }
+    }
+
+    private static final class PositionTrackingInputStream extends FilterInputStream {
+        private long position;
+
+        private PositionTrackingInputStream(InputStream inputStream, long initialPosition) {
+            super(inputStream);
+            position = initialPosition;
+        }
+
+        private long getPosition() {
+            return position;
+        }
+
+        @Override
+        public int read() throws IOException {
+            int value = super.read();
+            if (value >= 0) {
+                position++;
+            }
+            return value;
+        }
+
+        @Override
+        public int read(byte[] bytes, int offset, int length) throws IOException {
+            int read = super.read(bytes, offset, length);
+            if (read > 0) {
+                position += read;
+            }
+            return read;
+        }
+
+        @Override
+        public long skip(long count) throws IOException {
+            long skipped = super.skip(count);
+            position += skipped;
+            return skipped;
+        }
     }
 
     private static CompletableFuture<Void> acquirePermit(Semaphore semaphore, CancellationToken cancellationToken) {
