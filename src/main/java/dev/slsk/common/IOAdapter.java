@@ -5,8 +5,10 @@
 package dev.slsk.common;
 
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
@@ -48,6 +50,18 @@ public class IOAdapter {
      */
     public InputStream getInputStream(String path) throws IOException {
         return new FileInputStream(path);
+    }
+
+    /**
+     * Opens a file output stream.
+     *
+     * @param path the path to open
+     * @param append whether to append rather than overwrite
+     * @return the output stream
+     * @throws IOException when the file cannot be opened
+     */
+    public OutputStream getOutputStream(String path, boolean append) throws IOException {
+        return new FileOutputStream(path, append);
     }
 
     /**

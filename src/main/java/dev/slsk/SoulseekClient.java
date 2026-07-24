@@ -54,6 +54,7 @@ import dev.slsk.exceptions.TransferException;
 import dev.slsk.exceptions.TransferNotFoundException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
+import dev.slsk.exceptions.TransferSizeMismatchException;
 import dev.slsk.exceptions.TransferStreamException;
 import dev.slsk.exceptions.UserEndPointCacheException;
 import dev.slsk.exceptions.UserEndPointException;
@@ -142,7 +143,9 @@ import dev.slsk.network.tcp.Listener;
 import dev.slsk.options.BrowseOptions;
 import dev.slsk.options.BrowseProgress;
 import dev.slsk.options.ConnectionOptions;
+import dev.slsk.options.DownloadStreamFactory;
 import dev.slsk.options.PositionableInputStream;
+import dev.slsk.options.PositionableOutputStream;
 import dev.slsk.options.SearchOptions;
 import dev.slsk.options.SearchResponseReceived;
 import dev.slsk.options.SearchStateChange;
@@ -161,9 +164,12 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.FilterInputStream;
+import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -214,6 +220,7 @@ public class SoulseekClient
     private final TokenFactory tokenFactory;
     private final Semaphore searchSemaphore;
     private final Semaphore stateSemaphore = new Semaphore(1);
+    private final Semaphore globalDownloadSemaphore;
     private final Semaphore globalUploadSemaphore;
     private final Semaphore uploadSemaphoreSyncRoot = new Semaphore(1);
     private final IOAdapter ioAdapter;
@@ -306,6 +313,7 @@ public class SoulseekClient
         this.waiter = waiter == null ? new Waiter(this.options.getMessageTimeout()) : waiter;
         this.tokenFactory = tokenFactory == null ? new TokenFactory(this.options.getStartingToken()) : tokenFactory;
         this.searchSemaphore = new Semaphore(this.options.getMaximumConcurrentSearches());
+        this.globalDownloadSemaphore = new Semaphore(this.options.getMaximumConcurrentDownloads());
         this.globalUploadSemaphore = new Semaphore(this.options.getMaximumConcurrentUploads());
         this.ioAdapter = ioAdapter == null ? new IOAdapter() : ioAdapter;
         this.uploadTokenBucket = uploadTokenBucket == null
@@ -1519,6 +1527,411 @@ public class SoulseekClient
             }
         }
         return reconfigureOptionsInternalAsync(patch, defaultToken(cancellationToken));
+    }
+
+    /** Downloads a remote file to a local file. */
+    public CompletableFuture<Transfer> downloadAsync(
+            String requestedUsername, String remoteFilename, String localFilename) {
+        return downloadAsync(
+                requestedUsername, remoteFilename, localFilename, null, 0, null, null, CancellationToken.none());
+    }
+
+    /** Downloads a remote file with an expected size. */
+    public CompletableFuture<Transfer> downloadAsync(
+            String requestedUsername, String remoteFilename, String localFilename, Long size) {
+        return downloadAsync(
+                requestedUsername, remoteFilename, localFilename, size, 0, null, null, CancellationToken.none());
+    }
+
+    /** Downloads a remote file with cancellation. */
+    public CompletableFuture<Transfer> downloadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            String localFilename,
+            CancellationToken cancellationToken) {
+        return downloadAsync(requestedUsername, remoteFilename, localFilename, null, 0, null, null, cancellationToken);
+    }
+
+    /** Downloads a remote file from a resume offset. */
+    public CompletableFuture<Transfer> downloadAsync(
+            String requestedUsername, String remoteFilename, String localFilename, Long size, long startOffset) {
+        return downloadAsync(
+                requestedUsername,
+                remoteFilename,
+                localFilename,
+                size,
+                startOffset,
+                null,
+                null,
+                CancellationToken.none());
+    }
+
+    /** Downloads a remote file with a specific token. */
+    public CompletableFuture<Transfer> downloadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            String localFilename,
+            Long size,
+            long startOffset,
+            Integer token) {
+        return downloadAsync(
+                requestedUsername,
+                remoteFilename,
+                localFilename,
+                size,
+                startOffset,
+                token,
+                null,
+                CancellationToken.none());
+    }
+
+    /** Downloads a remote file using supplied transfer options. */
+    public CompletableFuture<Transfer> downloadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            String localFilename,
+            Long size,
+            long startOffset,
+            Integer token,
+            TransferOptions transferOptions) {
+        return downloadAsync(
+                requestedUsername,
+                remoteFilename,
+                localFilename,
+                size,
+                startOffset,
+                token,
+                transferOptions,
+                CancellationToken.none());
+    }
+
+    /** Downloads a remote file to a local file. */
+    public CompletableFuture<Transfer> downloadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            String localFilename,
+            Long size,
+            long startOffset,
+            Integer token,
+            TransferOptions transferOptions,
+            CancellationToken cancellationToken) {
+        requireText(requestedUsername, "username");
+        requireText(remoteFilename, "remoteFilename");
+        requireText(localFilename, "localFilename");
+        validateDownloadRange(size, startOffset);
+        requireLoggedIn("download files");
+        int transferToken = token == null ? getNextToken() : token;
+        validateDownloadUniqueness(requestedUsername, remoteFilename, transferToken);
+        TransferOptions options =
+                (transferOptions == null ? new TransferOptions() : transferOptions).withDisposalOptions(null, true);
+        return downloadToStreamAsync(
+                requestedUsername,
+                remoteFilename,
+                () -> {
+                    try {
+                        return CompletableFuture.completedFuture(
+                                ioAdapter.getOutputStream(localFilename, startOffset > 0));
+                    } catch (IOException failure) {
+                        return CompletableFuture.failedFuture(new UncheckedIOException(failure));
+                    }
+                },
+                size,
+                startOffset,
+                transferToken,
+                options,
+                defaultToken(cancellationToken));
+    }
+
+    /** Downloads data to a stream created by a factory. */
+    public CompletableFuture<Transfer> downloadAsync(
+            String requestedUsername, String remoteFilename, DownloadStreamFactory outputStreamFactory) {
+        return downloadAsync(
+                requestedUsername, remoteFilename, outputStreamFactory, null, 0, null, null, CancellationToken.none());
+    }
+
+    /** Downloads stream data with an expected size. */
+    public CompletableFuture<Transfer> downloadAsync(
+            String requestedUsername, String remoteFilename, DownloadStreamFactory outputStreamFactory, Long size) {
+        return downloadAsync(
+                requestedUsername, remoteFilename, outputStreamFactory, size, 0, null, null, CancellationToken.none());
+    }
+
+    /** Downloads stream data with cancellation. */
+    public CompletableFuture<Transfer> downloadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            DownloadStreamFactory outputStreamFactory,
+            CancellationToken cancellationToken) {
+        return downloadAsync(
+                requestedUsername, remoteFilename, outputStreamFactory, null, 0, null, null, cancellationToken);
+    }
+
+    /** Downloads stream data from a resume offset. */
+    public CompletableFuture<Transfer> downloadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            DownloadStreamFactory outputStreamFactory,
+            Long size,
+            long startOffset) {
+        return downloadAsync(
+                requestedUsername,
+                remoteFilename,
+                outputStreamFactory,
+                size,
+                startOffset,
+                null,
+                null,
+                CancellationToken.none());
+    }
+
+    /** Downloads stream data with a specific token. */
+    public CompletableFuture<Transfer> downloadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            DownloadStreamFactory outputStreamFactory,
+            Long size,
+            long startOffset,
+            Integer token) {
+        return downloadAsync(
+                requestedUsername,
+                remoteFilename,
+                outputStreamFactory,
+                size,
+                startOffset,
+                token,
+                null,
+                CancellationToken.none());
+    }
+
+    /** Downloads stream data using supplied transfer options. */
+    public CompletableFuture<Transfer> downloadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            DownloadStreamFactory outputStreamFactory,
+            Long size,
+            long startOffset,
+            Integer token,
+            TransferOptions transferOptions) {
+        return downloadAsync(
+                requestedUsername,
+                remoteFilename,
+                outputStreamFactory,
+                size,
+                startOffset,
+                token,
+                transferOptions,
+                CancellationToken.none());
+    }
+
+    /** Downloads data to a stream created by a factory. */
+    public CompletableFuture<Transfer> downloadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            DownloadStreamFactory outputStreamFactory,
+            Long size,
+            long startOffset,
+            Integer token,
+            TransferOptions transferOptions,
+            CancellationToken cancellationToken) {
+        requireText(requestedUsername, "username");
+        requireText(remoteFilename, "remoteFilename");
+        validateDownloadRange(size, startOffset);
+        Objects.requireNonNull(outputStreamFactory, "outputStreamFactory");
+        requireLoggedIn("download files");
+        int transferToken = token == null ? getNextToken() : token;
+        validateDownloadUniqueness(requestedUsername, remoteFilename, transferToken);
+        return downloadToStreamAsync(
+                requestedUsername,
+                remoteFilename,
+                outputStreamFactory,
+                size,
+                startOffset,
+                transferToken,
+                transferOptions == null ? new TransferOptions() : transferOptions,
+                defaultToken(cancellationToken));
+    }
+
+    /** Enqueues a local-file download. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+            String requestedUsername, String remoteFilename, String localFilename) {
+        return enqueueDownloadAsync(
+                requestedUsername, remoteFilename, localFilename, null, 0, null, null, CancellationToken.none());
+    }
+
+    /** Enqueues a local-file download with an expected size. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+            String requestedUsername, String remoteFilename, String localFilename, Long size) {
+        return enqueueDownloadAsync(
+                requestedUsername, remoteFilename, localFilename, size, 0, null, null, CancellationToken.none());
+    }
+
+    /** Enqueues a local-file download from a resume offset. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+            String requestedUsername, String remoteFilename, String localFilename, Long size, long startOffset) {
+        return enqueueDownloadAsync(
+                requestedUsername,
+                remoteFilename,
+                localFilename,
+                size,
+                startOffset,
+                null,
+                null,
+                CancellationToken.none());
+    }
+
+    /** Enqueues a local-file download with a specific token. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            String localFilename,
+            Long size,
+            long startOffset,
+            Integer token) {
+        return enqueueDownloadAsync(
+                requestedUsername,
+                remoteFilename,
+                localFilename,
+                size,
+                startOffset,
+                token,
+                null,
+                CancellationToken.none());
+    }
+
+    /** Enqueues a local-file download using supplied options. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            String localFilename,
+            Long size,
+            long startOffset,
+            Integer token,
+            TransferOptions transferOptions) {
+        return enqueueDownloadAsync(
+                requestedUsername,
+                remoteFilename,
+                localFilename,
+                size,
+                startOffset,
+                token,
+                transferOptions,
+                CancellationToken.none());
+    }
+
+    /** Enqueues a local-file download. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            String localFilename,
+            Long size,
+            long startOffset,
+            Integer token,
+            TransferOptions transferOptions,
+            CancellationToken cancellationToken) {
+        CompletableFuture<Boolean> enqueued = new CompletableFuture<>();
+        TransferOptions options = (transferOptions == null ? new TransferOptions() : transferOptions)
+                .withAdditionalStateChanged(change ->
+                        completeDownloadEnqueue(enqueued, change.transfer().getState()));
+        CompletableFuture<Transfer> download = downloadAsync(
+                requestedUsername, remoteFilename, localFilename, size, startOffset, token, options, cancellationToken);
+        return nestedDownloadWhenEnqueued(enqueued, download);
+    }
+
+    /** Enqueues a stream-factory download. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+            String requestedUsername, String remoteFilename, DownloadStreamFactory outputStreamFactory) {
+        return enqueueDownloadAsync(
+                requestedUsername, remoteFilename, outputStreamFactory, null, 0, null, null, CancellationToken.none());
+    }
+
+    /** Enqueues a stream-factory download with an expected size. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+            String requestedUsername, String remoteFilename, DownloadStreamFactory outputStreamFactory, Long size) {
+        return enqueueDownloadAsync(
+                requestedUsername, remoteFilename, outputStreamFactory, size, 0, null, null, CancellationToken.none());
+    }
+
+    /** Enqueues a stream-factory download from a resume offset. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            DownloadStreamFactory outputStreamFactory,
+            Long size,
+            long startOffset) {
+        return enqueueDownloadAsync(
+                requestedUsername,
+                remoteFilename,
+                outputStreamFactory,
+                size,
+                startOffset,
+                null,
+                null,
+                CancellationToken.none());
+    }
+
+    /** Enqueues a stream-factory download with a specific token. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            DownloadStreamFactory outputStreamFactory,
+            Long size,
+            long startOffset,
+            Integer token) {
+        return enqueueDownloadAsync(
+                requestedUsername,
+                remoteFilename,
+                outputStreamFactory,
+                size,
+                startOffset,
+                token,
+                null,
+                CancellationToken.none());
+    }
+
+    /** Enqueues a stream-factory download using supplied options. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            DownloadStreamFactory outputStreamFactory,
+            Long size,
+            long startOffset,
+            Integer token,
+            TransferOptions transferOptions) {
+        return enqueueDownloadAsync(
+                requestedUsername,
+                remoteFilename,
+                outputStreamFactory,
+                size,
+                startOffset,
+                token,
+                transferOptions,
+                CancellationToken.none());
+    }
+
+    /** Enqueues a stream-factory download. */
+    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+            String requestedUsername,
+            String remoteFilename,
+            DownloadStreamFactory outputStreamFactory,
+            Long size,
+            long startOffset,
+            Integer token,
+            TransferOptions transferOptions,
+            CancellationToken cancellationToken) {
+        CompletableFuture<Boolean> enqueued = new CompletableFuture<>();
+        TransferOptions options = (transferOptions == null ? new TransferOptions() : transferOptions)
+                .withAdditionalStateChanged(change ->
+                        completeDownloadEnqueue(enqueued, change.transfer().getState()));
+        CompletableFuture<Transfer> download = downloadAsync(
+                requestedUsername,
+                remoteFilename,
+                outputStreamFactory,
+                size,
+                startOffset,
+                token,
+                options,
+                cancellationToken);
+        return nestedDownloadWhenEnqueued(enqueued, download);
     }
 
     /** Uploads a local file to a peer. */
@@ -3037,6 +3450,512 @@ public class SoulseekClient
         return acquirePermit(searchSemaphore, cancellationToken);
     }
 
+    private static void validateDownloadRange(Long size, long startOffset) {
+        if (size != null && size < 0) {
+            throw new IllegalArgumentException("size must be greater than or equal to zero");
+        }
+        if (startOffset < 0) {
+            throw new IllegalArgumentException("startOffset must be greater than or equal to zero");
+        }
+        if (startOffset > 0 && size == null) {
+            throw new NullPointerException("size must be specified when startOffset is non-zero");
+        }
+    }
+
+    private void validateDownloadUniqueness(String requestedUsername, String remoteFilename, int token) {
+        if (uploads.containsKey(token) || downloads.containsKey(token)) {
+            throw new DuplicateTokenException("The specified or generated token " + token + " is already in progress");
+        }
+        boolean duplicate = downloads.values().stream()
+                .anyMatch(download -> Objects.equals(download.getUsername(), requestedUsername)
+                        && Objects.equals(download.getFilename(), remoteFilename));
+        if (duplicate || uniqueKeys.containsKey(downloadUniqueKey(requestedUsername, remoteFilename))) {
+            throw new DuplicateTransferException("An active or queued download of "
+                    + remoteFilename + " from " + requestedUsername
+                    + " is already in progress");
+        }
+    }
+
+    private static String downloadUniqueKey(String requestedUsername, String remoteFilename) {
+        return "Download:" + requestedUsername + ":" + remoteFilename;
+    }
+
+    private static boolean isQueuedResponse(String message) {
+        int end = message.length();
+        while (end > 0 && message.charAt(end - 1) == '.') {
+            end--;
+        }
+        return message.substring(0, end).equalsIgnoreCase("Queued");
+    }
+
+    private static void completeDownloadEnqueue(CompletableFuture<Boolean> enqueued, TransferStates state) {
+        if (state.equals(TransferStates.QUEUED.or(TransferStates.REMOTELY))) {
+            enqueued.complete(true);
+        } else if (state.hasFlag(TransferStates.COMPLETED) && !state.hasFlag(TransferStates.SUCCEEDED)) {
+            enqueued.complete(false);
+        }
+    }
+
+    private static CompletableFuture<CompletableFuture<Transfer>> nestedDownloadWhenEnqueued(
+            CompletableFuture<Boolean> enqueued, CompletableFuture<Transfer> download) {
+        return enqueued.thenCompose(success -> {
+            if (success) {
+                return CompletableFuture.completedFuture(download);
+            }
+            return download.thenApply(ignored -> download);
+        });
+    }
+
+    private CompletableFuture<Transfer> downloadToStreamAsync(
+            String requestedUsername,
+            String remoteFilename,
+            DownloadStreamFactory outputStreamFactory,
+            Long size,
+            long startOffset,
+            int token,
+            TransferOptions transferOptions,
+            CancellationToken cancellationToken) {
+        TransferOptions operationOptions = transferOptions == null ? new TransferOptions() : transferOptions;
+        TransferInternal download = new TransferInternal(
+                TransferDirection.DOWNLOAD, requestedUsername, remoteFilename, token, operationOptions);
+        download.setStartOffset(startOffset);
+        download.setSize(size);
+        String uniqueKey = downloadUniqueKey(requestedUsername, remoteFilename);
+
+        if (uniqueKeys.putIfAbsent(uniqueKey, true) != null) {
+            return CompletableFuture.failedFuture(new DuplicateTransferException(
+                    "Duplicate download of " + remoteFilename + " from " + requestedUsername + " aborted"));
+        }
+        if (downloads.putIfAbsent(token, download) != null) {
+            uniqueKeys.remove(uniqueKey);
+            return CompletableFuture.failedFuture(new DuplicateTransferException(
+                    "Duplicate download of " + remoteFilename + " from " + requestedUsername + " aborted"));
+        }
+
+        DownloadOperation operation =
+                new DownloadOperation(download, outputStreamFactory, operationOptions, cancellationToken, uniqueKey);
+        return CompletableFuture.supplyAsync(operation::execute);
+    }
+
+    private final class DownloadOperation {
+        private final TransferInternal download;
+        private final DownloadStreamFactory outputStreamFactory;
+        private final TransferOptions transferOptions;
+        private final CancellationToken cancellationToken;
+        private final String uniqueKey;
+        private final AtomicBoolean globalPermit = new AtomicBoolean();
+        private final CompletableFuture<Void> disconnected = new CompletableFuture<>();
+        private final WaitKey transferStartRequestedWaitKey;
+        private TransferStates lastState = TransferStates.NONE;
+        private InetSocketAddress endpoint;
+        private IConnection connection;
+        private OutputStream outputStream;
+        private PositionTrackingOutputStream trackingStream;
+        private ConnectionEventListener<ConnectionDataEventArgs> dataReadListener;
+        private ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedListener;
+
+        private DownloadOperation(
+                TransferInternal download,
+                DownloadStreamFactory outputStreamFactory,
+                TransferOptions transferOptions,
+                CancellationToken cancellationToken,
+                String uniqueKey) {
+            this.download = download;
+            this.outputStreamFactory = outputStreamFactory;
+            this.transferOptions = transferOptions;
+            this.cancellationToken = cancellationToken;
+            this.uniqueKey = uniqueKey;
+            transferStartRequestedWaitKey =
+                    new WaitKey(MessageCode.Peer.TRANSFER_REQUEST, download.getUsername(), download.getFilename());
+        }
+
+        private Transfer execute() {
+            try {
+                updateState(TransferStates.QUEUED.or(TransferStates.LOCALLY));
+                await(acquirePermit(globalDownloadSemaphore, cancellationToken));
+                globalPermit.set(true);
+
+                endpoint = await(getUserEndPointAsync(download.getUsername(), cancellationToken));
+                IMessageConnection peerConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
+                        download.getUsername(), endpoint, cancellationToken));
+
+                CompletableFuture<TransferResponse> transferRequestAcknowledged = waiter.waitAsync(
+                        new WaitKey(MessageCode.Peer.TRANSFER_RESPONSE, download.getUsername(), download.getToken()),
+                        TransferResponse.class,
+                        options.getPeerConnectionOptions().getInactivityTimeout(),
+                        cancellationToken);
+                CompletableFuture<TransferRequest> transferStartRequested = waiter.waitIndefinitelyAsync(
+                        transferStartRequestedWaitKey, TransferRequest.class, cancellationToken);
+
+                await(invokeMessageWrite(
+                        peerConnection,
+                        new TransferRequest(TransferDirection.DOWNLOAD, download.getToken(), download.getFilename()),
+                        cancellationToken));
+                updateState(TransferStates.REQUESTED);
+
+                TransferResponse acknowledgement = await(transferRequestAcknowledged);
+                if (acknowledgement.isAllowed()) {
+                    peerConnection = beginImmediateDownload(acknowledgement, peerConnection);
+                } else if (!isQueuedResponse(acknowledgement.getMessage())) {
+                    throw new TransferRejectedException("Transfer rejected: " + acknowledgement.getMessage());
+                } else {
+                    peerConnection = beginQueuedDownload(transferStartRequested, peerConnection);
+                }
+
+                bindConnectionEvents();
+                outputStream =
+                        Objects.requireNonNull(await(outputStreamFactory.openAsync()), "outputStreamFactory result");
+                positionOutputStream();
+                trackingStream = new PositionTrackingOutputStream(
+                        outputStream,
+                        determineOutputPosition(
+                                outputStream,
+                                transferOptions.isSeekOutputStreamAutomatically() ? download.getStartOffset() : 0));
+                readTransfer();
+
+                updateProgress(currentOutputPosition());
+                updateState(TransferStates.COMPLETED.or(TransferStates.SUCCEEDED));
+                connection.disconnect("Transfer complete");
+                return download.toTransfer();
+            } catch (Throwable failure) {
+                Throwable cause = unwrap(failure);
+                handleFailure(cause);
+                throw new CompletionException(mapDownloadFailure(cause));
+            } finally {
+                cleanup();
+            }
+        }
+
+        private IMessageConnection beginImmediateDownload(
+                TransferResponse acknowledgement, IMessageConnection peerConnection) {
+            validateRemoteSize(acknowledgement.getFileSize());
+            updateState(TransferStates.QUEUED.or(TransferStates.REMOTELY));
+            if (download.getSize() == null) {
+                download.setSize(acknowledgement.getFileSize());
+            }
+            updateState(TransferStates.INITIALIZING);
+            connection = await(peerConnectionManager.getTransferConnectionAsync(
+                    download.getUsername(), endpoint, acknowledgement.getToken(), cancellationToken));
+            download.setConnection(connection);
+            return peerConnection;
+        }
+
+        private IMessageConnection beginQueuedDownload(
+                CompletableFuture<TransferRequest> transferStartRequested, IMessageConnection peerConnection) {
+            updateState(TransferStates.QUEUED.or(TransferStates.REMOTELY));
+            TransferRequest request = await(transferStartRequested);
+            validateRemoteSize(request.getFileSize());
+            if (download.getSize() == null) {
+                download.setSize(request.getFileSize());
+            }
+            download.setRemoteToken(request.getToken());
+            updateState(TransferStates.INITIALIZING);
+
+            IMessageConnection refreshed = await(peerConnectionManager.getOrAddMessageConnectionAsync(
+                    download.getUsername(), endpoint, cancellationToken));
+            CompletableFuture<IConnection> connectionTask = peerConnectionManager.awaitTransferConnectionAsync(
+                    download.getUsername(), download.getFilename(), download.getRemoteToken(), cancellationToken);
+            await(invokeMessageWrite(
+                    refreshed,
+                    new TransferResponse(
+                            download.getRemoteToken(), download.getSize() == null ? 0 : download.getSize()),
+                    cancellationToken));
+            try {
+                connection = await(connectionTask);
+            } catch (Throwable failure) {
+                Throwable cause = unwrap(failure);
+                if (!(cause instanceof ConnectionException)) {
+                    throw failure;
+                }
+                connection = await(peerConnectionManager.getTransferConnectionAsync(
+                        download.getUsername(), endpoint, download.getRemoteToken(), cancellationToken));
+            }
+            download.setConnection(connection);
+            return refreshed;
+        }
+
+        private void validateRemoteSize(long remoteSize) {
+            if (download.getSize() != null && download.getSize() != remoteSize) {
+                throw new TransferSizeMismatchException(
+                        "Transfer aborted: the remote size of "
+                                + remoteSize
+                                + " does not match expected size "
+                                + download.getSize(),
+                        download.getSize(),
+                        remoteSize);
+            }
+        }
+
+        private void bindConnectionEvents() {
+            dataReadListener =
+                    (sender, eventArgs) -> updateProgress(download.getStartOffset() + eventArgs.getCurrentLength());
+            disconnectedListener = (sender, eventArgs) -> {
+                Throwable failure = eventArgs.getException();
+                if (failure instanceof CancellationException || failure instanceof TimeoutException) {
+                    disconnected.completeExceptionally(failure);
+                } else {
+                    disconnected.completeExceptionally(
+                            new ConnectionException("Transfer failed: " + eventArgs.getMessage(), failure));
+                }
+            };
+            connection.addDataReadListener(dataReadListener);
+            connection.addDisconnectedListener(disconnectedListener);
+        }
+
+        private void positionOutputStream() {
+            if (download.getStartOffset() <= 0 || !transferOptions.isSeekOutputStreamAutomatically()) {
+                return;
+            }
+            try {
+                seekOutputStream(outputStream, download.getStartOffset());
+            } catch (IOException failure) {
+                throw new TransferStreamException(
+                        "Requested non-zero start offset but output " + "stream does not support seeking", failure);
+            }
+        }
+
+        private void readTransfer() {
+            try (CancellationTokenSource linkedSource = new CancellationTokenSource();
+                    CancellationRegistration registration = cancellationToken.register(linkedSource::cancel)) {
+                CancellationToken linkedToken = linkedSource.getToken();
+                byte[] offset = ByteBuffer.allocate(8)
+                        .order(ByteOrder.LITTLE_ENDIAN)
+                        .putLong(download.getStartOffset())
+                        .array();
+                await(connection.writeAsync(offset, linkedToken));
+                updateState(TransferStates.IN_PROGRESS);
+                updateProgress(download.getStartOffset());
+
+                CompletableFuture<Void> read = connection.readAsync(
+                        download.getSize() - download.getStartOffset(),
+                        trackingStream,
+                        (requestedBytes, governorToken) -> transferOptions
+                                .getGovernor()
+                                .grantAsync(download.toTransfer(), requestedBytes, governorToken)
+                                .thenCompose(granted ->
+                                        downloadTokenBucket.getAsync(Math.min(requestedBytes, granted), governorToken)),
+                        (attemptedBytes, grantedBytes, transferredBytes) -> {
+                            if (transferOptions.getReporter() != null) {
+                                transferOptions
+                                        .getReporter()
+                                        .report(download.toTransfer(), attemptedBytes, grantedBytes, transferredBytes);
+                            }
+                            downloadTokenBucket.returnTokens(grantedBytes - transferredBytes);
+                        },
+                        linkedToken);
+
+                CompletableFuture<Integer> readRace = read.handle((ignored, failure) -> 0);
+                CompletableFuture<Integer> disconnectRace = disconnected.handle((ignored, failure) -> 1);
+                CompletableFuture<Integer> remoteRace =
+                        download.getRemoteTaskCompletionSource().handle((ignored, failure) -> 2);
+                int winner = await(CompletableFuture.anyOf(readRace, disconnectRace, remoteRace)
+                        .thenApply(value -> (Integer) value));
+                linkedSource.cancel();
+                if (winner == 2) {
+                    await(download.getRemoteTaskCompletionSource());
+                } else if (winner == 1) {
+                    await(disconnected);
+                }
+                await(read);
+            }
+        }
+
+        private void handleFailure(Throwable failure) {
+            if (failure instanceof TransferRejectedException) {
+                download.setException(failure);
+                updateState(TransferStates.COMPLETED.or(TransferStates.REJECTED));
+                return;
+            }
+            if (failure instanceof TransferSizeMismatchException) {
+                download.setException(failure);
+                updateState(TransferStates.COMPLETED.or(TransferStates.ABORTED));
+                return;
+            }
+            if (failure instanceof CancellationException) {
+                disconnectTransfer("Transfer cancelled", failure);
+                download.setException(failure);
+                updateProgress(currentOutputPosition());
+                updateState(TransferStates.COMPLETED.or(TransferStates.CANCELLED));
+                return;
+            }
+            if (failure instanceof TimeoutException) {
+                disconnectTransfer("Transfer timed out", failure);
+                download.setException(failure);
+                updateProgress(currentOutputPosition());
+                updateState(TransferStates.COMPLETED.or(TransferStates.TIMED_OUT));
+                return;
+            }
+            disconnectTransfer("Transfer error", failure);
+            download.setException(failure);
+            updateProgress(currentOutputPosition());
+            updateState(TransferStates.COMPLETED.or(TransferStates.ERRORED));
+        }
+
+        private Throwable mapDownloadFailure(Throwable failure) {
+            if (failure instanceof TransferRejectedException
+                    || failure instanceof TransferSizeMismatchException
+                    || failure instanceof CancellationException
+                    || failure instanceof TimeoutException
+                    || failure instanceof UserOfflineException) {
+                return failure;
+            }
+            return new SoulseekClientException(
+                    "Failed to download file "
+                            + download.getFilename()
+                            + " from user " + download.getUsername()
+                            + ": " + failureMessage(failure),
+                    failure);
+        }
+
+        private void disconnectTransfer(String message, Throwable failure) {
+            if (connection != null) {
+                connection.disconnect(
+                        message, failure instanceof Exception exception ? exception : new RuntimeException(failure));
+            }
+        }
+
+        private void cleanup() {
+            try {
+                try {
+                    waiter.cancel(transferStartRequestedWaitKey);
+                } catch (Throwable failure) {
+                    diagnostic.warning(
+                            "Failed to cancel wait for key "
+                                    + transferStartRequestedWaitKey
+                                    + ": " + failureMessage(failure),
+                            failure);
+                }
+                try {
+                    unbindConnectionEvents();
+                } catch (Throwable failure) {
+                    diagnostic.warning(
+                            "Failed to remove transfer connection "
+                                    + "listeners for file "
+                                    + download.getFilename() + " from user "
+                                    + download.getUsername() + ": "
+                                    + failureMessage(failure),
+                            failure);
+                }
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    } catch (Throwable failure) {
+                        diagnostic.warning(
+                                "Failed to dispose transfer connection "
+                                        + "for file "
+                                        + download.getFilename()
+                                        + " from user "
+                                        + download.getUsername() + ": "
+                                        + failureMessage(failure),
+                                failure);
+                    }
+                }
+                determineFinalOutputPosition();
+                if (transferOptions.isDisposeOutputStreamOnCompletion() && outputStream != null) {
+                    try {
+                        try {
+                            outputStream.flush();
+                        } finally {
+                            outputStream.close();
+                        }
+                    } catch (Throwable failure) {
+                        diagnostic.warning(
+                                "Failed to finalize output stream for "
+                                        + "file "
+                                        + filenameOnly(download.getFilename())
+                                        + " from "
+                                        + download.getUsername() + ": "
+                                        + failureMessage(failure),
+                                failure);
+                    }
+                }
+            } finally {
+                if (globalPermit.compareAndSet(true, false)) {
+                    try {
+                        globalDownloadSemaphore.release();
+                    } catch (Throwable failure) {
+                        diagnostic.warning(
+                                "Failed to release global download "
+                                        + "semaphore for file "
+                                        + filenameOnly(download.getFilename())
+                                        + " from "
+                                        + download.getUsername() + ": "
+                                        + failureMessage(failure),
+                                failure);
+                    }
+                }
+                downloads.remove(download.getToken(), download);
+                uniqueKeys.remove(uniqueKey);
+            }
+        }
+
+        private void unbindConnectionEvents() {
+            if (connection == null) {
+                return;
+            }
+            if (dataReadListener != null) {
+                connection.removeDataReadListener(dataReadListener);
+            }
+            if (disconnectedListener != null) {
+                connection.removeDisconnectedListener(disconnectedListener);
+            }
+        }
+
+        private void updateState(TransferStates state) {
+            download.setState(state);
+            Transfer transfer = download.toTransfer();
+            TransferStateChangedEventArgs eventArgs = new TransferStateChangedEventArgs(lastState, transfer);
+            TransferStates previous = lastState;
+            lastState = state;
+            if (transferOptions.getStateChanged() != null) {
+                transferOptions.getStateChanged().onStateChanged(new TransferStateChange(previous, transfer));
+            }
+            raise(Event.TRANSFER_STATE_CHANGED, eventArgs);
+        }
+
+        private void updateProgress(long bytesDownloaded) {
+            long previous = download.getBytesTransferred();
+            download.updateProgress(bytesDownloaded);
+            Transfer transfer = download.toTransfer();
+            if (transferOptions.getProgressUpdated() != null) {
+                transferOptions.getProgressUpdated().onProgressUpdated(new TransferProgressUpdate(previous, transfer));
+            }
+            raise(Event.TRANSFER_PROGRESS_UPDATED, new TransferProgressUpdatedEventArgs(previous, transfer));
+        }
+
+        private long currentOutputPosition() {
+            if (trackingStream != null) {
+                return trackingStream.getPosition();
+            }
+            if (outputStream != null) {
+                try {
+                    return determineOutputPosition(outputStream, 0);
+                } catch (Throwable ignored) {
+                    return 0;
+                }
+            }
+            return 0;
+        }
+
+        private long determineFinalOutputPosition() {
+            if (outputStream == null) {
+                return 0;
+            }
+            try {
+                return determineOutputPosition(outputStream, trackingStream == null ? 0 : trackingStream.getPosition());
+            } catch (Throwable failure) {
+                diagnostic.warning(
+                        "Failed to determine final position of output "
+                                + "stream for file "
+                                + filenameOnly(download.getFilename())
+                                + " from " + download.getUsername() + ": "
+                                + failureMessage(failure),
+                        failure);
+                return 0;
+            }
+        }
+    }
+
     private void validateUploadUniqueness(String requestedUsername, String remoteFilename, int token) {
         if (uploads.containsKey(token) || downloads.containsKey(token)) {
             throw new DuplicateTokenException("The specified or generated token " + token + " is already in progress");
@@ -3549,6 +4468,28 @@ public class SoulseekClient
         return fallback;
     }
 
+    private static void seekOutputStream(OutputStream stream, long position) throws IOException {
+        if (stream instanceof PositionableOutputStream positionable) {
+            positionable.setPosition(position);
+            return;
+        }
+        if (stream instanceof FileOutputStream fileOutputStream) {
+            fileOutputStream.getChannel().position(position);
+            return;
+        }
+        throw new IOException("Output stream is not seekable");
+    }
+
+    private static long determineOutputPosition(OutputStream stream, long fallback) throws IOException {
+        if (stream instanceof PositionableOutputStream positionable) {
+            return positionable.getPosition();
+        }
+        if (stream instanceof FileOutputStream fileOutputStream) {
+            return fileOutputStream.getChannel().position();
+        }
+        return fallback;
+    }
+
     private static String filenameOnly(String filename) {
         try {
             Path path = Path.of(filename);
@@ -3602,6 +4543,31 @@ public class SoulseekClient
             long skipped = super.skip(count);
             position += skipped;
             return skipped;
+        }
+    }
+
+    private static final class PositionTrackingOutputStream extends FilterOutputStream {
+        private long position;
+
+        private PositionTrackingOutputStream(OutputStream outputStream, long initialPosition) {
+            super(outputStream);
+            position = initialPosition;
+        }
+
+        private long getPosition() {
+            return position;
+        }
+
+        @Override
+        public void write(int value) throws IOException {
+            out.write(value);
+            position++;
+        }
+
+        @Override
+        public void write(byte[] bytes, int offset, int length) throws IOException {
+            out.write(bytes, offset, length);
+            position += length;
         }
     }
 
