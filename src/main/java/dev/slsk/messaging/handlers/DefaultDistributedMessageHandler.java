@@ -6,7 +6,7 @@ package dev.slsk.messaging.handlers;
 
 import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
-import dev.slsk.diagnostics.DiagnosticEventArgs;
+import dev.slsk.diagnostics.DiagnosticEvent;
 import dev.slsk.diagnostics.DiagnosticEventListener;
 import dev.slsk.diagnostics.DiagnosticSink;
 import dev.slsk.diagnostics.FilteringDiagnosticSink;
@@ -282,7 +282,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                 client.getDistributedConnectionManager().getParent());
     }
 
-    private void raiseDiagnostic(DiagnosticEventArgs eventArgs) {
+    private void raiseDiagnostic(DiagnosticEvent eventArgs) {
         diagnosticListeners.forEach(listener -> listener.handle(this, eventArgs));
     }
 

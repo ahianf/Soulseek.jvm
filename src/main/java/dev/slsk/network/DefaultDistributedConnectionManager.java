@@ -12,7 +12,7 @@ import dev.slsk.DistributedPeer;
 import dev.slsk.SoulseekClientStates;
 import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
-import dev.slsk.diagnostics.DiagnosticEventArgs;
+import dev.slsk.diagnostics.DiagnosticEvent;
 import dev.slsk.diagnostics.DiagnosticEventListener;
 import dev.slsk.diagnostics.DiagnosticSink;
 import dev.slsk.diagnostics.FilteringDiagnosticSink;
@@ -1117,7 +1117,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         stateChangedListeners.forEach(listener -> listener.handle(this, info));
     }
 
-    private void raiseDiagnostic(DiagnosticEventArgs eventArgs) {
+    private void raiseDiagnostic(DiagnosticEvent eventArgs) {
         diagnosticListeners.forEach(listener -> listener.handle(this, eventArgs));
     }
 

@@ -15,14 +15,14 @@ import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class DiagnosticEventArgsTest {
+class DiagnosticEventTest {
     @Test
-    @DisplayName("DiagnosticEventArgs instantiates with the given data")
+    @DisplayName("DiagnosticEvent instantiates with the given data")
     void instantiatesWithTheGivenData() {
         Instant before = Instant.now();
         RuntimeException exception = new RuntimeException("failure");
 
-        DiagnosticEventArgs args = new DiagnosticEventArgs(DiagnosticLevel.WARNING, "message", exception);
+        DiagnosticEvent args = new DiagnosticEvent(DiagnosticLevel.WARNING, "message", exception);
 
         assertEquals(DiagnosticLevel.WARNING, args.getLevel());
         assertEquals("message", args.getMessage());
@@ -33,9 +33,9 @@ class DiagnosticEventArgsTest {
     }
 
     @Test
-    @DisplayName("DiagnosticEventArgs instantiates with null Exception given null")
+    @DisplayName("DiagnosticEvent instantiates with null Exception given null")
     void instantiatesWithNullExceptionGivenNull() {
-        DiagnosticEventArgs args = new DiagnosticEventArgs(DiagnosticLevel.INFO, null);
+        DiagnosticEvent args = new DiagnosticEvent(DiagnosticLevel.INFO, null);
 
         assertEquals(DiagnosticLevel.INFO, args.getLevel());
         assertNull(args.getMessage());
@@ -46,6 +46,6 @@ class DiagnosticEventArgsTest {
     @Test
     @DisplayName("Rejects null level because the C# enum is non-nullable")
     void rejectsNullLevel() {
-        assertThrows(NullPointerException.class, () -> new DiagnosticEventArgs(null, "message"));
+        assertThrows(NullPointerException.class, () -> new DiagnosticEvent(null, "message"));
     }
 }

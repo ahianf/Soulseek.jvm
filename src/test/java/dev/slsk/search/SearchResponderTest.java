@@ -17,7 +17,7 @@ import dev.slsk.File;
 import dev.slsk.SearchResponse;
 import dev.slsk.SearchResponseCache;
 import dev.slsk.SearchResponseCacheRecord;
-import dev.slsk.diagnostics.DiagnosticEventArgs;
+import dev.slsk.diagnostics.DiagnosticEvent;
 import dev.slsk.diagnostics.DiagnosticEventListener;
 import dev.slsk.diagnostics.DiagnosticLevel;
 import dev.slsk.diagnostics.DiagnosticSink;
@@ -58,7 +58,7 @@ class SearchResponderTest {
     void defaultDiagnosticRaisesTypedEventsAndAllowsNoListeners() {
         Fixture fixture = fixture(null, null);
         DefaultSearchResponder responder = new DefaultSearchResponder(fixture.client);
-        AtomicReference<DiagnosticEventArgs> event = new AtomicReference<>();
+        AtomicReference<DiagnosticEvent> event = new AtomicReference<>();
         DiagnosticEventListener listener = (sender, args) -> event.set(args);
         responder.addDiagnosticGeneratedListener(listener);
         responder.getDiagnostic().info("test");

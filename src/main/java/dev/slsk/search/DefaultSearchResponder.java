@@ -11,7 +11,7 @@ import dev.slsk.SearchQuery;
 import dev.slsk.SearchResponse;
 import dev.slsk.SearchResponseCache;
 import dev.slsk.SearchResponseCacheRecord;
-import dev.slsk.diagnostics.DiagnosticEventArgs;
+import dev.slsk.diagnostics.DiagnosticEvent;
 import dev.slsk.diagnostics.DiagnosticEventListener;
 import dev.slsk.diagnostics.DiagnosticSink;
 import dev.slsk.diagnostics.FilteringDiagnosticSink;
@@ -312,7 +312,7 @@ public final class DefaultSearchResponder implements SearchResponder {
                 failure);
     }
 
-    private void raiseDiagnostic(DiagnosticEventArgs args) {
+    private void raiseDiagnostic(DiagnosticEvent args) {
         diagnosticListeners.forEach(listener -> listener.handle(this, args));
     }
 

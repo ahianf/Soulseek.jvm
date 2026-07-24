@@ -14,7 +14,7 @@ import dev.slsk.TransferDirection;
 import dev.slsk.UserInfo;
 import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
-import dev.slsk.diagnostics.DiagnosticEventArgs;
+import dev.slsk.diagnostics.DiagnosticEvent;
 import dev.slsk.diagnostics.DiagnosticEventListener;
 import dev.slsk.diagnostics.DiagnosticSink;
 import dev.slsk.diagnostics.FilteringDiagnosticSink;
@@ -502,7 +502,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                         place == null ? completed() : connection.writeAsync(new PlaceInQueueResponse(filename, place)));
     }
 
-    private void raiseDiagnostic(DiagnosticEventArgs eventArgs) {
+    private void raiseDiagnostic(DiagnosticEvent eventArgs) {
         diagnosticListeners.forEach(listener -> listener.handle(this, eventArgs));
     }
 

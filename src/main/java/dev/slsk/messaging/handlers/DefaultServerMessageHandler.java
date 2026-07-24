@@ -14,7 +14,7 @@ import dev.slsk.UserStatistics;
 import dev.slsk.UserStatus;
 import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
-import dev.slsk.diagnostics.DiagnosticEventArgs;
+import dev.slsk.diagnostics.DiagnosticEvent;
 import dev.slsk.diagnostics.DiagnosticEventListener;
 import dev.slsk.diagnostics.DiagnosticSink;
 import dev.slsk.diagnostics.FilteringDiagnosticSink;
@@ -585,7 +585,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         }
     }
 
-    private void raiseDiagnostic(DiagnosticEventArgs eventArgs) {
+    private void raiseDiagnostic(DiagnosticEvent eventArgs) {
         diagnosticListeners.forEach(listener -> listener.handle(this, eventArgs));
     }
 

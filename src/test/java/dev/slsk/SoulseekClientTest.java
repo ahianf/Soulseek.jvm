@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.common.TokenBucket;
 import dev.slsk.common.TokenFactory;
 import dev.slsk.common.Waiter;
-import dev.slsk.diagnostics.DiagnosticEventArgs;
+import dev.slsk.diagnostics.DiagnosticEvent;
 import dev.slsk.diagnostics.DiagnosticEventListener;
 import dev.slsk.events.DistributedChildEvent;
 import dev.slsk.events.DownloadDeniedEvent;
@@ -209,13 +209,13 @@ class SoulseekClientTest {
     void subsystemEventsForwardSenderPayloadAndListenerRemoval() {
         Fixture fixture = new Fixture();
         AtomicReference<Object> diagnosticSender = new AtomicReference<>();
-        AtomicReference<DiagnosticEventArgs> diagnostic = new AtomicReference<>();
+        AtomicReference<DiagnosticEvent> diagnostic = new AtomicReference<>();
         DiagnosticEventListener diagnosticListener = (sender, value) -> {
             diagnosticSender.set(sender);
             diagnostic.set(value);
         };
         fixture.client.addDiagnosticGeneratedListener(diagnosticListener);
-        DiagnosticEventArgs expected = new DiagnosticEventArgs(dev.slsk.diagnostics.DiagnosticLevel.INFO, "message");
+        DiagnosticEvent expected = new DiagnosticEvent(dev.slsk.diagnostics.DiagnosticLevel.INFO, "message");
         fixture.search.raiseDiagnostic(expected);
         assertSame(fixture.search.proxy, diagnosticSender.get());
         assertSame(expected, diagnostic.get());
@@ -478,7 +478,7 @@ class SoulseekClientTest {
             return defaultValue(method.getReturnType());
         }
 
-        private void raiseDiagnostic(DiagnosticEventArgs eventArgs) {
+        private void raiseDiagnostic(DiagnosticEvent eventArgs) {
             diagnostic.handle(proxy, eventArgs);
         }
     }

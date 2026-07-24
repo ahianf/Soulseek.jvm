@@ -8,9 +8,9 @@ import java.time.Instant;
 import java.util.Objects;
 
 /**
- * Event arguments for a diagnostic message.
+ * Event payload for a diagnostic message.
  */
-public class DiagnosticEventArgs {
+public class DiagnosticEvent {
     private final Throwable exception;
     private final boolean includesException;
     private final DiagnosticLevel level;
@@ -23,7 +23,7 @@ public class DiagnosticEventArgs {
      * @param level the diagnostic level
      * @param message the diagnostic message
      */
-    public DiagnosticEventArgs(DiagnosticLevel level, String message) {
+    public DiagnosticEvent(DiagnosticLevel level, String message) {
         this(level, message, null);
     }
 
@@ -34,7 +34,7 @@ public class DiagnosticEventArgs {
      * @param message the diagnostic message
      * @param exception the associated exception
      */
-    public DiagnosticEventArgs(DiagnosticLevel level, String message, Throwable exception) {
+    public DiagnosticEvent(DiagnosticLevel level, String message, Throwable exception) {
         this.level = Objects.requireNonNull(level, "level");
         this.message = message;
         this.exception = exception;

@@ -24,7 +24,7 @@ class FilteringDiagnosticSinkTest {
     @Test
     @DisplayName("Diagnostic factory retains constructor data")
     void constructs() {
-        Consumer<DiagnosticEventArgs> handler = ignored -> {};
+        Consumer<DiagnosticEvent> handler = ignored -> {};
         FilteringDiagnosticSink factory = new FilteringDiagnosticSink(DiagnosticLevel.DEBUG, handler);
 
         assertEquals(DiagnosticLevel.DEBUG, factory.getMinimumLevel());
@@ -34,7 +34,7 @@ class FilteringDiagnosticSinkTest {
     @Test
     @DisplayName("Every diagnostic method preserves level and exception")
     void raisesEveryMessageForm() {
-        List<DiagnosticEventArgs> events = new ArrayList<>();
+        List<DiagnosticEvent> events = new ArrayList<>();
         FilteringDiagnosticSink factory = new FilteringDiagnosticSink(DiagnosticLevel.TRACE, events::add);
         RuntimeException exception = new RuntimeException("broken");
 
@@ -60,7 +60,7 @@ class FilteringDiagnosticSinkTest {
     @MethodSource("filterCases")
     @DisplayName("Minimum level filters source ordering")
     void filtersByMinimumLevel(DiagnosticLevel minimum, int count) {
-        List<DiagnosticEventArgs> events = new ArrayList<>();
+        List<DiagnosticEvent> events = new ArrayList<>();
         FilteringDiagnosticSink factory = new FilteringDiagnosticSink(minimum, events::add);
 
         factory.trace("message");
@@ -81,8 +81,7 @@ class FilteringDiagnosticSinkTest {
                 Arguments.of(DiagnosticLevel.TRACE, 4));
     }
 
-    private static void assertEvent(
-            DiagnosticEventArgs event, DiagnosticLevel level, String message, Throwable exception) {
+    private static void assertEvent(DiagnosticEvent event, DiagnosticLevel level, String message, Throwable exception) {
         assertEquals(level, event.getLevel());
         assertEquals(message, event.getMessage());
         assertSame(exception, event.getException());

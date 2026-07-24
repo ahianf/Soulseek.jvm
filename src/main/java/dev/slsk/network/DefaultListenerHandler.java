@@ -8,7 +8,7 @@ import dev.slsk.CacheLookupResult;
 import dev.slsk.SearchResponseCacheRecord;
 import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
-import dev.slsk.diagnostics.DiagnosticEventArgs;
+import dev.slsk.diagnostics.DiagnosticEvent;
 import dev.slsk.diagnostics.DiagnosticEventListener;
 import dev.slsk.diagnostics.DiagnosticSink;
 import dev.slsk.diagnostics.FilteringDiagnosticSink;
@@ -213,7 +213,7 @@ public final class DefaultListenerHandler implements ListenerHandler {
                         + " (id: " + connection.getId() + ")"));
     }
 
-    private void raiseDiagnostic(DiagnosticEventArgs args) {
+    private void raiseDiagnostic(DiagnosticEvent args) {
         diagnosticListeners.forEach(listener -> listener.handle(this, args));
     }
 

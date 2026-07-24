@@ -16,7 +16,7 @@ class GlobalDiagnosticTest {
     @Test
     @DisplayName("Global diagnostic delegates every overload and tolerates null")
     void delegatesAndClears() {
-        List<DiagnosticEventArgs> events = new ArrayList<>();
+        List<DiagnosticEvent> events = new ArrayList<>();
         RuntimeException exception = new RuntimeException("broken");
         GlobalDiagnostic.init(new FilteringDiagnosticSink(DiagnosticLevel.TRACE, events::add));
         try {

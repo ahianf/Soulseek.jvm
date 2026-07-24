@@ -19,7 +19,7 @@ import dev.slsk.common.Constants;
 import dev.slsk.common.DefaultWaiter;
 import dev.slsk.common.WaitKey;
 import dev.slsk.common.Waiter;
-import dev.slsk.diagnostics.DiagnosticEventArgs;
+import dev.slsk.diagnostics.DiagnosticEvent;
 import dev.slsk.diagnostics.DiagnosticLevel;
 import dev.slsk.diagnostics.DiagnosticSink;
 import dev.slsk.messaging.messages.PeerInit;
@@ -48,7 +48,7 @@ class ListenerHandlerTest {
         assertThrows(NullPointerException.class, () -> new DefaultListenerHandler(null));
         try (Fixture fixture = fixture(null)) {
             DefaultListenerHandler handler = new DefaultListenerHandler(fixture.client);
-            AtomicReference<DiagnosticEventArgs> event = new AtomicReference<>();
+            AtomicReference<DiagnosticEvent> event = new AtomicReference<>();
             handler.addDiagnosticGeneratedListener((sender, args) -> event.set(args));
             handler.getDiagnostic().info("test");
             assertEquals("test", event.get().getMessage());

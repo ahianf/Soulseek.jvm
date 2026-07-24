@@ -8,11 +8,11 @@ import java.util.function.Consumer;
 
 /** Creates filtered diagnostic messages. */
 public final class FilteringDiagnosticSink implements DiagnosticSink {
-    private final Consumer<DiagnosticEventArgs> eventHandler;
+    private final Consumer<DiagnosticEvent> eventHandler;
     private final DiagnosticLevel minimumLevel;
 
     /** Creates a diagnostic factory. */
-    public FilteringDiagnosticSink(DiagnosticLevel minimumLevel, Consumer<DiagnosticEventArgs> eventHandler) {
+    public FilteringDiagnosticSink(DiagnosticLevel minimumLevel, Consumer<DiagnosticEvent> eventHandler) {
         this.minimumLevel = minimumLevel;
         this.eventHandler = eventHandler;
     }
@@ -56,13 +56,13 @@ public final class FilteringDiagnosticSink implements DiagnosticSink {
         return minimumLevel;
     }
 
-    Consumer<DiagnosticEventArgs> getEventHandler() {
+    Consumer<DiagnosticEvent> getEventHandler() {
         return eventHandler;
     }
 
     private void raiseEvent(DiagnosticLevel level, String message, Throwable exception) {
         if (level.getValue() <= minimumLevel.getValue()) {
-            eventHandler.accept(new DiagnosticEventArgs(level, message, exception));
+            eventHandler.accept(new DiagnosticEvent(level, message, exception));
         }
     }
 }

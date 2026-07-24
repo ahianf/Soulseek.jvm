@@ -8,8 +8,8 @@ import dev.slsk.SoulseekClientEventListener;
 
 /** Handles an internally generated diagnostic message. */
 @FunctionalInterface
-public interface DiagnosticEventListener extends SoulseekClientEventListener<DiagnosticEventArgs> {
+public interface DiagnosticEventListener extends SoulseekClientEventListener<DiagnosticEvent> {
     /** Handles diagnostic event data. */
     @Override
-    void handle(Object sender, DiagnosticEventArgs eventArgs);
+    void handle(Object sender, DiagnosticEvent eventArgs);
 }
