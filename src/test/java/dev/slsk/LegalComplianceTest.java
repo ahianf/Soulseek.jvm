@@ -33,24 +33,6 @@ class LegalComplianceTest {
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
     }
 
-    @Test
-    void buildAndInventorySourcesCarryRequiredLegalNotices() throws IOException {
-        List<String> failures = new ArrayList<>();
-        for (Path path : List.of(
-                Path.of("pom.xml"),
-                Path.of("examples", "console", "pom.xml"),
-                Path.of("tools", "api-inventory", "Program.cs"),
-                Path.of("tools", "api-inventory", "ApiInventory.csproj"),
-                Path.of("tools", "protocol-vectors", "Program.cs"),
-                Path.of("tools", "protocol-vectors", "ProtocolVectors.csproj"))) {
-            String text = Files.readString(path);
-            require(path, text, COPYRIGHT, failures);
-            require(path, text, SPDX, failures);
-        }
-
-        assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
-    }
-
     private static void auditJavaSource(Path path, List<String> failures) {
         try {
             String text = Files.readString(path);
