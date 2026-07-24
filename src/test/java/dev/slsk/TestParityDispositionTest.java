@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -23,6 +24,8 @@ class TestParityDispositionTest {
     private static final Pattern XUNIT_DECLARATION = Pattern.compile("^\\s*\\[(?:Fact|Theory)\\b", Pattern.MULTILINE);
     private static final Pattern XUNIT_DATA =
             Pattern.compile("^\\s*\\[(?:InlineData|MemberData|ClassData)\\b", Pattern.MULTILINE);
+    private static final Pattern XUNIT_DISPLAY_NAME = Pattern.compile("\\[Fact\\(DisplayName = \"([^\"]+)\"\\)\\]");
+    private static final Pattern JUNIT_DISPLAY_NAME = Pattern.compile("@DisplayName\\(\"([^\"]+)\"\\)");
 
     @Test
     void everyOriginalUnitTestClassHasAResolvableDisposition() throws IOException {
@@ -80,6 +83,34 @@ class TestParityDispositionTest {
         assertEquals(2_025, declarations);
         assertEquals(testBearingSources(csharpRoot), documentedSources);
         assertEquals(306, dataDeclarationCount(csharpRoot));
+    }
+
+    @Test
+    void everyOriginalIntegrationScenarioHasAnExactJavaDisplayName() throws IOException {
+        String csharp =
+                Files.readString(Path.of("..", "tests", "Soulseek.Tests.Integration", "SoulseekClientTests.cs"));
+        String java =
+                Files.readString(Path.of("src", "integrationTest", "java", "dev", "slsk", "SoulseekClientLiveIT.java"));
+
+        List<String> originalNames = XUNIT_DISPLAY_NAME
+                .matcher(csharp)
+                .results()
+                .map(result -> result.group(1))
+                .toList();
+        List<String> portedNames = JUNIT_DISPLAY_NAME
+                .matcher(java)
+                .results()
+                .map(result -> result.group(1))
+                .toList();
+
+        assertEquals(6, originalNames.size());
+        assertEquals(originalNames, portedNames);
+        assertEquals(
+                6,
+                Pattern.compile("^\\s*@Test\\s*$", Pattern.MULTILINE)
+                        .matcher(java)
+                        .results()
+                        .count());
     }
 
     private static Set<String> testBearingSources(Path root) throws IOException {

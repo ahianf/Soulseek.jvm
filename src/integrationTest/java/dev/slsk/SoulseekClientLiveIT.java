@@ -1,0 +1,143 @@
+// SPDX-FileCopyrightText: JP Dillingham
+// SPDX-FileCopyrightText: 2026 Ahian Fernandez
+// SPDX-License-Identifier: GPL-3.0-only
+
+package dev.slsk;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import dev.slsk.diagnostics.DiagnosticLevel;
+import dev.slsk.eventargs.SoulseekClientStateChangedEventArgs;
+import dev.slsk.options.SoulseekClientOptions;
+import java.util.ArrayList;
+import java.util.List;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+
+@Tag("integration")
+class SoulseekClientLiveIT {
+    @Test
+    @DisplayName("Client connects")
+    void clientConnects() {
+        LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
+        try (SoulseekClient client = new SoulseekClient(credentials.minorVersion())) {
+            assertDoesNotThrow(() -> client.connectAsync(credentials.username(), credentials.password())
+                    .join());
+            assertEquals(SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN), client.getState());
+        }
+    }
+
+    @Test
+    @DisplayName("Client connect raises StateChanged event")
+    void clientConnectRaisesStateChangedEvent() {
+        LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
+        try (SoulseekClient client = new SoulseekClient(credentials.minorVersion())) {
+            List<SoulseekClientStateChangedEventArgs> events = new ArrayList<>();
+            client.addStateChangedListener((sender, event) -> events.add(event));
+
+            assertDoesNotThrow(() -> client.connectAsync(credentials.username(), credentials.password())
+                    .join());
+
+            assertEquals(4, events.size());
+            assertEquals(SoulseekClientStates.CONNECTING, events.get(0).getState());
+            assertEquals(SoulseekClientStates.CONNECTED, events.get(1).getState());
+            assertEquals(
+                    SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGING_IN),
+                    events.get(2).getState());
+            assertEquals(
+                    SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN),
+                    events.get(3).getState());
+        }
+    }
+
+    @Test
+    @DisplayName("Client disconnects")
+    void clientDisconnects() {
+        LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
+        try (SoulseekClient client = new SoulseekClient(credentials.minorVersion())) {
+            client.connectAsync(credentials.username(), credentials.password()).join();
+
+            assertDoesNotThrow(() -> client.disconnect());
+            assertEquals(SoulseekClientStates.DISCONNECTED, client.getState());
+        }
+    }
+
+    @Test
+    @DisplayName("Client disconnect raises StateChanged event")
+    void clientDisconnectRaisesStateChangedEvent() {
+        LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
+        List<SoulseekClientStateChangedEventArgs> events = new ArrayList<>();
+        try (SoulseekClient client = new SoulseekClient(credentials.minorVersion())) {
+            client.connectAsync(credentials.username(), credentials.password()).join();
+            client.addStateChangedListener((sender, event) -> events.add(event));
+
+            assertDoesNotThrow(() -> client.disconnect());
+
+            assertEquals(SoulseekClientStates.DISCONNECTED, client.getState());
+            assertEquals(1, events.size());
+            assertEquals(SoulseekClientStates.DISCONNECTED, events.getFirst().getState());
+        }
+    }
+
+    @Test
+    @DisplayName("GetNextToken returns sequential tokens")
+    void getNextTokenReturnsSequentialTokens() {
+        try (SoulseekClient client = new SoulseekClient(101)) {
+            int first = client.getNextToken();
+            int second = client.getNextToken();
+
+            assertEquals(first + 1, second);
+        }
+    }
+
+    @Test
+    @DisplayName("GetNextToken rolls over at int.MaxValue")
+    void getNextTokenRollsOverAtIntMaxValue() {
+        SoulseekClientOptions options = optionsStartingAtMaximumToken();
+        try (SoulseekClient client = new SoulseekClient(101, options)) {
+            int first = client.getNextToken();
+            int second = client.getNextToken();
+
+            assertEquals(Integer.MAX_VALUE, first);
+            assertEquals(0, second);
+        }
+    }
+
+    private static SoulseekClientOptions optionsStartingAtMaximumToken() {
+        return new SoulseekClientOptions(
+                true,
+                null,
+                SoulseekClientOptions.DEFAULT_LISTEN_PORT,
+                true,
+                true,
+                SoulseekClientOptions.DEFAULT_DISTRIBUTED_CHILD_LIMIT,
+                SoulseekClientOptions.DEFAULT_MAXIMUM_CONCURRENT_SEARCHES,
+                SoulseekClientOptions.DEFAULT_MAXIMUM_CONCURRENT_UPLOADS,
+                Integer.MAX_VALUE,
+                Integer.MAX_VALUE,
+                Integer.MAX_VALUE,
+                true,
+                SoulseekClientOptions.DEFAULT_MESSAGE_TIMEOUT,
+                true,
+                true,
+                false,
+                DiagnosticLevel.INFO,
+                Integer.MAX_VALUE,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false);
+    }
+}
