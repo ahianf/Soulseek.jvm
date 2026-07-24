@@ -4,7 +4,7 @@
 
 package dev.slsk.events;
 
-import dev.slsk.SoulseekClientStates;
+import dev.slsk.SoulseekClientState;
 import java.util.Objects;
 
 /**
@@ -13,8 +13,8 @@ import java.util.Objects;
 public class SoulseekClientStateChangedEvent extends SoulseekClientEvent {
     private final Throwable exception;
     private final String message;
-    private final SoulseekClientStates previousState;
-    private final SoulseekClientStates state;
+    private final SoulseekClientState previousState;
+    private final SoulseekClientState state;
 
     /**
      * Creates state-change event payload without a message or exception.
@@ -22,7 +22,7 @@ public class SoulseekClientStateChangedEvent extends SoulseekClientEvent {
      * @param previousState the previous client state
      * @param state the current client state
      */
-    public SoulseekClientStateChangedEvent(SoulseekClientStates previousState, SoulseekClientStates state) {
+    public SoulseekClientStateChangedEvent(SoulseekClientState previousState, SoulseekClientState state) {
         this(previousState, state, null, null);
     }
 
@@ -34,7 +34,7 @@ public class SoulseekClientStateChangedEvent extends SoulseekClientEvent {
      * @param message the associated message
      */
     public SoulseekClientStateChangedEvent(
-            SoulseekClientStates previousState, SoulseekClientStates state, String message) {
+            SoulseekClientState previousState, SoulseekClientState state, String message) {
         this(previousState, state, message, null);
     }
 
@@ -47,7 +47,7 @@ public class SoulseekClientStateChangedEvent extends SoulseekClientEvent {
      * @param exception the associated exception
      */
     public SoulseekClientStateChangedEvent(
-            SoulseekClientStates previousState, SoulseekClientStates state, String message, Throwable exception) {
+            SoulseekClientState previousState, SoulseekClientState state, String message, Throwable exception) {
         this.previousState = Objects.requireNonNull(previousState, "previousState");
         this.state = Objects.requireNonNull(state, "state");
         this.message = message;
@@ -77,7 +77,7 @@ public class SoulseekClientStateChangedEvent extends SoulseekClientEvent {
      *
      * @return the previous state
      */
-    public final SoulseekClientStates getPreviousState() {
+    public final SoulseekClientState getPreviousState() {
         return previousState;
     }
 
@@ -86,7 +86,7 @@ public class SoulseekClientStateChangedEvent extends SoulseekClientEvent {
      *
      * @return the current state
      */
-    public final SoulseekClientStates getState() {
+    public final SoulseekClientState getState() {
         return state;
     }
 }

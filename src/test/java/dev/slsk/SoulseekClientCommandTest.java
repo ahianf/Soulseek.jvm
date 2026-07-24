@@ -102,7 +102,7 @@ class SoulseekClientCommandTest {
             client.sendRoomMessageAsync("room", " ").join();
             client.setRoomTickerAsync("room", " ").join();
 
-            client.setStateForTest(SoulseekClientStates.DISCONNECTED);
+            client.setStateForTest(SoulseekClientState.DISCONNECTED);
             for (Operation operation : operations(client)) {
                 assertThrows(IllegalStateException.class, operation::run);
             }
@@ -171,7 +171,7 @@ class SoulseekClientCommandTest {
     private static DefaultSoulseekClient loggedInClient(ConnectionProbe connection) {
         DefaultSoulseekClient client = new DefaultSoulseekClient(9999);
         client.setServerConnectionForTest(connection.proxy);
-        client.setStateForTest(SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN));
+        client.setStateForTest(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
         return client;
     }
 

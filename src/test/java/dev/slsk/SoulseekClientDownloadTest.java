@@ -95,7 +95,7 @@ class SoulseekClientDownloadTest {
                             null,
                             CancellationSignal.none()));
 
-            fixture.client.setStateForTest(SoulseekClientStates.DISCONNECTED);
+            fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
             assertThrows(
                     IllegalStateException.class, () -> fixture.client.downloadAsync("alice", "file", outputFactory()));
         }
@@ -136,7 +136,7 @@ class SoulseekClientDownloadTest {
             fixture.transfer.data = bytes;
             fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(11, bytes.length));
             ByteArrayOutputStream output = new ByteArrayOutputStream();
-            List<TransferStates> states = new ArrayList<>();
+            List<TransferState> states = new ArrayList<>();
             List<Long> progress = new ArrayList<>();
             fixture.client.addTransferStateChangedListener(
                     (sender, eventData) -> states.add(eventData.getTransfer().getState()));
@@ -165,12 +165,12 @@ class SoulseekClientDownloadTest {
             assertEquals("remote\\file", request.getFilename());
             assertEquals(
                     List.of(
-                            TransferStates.QUEUED.or(TransferStates.LOCALLY),
-                            TransferStates.REQUESTED,
-                            TransferStates.QUEUED.or(TransferStates.REMOTELY),
-                            TransferStates.INITIALIZING,
-                            TransferStates.IN_PROGRESS,
-                            TransferStates.COMPLETED.or(TransferStates.SUCCEEDED)),
+                            TransferState.QUEUED.or(TransferState.LOCALLY),
+                            TransferState.REQUESTED,
+                            TransferState.QUEUED.or(TransferState.REMOTELY),
+                            TransferState.INITIALIZING,
+                            TransferState.IN_PROGRESS,
+                            TransferState.COMPLETED.or(TransferState.SUCCEEDED)),
                     states);
             assertTrue(progress.contains(0L));
             assertTrue(progress.contains((long) bytes.length));
@@ -185,7 +185,7 @@ class SoulseekClientDownloadTest {
             fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(12, 5));
             List<Transfer> terminal = new ArrayList<>();
             fixture.client.addTransferStateChangedListener((sender, eventData) -> {
-                if (eventData.getTransfer().getState().hasFlag(TransferStates.COMPLETED)) {
+                if (eventData.getTransfer().getState().contains(TransferState.COMPLETED)) {
                     terminal.add(eventData.getTransfer());
                 }
             });
@@ -196,7 +196,7 @@ class SoulseekClientDownloadTest {
             TransferSizeMismatchException mismatch = assertInstanceOf(TransferSizeMismatchException.class, failure);
             assertEquals(4, mismatch.getLocalSize());
             assertEquals(5, mismatch.getRemoteSize());
-            assertTrue(terminal.get(0).getState().hasFlag(TransferStates.ABORTED));
+            assertTrue(terminal.get(0).getState().contains(TransferState.ABORTED));
             assertSame(mismatch, terminal.get(0).getException());
         }
     }
@@ -209,7 +209,7 @@ class SoulseekClientDownloadTest {
                     CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 130, "file", 6));
             List<Transfer> terminal = new ArrayList<>();
             fixture.client.addTransferStateChangedListener((sender, eventData) -> {
-                if (eventData.getTransfer().getState().hasFlag(TransferStates.COMPLETED)) {
+                if (eventData.getTransfer().getState().contains(TransferState.COMPLETED)) {
                     terminal.add(eventData.getTransfer());
                 }
             });
@@ -220,7 +220,7 @@ class SoulseekClientDownloadTest {
             TransferSizeMismatchException mismatch = assertInstanceOf(TransferSizeMismatchException.class, failure);
             assertEquals(5, mismatch.getLocalSize());
             assertEquals(6, mismatch.getRemoteSize());
-            assertTrue(terminal.get(0).getState().hasFlag(TransferStates.ABORTED));
+            assertTrue(terminal.get(0).getState().contains(TransferState.ABORTED));
             assertSame(mismatch, terminal.get(0).getException());
         }
     }
@@ -284,7 +284,7 @@ class SoulseekClientDownloadTest {
                     .downloadAsync("alice", "file", outputFactory(), 1L, 0, 15, options(), CancellationSignal.none())
                     .join();
 
-            assertTrue(result.getState().hasFlag(TransferStates.SUCCEEDED));
+            assertTrue(result.getState().contains(TransferState.SUCCEEDED));
             assertEquals(1, fixture.peerManager.awaitCalls);
             assertEquals(1, fixture.peerManager.outgoingTransferCalls);
             assertEquals(100, fixture.peerManager.outgoingToken);
@@ -305,7 +305,7 @@ class SoulseekClientDownloadTest {
             assertFalse(download.isDone());
             fixture.transfer.data = new byte[] {1, 2};
             fixture.waiter.startRequest.complete(new TransferRequest(TransferDirection.UPLOAD, 101, "file", 2));
-            assertTrue(download.join().getState().hasFlag(TransferStates.SUCCEEDED));
+            assertTrue(download.join().getState().contains(TransferState.SUCCEEDED));
         }
     }
 
@@ -416,7 +416,7 @@ class SoulseekClientDownloadTest {
             fixture.transfer.blockRead = true;
             List<Transfer> terminal = new ArrayList<>();
             fixture.client.addTransferStateChangedListener((sender, eventData) -> {
-                if (eventData.getTransfer().getState().hasFlag(TransferStates.COMPLETED)) {
+                if (eventData.getTransfer().getState().contains(TransferState.COMPLETED)) {
                     terminal.add(eventData.getTransfer());
                 }
             });
@@ -427,7 +427,7 @@ class SoulseekClientDownloadTest {
             SoulseekClientException mapped = assertInstanceOf(SoulseekClientException.class, failure);
             assertInstanceOf(TransferReportedFailedException.class, mapped.getCause());
             assertSame(mapped.getCause(), terminal.get(0).getException());
-            assertTrue(terminal.get(0).getState().hasFlag(TransferStates.ERRORED));
+            assertTrue(terminal.get(0).getState().contains(TransferState.ERRORED));
         }
     }
 
@@ -444,7 +444,7 @@ class SoulseekClientDownloadTest {
             fixture.transfer.blockRead = true;
             List<Transfer> terminal = new ArrayList<>();
             fixture.client.addTransferStateChangedListener((sender, eventData) -> {
-                if (eventData.getTransfer().getState().hasFlag(TransferStates.COMPLETED)) {
+                if (eventData.getTransfer().getState().contains(TransferState.COMPLETED)) {
                     terminal.add(eventData.getTransfer());
                 }
             });
@@ -454,7 +454,7 @@ class SoulseekClientDownloadTest {
 
             assertSame(rejection, failure);
             assertSame(rejection, terminal.get(0).getException());
-            assertTrue(terminal.get(0).getState().hasFlag(TransferStates.REJECTED));
+            assertTrue(terminal.get(0).getState().contains(TransferState.REJECTED));
         }
     }
 
@@ -578,7 +578,7 @@ class SoulseekClientDownloadTest {
                             CancellationSignal.none())
                     .join();
 
-            assertTrue(transfer.getState().hasFlag(TransferStates.SUCCEEDED));
+            assertTrue(transfer.getState().contains(TransferState.SUCCEEDED));
             assertTrue(diagnostic.warnings.stream().anyMatch(warning -> warning.contains("Failed to cancel wait")));
             assertTrue(diagnostic.warnings.stream()
                     .anyMatch(warning -> warning.contains("Failed to dispose transfer connection")));
@@ -680,7 +680,7 @@ class SoulseekClientDownloadTest {
                     null,
                     null,
                     null);
-            client.setStateForTest(SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN));
+            client.setStateForTest(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
         }
 
         @Override

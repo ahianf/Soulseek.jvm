@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.slsk.Transfer;
 import dev.slsk.TransferDirection;
-import dev.slsk.TransferStates;
+import dev.slsk.TransferState;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -39,7 +39,7 @@ class TransferEventTest {
     @DisplayName("TransferStateChangedEvent instantiates with the given data")
     void stateChangedInstantiatesWithTheGivenData() {
         Transfer transfer = transfer();
-        TransferStates previousState = TransferStates.IN_PROGRESS.or(TransferStates.ERRORED);
+        TransferState previousState = TransferState.IN_PROGRESS.or(TransferState.ERRORED);
         TransferStateChangedEvent args = new TransferStateChangedEvent(previousState, transfer);
 
         assertEquals(previousState, args.getPreviousState());
@@ -60,6 +60,6 @@ class TransferEventTest {
     }
 
     private static Transfer transfer() {
-        return new Transfer(TransferDirection.DOWNLOAD, "alice", "file.mp3", 42, TransferStates.IN_PROGRESS, 100, 0);
+        return new Transfer(TransferDirection.DOWNLOAD, "alice", "file.mp3", 42, TransferState.IN_PROGRESS, 100, 0);
     }
 }

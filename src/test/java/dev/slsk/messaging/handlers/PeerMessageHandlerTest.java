@@ -20,7 +20,7 @@ import dev.slsk.RawSearchResponse;
 import dev.slsk.SearchQuery;
 import dev.slsk.SearchResponse;
 import dev.slsk.SearchScope;
-import dev.slsk.SearchStates;
+import dev.slsk.SearchState;
 import dev.slsk.TransferDirection;
 import dev.slsk.UserInfo;
 import dev.slsk.common.Constants;
@@ -147,7 +147,7 @@ class PeerMessageHandlerTest {
     void activeSearchReceivesResponseAndInactiveSearchIsIgnored() {
         Fixture fixture = new Fixture(new SoulseekClientOptions());
         SearchInternal search = new SearchInternal(SearchQuery.fromText("query"), SearchScope.getNetwork(), TOKEN);
-        search.setState(SearchStates.IN_PROGRESS);
+        search.setState(SearchState.IN_PROGRESS);
         fixture.client.searches.put(TOKEN, search);
         SearchResponse response =
                 new SearchResponse(USERNAME, TOKEN, true, 100, 0, List.of(new File(1, FILENAME, 123L, "mp3")));

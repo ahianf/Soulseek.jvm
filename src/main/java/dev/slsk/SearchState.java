@@ -11,31 +11,31 @@ import java.util.Objects;
 /**
  * A bitwise combination of search states.
  */
-public final class SearchStates {
+public final class SearchState {
     /** No search state. */
-    public static final SearchStates NONE = new SearchStates(0);
+    public static final SearchState NONE = new SearchState(0);
     /** The search was requested. */
-    public static final SearchStates REQUESTED = new SearchStates(1);
+    public static final SearchState REQUESTED = new SearchState(1);
     /** The search is in progress. */
-    public static final SearchStates IN_PROGRESS = new SearchStates(2);
+    public static final SearchState IN_PROGRESS = new SearchState(2);
     /** The search is complete. */
-    public static final SearchStates COMPLETED = new SearchStates(4);
+    public static final SearchState COMPLETED = new SearchState(4);
     /** The search completed due to cancellation. */
-    public static final SearchStates CANCELLED = new SearchStates(8);
+    public static final SearchState CANCELLED = new SearchState(8);
     /** The search completed due to its timeout. */
-    public static final SearchStates TIMED_OUT = new SearchStates(16);
+    public static final SearchState TIMED_OUT = new SearchState(16);
     /** The search completed after reaching its response limit. */
-    public static final SearchStates RESPONSE_LIMIT_REACHED = new SearchStates(32);
+    public static final SearchState RESPONSE_LIMIT_REACHED = new SearchState(32);
     /** The search completed after reaching its file limit. */
-    public static final SearchStates FILE_LIMIT_REACHED = new SearchStates(64);
+    public static final SearchState FILE_LIMIT_REACHED = new SearchState(64);
     /** The search completed due to an error. */
-    public static final SearchStates ERRORED = new SearchStates(128);
+    public static final SearchState ERRORED = new SearchState(128);
     /** The search is queued. */
-    public static final SearchStates QUEUED = new SearchStates(256);
+    public static final SearchState QUEUED = new SearchState(256);
 
     private final int value;
 
-    private SearchStates(int value) {
+    private SearchState(int value) {
         this.value = value;
     }
 
@@ -45,7 +45,7 @@ public final class SearchStates {
      * @param value the bit mask
      * @return the state value
      */
-    public static SearchStates fromValue(int value) {
+    public static SearchState fromValue(int value) {
         return switch (value) {
             case 0 -> NONE;
             case 1 -> REQUESTED;
@@ -57,7 +57,7 @@ public final class SearchStates {
             case 64 -> FILE_LIMIT_REACHED;
             case 128 -> ERRORED;
             case 256 -> QUEUED;
-            default -> new SearchStates(value);
+            default -> new SearchState(value);
         };
     }
 
@@ -76,7 +76,7 @@ public final class SearchStates {
      * @param state the state to test
      * @return {@code true} when all state bits are present
      */
-    public boolean hasFlag(SearchStates state) {
+    public boolean contains(SearchState state) {
         Objects.requireNonNull(state, "state");
         return (value & state.value) == state.value;
     }
@@ -87,14 +87,14 @@ public final class SearchStates {
      * @param state the state to combine
      * @return the combined state
      */
-    public SearchStates or(SearchStates state) {
+    public SearchState or(SearchState state) {
         Objects.requireNonNull(state, "state");
         return fromValue(value | state.value);
     }
 
     @Override
     public boolean equals(Object other) {
-        return this == other || other instanceof SearchStates states && value == states.value;
+        return this == other || other instanceof SearchState states && value == states.value;
     }
 
     @Override
@@ -120,8 +120,8 @@ public final class SearchStates {
         return names.isEmpty() ? Integer.toString(value) : String.join(" | ", names);
     }
 
-    private void addName(List<String> names, SearchStates state, String name) {
-        if (hasFlag(state)) {
+    private void addName(List<String> names, SearchState state, String name) {
+        if (contains(state)) {
             names.add(name);
         }
     }

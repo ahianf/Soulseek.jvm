@@ -90,7 +90,7 @@ class SoulseekClientApiTest {
             assertEquals(170, client.getMajorVersion());
             assertEquals(9999, client.getMinorVersion());
             assertNotNull(client.getOptions());
-            assertEquals(SoulseekClientStates.DISCONNECTED, client.getState());
+            assertEquals(SoulseekClientState.DISCONNECTED, client.getState());
             client.close();
         }
 

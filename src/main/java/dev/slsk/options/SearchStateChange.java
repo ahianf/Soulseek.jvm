@@ -5,7 +5,7 @@
 package dev.slsk.options;
 
 import dev.slsk.Search;
-import dev.slsk.SearchStates;
+import dev.slsk.SearchState;
 
 /**
  * A search state-change callback payload.
@@ -13,4 +13,4 @@ import dev.slsk.SearchStates;
  * @param previousState the previous search state
  * @param search the search after the state change
  */
-public record SearchStateChange(SearchStates previousState, Search search) {}
+public record SearchStateChange(SearchState previousState, Search search) {}

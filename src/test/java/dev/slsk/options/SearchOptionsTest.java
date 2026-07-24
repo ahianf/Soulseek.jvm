@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.File;
 import dev.slsk.Search;
 import dev.slsk.SearchResponse;
-import dev.slsk.SearchStates;
+import dev.slsk.SearchState;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -90,16 +90,16 @@ class SearchOptionsTest {
                 file -> "x".equals(file.getFilename()),
                 state::set,
                 received::set);
-        Search search = new Search(null, null, 9, SearchStates.COMPLETED, 0, 0, 0);
+        Search search = new Search(null, null, 9, SearchState.COMPLETED, 0, 0, 0);
         SearchResponse response = new SearchResponse("u", 8, true, 1, 7, List.of());
         File file = new File(1, "x", 2, "ext");
 
-        options.getStateChanged().onStateChanged(new SearchStateChange(SearchStates.IN_PROGRESS, search));
+        options.getStateChanged().onStateChanged(new SearchStateChange(SearchState.IN_PROGRESS, search));
         options.getResponseReceived().onResponseReceived(new SearchResponseReceived(search, response));
 
         assertTrue(options.getResponseFilter().test(response));
         assertTrue(options.getFileFilter().test(file));
-        assertEquals(new SearchStateChange(SearchStates.IN_PROGRESS, search), state.get());
+        assertEquals(new SearchStateChange(SearchState.IN_PROGRESS, search), state.get());
         assertEquals(new SearchResponseReceived(search, response), received.get());
     }
 }

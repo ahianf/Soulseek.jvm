@@ -11,39 +11,39 @@ import java.util.Objects;
 /**
  * A bitwise combination of transfer states.
  */
-public final class TransferStates {
+public final class TransferState {
     /** No transfer state. */
-    public static final TransferStates NONE = new TransferStates(0);
+    public static final TransferState NONE = new TransferState(0);
     /** The transfer was requested. */
-    public static final TransferStates REQUESTED = new TransferStates(1);
+    public static final TransferState REQUESTED = new TransferState(1);
     /** The transfer is queued. */
-    public static final TransferStates QUEUED = new TransferStates(2);
+    public static final TransferState QUEUED = new TransferState(2);
     /** The transfer is initializing. */
-    public static final TransferStates INITIALIZING = new TransferStates(4);
+    public static final TransferState INITIALIZING = new TransferState(4);
     /** The transfer is in progress. */
-    public static final TransferStates IN_PROGRESS = new TransferStates(8);
+    public static final TransferState IN_PROGRESS = new TransferState(8);
     /** The transfer is complete; another flag describes its disposition. */
-    public static final TransferStates COMPLETED = new TransferStates(16);
+    public static final TransferState COMPLETED = new TransferState(16);
     /** The transfer completed successfully. */
-    public static final TransferStates SUCCEEDED = new TransferStates(32);
+    public static final TransferState SUCCEEDED = new TransferState(32);
     /** The transfer completed due to cancellation. */
-    public static final TransferStates CANCELLED = new TransferStates(64);
+    public static final TransferState CANCELLED = new TransferState(64);
     /** The transfer completed due to a timeout. */
-    public static final TransferStates TIMED_OUT = new TransferStates(128);
+    public static final TransferState TIMED_OUT = new TransferState(128);
     /** The transfer completed due to an error. */
-    public static final TransferStates ERRORED = new TransferStates(256);
+    public static final TransferState ERRORED = new TransferState(256);
     /** The transfer completed because the peer rejected it. */
-    public static final TransferStates REJECTED = new TransferStates(512);
+    public static final TransferState REJECTED = new TransferState(512);
     /** The transfer completed due to unexpected circumstances. */
-    public static final TransferStates ABORTED = new TransferStates(1024);
+    public static final TransferState ABORTED = new TransferState(1024);
     /** The transfer is queued locally. */
-    public static final TransferStates LOCALLY = new TransferStates(2048);
+    public static final TransferState LOCALLY = new TransferState(2048);
     /** The transfer is queued remotely. */
-    public static final TransferStates REMOTELY = new TransferStates(4096);
+    public static final TransferState REMOTELY = new TransferState(4096);
 
     private final int value;
 
-    private TransferStates(int value) {
+    private TransferState(int value) {
         this.value = value;
     }
 
@@ -53,7 +53,7 @@ public final class TransferStates {
      * @param value the bit mask
      * @return the state value
      */
-    public static TransferStates fromValue(int value) {
+    public static TransferState fromValue(int value) {
         return switch (value) {
             case 0 -> NONE;
             case 1 -> REQUESTED;
@@ -69,7 +69,7 @@ public final class TransferStates {
             case 1024 -> ABORTED;
             case 2048 -> LOCALLY;
             case 4096 -> REMOTELY;
-            default -> new TransferStates(value);
+            default -> new TransferState(value);
         };
     }
 
@@ -88,7 +88,7 @@ public final class TransferStates {
      * @param state the state to test
      * @return {@code true} when all state bits are present
      */
-    public boolean hasFlag(TransferStates state) {
+    public boolean contains(TransferState state) {
         Objects.requireNonNull(state, "state");
         return (value & state.value) == state.value;
     }
@@ -99,14 +99,14 @@ public final class TransferStates {
      * @param state the state to combine
      * @return the combined state
      */
-    public TransferStates or(TransferStates state) {
+    public TransferState or(TransferState state) {
         Objects.requireNonNull(state, "state");
         return fromValue(value | state.value);
     }
 
     @Override
     public boolean equals(Object other) {
-        return this == other || other instanceof TransferStates states && value == states.value;
+        return this == other || other instanceof TransferState states && value == states.value;
     }
 
     @Override
@@ -136,8 +136,8 @@ public final class TransferStates {
         return names.isEmpty() ? Integer.toString(value) : String.join(" | ", names);
     }
 
-    private void addName(List<String> names, TransferStates state, String name) {
-        if (hasFlag(state)) {
+    private void addName(List<String> names, TransferState state, String name) {
+        if (contains(state)) {
             names.add(name);
         }
     }

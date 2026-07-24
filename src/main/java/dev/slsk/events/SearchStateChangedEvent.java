@@ -5,14 +5,14 @@
 package dev.slsk.events;
 
 import dev.slsk.Search;
-import dev.slsk.SearchStates;
+import dev.slsk.SearchState;
 import java.util.Objects;
 
 /**
  * Event arguments raised by a search-state change.
  */
 public class SearchStateChangedEvent extends SearchEvent {
-    private final SearchStates previousState;
+    private final SearchState previousState;
 
     /**
      * Creates search-state event payload.
@@ -24,7 +24,7 @@ public class SearchStateChangedEvent extends SearchEvent {
      * @param previousState the state before the change
      * @param search the search after the change
      */
-    public SearchStateChangedEvent(SearchStates previousState, Search search) {
+    public SearchStateChangedEvent(SearchState previousState, Search search) {
         super(search);
         this.previousState = Objects.requireNonNull(previousState, "previousState");
     }
@@ -34,7 +34,7 @@ public class SearchStateChangedEvent extends SearchEvent {
      *
      * @return the previous state
      */
-    public final SearchStates getPreviousState() {
+    public final SearchState getPreviousState() {
         return previousState;
     }
 }

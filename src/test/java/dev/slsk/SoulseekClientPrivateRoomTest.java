@@ -104,7 +104,7 @@ class SoulseekClientPrivateRoomTest {
                 assertThrows(IllegalArgumentException.class, () -> client.dropPrivateRoomOwnershipAsync(bad));
             }
 
-            client.setStateForTest(SoulseekClientStates.DISCONNECTED);
+            client.setStateForTest(SoulseekClientState.DISCONNECTED);
             for (Operation operation : operations(client)) {
                 assertThrows(IllegalStateException.class, operation::run);
             }
@@ -196,7 +196,7 @@ class SoulseekClientPrivateRoomTest {
                 null,
                 null,
                 null);
-        client.setStateForTest(SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN));
+        client.setStateForTest(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
         return client;
     }
 

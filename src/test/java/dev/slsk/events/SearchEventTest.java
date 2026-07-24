@@ -13,7 +13,7 @@ import dev.slsk.Search;
 import dev.slsk.SearchQuery;
 import dev.slsk.SearchResponse;
 import dev.slsk.SearchScope;
-import dev.slsk.SearchStates;
+import dev.slsk.SearchState;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -22,12 +22,12 @@ class SearchEventTest {
     @DisplayName("SearchStateChangedEvent instantiates with valid Search")
     void stateChangedInstantiatesWithValidSearch() {
         Search search =
-                new Search(new SearchQuery("foo"), SearchScope.getNetwork(), 42, SearchStates.COMPLETED, 0, 0, 0);
-        SearchStateChangedEvent args = new SearchStateChangedEvent(SearchStates.NONE, search);
+                new Search(new SearchQuery("foo"), SearchScope.getNetwork(), 42, SearchState.COMPLETED, 0, 0, 0);
+        SearchStateChangedEvent args = new SearchStateChangedEvent(SearchState.NONE, search);
 
         assertSame(search, args.getSearch());
-        assertEquals(SearchStates.NONE, args.getPreviousState());
-        assertEquals(SearchStates.COMPLETED, args.getSearch().getState());
+        assertEquals(SearchState.NONE, args.getPreviousState());
+        assertEquals(SearchState.COMPLETED, args.getSearch().getState());
     }
 
     @Test
@@ -52,7 +52,7 @@ class SearchEventTest {
     @Test
     @DisplayName("Search event base preserves a null search")
     void searchEventBasePreservesNullSearch() {
-        SearchStateChangedEvent args = new SearchStateChangedEvent(SearchStates.NONE, null);
+        SearchStateChangedEvent args = new SearchStateChangedEvent(SearchState.NONE, null);
 
         assertNull(args.getSearch());
     }
@@ -65,7 +65,7 @@ class SearchEventTest {
 
     @Test
     void responseReceivedInstantiatesWithSearchAndResponse() {
-        Search search = new Search(null, null, 42, SearchStates.IN_PROGRESS, 1, 2, 3);
+        Search search = new Search(null, null, 42, SearchState.IN_PROGRESS, 1, 2, 3);
         SearchResponse response = new SearchResponse("alice", 42, true, 1, 2, null);
 
         SearchResponseReceivedEvent args = new SearchResponseReceivedEvent(response, search);

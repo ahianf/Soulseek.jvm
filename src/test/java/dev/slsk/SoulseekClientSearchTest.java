@@ -50,7 +50,7 @@ class SoulseekClientSearchTest {
                 NullPointerException.class,
                 () -> fixture.client.searchAsync(SearchQuery.fromText("valid"), (Consumer<SearchResponse>) null));
 
-        fixture.client.setStateForTest(SoulseekClientStates.DISCONNECTED);
+        fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
         assertThrows(IllegalStateException.class, () -> fixture.client.searchAsync(SearchQuery.fromText("valid")));
 
         fixture.client.setStateForTest(loggedIn());
@@ -75,14 +75,14 @@ class SoulseekClientSearchTest {
                 .join();
 
         assertArrayEquals(new SearchRequest("a", 10).toByteArray(), fixture.server.messages.get(0));
-        assertTrue(result.search().getState().hasFlag(SearchStates.TIMED_OUT));
+        assertTrue(result.search().getState().contains(SearchState.TIMED_OUT));
         fixture.close();
     }
 
     @Test
     void sendsFilteredNetworkSearchAndReturnsTimedOutSearch() {
         Fixture fixture = new Fixture();
-        List<SearchStates> states = new ArrayList<>();
+        List<SearchState> states = new ArrayList<>();
         SearchOptions options =
                 options(40, 250, true, change -> states.add(change.search().getState()), null);
 
@@ -93,10 +93,10 @@ class SoulseekClientSearchTest {
         assertArrayEquals(new SearchRequest("foo -bar", 11).toByteArray(), fixture.server.messages.get(0));
         assertEquals(
                 List.of(
-                        SearchStates.REQUESTED,
-                        SearchStates.QUEUED,
-                        SearchStates.IN_PROGRESS,
-                        SearchStates.COMPLETED.or(SearchStates.TIMED_OUT)),
+                        SearchState.REQUESTED,
+                        SearchState.QUEUED,
+                        SearchState.IN_PROGRESS,
+                        SearchState.COMPLETED.or(SearchState.TIMED_OUT)),
                 states);
         assertEquals("foo -bar", result.search().getQuery().getSearchText());
         assertEquals(11, result.search().getToken());
@@ -134,7 +134,7 @@ class SoulseekClientSearchTest {
                 fixture.client.searchAsync(SearchQuery.fromText("query"), null, 30, options, CancellationSignal.none());
         waitUntil(() -> {
             SearchInternal active = fixture.client.getSearches().get(30);
-            return active != null && active.getState().equals(SearchStates.IN_PROGRESS);
+            return active != null && active.getState().equals(SearchState.IN_PROGRESS);
         });
         SearchResponse response =
                 new SearchResponse("alice", 30, true, 100, 0, List.of(new File(2, "file.mp3", 3, "mp3")));
@@ -147,7 +147,7 @@ class SoulseekClientSearchTest {
         assertEquals(1, result.search().getResponseCount());
         assertEquals(1, result.search().getFileCount());
         assertEquals(
-                SearchStates.COMPLETED.or(SearchStates.RESPONSE_LIMIT_REACHED),
+                SearchState.COMPLETED.or(SearchState.RESPONSE_LIMIT_REACHED),
                 result.search().getState());
         assertEquals(1, optionResponses.get());
         assertEquals(1, clientResponses.get());
@@ -171,7 +171,7 @@ class SoulseekClientSearchTest {
                 options,
                 CancellationSignal.none());
         waitUntil(() -> fixture.client.getSearches().containsKey(31)
-                && fixture.client.getSearches().get(31).getState().equals(SearchStates.IN_PROGRESS));
+                && fixture.client.getSearches().get(31).getState().equals(SearchState.IN_PROGRESS));
         SearchResponse response = new SearchResponse("bob", 31, true, 1, 0, List.of(new File(2, "file", 3, "ext")));
         fixture.client.getSearches().get(31).tryAddResponse(response);
 
@@ -240,7 +240,7 @@ class SoulseekClientSearchTest {
                 fixture.client.searchAsync(SearchQuery.fromText("three"), null, 53, options, thirdSource.getSignal());
 
         waitUntil(() -> fixture.server.messages.size() == 2);
-        assertEquals(SearchStates.QUEUED, fixture.client.getSearches().get(53).getState());
+        assertEquals(SearchState.QUEUED, fixture.client.getSearches().get(53).getState());
         firstSource.cancel();
         assertInstanceOf(CancellationException.class, completionCause(first));
         waitUntil(() -> fixture.server.messages.size() == 3);
@@ -259,7 +259,7 @@ class SoulseekClientSearchTest {
                         SearchQuery.fromText("query"), scope, 20, options(30, 250, true), CancellationSignal.none())
                 .join();
         assertArrayEquals(expected, fixture.server.messages.get(0));
-        assertTrue(result.search().getState().hasFlag(SearchStates.TIMED_OUT));
+        assertTrue(result.search().getState().contains(SearchState.TIMED_OUT));
         fixture.close();
     }
 
@@ -288,8 +288,8 @@ class SoulseekClientSearchTest {
                 responseReceived);
     }
 
-    private static SoulseekClientStates loggedIn() {
-        return SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN);
+    private static SoulseekClientState loggedIn() {
+        return SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN);
     }
 
     private static Throwable completionCause(CompletableFuture<?> future) {

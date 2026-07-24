@@ -342,8 +342,8 @@ class SoulseekClientReconfigureTest {
                 null);
     }
 
-    private static SoulseekClientStates loggedIn() {
-        return SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN);
+    private static SoulseekClientState loggedIn() {
+        return SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN);
     }
 
     private static Throwable completionCause(CompletableFuture<?> future) {

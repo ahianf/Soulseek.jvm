@@ -26,7 +26,7 @@ class SoulseekClientLiveIT {
         try (SoulseekClient client = SoulseekClient.create(credentials.minorVersion())) {
             assertDoesNotThrow(() -> client.connectAsync(credentials.username(), credentials.password())
                     .join());
-            assertEquals(SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN), client.getState());
+            assertEquals(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN), client.getState());
         }
     }
 
@@ -42,13 +42,13 @@ class SoulseekClientLiveIT {
                     .join());
 
             assertEquals(4, events.size());
-            assertEquals(SoulseekClientStates.CONNECTING, events.get(0).getState());
-            assertEquals(SoulseekClientStates.CONNECTED, events.get(1).getState());
+            assertEquals(SoulseekClientState.CONNECTING, events.get(0).getState());
+            assertEquals(SoulseekClientState.CONNECTED, events.get(1).getState());
             assertEquals(
-                    SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGING_IN),
+                    SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGING_IN),
                     events.get(2).getState());
             assertEquals(
-                    SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN),
+                    SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN),
                     events.get(3).getState());
         }
     }
@@ -61,7 +61,7 @@ class SoulseekClientLiveIT {
             client.connectAsync(credentials.username(), credentials.password()).join();
 
             assertDoesNotThrow(() -> client.disconnect());
-            assertEquals(SoulseekClientStates.DISCONNECTED, client.getState());
+            assertEquals(SoulseekClientState.DISCONNECTED, client.getState());
         }
     }
 
@@ -76,8 +76,8 @@ class SoulseekClientLiveIT {
 
             assertDoesNotThrow(() -> client.disconnect());
 
-            assertEquals(SoulseekClientStates.DISCONNECTED, client.getState());
-            assertEquals(SoulseekClientStates.DISCONNECTED, event.get().getState());
+            assertEquals(SoulseekClientState.DISCONNECTED, client.getState());
+            assertEquals(SoulseekClientState.DISCONNECTED, event.get().getState());
         }
     }
 

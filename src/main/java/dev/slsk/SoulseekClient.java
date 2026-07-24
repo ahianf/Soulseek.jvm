@@ -111,7 +111,7 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
 
     ServerInfo getServerInfo();
 
-    SoulseekClientStates getState();
+    SoulseekClientState getState();
 
     List<Transfer> getUploads();
 

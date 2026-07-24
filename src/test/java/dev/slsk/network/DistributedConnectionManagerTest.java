@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
-import dev.slsk.SoulseekClientStates;
+import dev.slsk.SoulseekClientState;
 import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
 import dev.slsk.common.Waiter;
@@ -351,7 +351,7 @@ class DistributedConnectionManagerTest {
     @Test
     void statusSkipsWhenNotConnectedAndReportsWriteFailures() {
         Fixture skipped = fixture();
-        skipped.client.state = SoulseekClientStates.DISCONNECTED;
+        skipped.client.state = SoulseekClientState.DISCONNECTED;
         skipped.manager.updateStatusAsync().join();
         assertTrue(skipped.server.byteWrites.isEmpty());
 
@@ -537,7 +537,7 @@ class DistributedConnectionManagerTest {
             disconnected.incrementAndGet();
         });
         // Avoid reconnecting to the same test candidate.
-        fixture.client.state = SoulseekClientStates.DISCONNECTED;
+        fixture.client.state = SoulseekClientState.DISCONNECTED;
 
         parent.fireDisconnected("gone", null);
 
@@ -556,7 +556,7 @@ class DistributedConnectionManagerTest {
         assertEquals(1, fixture.server.byteWrites.size());
 
         Fixture disconnected = fixture();
-        disconnected.client.state = SoulseekClientStates.DISCONNECTED;
+        disconnected.client.state = SoulseekClientState.DISCONNECTED;
         disconnected.manager.watchdogElapsed();
         assertFalse(disconnected.diagnostic.containsWarning("No distributed parent connected"));
     }
@@ -635,7 +635,7 @@ class DistributedConnectionManagerTest {
                 DistributedMessageHandler.class.getClassLoader(),
                 new Class<?>[] {DistributedMessageHandler.class},
                 (proxy, method, arguments) -> defaultValue(method.getReturnType()));
-        private SoulseekClientStates state = SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN);
+        private SoulseekClientState state = SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN);
 
         private FakeClient(FakeWaiter waiter, MessageConnection server) {
             this.waiter = waiter;
@@ -653,7 +653,7 @@ class DistributedConnectionManagerTest {
         }
 
         @Override
-        public SoulseekClientStates getState() {
+        public SoulseekClientState getState() {
             return state;
         }
 

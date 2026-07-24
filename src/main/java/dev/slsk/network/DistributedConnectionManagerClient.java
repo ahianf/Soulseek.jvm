@@ -4,7 +4,7 @@
 
 package dev.slsk.network;
 
-import dev.slsk.SoulseekClientStates;
+import dev.slsk.SoulseekClientState;
 import dev.slsk.common.Waiter;
 import dev.slsk.messaging.handlers.DistributedMessageHandler;
 import dev.slsk.options.SoulseekClientOptions;
@@ -15,7 +15,7 @@ public interface DistributedConnectionManagerClient {
 
     String getUsername();
 
-    SoulseekClientStates getState();
+    SoulseekClientState getState();
 
     int getNextToken();
 

@@ -317,7 +317,7 @@ class SoulseekClientServerRequestTest {
                 assertThrows(IllegalArgumentException.class, () -> client.leaveRoomAsync(bad));
             }
 
-            client.setStateForTest(SoulseekClientStates.DISCONNECTED);
+            client.setStateForTest(SoulseekClientState.DISCONNECTED);
             assertThrows(IllegalStateException.class, () -> client.changePasswordAsync("password"));
             assertThrows(IllegalStateException.class, client::getPrivilegesAsync);
             assertThrows(IllegalStateException.class, client::pingServerAsync);
@@ -441,7 +441,7 @@ class SoulseekClientServerRequestTest {
                 null,
                 null,
                 null);
-        client.setStateForTest(SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN));
+        client.setStateForTest(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
         return client;
     }
 

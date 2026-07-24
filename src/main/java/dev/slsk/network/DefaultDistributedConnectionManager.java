@@ -9,7 +9,7 @@ import dev.slsk.CancellationSignal;
 import dev.slsk.CancellationSubscription;
 import dev.slsk.DistributedNetworkInfo;
 import dev.slsk.DistributedPeer;
-import dev.slsk.SoulseekClientStates;
+import dev.slsk.SoulseekClientState;
 import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
 import dev.slsk.diagnostics.DiagnosticEvent;
@@ -316,8 +316,8 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
             diagnostic.debug("Parent connection solicitation ignored; distributed " + "network is not enabled.");
             return CompletableFuture.completedFuture(null);
         }
-        SoulseekClientStates state = client.getState();
-        if (state.hasFlag(SoulseekClientStates.DISCONNECTED) || state.hasFlag(SoulseekClientStates.DISCONNECTING)) {
+        SoulseekClientState state = client.getState();
+        if (state.contains(SoulseekClientState.DISCONNECTED) || state.contains(SoulseekClientState.DISCONNECTING)) {
             return CompletableFuture.completedFuture(null);
         }
 
@@ -557,8 +557,8 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
 
     @Override
     public CompletableFuture<Void> updateStatusAsync(CancellationSignal cancellationSignal) {
-        SoulseekClientStates state = client.getState();
-        if (!state.hasFlag(SoulseekClientStates.CONNECTED) || !state.hasFlag(SoulseekClientStates.LOGGED_IN)) {
+        SoulseekClientState state = client.getState();
+        if (!state.contains(SoulseekClientState.CONNECTED) || !state.contains(SoulseekClientState.LOGGED_IN)) {
             return CompletableFuture.completedFuture(null);
         }
         if (!statusUpdating.compareAndSet(false, true)) {
@@ -598,7 +598,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                     } else {
                         Throwable cause = unwrap(failure);
                         String message = "Failed to update distributed status: " + message(cause);
-                        if (!client.getState().equals(SoulseekClientStates.DISCONNECTED)) {
+                        if (!client.getState().equals(SoulseekClientState.DISCONNECTED)) {
                             diagnostic.warning(message, cause);
                         } else {
                             diagnostic.debug(message, cause);
@@ -629,12 +629,12 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     }
 
     void watchdogElapsed() {
-        SoulseekClientStates state = client.getState();
+        SoulseekClientState state = client.getState();
         if (isEnabled()
                 && !hasParent()
                 && !isBranchRoot()
-                && state.hasFlag(SoulseekClientStates.CONNECTED)
-                && state.hasFlag(SoulseekClientStates.LOGGED_IN)) {
+                && state.contains(SoulseekClientState.CONNECTED)
+                && state.contains(SoulseekClientState.LOGGED_IN)) {
             diagnostic.warning("No distributed parent connected.  Requesting a list of " + "candidates.");
             updateStatusAsync();
         }

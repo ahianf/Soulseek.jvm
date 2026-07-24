@@ -132,7 +132,7 @@ class SoulseekClientPeerRequestTest {
             assertThrows(IllegalArgumentException.class, () -> fixture.client.connectToUserAsync(bad));
             assertThrows(IllegalArgumentException.class, () -> fixture.client.getUserInfoAsync(bad));
         }
-        fixture.client.setStateForTest(SoulseekClientStates.DISCONNECTED);
+        fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
         assertThrows(IllegalStateException.class, () -> fixture.client.connectToUserAsync("alice"));
         assertThrows(IllegalStateException.class, () -> fixture.client.getUserInfoAsync("alice"));
         fixture.close();
@@ -288,7 +288,7 @@ class SoulseekClientPeerRequestTest {
         assertThrows(
                 TransferNotFoundException.class, () -> fixture.client.getDownloadPlaceInQueueAsync("alice", "file"));
 
-        fixture.client.setStateForTest(SoulseekClientStates.DISCONNECTED);
+        fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
         assertThrows(IllegalStateException.class, () -> fixture.client.getDirectoryContentsAsync("alice", "directory"));
         assertThrows(IllegalStateException.class, () -> fixture.client.getDownloadPlaceInQueueAsync("alice", "file"));
         fixture.close();
@@ -386,9 +386,9 @@ class SoulseekClientPeerRequestTest {
         for (String bad : new String[] {null, "", " ", "\t"}) {
             assertThrows(IllegalArgumentException.class, () -> fixture.client.browseAsync(bad));
         }
-        fixture.client.setStateForTest(SoulseekClientStates.DISCONNECTED);
+        fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
         assertThrows(IllegalStateException.class, () -> fixture.client.browseAsync("alice"));
-        fixture.client.setStateForTest(SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN));
+        fixture.client.setStateForTest(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
 
         fixture.waiter.results.put(BrowseResponse.class, new CompletableFuture<>());
         TimeoutException timeout = new TimeoutException("header timed out");
@@ -511,7 +511,7 @@ class SoulseekClientPeerRequestTest {
                 null);
 
         private Fixture() {
-            client.setStateForTest(SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN));
+            client.setStateForTest(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
         }
 
         @Override

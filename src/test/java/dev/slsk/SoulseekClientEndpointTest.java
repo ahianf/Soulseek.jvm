@@ -41,7 +41,7 @@ class SoulseekClientEndpointTest {
         for (String bad : new String[] {null, "", " ", "\t"}) {
             assertThrows(IllegalArgumentException.class, () -> fixture.client.getUserEndpointAsync(bad));
         }
-        fixture.client.setStateForTest(SoulseekClientStates.DISCONNECTED);
+        fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
         assertThrows(IllegalStateException.class, () -> fixture.client.getUserEndpointAsync("alice"));
         fixture.close();
     }
@@ -252,7 +252,7 @@ class SoulseekClientEndpointTest {
                     null,
                     null,
                     null);
-            client.setStateForTest(SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN));
+            client.setStateForTest(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
         }
 
         @Override

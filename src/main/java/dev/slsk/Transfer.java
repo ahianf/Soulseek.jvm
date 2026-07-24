@@ -28,7 +28,7 @@ public class Transfer {
     private final long size;
     private final long startOffset;
     private final Instant startTime;
-    private final TransferStates state;
+    private final TransferState state;
     private final int token;
     private final String username;
 
@@ -48,7 +48,7 @@ public class Transfer {
             String username,
             String filename,
             int token,
-            TransferStates state,
+            TransferState state,
             long size,
             long startOffset) {
         this(direction, username, filename, token, state, size, startOffset, 0, 0, null, null, null, null, null);
@@ -71,7 +71,7 @@ public class Transfer {
             String username,
             String filename,
             int token,
-            TransferStates state,
+            TransferState state,
             long size,
             long startOffset,
             long bytesTransferred) {
@@ -110,7 +110,7 @@ public class Transfer {
             String username,
             String filename,
             int token,
-            TransferStates state,
+            TransferState state,
             long size,
             long startOffset,
             long bytesTransferred,
@@ -151,7 +151,7 @@ public class Transfer {
             String username,
             String filename,
             int token,
-            TransferStates state,
+            TransferState state,
             long size,
             long startOffset,
             long bytesTransferred,
@@ -194,7 +194,7 @@ public class Transfer {
             String username,
             String filename,
             int token,
-            TransferStates state,
+            TransferState state,
             long size,
             long startOffset,
             long bytesTransferred,
@@ -239,7 +239,7 @@ public class Transfer {
             String username,
             String filename,
             int token,
-            TransferStates state,
+            TransferState state,
             long size,
             long startOffset,
             long bytesTransferred,
@@ -286,7 +286,7 @@ public class Transfer {
             String username,
             String filename,
             int token,
-            TransferStates state,
+            TransferState state,
             long size,
             long startOffset,
             long bytesTransferred,
@@ -335,7 +335,7 @@ public class Transfer {
             String username,
             String filename,
             int token,
-            TransferStates state,
+            TransferState state,
             long size,
             long startOffset,
             long bytesTransferred,
@@ -506,7 +506,7 @@ public class Transfer {
      *
      * @return the transfer state
      */
-    public final TransferStates getState() {
+    public final TransferState getState() {
         return state;
     }
 

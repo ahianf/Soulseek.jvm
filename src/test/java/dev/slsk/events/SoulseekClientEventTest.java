@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import dev.slsk.SoulseekClientStates;
+import dev.slsk.SoulseekClientState;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -18,10 +18,10 @@ class SoulseekClientEventTest {
     @DisplayName("SoulseekClientStateChangedEvent instantiates with the given data")
     void stateChangedInstantiatesWithTheGivenData() {
         SoulseekClientStateChangedEvent args = new SoulseekClientStateChangedEvent(
-                SoulseekClientStates.CONNECTED, SoulseekClientStates.LOGGED_IN, "message");
+                SoulseekClientState.CONNECTED, SoulseekClientState.LOGGED_IN, "message");
 
-        assertEquals(SoulseekClientStates.CONNECTED, args.getPreviousState());
-        assertEquals(SoulseekClientStates.LOGGED_IN, args.getState());
+        assertEquals(SoulseekClientState.CONNECTED, args.getPreviousState());
+        assertEquals(SoulseekClientState.LOGGED_IN, args.getState());
         assertEquals("message", args.getMessage());
         assertNull(args.getException());
     }
@@ -31,7 +31,7 @@ class SoulseekClientEventTest {
     void stateChangedInstantiatesWithException() {
         RuntimeException exception = new RuntimeException("failure");
         SoulseekClientStateChangedEvent args = new SoulseekClientStateChangedEvent(
-                SoulseekClientStates.CONNECTED, SoulseekClientStates.DISCONNECTED, null, exception);
+                SoulseekClientState.CONNECTED, SoulseekClientState.DISCONNECTED, null, exception);
 
         assertSame(exception, args.getException());
         assertNull(args.getMessage());
@@ -51,7 +51,7 @@ class SoulseekClientEventTest {
     @DisplayName("Optional constructor values default to null")
     void optionalConstructorValuesDefaultToNull() {
         SoulseekClientStateChangedEvent stateArgs =
-                new SoulseekClientStateChangedEvent(SoulseekClientStates.NONE, SoulseekClientStates.NONE);
+                new SoulseekClientStateChangedEvent(SoulseekClientState.NONE, SoulseekClientState.NONE);
         SoulseekClientDisconnectedEvent disconnectedArgs = new SoulseekClientDisconnectedEvent(null);
 
         assertNull(stateArgs.getMessage());
@@ -64,8 +64,8 @@ class SoulseekClientEventTest {
     @DisplayName("Rejects null state values that C# flags cannot represent")
     void rejectsNullStateValues() {
         assertThrows(
-                NullPointerException.class, () -> new SoulseekClientStateChangedEvent(null, SoulseekClientStates.NONE));
+                NullPointerException.class, () -> new SoulseekClientStateChangedEvent(null, SoulseekClientState.NONE));
         assertThrows(
-                NullPointerException.class, () -> new SoulseekClientStateChangedEvent(SoulseekClientStates.NONE, null));
+                NullPointerException.class, () -> new SoulseekClientStateChangedEvent(SoulseekClientState.NONE, null));
     }
 }

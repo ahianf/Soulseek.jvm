@@ -5,14 +5,14 @@
 package dev.slsk.events;
 
 import dev.slsk.Transfer;
-import dev.slsk.TransferStates;
+import dev.slsk.TransferState;
 import java.util.Objects;
 
 /**
  * Event arguments raised by a transfer-state change.
  */
 public class TransferStateChangedEvent extends TransferEvent {
-    private final TransferStates previousState;
+    private final TransferState previousState;
 
     /**
      * Creates transfer-state event payload.
@@ -21,7 +21,7 @@ public class TransferStateChangedEvent extends TransferEvent {
      * public because package visibility cannot span the client and
      * event-argument packages.</p>
      */
-    public TransferStateChangedEvent(TransferStates previousState, Transfer transfer) {
+    public TransferStateChangedEvent(TransferState previousState, Transfer transfer) {
         super(transfer);
         this.previousState = Objects.requireNonNull(previousState, "previousState");
     }
@@ -31,7 +31,7 @@ public class TransferStateChangedEvent extends TransferEvent {
      *
      * @return the previous state
      */
-    public final TransferStates getPreviousState() {
+    public final TransferState getPreviousState() {
         return previousState;
     }
 }

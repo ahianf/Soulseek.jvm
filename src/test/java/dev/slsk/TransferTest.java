@@ -30,7 +30,7 @@ class TransferTest {
                 "alice",
                 "music/file.mp3",
                 42,
-                TransferStates.IN_PROGRESS,
+                TransferState.IN_PROGRESS,
                 1000,
                 10,
                 400,
@@ -45,7 +45,7 @@ class TransferTest {
         assertEquals("alice", transfer.getUsername());
         assertEquals("music/file.mp3", transfer.getFilename());
         assertEquals(42, transfer.getToken());
-        assertEquals(TransferStates.IN_PROGRESS, transfer.getState());
+        assertEquals(TransferState.IN_PROGRESS, transfer.getState());
         assertEquals(1000, transfer.getSize());
         assertEquals(10, transfer.getStartOffset());
         assertEquals(400, transfer.getBytesTransferred());
@@ -64,7 +64,7 @@ class TransferTest {
     @Test
     @DisplayName("Optional values use source defaults")
     void optionalValuesUseSourceDefaults() {
-        Transfer transfer = new Transfer(TransferDirection.UPLOAD, null, null, 0, TransferStates.NONE, 0, 0);
+        Transfer transfer = new Transfer(TransferDirection.UPLOAD, null, null, 0, TransferState.NONE, 0, 0);
 
         assertNull(transfer.getUsername());
         assertNull(transfer.getFilename());
@@ -89,23 +89,23 @@ class TransferTest {
 
         assertEquals(
                 1,
-                new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, TransferStates.NONE, 2, 0, 1)
+                new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, TransferState.NONE, 2, 0, 1)
                         .getBytesTransferred());
         assertEquals(
                 2,
-                new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, TransferStates.NONE, 3, 0, 1, 2)
+                new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, TransferState.NONE, 3, 0, 1, 2)
                         .getAverageSpeed());
         assertEquals(
                 start,
-                new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, TransferStates.NONE, 3, 0, 1, 2, start)
+                new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, TransferState.NONE, 3, 0, 1, 2, start)
                         .getStartTime());
         assertEquals(
                 end,
-                new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, TransferStates.NONE, 3, 0, 1, 2, start, end)
+                new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, TransferState.NONE, 3, 0, 1, 2, start, end)
                         .getEndTime());
         assertEquals(
                 5,
-                new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, TransferStates.NONE, 3, 0, 1, 2, start, end, 5)
+                new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, TransferState.NONE, 3, 0, 1, 2, start, end, 5)
                         .getRemoteToken());
         assertSame(
                 endpoint,
@@ -114,7 +114,7 @@ class TransferTest {
                                 "u",
                                 "f",
                                 1,
-                                TransferStates.NONE,
+                                TransferState.NONE,
                                 3,
                                 0,
                                 1,
@@ -131,7 +131,7 @@ class TransferTest {
     void elapsedTimeUsesCurrentTimeWhenEndTimeIsNull() {
         Instant before = Instant.now().minusSeconds(2);
         Transfer transfer =
-                new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, TransferStates.IN_PROGRESS, 1, 0, 0, 1, before);
+                new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, TransferState.IN_PROGRESS, 1, 0, 0, 1, before);
 
         assertTrue(transfer.getElapsedTime().compareTo(Duration.ofSeconds(2)) >= 0);
         assertTrue(transfer.getElapsedTime().compareTo(Duration.ofSeconds(5)) < 0);
@@ -140,7 +140,7 @@ class TransferTest {
     @Test
     @DisplayName("PercentComplete returns zero if Size is zero")
     void percentCompleteReturnsZeroIfSizeIsZero() {
-        Transfer transfer = new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, TransferStates.NONE, 0, 0, 10);
+        Transfer transfer = new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, TransferState.NONE, 0, 0, 10);
 
         assertEquals(0, transfer.getPercentComplete());
         assertEquals(-10, transfer.getBytesRemaining());
@@ -149,8 +149,8 @@ class TransferTest {
     @Test
     @DisplayName("RemainingTime truncates to source TimeSpan 100-nanosecond ticks")
     void remainingTimeTruncatesToSourceTimeSpanTicks() {
-        Transfer positive = new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, TransferStates.NONE, 1, 0, 0, 600);
-        Transfer negative = new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, TransferStates.NONE, -1, 0, 0, 600);
+        Transfer positive = new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, TransferState.NONE, 1, 0, 0, 600);
+        Transfer negative = new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, TransferState.NONE, -1, 0, 0, 600);
 
         assertEquals(Duration.ofNanos(1_666_600), positive.getRemainingTime());
         assertEquals(Duration.ofNanos(-1_666_600), negative.getRemainingTime());
@@ -159,7 +159,7 @@ class TransferTest {
     @Test
     @DisplayName("Rejects null value-type mappings")
     void rejectsNullValueTypeMappings() {
-        assertThrows(NullPointerException.class, () -> new Transfer(null, "u", "f", 1, TransferStates.NONE, 1, 0));
+        assertThrows(NullPointerException.class, () -> new Transfer(null, "u", "f", 1, TransferState.NONE, 1, 0));
         assertThrows(
                 NullPointerException.class, () -> new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, null, 1, 0));
     }
@@ -169,10 +169,10 @@ class TransferTest {
     void rejectsNonFiniteRemainingDuration() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, TransferStates.NONE, 1, 0, 0, Double.NaN));
+                () -> new Transfer(TransferDirection.DOWNLOAD, "u", "f", 1, TransferState.NONE, 1, 0, 0, Double.NaN));
         assertThrows(
                 ArithmeticException.class,
                 () -> new Transfer(
-                        TransferDirection.DOWNLOAD, "u", "f", 1, TransferStates.NONE, 1, 0, 0, Double.MIN_VALUE));
+                        TransferDirection.DOWNLOAD, "u", "f", 1, TransferState.NONE, 1, 0, 0, Double.MIN_VALUE));
     }
 }

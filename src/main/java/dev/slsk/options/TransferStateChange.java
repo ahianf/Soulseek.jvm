@@ -5,7 +5,7 @@
 package dev.slsk.options;
 
 import dev.slsk.Transfer;
-import dev.slsk.TransferStates;
+import dev.slsk.TransferState;
 import java.util.Objects;
 
 /**
@@ -14,7 +14,7 @@ import java.util.Objects;
  * @param previousState the transfer's previous state
  * @param transfer the transfer after the state change
  */
-public record TransferStateChange(TransferStates previousState, Transfer transfer) {
+public record TransferStateChange(TransferState previousState, Transfer transfer) {
     /**
      * Creates a transfer state change.
      */

@@ -10,7 +10,7 @@ import dev.slsk.Search;
 import dev.slsk.SearchQuery;
 import dev.slsk.SearchResponse;
 import dev.slsk.SearchScope;
-import dev.slsk.SearchStates;
+import dev.slsk.SearchState;
 import dev.slsk.options.SearchOptions;
 import java.util.List;
 import java.util.Objects;
@@ -43,7 +43,7 @@ public final class SearchInternal implements AutoCloseable {
 
     private volatile Consumer<SearchResponse> responseReceived;
     private volatile ScheduledFuture<?> timeoutTask;
-    private volatile SearchStates state = SearchStates.NONE;
+    private volatile SearchState state = SearchState.NONE;
 
     /** Creates a search using default options. */
     public SearchInternal(SearchQuery query, SearchScope scope, int token) {
@@ -97,7 +97,7 @@ public final class SearchInternal implements AutoCloseable {
     }
 
     /** Returns the current state. */
-    public SearchStates getState() {
+    public SearchState getState() {
         return state;
     }
 
@@ -129,7 +129,7 @@ public final class SearchInternal implements AutoCloseable {
         stateLock.writeLock().lock();
         try {
             stopTimeout();
-            state = SearchStates.COMPLETED.or(SearchStates.CANCELLED);
+            state = SearchState.COMPLETED.or(SearchState.CANCELLED);
             completion.cancel(false);
         } finally {
             stateLock.writeLock().unlock();
@@ -137,12 +137,12 @@ public final class SearchInternal implements AutoCloseable {
     }
 
     /** Completes the search with a terminal detail state. */
-    public void complete(SearchStates terminalState) {
+    public void complete(SearchState terminalState) {
         Objects.requireNonNull(terminalState, "terminalState");
         stateLock.writeLock().lock();
         try {
             stopTimeout();
-            state = SearchStates.COMPLETED.or(terminalState);
+            state = SearchState.COMPLETED.or(terminalState);
             completion.complete(null);
         } finally {
             stateLock.writeLock().unlock();
@@ -150,13 +150,13 @@ public final class SearchInternal implements AutoCloseable {
     }
 
     /** Sets the current search state. */
-    public void setState(SearchStates newState) {
+    public void setState(SearchState newState) {
         Objects.requireNonNull(newState, "newState");
         stateLock.writeLock().lock();
         try {
-            SearchStates previousState = state;
+            SearchState previousState = state;
             state = newState;
-            if (!previousState.equals(SearchStates.IN_PROGRESS) && newState.equals(SearchStates.IN_PROGRESS)) {
+            if (!previousState.equals(SearchState.IN_PROGRESS) && newState.equals(SearchState.IN_PROGRESS)) {
                 resetTimeout();
             }
         } finally {
@@ -184,7 +184,7 @@ public final class SearchInternal implements AutoCloseable {
         try {
             stateLock.readLock().lock();
             try {
-                if (!state.hasFlag(SearchStates.IN_PROGRESS) || !responseMeetsOptionCriteria(response)) {
+                if (!state.contains(SearchState.IN_PROGRESS) || !responseMeetsOptionCriteria(response)) {
                     return;
                 }
 
@@ -231,9 +231,9 @@ public final class SearchInternal implements AutoCloseable {
             }
 
             if (responseCount.get() >= options.getResponseLimit()) {
-                complete(SearchStates.RESPONSE_LIMIT_REACHED);
+                complete(SearchState.RESPONSE_LIMIT_REACHED);
             } else if (fileCount.get() >= options.getFileLimit()) {
-                complete(SearchStates.FILE_LIMIT_REACHED);
+                complete(SearchState.FILE_LIMIT_REACHED);
             }
         } catch (IllegalStateException ignored) {
             // Java adaptation of the source's late ObjectDisposedException.
@@ -286,7 +286,7 @@ public final class SearchInternal implements AutoCloseable {
     private void resetTimeout() {
         stopTimeout();
         timeoutTask = timerExecutor.schedule(
-                () -> complete(SearchStates.TIMED_OUT), options.getSearchTimeout(), TimeUnit.MILLISECONDS);
+                () -> complete(SearchState.TIMED_OUT), options.getSearchTimeout(), TimeUnit.MILLISECONDS);
     }
 
     private void stopTimeout() {

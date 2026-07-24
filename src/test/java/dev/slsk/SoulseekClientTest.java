@@ -63,7 +63,7 @@ class SoulseekClientTest {
             assertEquals(170, client.getMajorVersion());
             assertEquals(9999, client.getMinorVersion());
             assertSame(options, client.getOptions());
-            assertEquals(SoulseekClientStates.DISCONNECTED, client.getState());
+            assertEquals(SoulseekClientState.DISCONNECTED, client.getState());
             assertNull(client.getUsername());
             assertNull(client.getIpEndpoint());
             assertNull(client.getIpAddress());
@@ -108,10 +108,10 @@ class SoulseekClientTest {
         AtomicReference<SoulseekClientDisconnectedEvent> disconnected = new AtomicReference<>();
         fixture.client.addDisconnectedListener((sender, eventData) -> disconnected.set(eventData));
 
-        fixture.client.changeState(SoulseekClientStates.CONNECTED, "connected", null);
-        fixture.client.changeState(SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN), "logged", null);
+        fixture.client.changeState(SoulseekClientState.CONNECTED, "connected", null);
+        fixture.client.changeState(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN), "logged", null);
         RuntimeException cause = new RuntimeException("bye");
-        fixture.client.changeState(SoulseekClientStates.DISCONNECTED, "bye", cause);
+        fixture.client.changeState(SoulseekClientState.DISCONNECTED, "bye", cause);
 
         assertEquals(
                 List.of("state:CONNECTED", "connected", "state:CONNECTED | LOGGED_IN", "logged", "state:DISCONNECTED"),
@@ -124,7 +124,7 @@ class SoulseekClientTest {
     @Test
     void disconnectUsesSourceReasonsCancelsSearchesAndRetainsDownloads() {
         Fixture fixture = new Fixture();
-        fixture.client.setStateForTest(SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN));
+        fixture.client.setStateForTest(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
         SearchInternal search = new SearchInternal(SearchQuery.fromText("query"), SearchScope.getNetwork(), 1);
         Map<Integer, SearchInternal> searches = new HashMap<>();
         searches.put(1, search);
@@ -135,7 +135,7 @@ class SoulseekClientTest {
 
         fixture.client.disconnect(null, new RuntimeException("cause"));
 
-        assertEquals(SoulseekClientStates.DISCONNECTED, fixture.client.getState());
+        assertEquals(SoulseekClientState.DISCONNECTED, fixture.client.getState());
         assertEquals("cause", fixture.connection.disconnectMessage);
         assertTrue(searches.isEmpty());
         assertEquals(1, downloads.size());
@@ -189,17 +189,17 @@ class SoulseekClientTest {
 
         fixture.server.raise(ServerMessageEvent.GLOBAL_MESSAGE_RECEIVED, "global");
         fixture.server.raise(ServerMessageEvent.SERVER_INFO_RECEIVED, new ServerInfo(1, 2, 3, true));
-        fixture.client.setStateForTest(SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN));
+        fixture.client.setStateForTest(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
         fixture.server.raise(ServerMessageEvent.KICKED_FROM_SERVER, null);
 
         assertEquals("global", global.get());
         assertEquals(2, serverInfo.get().getParentSpeedRatio());
         assertEquals(true, fixture.client.getServerInfo().isSupporter());
         assertEquals(1, kicked.get());
-        assertEquals(SoulseekClientStates.DISCONNECTED, fixture.client.getState());
+        assertEquals(SoulseekClientState.DISCONNECTED, fixture.client.getState());
         AtomicReference<SoulseekClientDisconnectedEvent> disconnect = new AtomicReference<>();
         fixture.client.addDisconnectedListener((sender, value) -> disconnect.set(value));
-        fixture.client.setStateForTest(SoulseekClientStates.CONNECTED);
+        fixture.client.setStateForTest(SoulseekClientState.CONNECTED);
         fixture.server.raise(ServerMessageEvent.KICKED_FROM_SERVER, null);
         assertInstanceOf(KickedFromServerException.class, disconnect.get().getException());
         fixture.close();

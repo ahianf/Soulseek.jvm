@@ -11,25 +11,25 @@ import java.util.Objects;
 /**
  * A bitwise combination of Soulseek client states.
  */
-public final class SoulseekClientStates {
+public final class SoulseekClientState {
     /** No client state. */
-    public static final SoulseekClientStates NONE = new SoulseekClientStates(0);
+    public static final SoulseekClientState NONE = new SoulseekClientState(0);
     /** The client is disconnected. */
-    public static final SoulseekClientStates DISCONNECTED = new SoulseekClientStates(1);
+    public static final SoulseekClientState DISCONNECTED = new SoulseekClientState(1);
     /** The client is connected. */
-    public static final SoulseekClientStates CONNECTED = new SoulseekClientStates(2);
+    public static final SoulseekClientState CONNECTED = new SoulseekClientState(2);
     /** The client is logged in. */
-    public static final SoulseekClientStates LOGGED_IN = new SoulseekClientStates(4);
+    public static final SoulseekClientState LOGGED_IN = new SoulseekClientState(4);
     /** The client is connecting. */
-    public static final SoulseekClientStates CONNECTING = new SoulseekClientStates(8);
+    public static final SoulseekClientState CONNECTING = new SoulseekClientState(8);
     /** The client is logging in. */
-    public static final SoulseekClientStates LOGGING_IN = new SoulseekClientStates(16);
+    public static final SoulseekClientState LOGGING_IN = new SoulseekClientState(16);
     /** The client is disconnecting. */
-    public static final SoulseekClientStates DISCONNECTING = new SoulseekClientStates(32);
+    public static final SoulseekClientState DISCONNECTING = new SoulseekClientState(32);
 
     private final int value;
 
-    private SoulseekClientStates(int value) {
+    private SoulseekClientState(int value) {
         this.value = value;
     }
 
@@ -39,7 +39,7 @@ public final class SoulseekClientStates {
      * @param value the bit mask
      * @return the state value
      */
-    public static SoulseekClientStates fromValue(int value) {
+    public static SoulseekClientState fromValue(int value) {
         return switch (value) {
             case 0 -> NONE;
             case 1 -> DISCONNECTED;
@@ -48,7 +48,7 @@ public final class SoulseekClientStates {
             case 8 -> CONNECTING;
             case 16 -> LOGGING_IN;
             case 32 -> DISCONNECTING;
-            default -> new SoulseekClientStates(value);
+            default -> new SoulseekClientState(value);
         };
     }
 
@@ -67,7 +67,7 @@ public final class SoulseekClientStates {
      * @param state the state to test
      * @return {@code true} when all state bits are present
      */
-    public boolean hasFlag(SoulseekClientStates state) {
+    public boolean contains(SoulseekClientState state) {
         Objects.requireNonNull(state, "state");
         return (value & state.value) == state.value;
     }
@@ -78,14 +78,14 @@ public final class SoulseekClientStates {
      * @param state the state to combine
      * @return the combined state
      */
-    public SoulseekClientStates or(SoulseekClientStates state) {
+    public SoulseekClientState or(SoulseekClientState state) {
         Objects.requireNonNull(state, "state");
         return fromValue(value | state.value);
     }
 
     @Override
     public boolean equals(Object other) {
-        return this == other || other instanceof SoulseekClientStates states && value == states.value;
+        return this == other || other instanceof SoulseekClientState states && value == states.value;
     }
 
     @Override
@@ -108,8 +108,8 @@ public final class SoulseekClientStates {
         return names.isEmpty() ? Integer.toString(value) : String.join(" | ", names);
     }
 
-    private void addName(List<String> names, SoulseekClientStates state, String name) {
-        if (hasFlag(state)) {
+    private void addName(List<String> names, SoulseekClientState state, String name) {
+        if (contains(state)) {
             names.add(name);
         }
     }

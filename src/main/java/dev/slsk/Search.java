@@ -15,7 +15,7 @@ public class Search {
     private final SearchQuery query;
     private final int responseCount;
     private final SearchScope scope;
-    private final SearchStates state;
+    private final SearchState state;
     private final int token;
 
     /**
@@ -33,7 +33,7 @@ public class Search {
             SearchQuery query,
             SearchScope scope,
             int token,
-            SearchStates state,
+            SearchState state,
             int responseCount,
             int fileCount,
             int lockedFileCount) {
@@ -96,7 +96,7 @@ public class Search {
      *
      * @return the search state
      */
-    public final SearchStates getState() {
+    public final SearchState getState() {
         return state;
     }
 

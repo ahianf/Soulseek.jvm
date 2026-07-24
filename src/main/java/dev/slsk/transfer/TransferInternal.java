@@ -6,7 +6,7 @@ package dev.slsk.transfer;
 
 import dev.slsk.Transfer;
 import dev.slsk.TransferDirection;
-import dev.slsk.TransferStates;
+import dev.slsk.TransferState;
 import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
 import dev.slsk.network.tcp.Connection;
@@ -40,7 +40,7 @@ public final class TransferInternal {
     private boolean speedInitialized;
     private long startOffset;
     private Instant startTime;
-    private TransferStates state = TransferStates.NONE;
+    private TransferState state = TransferState.NONE;
     private final int token;
     private final String username;
     private final WaitKey waitKey;
@@ -194,17 +194,17 @@ public final class TransferInternal {
     }
 
     /** Returns the transfer state. */
-    public synchronized TransferStates getState() {
+    public synchronized TransferState getState() {
         return state;
     }
 
     /** Sets the transfer state and records transition timestamps. */
-    public synchronized void setState(TransferStates value) {
+    public synchronized void setState(TransferState value) {
         Objects.requireNonNull(value, "value");
         Instant time = clock.instant();
-        if (value.hasFlag(TransferStates.IN_PROGRESS) && startTime == null) {
+        if (value.contains(TransferState.IN_PROGRESS) && startTime == null) {
             startTime = time;
-        } else if (value.hasFlag(TransferStates.COMPLETED) && endTime == null) {
+        } else if (value.contains(TransferState.COMPLETED) && endTime == null) {
             endTime = time;
             if (startTime == null) {
                 startTime = time;
@@ -212,7 +212,7 @@ public final class TransferInternal {
         }
 
         state = value;
-        if (state.hasFlag(TransferStates.COMPLETED)) {
+        if (state.contains(TransferState.COMPLETED)) {
             updateProgress(bytesTransferred);
         }
     }
@@ -240,7 +240,7 @@ public final class TransferInternal {
         }
 
         Instant now = clock.instant();
-        if (state.hasFlag(TransferStates.COMPLETED)) {
+        if (state.contains(TransferState.COMPLETED)) {
             averageSpeed = (bytesTransferred - startOffset) / durationSeconds(startTime, endTime);
             return;
         }

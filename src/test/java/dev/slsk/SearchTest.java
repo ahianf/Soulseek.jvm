@@ -17,7 +17,7 @@ class SearchTest {
     void instantiatesWithExpectedData() {
         SearchQuery query = new SearchQuery("foo bar");
         SearchScope scope = SearchScope.getNetwork();
-        SearchStates state = SearchStates.COMPLETED.or(SearchStates.TIMED_OUT);
+        SearchState state = SearchState.COMPLETED.or(SearchState.TIMED_OUT);
 
         Search search = new Search(query, scope, 42, state, 3, 4, 5);
 
@@ -33,7 +33,7 @@ class SearchTest {
     @Test
     @DisplayName("Preserves nullable query and scope references")
     void preservesNullableQueryAndScopeReferences() {
-        Search search = new Search(null, null, 0, SearchStates.NONE, 0, 0, 0);
+        Search search = new Search(null, null, 0, SearchState.NONE, 0, 0, 0);
 
         assertNull(search.getQuery());
         assertNull(search.getScope());

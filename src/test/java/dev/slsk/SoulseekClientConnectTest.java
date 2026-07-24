@@ -72,16 +72,16 @@ class SoulseekClientConnectTest {
                 IllegalArgumentException.class,
                 () -> fixture.client.connectAsync("127.0.0.1", 65_536, "user", "password"));
 
-        fixture.client.setStateForTest(SoulseekClientStates.CONNECTING);
+        fixture.client.setStateForTest(SoulseekClientState.CONNECTING);
         assertThrows(
                 IllegalStateException.class, () -> fixture.client.connectAsync("127.0.0.1", 1, "user", "password"));
-        fixture.client.setStateForTest(SoulseekClientStates.LOGGING_IN);
+        fixture.client.setStateForTest(SoulseekClientState.LOGGING_IN);
         assertThrows(
                 IllegalStateException.class, () -> fixture.client.connectAsync("127.0.0.1", 1, "user", "password"));
-        fixture.client.setStateForTest(SoulseekClientStates.CONNECTED);
+        fixture.client.setStateForTest(SoulseekClientState.CONNECTED);
         assertThrows(
                 IllegalStateException.class, () -> fixture.client.connectAsync("127.0.0.1", 1, "user", "password"));
-        fixture.client.setStateForTest(SoulseekClientStates.DISCONNECTED);
+        fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
         fixture.close();
     }
 
@@ -110,7 +110,7 @@ class SoulseekClientConnectTest {
         Fixture fixture = new Fixture();
         CancellationController source = new CancellationController();
         CancellationSignal token = source.getSignal();
-        List<SoulseekClientStates> states = new ArrayList<>();
+        List<SoulseekClientState> states = new ArrayList<>();
         fixture.client.addStateChangedListener((sender, eventData) -> states.add(eventData.getState()));
         fixture.connection.fireConnected = true;
 
@@ -137,9 +137,9 @@ class SoulseekClientConnectTest {
         assertSame(token, fixture.distributed.updateToken);
         assertEquals(
                 List.of(
-                        SoulseekClientStates.CONNECTING,
-                        SoulseekClientStates.CONNECTED,
-                        SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGING_IN),
+                        SoulseekClientState.CONNECTING,
+                        SoulseekClientState.CONNECTED,
+                        SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGING_IN),
                         loggedIn()),
                 states);
         assertEquals(List.of("wait", "raw", "message", "message", "distributed"), fixture.sequence);
@@ -181,7 +181,7 @@ class SoulseekClientConnectTest {
         LoginRejectedException failure = assertInstanceOf(LoginRejectedException.class, completionCause(operation));
 
         assertTrue(failure.getMessage().contains("denied"));
-        assertEquals(SoulseekClientStates.DISCONNECTED, fixture.client.getState());
+        assertEquals(SoulseekClientState.DISCONNECTED, fixture.client.getState());
         assertNull(fixture.client.getUsername());
         assertEquals(1, fixture.connection.disconnectCount);
         fixture.close();
@@ -196,7 +196,7 @@ class SoulseekClientConnectTest {
                 SoulseekClientException.class,
                 completionCause(fixture.client.connectAsync("127.0.0.1", 2271, "alice", "secret")));
         assertSame(connectFailure, wrapped.getCause());
-        assertEquals(SoulseekClientStates.DISCONNECTED, fixture.client.getState());
+        assertEquals(SoulseekClientState.DISCONNECTED, fixture.client.getState());
 
         Fixture configurationFixture = new Fixture();
         ConnectionWriteException writeFailure = new ConnectionWriteException("write");
@@ -205,7 +205,7 @@ class SoulseekClientConnectTest {
                 SoulseekClientException.class,
                 completionCause(configurationFixture.client.connectAsync("127.0.0.1", 2271, "alice", "secret")));
         assertSame(writeFailure, configurationWrapped.getCause());
-        assertEquals(SoulseekClientStates.DISCONNECTED, configurationFixture.client.getState());
+        assertEquals(SoulseekClientState.DISCONNECTED, configurationFixture.client.getState());
         fixture.close();
         configurationFixture.close();
     }
@@ -216,7 +216,7 @@ class SoulseekClientConnectTest {
         TimeoutException timeout = new TimeoutException("timeout");
         fixture.connection.connectResult = CompletableFuture.failedFuture(timeout);
         assertSame(timeout, completionCause(fixture.client.connectAsync("127.0.0.1", 2271, "alice", "secret")));
-        assertEquals(SoulseekClientStates.DISCONNECTED, fixture.client.getState());
+        assertEquals(SoulseekClientState.DISCONNECTED, fixture.client.getState());
 
         Fixture cancelledFixture = new Fixture();
         CancellationController source = new CancellationController();
@@ -226,7 +226,7 @@ class SoulseekClientConnectTest {
                 completionCause(cancelledFixture.client.connectAsync(
                         "127.0.0.1", 2271, "alice", "secret", source.getSignal())));
         assertEquals(0, cancelledFixture.connection.connectCount);
-        assertEquals(SoulseekClientStates.DISCONNECTED, cancelledFixture.client.getState());
+        assertEquals(SoulseekClientState.DISCONNECTED, cancelledFixture.client.getState());
         fixture.close();
         cancelledFixture.close();
     }
@@ -241,14 +241,14 @@ class SoulseekClientConnectTest {
         assertTrue(fixture.factory.messageWritten != null);
 
         fixture.factory.connected.handle(fixture.connection.proxy, null);
-        assertEquals(SoulseekClientStates.CONNECTED, fixture.client.getState());
+        assertEquals(SoulseekClientState.CONNECTED, fixture.client.getState());
         fixture.factory.disconnected.handle(fixture.connection.proxy, new ConnectionDisconnectedEvent("gone"));
-        assertEquals(SoulseekClientStates.DISCONNECTED, fixture.client.getState());
+        assertEquals(SoulseekClientState.DISCONNECTED, fixture.client.getState());
         fixture.close();
     }
 
-    private static SoulseekClientStates loggedIn() {
-        return SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN);
+    private static SoulseekClientState loggedIn() {
+        return SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN);
     }
 
     private static Throwable completionCause(CompletableFuture<?> future) {

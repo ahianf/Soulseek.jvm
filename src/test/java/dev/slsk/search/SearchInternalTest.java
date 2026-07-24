@@ -18,7 +18,7 @@ import dev.slsk.Search;
 import dev.slsk.SearchQuery;
 import dev.slsk.SearchResponse;
 import dev.slsk.SearchScope;
-import dev.slsk.SearchStates;
+import dev.slsk.SearchState;
 import dev.slsk.options.SearchOptions;
 import java.util.List;
 import java.util.concurrent.CancellationException;
@@ -39,7 +39,7 @@ class SearchInternalTest {
             assertSame(scope, search.getScope());
             assertSame(options, search.getOptions());
             assertEquals(42, search.getToken());
-            assertEquals(SearchStates.NONE, search.getState());
+            assertEquals(SearchState.NONE, search.getState());
             assertEquals(0, search.getResponseCount());
             assertEquals(0, search.getFileCount());
             assertEquals(0, search.getLockedFileCount());
@@ -54,18 +54,18 @@ class SearchInternalTest {
     @Test
     void closeCompleteAndCancelAreIdempotent() {
         SearchInternal search = search(42, new SearchOptions());
-        search.complete(SearchStates.TIMED_OUT);
-        search.complete(SearchStates.TIMED_OUT);
-        assertTrue(search.getState().hasFlag(SearchStates.COMPLETED));
-        assertTrue(search.getState().hasFlag(SearchStates.TIMED_OUT));
+        search.complete(SearchState.TIMED_OUT);
+        search.complete(SearchState.TIMED_OUT);
+        assertTrue(search.getState().contains(SearchState.COMPLETED));
+        assertTrue(search.getState().contains(SearchState.TIMED_OUT));
         search.close();
         search.close();
 
         SearchInternal cancelled = search(42, new SearchOptions());
         cancelled.cancel();
         cancelled.cancel();
-        assertTrue(cancelled.getState().hasFlag(SearchStates.COMPLETED));
-        assertTrue(cancelled.getState().hasFlag(SearchStates.CANCELLED));
+        assertTrue(cancelled.getState().contains(SearchState.COMPLETED));
+        assertTrue(cancelled.getState().contains(SearchState.CANCELLED));
         assertThrows(
                 CancellationException.class, () -> cancelled.waitForCompletion().join());
         cancelled.close();
@@ -84,7 +84,7 @@ class SearchInternalTest {
         AtomicInteger received = new AtomicInteger();
         try (SearchInternal search = search(42, new SearchOptions())) {
             search.setResponseReceived(response -> received.incrementAndGet());
-            search.setState(SearchStates.COMPLETED);
+            search.setState(SearchState.COMPLETED);
             search.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of()));
             assertEquals(0, received.get());
         }
@@ -115,7 +115,7 @@ class SearchInternalTest {
         AtomicReference<SearchResponse> accepted = new AtomicReference<>();
 
         try (SearchInternal search = search(42, options)) {
-            search.setState(SearchStates.IN_PROGRESS);
+            search.setState(SearchState.IN_PROGRESS);
             search.setResponseReceived(accepted::set);
             search.tryAddResponse(response(42, 1, 0, List.of(keep, remove), List.of(keep, remove)));
 
@@ -138,7 +138,7 @@ class SearchInternalTest {
     void invokesComposedCallbacksInOrderAndResetsTimeout() {
         StringBuilder order = new StringBuilder();
         try (SearchInternal search = search(42, new SearchOptions(1000))) {
-            search.setState(SearchStates.IN_PROGRESS);
+            search.setState(SearchState.IN_PROGRESS);
             search.addResponseReceived(response -> order.append('a'));
             search.addResponseReceived(response -> order.append('b'));
             search.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of()));
@@ -152,14 +152,14 @@ class SearchInternalTest {
     void returnsWithoutCallbackAfterCloseAndSwallowsDisposedFailure() {
         AtomicInteger count = new AtomicInteger();
         SearchInternal search = search(42, new SearchOptions());
-        search.setState(SearchStates.IN_PROGRESS);
+        search.setState(SearchState.IN_PROGRESS);
         search.setResponseReceived(response -> count.incrementAndGet());
         search.close();
         search.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of()));
         assertEquals(0, count.get());
 
         try (SearchInternal second = search(42, new SearchOptions())) {
-            second.setState(SearchStates.IN_PROGRESS);
+            second.setState(SearchState.IN_PROGRESS);
             second.setResponseReceived(response -> {
                 throw new IllegalStateException("disposed");
             });
@@ -172,11 +172,11 @@ class SearchInternalTest {
     void responseLimitWinsWhenBothLimitsAreReached() {
         SearchOptions options = new SearchOptions(1000, 1, false, 1, Integer.MAX_VALUE, 0, 1);
         try (SearchInternal search = search(42, options)) {
-            search.setState(SearchStates.IN_PROGRESS);
+            search.setState(SearchState.IN_PROGRESS);
             search.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of()));
             search.waitForCompletion().join();
-            assertTrue(search.getState().hasFlag(SearchStates.RESPONSE_LIMIT_REACHED));
-            assertFalse(search.getState().hasFlag(SearchStates.FILE_LIMIT_REACHED));
+            assertTrue(search.getState().contains(SearchState.RESPONSE_LIMIT_REACHED));
+            assertFalse(search.getState().contains(SearchState.FILE_LIMIT_REACHED));
         }
     }
 
@@ -184,10 +184,10 @@ class SearchInternalTest {
     void fileLimitCompletesSearch() {
         SearchOptions options = new SearchOptions(1000, 2, false, 1, Integer.MAX_VALUE, 0, 1);
         try (SearchInternal search = search(42, options)) {
-            search.setState(SearchStates.IN_PROGRESS);
+            search.setState(SearchState.IN_PROGRESS);
             search.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of()));
             search.waitForCompletion().join();
-            assertTrue(search.getState().hasFlag(SearchStates.FILE_LIMIT_REACHED));
+            assertTrue(search.getState().contains(SearchState.FILE_LIMIT_REACHED));
         }
     }
 
@@ -195,7 +195,7 @@ class SearchInternalTest {
     void waitCompletesAndCallerCancellationDoesNotCancelSearch() {
         try (SearchInternal search = search(42, new SearchOptions())) {
             var wait = search.waitForCompletion();
-            search.complete(SearchStates.TIMED_OUT);
+            search.complete(SearchState.TIMED_OUT);
             assertNull(wait.join());
         }
 
@@ -204,7 +204,7 @@ class SearchInternalTest {
             var wait = search.waitForCompletion(source.getSignal());
             source.cancel();
             assertThrows(CancellationException.class, wait::join);
-            assertEquals(SearchStates.NONE, search.getState());
+            assertEquals(SearchState.NONE, search.getState());
         }
     }
 
@@ -213,16 +213,16 @@ class SearchInternalTest {
         SearchOptions options = new SearchOptions(40);
         try (SearchInternal search = search(42, options)) {
             assertFalse(search.isTimeoutActive());
-            search.setState(SearchStates.REQUESTED);
-            search.setState(SearchStates.QUEUED);
+            search.setState(SearchState.REQUESTED);
+            search.setState(SearchState.QUEUED);
             assertFalse(search.isTimeoutActive());
-            search.setState(SearchStates.IN_PROGRESS);
+            search.setState(SearchState.IN_PROGRESS);
             assertTrue(search.isTimeoutActive());
-            search.setState(SearchStates.IN_PROGRESS);
+            search.setState(SearchState.IN_PROGRESS);
             assertTrue(search.isTimeoutActive());
             search.waitForCompletion().join();
-            assertTrue(search.getState().hasFlag(SearchStates.COMPLETED));
-            assertTrue(search.getState().hasFlag(SearchStates.TIMED_OUT));
+            assertTrue(search.getState().contains(SearchState.COMPLETED));
+            assertTrue(search.getState().contains(SearchState.TIMED_OUT));
             assertFalse(search.isTimeoutActive());
         }
     }
@@ -230,13 +230,13 @@ class SearchInternalTest {
     @Test
     void snapshotCopiesCurrentMutableState() {
         try (SearchInternal search = search(42, new SearchOptions())) {
-            search.setState(SearchStates.IN_PROGRESS);
+            search.setState(SearchState.IN_PROGRESS);
             search.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of(FILE)));
             Search snapshot = search.toSearch();
             assertSame(search.getQuery(), snapshot.getQuery());
             assertSame(search.getScope(), snapshot.getScope());
             assertEquals(42, snapshot.getToken());
-            assertEquals(SearchStates.IN_PROGRESS, snapshot.getState());
+            assertEquals(SearchState.IN_PROGRESS, snapshot.getState());
             assertEquals(1, snapshot.getResponseCount());
             assertEquals(1, snapshot.getFileCount());
             assertEquals(1, snapshot.getLockedFileCount());
@@ -259,7 +259,7 @@ class SearchInternalTest {
 
     private static void assertAccepted(SearchOptions options, SearchResponse response) {
         try (SearchInternal search = search(42, options)) {
-            search.setState(SearchStates.IN_PROGRESS);
+            search.setState(SearchState.IN_PROGRESS);
             search.tryAddResponse(response);
             assertEquals(1, search.getResponseCount());
         }
@@ -267,7 +267,7 @@ class SearchInternalTest {
 
     private static void assertRejected(SearchOptions options, SearchResponse response) {
         try (SearchInternal search = search(42, options)) {
-            search.setState(SearchStates.IN_PROGRESS);
+            search.setState(SearchState.IN_PROGRESS);
             search.tryAddResponse(response);
             assertEquals(0, search.getResponseCount());
         }
