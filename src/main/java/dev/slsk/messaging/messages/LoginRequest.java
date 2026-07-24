@@ -5,13 +5,12 @@
 package dev.slsk.messaging.messages;
 
 import dev.slsk.common.CommonUtils;
+import dev.slsk.common.Constants;
 import dev.slsk.messaging.MessageBuilder;
 import dev.slsk.messaging.MessageCode;
 
 /** Logs in to the Soulseek server. */
 public final class LoginRequest implements IOutgoingMessage {
-    private static final int VERSION = 170;
-
     private final String hash;
     private final int minorVersion;
     private final String password;
@@ -41,7 +40,7 @@ public final class LoginRequest implements IOutgoingMessage {
     }
 
     public int getVersion() {
-        return VERSION;
+        return Constants.MAJOR_VERSION;
     }
 
     @Override
@@ -50,7 +49,7 @@ public final class LoginRequest implements IOutgoingMessage {
                 .writeCode(MessageCode.Server.LOGIN)
                 .writeString(username)
                 .writeString(password)
-                .writeInteger(VERSION)
+                .writeInteger(Constants.MAJOR_VERSION)
                 .writeString(hash)
                 .writeInteger(minorVersion)
                 .build();
