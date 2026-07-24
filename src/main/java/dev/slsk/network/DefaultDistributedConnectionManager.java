@@ -102,7 +102,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
             this::parentDisconnected;
     private final ConnectionEventListener<ConnectionDisconnectedEventArgs> childDisconnectedListener =
             this::childDisconnected;
-    private final MessageConnectionEventListener<MessageEventArgs> parentInitializationListener =
+    private final MessageConnectionEventListener<MessageEvent> parentInitializationListener =
             this::handleParentCandidateMessage;
 
     private volatile Double averageBroadcastLatency;
@@ -640,7 +640,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         }
     }
 
-    void handleParentCandidateMessage(MessageConnection connection, MessageEventArgs eventArgs) {
+    void handleParentCandidateMessage(MessageConnection connection, MessageEvent eventArgs) {
         try {
             byte[] message = eventArgs.getMessage();
             MessageCode.Distributed code = new MessageReader<>(message, MessageCode.Distributed.class).readCode();

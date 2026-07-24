@@ -11,21 +11,21 @@ import java.util.concurrent.CompletableFuture;
 
 /** Provides framed client connections to the Soulseek network. */
 public interface MessageConnection extends Connection {
-    void addMessageDataReadListener(MessageConnectionEventListener<MessageDataEventArgs> listener);
+    void addMessageDataReadListener(MessageConnectionEventListener<MessageDataEvent> listener);
 
-    void removeMessageDataReadListener(MessageConnectionEventListener<MessageDataEventArgs> listener);
+    void removeMessageDataReadListener(MessageConnectionEventListener<MessageDataEvent> listener);
 
-    void addMessageReadListener(MessageConnectionEventListener<MessageEventArgs> listener);
+    void addMessageReadListener(MessageConnectionEventListener<MessageEvent> listener);
 
-    void removeMessageReadListener(MessageConnectionEventListener<MessageEventArgs> listener);
+    void removeMessageReadListener(MessageConnectionEventListener<MessageEvent> listener);
 
-    void addMessageReceivedListener(MessageConnectionEventListener<MessageReceivedEventArgs> listener);
+    void addMessageReceivedListener(MessageConnectionEventListener<MessageReceivedEvent> listener);
 
-    void removeMessageReceivedListener(MessageConnectionEventListener<MessageReceivedEventArgs> listener);
+    void removeMessageReceivedListener(MessageConnectionEventListener<MessageReceivedEvent> listener);
 
-    void addMessageWrittenListener(MessageConnectionEventListener<MessageEventArgs> listener);
+    void addMessageWrittenListener(MessageConnectionEventListener<MessageEvent> listener);
 
-    void removeMessageWrittenListener(MessageConnectionEventListener<MessageEventArgs> listener);
+    void removeMessageWrittenListener(MessageConnectionEventListener<MessageEvent> listener);
 
     /** Returns the received message-code width. */
     int getCodeLength();

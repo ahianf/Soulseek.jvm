@@ -5,7 +5,7 @@
 package dev.slsk.messaging.handlers;
 
 import dev.slsk.network.MessageConnection;
-import dev.slsk.network.MessageReceivedEventArgs;
+import dev.slsk.network.MessageReceivedEvent;
 
 /** A browse-response header and the connection carrying its body. */
-public record BrowseResponseConnection(MessageReceivedEventArgs eventArgs, MessageConnection connection) {}
+public record BrowseResponseConnection(MessageReceivedEvent eventArgs, MessageConnection connection) {}

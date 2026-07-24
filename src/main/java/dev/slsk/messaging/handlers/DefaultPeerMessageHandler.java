@@ -40,8 +40,8 @@ import dev.slsk.messaging.messages.UploadDenied;
 import dev.slsk.messaging.messages.UploadFailed;
 import dev.slsk.messaging.messages.UserInfoResponseFactory;
 import dev.slsk.network.MessageConnection;
-import dev.slsk.network.MessageEventArgs;
-import dev.slsk.network.MessageReceivedEventArgs;
+import dev.slsk.network.MessageEvent;
+import dev.slsk.network.MessageReceivedEvent;
 import dev.slsk.options.SoulseekClientOptions;
 import dev.slsk.search.SearchInternal;
 import java.io.IOException;
@@ -106,7 +106,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     @Override
-    public void handleMessageRead(MessageConnection sender, MessageEventArgs eventArgs) {
+    public void handleMessageRead(MessageConnection sender, MessageEvent eventArgs) {
         handleMessageRead(sender, eventArgs.getMessage());
     }
 
@@ -210,7 +210,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     @Override
-    public void handleMessageReceived(MessageConnection connection, MessageReceivedEventArgs eventArgs) {
+    public void handleMessageReceived(MessageConnection connection, MessageReceivedEvent eventArgs) {
         MessageCode.Peer code = MessageCode.Peer.fromValue(ByteBuffer.wrap(eventArgs.getCode())
                 .order(ByteOrder.LITTLE_ENDIAN)
                 .getInt());
@@ -232,7 +232,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     @Override
-    public void handleMessageWritten(MessageConnection connection, MessageEventArgs eventArgs) {
+    public void handleMessageWritten(MessageConnection connection, MessageEvent eventArgs) {
         MessageCode.Peer code = new MessageReader<>(eventArgs.getMessage(), MessageCode.Peer.class).readCode();
         diagnostic.debug("Peer message sent: " + code + " ("
                 + connection.getIpEndpoint() + ") (id: "

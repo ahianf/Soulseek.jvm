@@ -116,9 +116,9 @@ class MessageConnectionTest {
         stream.maxRead = 1;
         FakeTcpClient client = new FakeTcpClient(stream, true);
         DefaultMessageConnection connection = new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 4, client);
-        AtomicReference<MessageReceivedEventArgs> received = new AtomicReference<>();
-        AtomicReference<MessageEventArgs> read = new AtomicReference<>();
-        List<MessageDataEventArgs> progress = new ArrayList<>();
+        AtomicReference<MessageReceivedEvent> received = new AtomicReference<>();
+        AtomicReference<MessageEvent> read = new AtomicReference<>();
+        List<MessageDataEvent> progress = new ArrayList<>();
         CountDownLatch complete = new CountDownLatch(1);
         connection.addMessageReceivedListener((sender, args) -> {
             assertSame(connection, sender);
@@ -143,7 +143,7 @@ class MessageConnectionTest {
         assertArrayEquals(frame, read.get().getMessage());
         assertEquals(
                 List.of(0L, 1L, 2L, 3L),
-                progress.stream().map(MessageDataEventArgs::getCurrentLength).toList());
+                progress.stream().map(MessageDataEvent::getCurrentLength).toList());
         assertEquals(3, progress.get(0).getTotalLength());
         assertEquals(100.0, progress.get(3).getPercentComplete());
         connection.close();
@@ -177,7 +177,7 @@ class MessageConnectionTest {
         FakeTcpClient client = new FakeTcpClient(stream, true);
         DefaultMessageConnection connection = new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 4, client);
         byte[] bytes = new byte[] {4, 0, 0, 0, 1, 2, 3, 4};
-        AtomicReference<MessageEventArgs> written = new AtomicReference<>();
+        AtomicReference<MessageEvent> written = new AtomicReference<>();
         AtomicReference<CancellationToken> tokenSeen = new AtomicReference<>();
         stream.tokenSeen = tokenSeen;
         CancellationToken token = CancellationToken.none();
@@ -233,9 +233,9 @@ class MessageConnectionTest {
     void eventArgsPreserveData() {
         byte[] code = new byte[] {1};
         byte[] message = new byte[] {2};
-        MessageDataEventArgs progress = new MessageDataEventArgs(code, 0, 0);
-        MessageReceivedEventArgs received = new MessageReceivedEventArgs(5, code);
-        MessageEventArgs complete = new MessageEventArgs(message);
+        MessageDataEvent progress = new MessageDataEvent(code, 0, 0);
+        MessageReceivedEvent received = new MessageReceivedEvent(5, code);
+        MessageEvent complete = new MessageEvent(message);
 
         assertSame(code, progress.getCode());
         assertTrue(Double.isNaN(progress.getPercentComplete()));

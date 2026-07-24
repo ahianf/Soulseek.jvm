@@ -31,8 +31,8 @@ public final class DefaultConnectionFactory implements ConnectionFactory {
             InetSocketAddress ipEndpoint,
             ConnectionEventListener<Void> connectedEventHandler,
             ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
-            MessageConnectionEventListener<MessageEventArgs> messageReadEventHandler,
-            MessageConnectionEventListener<MessageEventArgs> messageWrittenEventHandler,
+            MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
+            MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler,
             ConnectionOptions options,
             TcpClient tcpClient) {
         DefaultMessageConnection connection = new DefaultMessageConnection(

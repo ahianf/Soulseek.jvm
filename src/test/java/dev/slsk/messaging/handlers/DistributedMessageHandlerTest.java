@@ -27,7 +27,7 @@ import dev.slsk.messaging.messages.EmbeddedMessage;
 import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.network.DistributedConnectionManager;
 import dev.slsk.network.MessageConnection;
-import dev.slsk.network.MessageEventArgs;
+import dev.slsk.network.MessageEvent;
 import dev.slsk.network.PeerEndpoint;
 import dev.slsk.network.tcp.ConnectionKey;
 import dev.slsk.network.tcp.ConnectionState;
@@ -202,7 +202,7 @@ class DistributedMessageHandlerTest {
     void writtenMessageCallbacksLogNonPingCodes() {
         Fixture fixture = new Fixture(true);
         ConnectionProbe connection = new ConnectionProbe(USERNAME, ENDPOINT);
-        MessageEventArgs branch = new MessageEventArgs(new DistributedBranchLevel(1).toByteArray());
+        MessageEvent branch = new MessageEvent(new DistributedBranchLevel(1).toByteArray());
         fixture.handler.handleChildMessageWritten(connection.proxy, branch);
         fixture.handler.handleMessageWritten(connection.proxy, branch);
 

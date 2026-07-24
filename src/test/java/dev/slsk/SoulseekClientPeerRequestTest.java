@@ -30,8 +30,8 @@ import dev.slsk.messaging.messages.UserAddressResponse;
 import dev.slsk.messaging.messages.UserInfoRequest;
 import dev.slsk.network.MessageConnection;
 import dev.slsk.network.MessageConnectionEventListener;
-import dev.slsk.network.MessageDataEventArgs;
-import dev.slsk.network.MessageReceivedEventArgs;
+import dev.slsk.network.MessageDataEvent;
+import dev.slsk.network.MessageReceivedEvent;
 import dev.slsk.network.PeerConnectionManager;
 import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
 import dev.slsk.network.tcp.ConnectionEventListener;
@@ -346,7 +346,7 @@ class SoulseekClientPeerRequestTest {
         fixture.waiter.results.put(
                 BrowseResponseConnection.class,
                 CompletableFuture.completedFuture(new BrowseResponseConnection(
-                        new MessageReceivedEventArgs(104, new byte[] {1, 2, 3, 4}), fixture.peer.proxy)));
+                        new MessageReceivedEvent(104, new byte[] {1, 2, 3, 4}), fixture.peer.proxy)));
         fixture.waiter.results.put(
                 UserAddressResponse.class,
                 CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));
@@ -407,8 +407,8 @@ class SoulseekClientPeerRequestTest {
         fixture.waiter.results.put(BrowseResponse.class, CompletableFuture.failedFuture(cancellation));
         fixture.waiter.results.put(
                 BrowseResponseConnection.class,
-                CompletableFuture.completedFuture(new BrowseResponseConnection(
-                        new MessageReceivedEventArgs(5, new byte[] {1}), fixture.peer.proxy)));
+                CompletableFuture.completedFuture(
+                        new BrowseResponseConnection(new MessageReceivedEvent(5, new byte[] {1}), fixture.peer.proxy)));
         fixture.waiter.results.put(
                 UserAddressResponse.class,
                 CompletableFuture.completedFuture(new UserAddressResponse("carol", ENDPOINT)));
@@ -438,7 +438,7 @@ class SoulseekClientPeerRequestTest {
         disconnectFixture.waiter.results.put(
                 BrowseResponseConnection.class,
                 CompletableFuture.completedFuture(new BrowseResponseConnection(
-                        new MessageReceivedEventArgs(5, new byte[] {1}), disconnectFixture.peer.proxy)));
+                        new MessageReceivedEvent(5, new byte[] {1}), disconnectFixture.peer.proxy)));
         disconnectFixture.waiter.results.put(
                 UserAddressResponse.class, CompletableFuture.completedFuture(new UserAddressResponse("bob", ENDPOINT)));
 
@@ -526,7 +526,7 @@ class SoulseekClientPeerRequestTest {
         private CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
         private RuntimeException synchronousFailure;
         private ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedListener;
-        private MessageConnectionEventListener<MessageDataEventArgs> messageDataListener;
+        private MessageConnectionEventListener<MessageDataEvent> messageDataListener;
         private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 

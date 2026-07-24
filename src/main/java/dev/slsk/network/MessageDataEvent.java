@@ -5,14 +5,14 @@
 package dev.slsk.network;
 
 /** Progress data for a message payload being received. */
-public final class MessageDataEventArgs extends MessageConnectionEventArgs {
+public final class MessageDataEvent extends MessageConnectionEvent {
     private final byte[] code;
     private final long currentLength;
     private final double percentComplete;
     private final long totalLength;
 
     /** Creates message payload progress data. */
-    public MessageDataEventArgs(byte[] code, long currentLength, long totalLength) {
+    public MessageDataEvent(byte[] code, long currentLength, long totalLength) {
         this.code = code;
         this.currentLength = currentLength;
         this.totalLength = totalLength;

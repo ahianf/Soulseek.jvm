@@ -6,13 +6,13 @@ package dev.slsk.messaging.handlers;
 
 import dev.slsk.diagnostics.DiagnosticSource;
 import dev.slsk.network.MessageConnection;
-import dev.slsk.network.MessageEventArgs;
+import dev.slsk.network.MessageEvent;
 
 /** Handles incoming and outgoing protocol messages. */
 public interface MessageHandler extends DiagnosticSource {
-    void handleMessageRead(MessageConnection sender, MessageEventArgs eventArgs);
+    void handleMessageRead(MessageConnection sender, MessageEvent eventArgs);
 
     void handleMessageRead(MessageConnection sender, byte[] message);
 
-    void handleMessageWritten(MessageConnection sender, MessageEventArgs eventArgs);
+    void handleMessageWritten(MessageConnection sender, MessageEvent eventArgs);
 }

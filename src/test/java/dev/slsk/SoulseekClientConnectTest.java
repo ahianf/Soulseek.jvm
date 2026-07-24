@@ -30,7 +30,7 @@ import dev.slsk.network.ConnectionFactory;
 import dev.slsk.network.DistributedConnectionManager;
 import dev.slsk.network.MessageConnection;
 import dev.slsk.network.MessageConnectionEventListener;
-import dev.slsk.network.MessageEventArgs;
+import dev.slsk.network.MessageEvent;
 import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
 import dev.slsk.network.tcp.ConnectionEventListener;
 import dev.slsk.options.SoulseekClientOptions;
@@ -392,8 +392,8 @@ class SoulseekClientConnectTest {
         private dev.slsk.options.ConnectionOptions options;
         private ConnectionEventListener<Void> connected;
         private ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnected;
-        private MessageConnectionEventListener<MessageEventArgs> messageRead;
-        private MessageConnectionEventListener<MessageEventArgs> messageWritten;
+        private MessageConnectionEventListener<MessageEvent> messageRead;
+        private MessageConnectionEventListener<MessageEvent> messageWritten;
         private final ConnectionFactory proxy = (ConnectionFactory) Proxy.newProxyInstance(
                 ConnectionFactory.class.getClassLoader(), new Class<?>[] {ConnectionFactory.class}, this::invoke);
 
@@ -408,8 +408,8 @@ class SoulseekClientConnectTest {
                 endpoint = (InetSocketAddress) arguments[0];
                 connected = (ConnectionEventListener<Void>) arguments[1];
                 disconnected = (ConnectionEventListener<ConnectionDisconnectedEventArgs>) arguments[2];
-                messageRead = (MessageConnectionEventListener<MessageEventArgs>) arguments[3];
-                messageWritten = (MessageConnectionEventListener<MessageEventArgs>) arguments[4];
+                messageRead = (MessageConnectionEventListener<MessageEvent>) arguments[3];
+                messageWritten = (MessageConnectionEventListener<MessageEvent>) arguments[4];
                 options = (dev.slsk.options.ConnectionOptions) arguments[5];
                 return connection;
             }

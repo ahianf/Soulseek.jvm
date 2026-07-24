@@ -26,13 +26,13 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /** Provides framed client connections to the Soulseek network. */
 public final class DefaultMessageConnection extends SocketConnection implements MessageConnection {
 
-    private final CopyOnWriteArrayList<MessageConnectionEventListener<MessageDataEventArgs>> messageDataReadListeners =
+    private final CopyOnWriteArrayList<MessageConnectionEventListener<MessageDataEvent>> messageDataReadListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<MessageConnectionEventListener<MessageEventArgs>> messageReadListeners =
+    private final CopyOnWriteArrayList<MessageConnectionEventListener<MessageEvent>> messageReadListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<MessageConnectionEventListener<MessageReceivedEventArgs>>
-            messageReceivedListeners = new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<MessageConnectionEventListener<MessageEventArgs>> messageWrittenListeners =
+    private final CopyOnWriteArrayList<MessageConnectionEventListener<MessageReceivedEvent>> messageReceivedListeners =
+            new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<MessageConnectionEventListener<MessageEvent>> messageWrittenListeners =
             new CopyOnWriteArrayList<>();
 
     private final int codeLength;
@@ -76,42 +76,42 @@ public final class DefaultMessageConnection extends SocketConnection implements 
     }
 
     @Override
-    public void addMessageDataReadListener(MessageConnectionEventListener<MessageDataEventArgs> listener) {
+    public void addMessageDataReadListener(MessageConnectionEventListener<MessageDataEvent> listener) {
         messageDataReadListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override
-    public void removeMessageDataReadListener(MessageConnectionEventListener<MessageDataEventArgs> listener) {
+    public void removeMessageDataReadListener(MessageConnectionEventListener<MessageDataEvent> listener) {
         messageDataReadListeners.remove(listener);
     }
 
     @Override
-    public void addMessageReadListener(MessageConnectionEventListener<MessageEventArgs> listener) {
+    public void addMessageReadListener(MessageConnectionEventListener<MessageEvent> listener) {
         messageReadListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override
-    public void removeMessageReadListener(MessageConnectionEventListener<MessageEventArgs> listener) {
+    public void removeMessageReadListener(MessageConnectionEventListener<MessageEvent> listener) {
         messageReadListeners.remove(listener);
     }
 
     @Override
-    public void addMessageReceivedListener(MessageConnectionEventListener<MessageReceivedEventArgs> listener) {
+    public void addMessageReceivedListener(MessageConnectionEventListener<MessageReceivedEvent> listener) {
         messageReceivedListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override
-    public void removeMessageReceivedListener(MessageConnectionEventListener<MessageReceivedEventArgs> listener) {
+    public void removeMessageReceivedListener(MessageConnectionEventListener<MessageReceivedEvent> listener) {
         messageReceivedListeners.remove(listener);
     }
 
     @Override
-    public void addMessageWrittenListener(MessageConnectionEventListener<MessageEventArgs> listener) {
+    public void addMessageWrittenListener(MessageConnectionEventListener<MessageEvent> listener) {
         messageWrittenListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override
-    public void removeMessageWrittenListener(MessageConnectionEventListener<MessageEventArgs> listener) {
+    public void removeMessageWrittenListener(MessageConnectionEventListener<MessageEvent> listener) {
         messageWrittenListeners.remove(listener);
     }
 
@@ -212,10 +212,10 @@ public final class DefaultMessageConnection extends SocketConnection implements 
     }
 
     private void raiseMessageDataRead(byte[] code, long currentLength, long totalLength) {
-        MessageDataEventArgs eventArgs = new MessageDataEventArgs(code, currentLength, totalLength);
+        MessageDataEvent eventArgs = new MessageDataEvent(code, currentLength, totalLength);
         dispatch(
                 () -> {
-                    for (MessageConnectionEventListener<MessageDataEventArgs> listener : messageDataReadListeners) {
+                    for (MessageConnectionEventListener<MessageDataEvent> listener : messageDataReadListeners) {
                         listener.handle(this, eventArgs);
                     }
                 },
@@ -223,17 +223,17 @@ public final class DefaultMessageConnection extends SocketConnection implements 
     }
 
     private void raiseMessageReceived(long length, byte[] code) {
-        MessageReceivedEventArgs eventArgs = new MessageReceivedEventArgs(length, code);
-        for (MessageConnectionEventListener<MessageReceivedEventArgs> listener : messageReceivedListeners) {
+        MessageReceivedEvent eventArgs = new MessageReceivedEvent(length, code);
+        for (MessageConnectionEventListener<MessageReceivedEvent> listener : messageReceivedListeners) {
             listener.handle(this, eventArgs);
         }
     }
 
     private void raiseMessageRead(byte[] message) {
-        MessageEventArgs eventArgs = new MessageEventArgs(message);
+        MessageEvent eventArgs = new MessageEvent(message);
         dispatch(
                 () -> {
-                    for (MessageConnectionEventListener<MessageEventArgs> listener : messageReadListeners) {
+                    for (MessageConnectionEventListener<MessageEvent> listener : messageReadListeners) {
                         listener.handle(this, eventArgs);
                     }
                 },
@@ -241,10 +241,10 @@ public final class DefaultMessageConnection extends SocketConnection implements 
     }
 
     private void raiseMessageWritten(byte[] message, CancellationToken cancellationToken) {
-        MessageEventArgs eventArgs = new MessageEventArgs(message);
+        MessageEvent eventArgs = new MessageEvent(message);
         dispatch(
                 () -> {
-                    for (MessageConnectionEventListener<MessageEventArgs> listener : messageWrittenListeners) {
+                    for (MessageConnectionEventListener<MessageEvent> listener : messageWrittenListeners) {
                         listener.handle(this, eventArgs);
                     }
                 },

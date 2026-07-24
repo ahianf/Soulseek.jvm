@@ -5,11 +5,11 @@
 package dev.slsk.network;
 
 /** Data for a complete message read or write. */
-public final class MessageEventArgs extends MessageConnectionEventArgs {
+public final class MessageEvent extends MessageConnectionEvent {
     private final byte[] message;
 
     /** Creates complete-message event data. */
-    public MessageEventArgs(byte[] message) {
+    public MessageEvent(byte[] message) {
         this.message = message;
     }
 

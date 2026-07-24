@@ -41,8 +41,8 @@ public interface ConnectionFactory {
             InetSocketAddress ipEndpoint,
             ConnectionEventListener<Void> connectedEventHandler,
             ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
-            MessageConnectionEventListener<MessageEventArgs> messageReadEventHandler,
-            MessageConnectionEventListener<MessageEventArgs> messageWrittenEventHandler,
+            MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
+            MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler,
             ConnectionOptions options,
             TcpClient tcpClient);
 
@@ -50,8 +50,8 @@ public interface ConnectionFactory {
             InetSocketAddress ipEndpoint,
             ConnectionEventListener<Void> connectedEventHandler,
             ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
-            MessageConnectionEventListener<MessageEventArgs> messageReadEventHandler,
-            MessageConnectionEventListener<MessageEventArgs> messageWrittenEventHandler) {
+            MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
+            MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler) {
         return getServerConnection(
                 ipEndpoint,
                 connectedEventHandler,
@@ -66,8 +66,8 @@ public interface ConnectionFactory {
             InetSocketAddress ipEndpoint,
             ConnectionEventListener<Void> connectedEventHandler,
             ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
-            MessageConnectionEventListener<MessageEventArgs> messageReadEventHandler,
-            MessageConnectionEventListener<MessageEventArgs> messageWrittenEventHandler,
+            MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
+            MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler,
             ConnectionOptions options) {
         return getServerConnection(
                 ipEndpoint,

@@ -6,7 +6,7 @@ package dev.slsk.network;
 
 /** Handles a message-connection event. */
 @FunctionalInterface
-public interface MessageConnectionEventListener<T extends MessageConnectionEventArgs> {
+public interface MessageConnectionEventListener<T extends MessageConnectionEvent> {
     /** Handles an event raised by a message connection. */
     void handle(MessageConnection sender, T eventArgs);
 }

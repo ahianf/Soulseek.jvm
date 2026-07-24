@@ -19,7 +19,7 @@ import dev.slsk.messaging.messages.DistributedPingResponse;
 import dev.slsk.messaging.messages.DistributedSearchRequest;
 import dev.slsk.messaging.messages.EmbeddedMessage;
 import dev.slsk.network.MessageConnection;
-import dev.slsk.network.MessageEventArgs;
+import dev.slsk.network.MessageEvent;
 import dev.slsk.network.PeerEndpoint;
 import java.util.Base64;
 import java.util.Objects;
@@ -58,7 +58,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     }
 
     @Override
-    public void handleChildMessageRead(MessageConnection sender, MessageEventArgs eventArgs) {
+    public void handleChildMessageRead(MessageConnection sender, MessageEvent eventArgs) {
         handleChildMessageRead(sender, eventArgs.getMessage());
     }
 
@@ -107,7 +107,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     }
 
     @Override
-    public void handleChildMessageWritten(MessageConnection connection, MessageEventArgs eventArgs) {
+    public void handleChildMessageWritten(MessageConnection connection, MessageEvent eventArgs) {
         MessageCode.Distributed code =
                 new MessageReader<>(eventArgs.getMessage(), MessageCode.Distributed.class).readCode();
         if (code != MessageCode.Distributed.PING) {
@@ -119,7 +119,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     }
 
     @Override
-    public void handleMessageRead(MessageConnection sender, MessageEventArgs eventArgs) {
+    public void handleMessageRead(MessageConnection sender, MessageEvent eventArgs) {
         handleMessageRead(sender, eventArgs.getMessage());
     }
 
@@ -204,7 +204,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     }
 
     @Override
-    public void handleMessageWritten(MessageConnection sender, MessageEventArgs eventArgs) {
+    public void handleMessageWritten(MessageConnection sender, MessageEvent eventArgs) {
         MessageCode.Distributed code =
                 new MessageReader<>(eventArgs.getMessage(), MessageCode.Distributed.class).readCode();
         diagnostic.debug("Distributed message sent: " + code);

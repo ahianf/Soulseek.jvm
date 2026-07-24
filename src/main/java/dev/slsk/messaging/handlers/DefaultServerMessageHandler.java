@@ -71,7 +71,7 @@ import dev.slsk.messaging.messages.UserStatisticsResponseFactory;
 import dev.slsk.messaging.messages.UserStatusResponseFactory;
 import dev.slsk.messaging.messages.WatchUserResponse;
 import dev.slsk.network.MessageConnection;
-import dev.slsk.network.MessageEventArgs;
+import dev.slsk.network.MessageEvent;
 import dev.slsk.network.PeerEndpoint;
 import dev.slsk.network.TransferConnectionResult;
 import dev.slsk.network.tcp.Connection;
@@ -132,7 +132,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     }
 
     @Override
-    public void handleMessageRead(MessageConnection sender, MessageEventArgs eventArgs) {
+    public void handleMessageRead(MessageConnection sender, MessageEvent eventArgs) {
         handleMessageRead(sender, eventArgs.getMessage());
     }
 
@@ -402,7 +402,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     }
 
     @Override
-    public void handleMessageWritten(MessageConnection sender, MessageEventArgs eventArgs) {
+    public void handleMessageWritten(MessageConnection sender, MessageEvent eventArgs) {
         MessageCode.Server code = new MessageReader<>(eventArgs.getMessage(), MessageCode.Server.class).readCode();
         diagnostic.debug("Server message sent: " + code);
     }

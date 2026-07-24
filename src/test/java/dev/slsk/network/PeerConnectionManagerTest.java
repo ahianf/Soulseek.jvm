@@ -643,8 +643,8 @@ class PeerConnectionManagerTest {
                 InetSocketAddress ipEndpoint,
                 ConnectionEventListener<Void> connectedEventHandler,
                 ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
-                MessageConnectionEventListener<MessageEventArgs> messageReadEventHandler,
-                MessageConnectionEventListener<MessageEventArgs> messageWrittenEventHandler,
+                MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
+                MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler,
                 ConnectionOptions options,
                 TcpClient tcpClient) {
             throw new AssertionError("unexpected server connection");
@@ -835,11 +835,10 @@ class PeerConnectionManagerTest {
         private final Connection proxy;
         private final List<ConnectionEventListener<ConnectionDisconnectedEventArgs>> disconnectedListeners =
                 new ArrayList<>();
-        private final List<MessageConnectionEventListener<MessageEventArgs>> messageReadListeners = new ArrayList<>();
-        private final List<MessageConnectionEventListener<MessageReceivedEventArgs>> messageReceivedListeners =
+        private final List<MessageConnectionEventListener<MessageEvent>> messageReadListeners = new ArrayList<>();
+        private final List<MessageConnectionEventListener<MessageReceivedEvent>> messageReceivedListeners =
                 new ArrayList<>();
-        private final List<MessageConnectionEventListener<MessageEventArgs>> messageWrittenListeners =
-                new ArrayList<>();
+        private final List<MessageConnectionEventListener<MessageEvent>> messageWrittenListeners = new ArrayList<>();
         private final List<byte[]> byteWrites = new ArrayList<>();
         private final List<OutgoingMessage> outgoingWrites = new ArrayList<>();
         private ConnectionTypes type = ConnectionTypes.NONE;

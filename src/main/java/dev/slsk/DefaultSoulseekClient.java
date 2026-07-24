@@ -1068,7 +1068,7 @@ final class DefaultSoulseekClient
                     MessageConnection connection = responseConnection.connection();
                     long responseLength = responseConnection.eventArgs().getLength() - 4;
                     AtomicBoolean completionEventFired = new AtomicBoolean();
-                    dev.slsk.network.MessageConnectionEventListener<dev.slsk.network.MessageDataEventArgs>
+                    dev.slsk.network.MessageConnectionEventListener<dev.slsk.network.MessageDataEvent>
                             progressListener = (sender, eventArgs) -> updateBrowseProgress(
                             requestedUsername,
                             operationOptions,

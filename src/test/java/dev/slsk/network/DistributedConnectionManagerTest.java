@@ -397,12 +397,12 @@ class DistributedConnectionManagerTest {
                 fixture.waiter.waitAsync(new WaitKey(Constants.WaitKey.SEARCH_REQUEST_MESSAGE, parent.id));
 
         fixture.manager.handleParentCandidateMessage(
-                parent.messageConnection(), new MessageEventArgs(new DistributedBranchLevel(3).toByteArray()));
+                parent.messageConnection(), new MessageEvent(new DistributedBranchLevel(3).toByteArray()));
         fixture.manager.handleParentCandidateMessage(
-                parent.messageConnection(), new MessageEventArgs(new DistributedBranchRoot("root").toByteArray()));
+                parent.messageConnection(), new MessageEvent(new DistributedBranchRoot("root").toByteArray()));
         fixture.manager.handleParentCandidateMessage(
                 parent.messageConnection(),
-                new MessageEventArgs(new DistributedSearchRequest("user", TOKEN, "query").toByteArray()));
+                new MessageEvent(new DistributedSearchRequest("user", TOKEN, "query").toByteArray()));
 
         assertEquals(3, level.join());
         assertEquals("root", root.join());
@@ -414,7 +414,7 @@ class DistributedConnectionManagerTest {
         Fixture fixture = fixture();
         ConnectionProbe parent = ConnectionProbe.message(USERNAME, ENDPOINT);
 
-        fixture.manager.handleParentCandidateMessage(parent.messageConnection(), new MessageEventArgs(new byte[0]));
+        fixture.manager.handleParentCandidateMessage(parent.messageConnection(), new MessageEvent(new byte[0]));
 
         assertEquals(1, parent.disconnectCount);
         assertEquals(1, parent.closeCount);
@@ -705,8 +705,8 @@ class DistributedConnectionManagerTest {
                 InetSocketAddress ipEndpoint,
                 ConnectionEventListener<Void> connectedEventHandler,
                 ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
-                MessageConnectionEventListener<MessageEventArgs> messageReadEventHandler,
-                MessageConnectionEventListener<MessageEventArgs> messageWrittenEventHandler,
+                MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
+                MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler,
                 ConnectionOptions options,
                 TcpClient tcpClient) {
             throw new AssertionError("unexpected server connection");
@@ -899,7 +899,7 @@ class DistributedConnectionManagerTest {
         private final Connection proxy;
         private final List<ConnectionEventListener<ConnectionDisconnectedEventArgs>> disconnectedListeners =
                 new ArrayList<>();
-        private final List<MessageConnectionEventListener<MessageEventArgs>> messageReadListeners = new ArrayList<>();
+        private final List<MessageConnectionEventListener<MessageEvent>> messageReadListeners = new ArrayList<>();
         private final List<byte[]> byteWrites = new ArrayList<>();
         private final List<OutgoingMessage> outgoingWrites = new ArrayList<>();
         private ConnectionTypes type = ConnectionTypes.NONE;
@@ -947,7 +947,7 @@ class DistributedConnectionManagerTest {
         }
 
         private void fireMessageRead(byte[] bytes) {
-            MessageEventArgs eventArgs = new MessageEventArgs(bytes);
+            MessageEvent eventArgs = new MessageEvent(bytes);
             List.copyOf(messageReadListeners).forEach(listener -> listener.handle(messageConnection(), eventArgs));
         }
 

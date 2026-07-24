@@ -5,4 +5,4 @@
 package dev.slsk.network;
 
 /** Base type for message-connection events. */
-public abstract class MessageConnectionEventArgs {}
+public abstract class MessageConnectionEvent {}

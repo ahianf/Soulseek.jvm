@@ -48,7 +48,7 @@ import dev.slsk.messaging.messages.UserAddressResponse;
 import dev.slsk.messaging.messages.WatchUserResponse;
 import dev.slsk.network.DistributedConnectionManager;
 import dev.slsk.network.MessageConnection;
-import dev.slsk.network.MessageEventArgs;
+import dev.slsk.network.MessageEvent;
 import dev.slsk.network.PeerConnectionManager;
 import dev.slsk.network.PeerEndpoint;
 import dev.slsk.network.TransferConnectionResult;
@@ -106,7 +106,7 @@ class ServerMessageHandlerTest {
                 .join();
         assertTrue(fixture.diagnostic.containsWarning("Error handling server message"));
 
-        fixture.handler.handleMessageWritten(null, new MessageEventArgs(searchRequest(USERNAME, TOKEN, "query")));
+        fixture.handler.handleMessageWritten(null, new MessageEvent(searchRequest(USERNAME, TOKEN, "query")));
         assertTrue(fixture.diagnostic.contains("Server message sent: FILE_SEARCH"));
 
         AtomicInteger generated = new AtomicInteger();
@@ -814,22 +814,22 @@ class ServerMessageHandlerTest {
                 public void removeDiagnosticGeneratedListener(dev.slsk.diagnostics.DiagnosticEventListener listener) {}
 
                 @Override
-                public void handleMessageRead(MessageConnection sender, MessageEventArgs eventArgs) {}
+                public void handleMessageRead(MessageConnection sender, MessageEvent eventArgs) {}
 
                 @Override
                 public void handleMessageRead(MessageConnection sender, byte[] message) {}
 
                 @Override
-                public void handleMessageWritten(MessageConnection sender, MessageEventArgs eventArgs) {}
+                public void handleMessageWritten(MessageConnection sender, MessageEvent eventArgs) {}
 
                 @Override
-                public void handleChildMessageRead(MessageConnection sender, MessageEventArgs eventArgs) {}
+                public void handleChildMessageRead(MessageConnection sender, MessageEvent eventArgs) {}
 
                 @Override
                 public void handleChildMessageRead(MessageConnection sender, byte[] message) {}
 
                 @Override
-                public void handleChildMessageWritten(MessageConnection sender, MessageEventArgs eventArgs) {}
+                public void handleChildMessageWritten(MessageConnection sender, MessageEvent eventArgs) {}
             };
         }
 

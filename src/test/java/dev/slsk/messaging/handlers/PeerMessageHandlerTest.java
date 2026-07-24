@@ -47,8 +47,8 @@ import dev.slsk.messaging.messages.TransferResponse;
 import dev.slsk.messaging.messages.UploadDenied;
 import dev.slsk.messaging.messages.UploadFailed;
 import dev.slsk.network.MessageConnection;
-import dev.slsk.network.MessageEventArgs;
-import dev.slsk.network.MessageReceivedEventArgs;
+import dev.slsk.network.MessageEvent;
+import dev.slsk.network.MessageReceivedEvent;
 import dev.slsk.options.BrowseResponseResolver;
 import dev.slsk.options.DirectoryContentsResolver;
 import dev.slsk.options.EnqueueDownloadCallback;
@@ -514,8 +514,7 @@ class PeerMessageHandlerTest {
     void receiptAndWrittenCallbacksCorrelateBrowseAndLogCodes() {
         Fixture fixture = new Fixture(new SoulseekClientOptions());
         byte[] response = new BrowseResponse(List.of()).toByteArray();
-        MessageReceivedEventArgs received =
-                new MessageReceivedEventArgs(response.length, Arrays.copyOfRange(response, 4, 8));
+        MessageReceivedEvent received = new MessageReceivedEvent(response.length, Arrays.copyOfRange(response, 4, 8));
 
         fixture.handler.handleMessageReceived(fixture.connection.proxy, received);
         Object result =
@@ -526,9 +525,9 @@ class PeerMessageHandlerTest {
 
         fixture.handler.handleMessageReceived(
                 fixture.connection.proxy,
-                new MessageReceivedEventArgs(8, Arrays.copyOfRange(new BrowseRequest().toByteArray(), 4, 8)));
+                new MessageReceivedEvent(8, Arrays.copyOfRange(new BrowseRequest().toByteArray(), 4, 8)));
         fixture.handler.handleMessageWritten(
-                fixture.connection.proxy, new MessageEventArgs(new BrowseRequest().toByteArray()));
+                fixture.connection.proxy, new MessageEvent(new BrowseRequest().toByteArray()));
         assertTrue(fixture.diagnostic.contains("Peer message sent: BROWSE_REQUEST"));
     }
 
