@@ -31,7 +31,7 @@ public interface ServerMessageHandlerClient {
 
     IDistributedConnectionManager getDistributedConnectionManager();
 
-    IDistributedMessageHandler getDistributedMessageHandler();
+    DistributedMessageHandler getDistributedMessageHandler();
 
     ISearchResponder getSearchResponder();
 

@@ -14,7 +14,7 @@ import dev.slsk.diagnostics.DiagnosticEventListener;
 import dev.slsk.diagnostics.DiagnosticFactory;
 import dev.slsk.diagnostics.IDiagnosticFactory;
 import dev.slsk.exceptions.ConnectionException;
-import dev.slsk.messaging.handlers.IPeerMessageHandler;
+import dev.slsk.messaging.handlers.PeerMessageHandler;
 import dev.slsk.messaging.messages.ConnectToPeerRequest;
 import dev.slsk.messaging.messages.ConnectToPeerResponse;
 import dev.slsk.messaging.messages.PeerInit;
@@ -786,7 +786,7 @@ public final class PeerConnectionManager implements IPeerConnectionManager {
     }
 
     private void attachPeerMessageListeners(IMessageConnection connection) {
-        IPeerMessageHandler handler = client.getPeerMessageHandler();
+        PeerMessageHandler handler = client.getPeerMessageHandler();
         connection.addMessageReadListener(handler::handleMessageRead);
         connection.addMessageReceivedListener(handler::handleMessageReceived);
         connection.addMessageWrittenListener(handler::handleMessageWritten);

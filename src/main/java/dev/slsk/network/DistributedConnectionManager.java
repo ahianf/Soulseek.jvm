@@ -21,7 +21,7 @@ import dev.slsk.eventargs.DistributedParentEventArgs;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
-import dev.slsk.messaging.handlers.IDistributedMessageHandler;
+import dev.slsk.messaging.handlers.DistributedMessageHandler;
 import dev.slsk.messaging.messages.AcceptChildrenCommand;
 import dev.slsk.messaging.messages.BranchLevelCommand;
 import dev.slsk.messaging.messages.BranchRootCommand;
@@ -375,7 +375,7 @@ public final class DistributedConnectionManager implements IDistributedConnectio
                             + parentBranchLevel);
                     parentConnection.addDisconnectedListener(parentDisconnectedListener);
                     parentConnection.removeDisconnectedListener(parentCandidateDisconnectedListener);
-                    IDistributedMessageHandler handler = client.getDistributedMessageHandler();
+                    DistributedMessageHandler handler = client.getDistributedMessageHandler();
                     parentConnection.addMessageReadListener(handler::handleMessageRead);
                     parentConnection.addMessageWrittenListener(handler::handleMessageWritten);
                     diagnostic.debug("Parent connection to " + parentConnection.getUsername()
@@ -1008,7 +1008,7 @@ public final class DistributedConnectionManager implements IDistributedConnectio
     }
 
     private void attachChildMessageListeners(IMessageConnection connection) {
-        IDistributedMessageHandler handler = client.getDistributedMessageHandler();
+        DistributedMessageHandler handler = client.getDistributedMessageHandler();
         connection.addMessageReadListener(handler::handleChildMessageRead);
         connection.addMessageWrittenListener(handler::handleChildMessageWritten);
     }

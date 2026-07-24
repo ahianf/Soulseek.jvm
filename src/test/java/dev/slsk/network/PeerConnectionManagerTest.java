@@ -22,7 +22,7 @@ import dev.slsk.common.WaitKey;
 import dev.slsk.diagnostics.DiagnosticEventListener;
 import dev.slsk.diagnostics.IDiagnosticFactory;
 import dev.slsk.exceptions.ConnectionException;
-import dev.slsk.messaging.handlers.IPeerMessageHandler;
+import dev.slsk.messaging.handlers.PeerMessageHandler;
 import dev.slsk.messaging.messages.ConnectToPeerRequest;
 import dev.slsk.messaging.messages.ConnectToPeerResponse;
 import dev.slsk.messaging.messages.OutgoingMessage;
@@ -571,9 +571,9 @@ class PeerConnectionManagerTest {
         private final FakeWaiter waiter;
         private final IMessageConnection server;
         private final AtomicInteger token = new AtomicInteger(TOKEN);
-        private final IPeerMessageHandler handler = (IPeerMessageHandler) Proxy.newProxyInstance(
-                IPeerMessageHandler.class.getClassLoader(),
-                new Class<?>[] {IPeerMessageHandler.class},
+        private final PeerMessageHandler handler = (PeerMessageHandler) Proxy.newProxyInstance(
+                PeerMessageHandler.class.getClassLoader(),
+                new Class<?>[] {PeerMessageHandler.class},
                 (proxy, method, arguments) -> defaultValue(method.getReturnType()));
 
         private FakeClient(FakeWaiter waiter, IMessageConnection server) {
@@ -607,7 +607,7 @@ class PeerConnectionManagerTest {
         }
 
         @Override
-        public IPeerMessageHandler getPeerMessageHandler() {
+        public PeerMessageHandler getPeerMessageHandler() {
             return handler;
         }
     }

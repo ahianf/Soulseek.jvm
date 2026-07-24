@@ -5,7 +5,7 @@
 package dev.slsk.network;
 
 import dev.slsk.common.IWaiter;
-import dev.slsk.messaging.handlers.IPeerMessageHandler;
+import dev.slsk.messaging.handlers.PeerMessageHandler;
 import dev.slsk.options.SoulseekClientOptions;
 
 /** Internal client state consumed by the peer-connection manager. */
@@ -20,5 +20,5 @@ public interface PeerConnectionManagerClient {
 
     IMessageConnection getServerConnection();
 
-    IPeerMessageHandler getPeerMessageHandler();
+    PeerMessageHandler getPeerMessageHandler();
 }

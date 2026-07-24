@@ -6,7 +6,7 @@ package dev.slsk.network;
 
 import dev.slsk.SoulseekClientStates;
 import dev.slsk.common.IWaiter;
-import dev.slsk.messaging.handlers.IDistributedMessageHandler;
+import dev.slsk.messaging.handlers.DistributedMessageHandler;
 import dev.slsk.options.SoulseekClientOptions;
 
 /** Internal client state consumed by the distributed manager. */
@@ -23,5 +23,5 @@ public interface DistributedConnectionManagerClient {
 
     IMessageConnection getServerConnection();
 
-    IDistributedMessageHandler getDistributedMessageHandler();
+    DistributedMessageHandler getDistributedMessageHandler();
 }

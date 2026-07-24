@@ -81,7 +81,7 @@ class ServerMessageHandlerTest {
 
     @Test
     void constructionRequiresClient() {
-        assertThrows(NullPointerException.class, () -> new ServerMessageHandler(null));
+        assertThrows(NullPointerException.class, () -> new DefaultServerMessageHandler(null));
     }
 
     @Test
@@ -110,7 +110,7 @@ class ServerMessageHandlerTest {
         assertTrue(fixture.diagnostic.contains("Server message sent: FILE_SEARCH"));
 
         AtomicInteger generated = new AtomicInteger();
-        ServerMessageHandler defaultDiagnostic = new ServerMessageHandler(fixture.client);
+        DefaultServerMessageHandler defaultDiagnostic = new DefaultServerMessageHandler(fixture.client);
         defaultDiagnostic.addDiagnosticGeneratedListener((sender, eventArgs) -> generated.incrementAndGet());
         defaultDiagnostic
                 .handleMessageReadAsync(
@@ -729,11 +729,11 @@ class ServerMessageHandlerTest {
         private final DistributedManagerProbe distributed = new DistributedManagerProbe();
         private final SearchResponderProbe responder = new SearchResponderProbe();
         private final FakeClient client;
-        private final ServerMessageHandler handler;
+        private final DefaultServerMessageHandler handler;
 
         private Fixture(SoulseekClientOptions options) {
             client = new FakeClient(options, waiter, peer.proxy, distributed.proxy, responder.proxy);
-            handler = new ServerMessageHandler(client, diagnostic);
+            handler = new DefaultServerMessageHandler(client, diagnostic);
         }
 
         private void handle(byte[] message) {
@@ -802,8 +802,8 @@ class ServerMessageHandlerTest {
         }
 
         @Override
-        public IDistributedMessageHandler getDistributedMessageHandler() {
-            return new IDistributedMessageHandler() {
+        public DistributedMessageHandler getDistributedMessageHandler() {
+            return new DistributedMessageHandler() {
                 @Override
                 public void handleEmbeddedMessage(byte[] message) {
                     embedded = message;

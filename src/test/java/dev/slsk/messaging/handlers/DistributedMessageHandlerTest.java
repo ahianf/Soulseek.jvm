@@ -59,7 +59,7 @@ class DistributedMessageHandlerTest {
 
     @Test
     void constructionRequiresClient() {
-        assertThrows(NullPointerException.class, () -> new DistributedMessageHandler(null));
+        assertThrows(NullPointerException.class, () -> new DefaultDistributedMessageHandler(null));
     }
 
     @Test
@@ -247,11 +247,11 @@ class DistributedMessageHandlerTest {
         private final ManagerProbe manager = new ManagerProbe();
         private final ResponderProbe responder = new ResponderProbe();
         private final FakeClient client;
-        private final DistributedMessageHandler handler;
+        private final DefaultDistributedMessageHandler handler;
 
         private Fixture(boolean deduplicate) {
             client = new FakeClient(options(deduplicate), waiter, manager.proxy, responder.proxy);
-            handler = new DistributedMessageHandler(client, diagnostic);
+            handler = new DefaultDistributedMessageHandler(client, diagnostic);
         }
     }
 

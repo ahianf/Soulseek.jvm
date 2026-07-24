@@ -83,7 +83,7 @@ class PeerMessageHandlerTest {
 
     @Test
     void constructionRequiresClient() {
-        assertThrows(NullPointerException.class, () -> new PeerMessageHandler(null));
+        assertThrows(NullPointerException.class, () -> new DefaultPeerMessageHandler(null));
     }
 
     @Test
@@ -589,11 +589,11 @@ class PeerMessageHandlerTest {
         private final RecordingWaiter waiter = new RecordingWaiter();
         private final FakeClient client;
         private final ConnectionProbe connection = new ConnectionProbe();
-        private final PeerMessageHandler handler;
+        private final DefaultPeerMessageHandler handler;
 
         private Fixture(SoulseekClientOptions options) {
             client = new FakeClient(options, waiter);
-            handler = new PeerMessageHandler(client, diagnostic);
+            handler = new DefaultPeerMessageHandler(client, diagnostic);
         }
     }
 

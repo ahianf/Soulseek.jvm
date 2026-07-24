@@ -9,7 +9,7 @@ import dev.slsk.network.IMessageConnection;
 import dev.slsk.network.MessageEventArgs;
 
 /** Handles incoming and outgoing protocol messages. */
-public interface IMessageHandler extends IDiagnosticGenerator {
+public interface MessageHandler extends IDiagnosticGenerator {
     void handleMessageRead(IMessageConnection sender, MessageEventArgs eventArgs);
 
     void handleMessageRead(IMessageConnection sender, byte[] message);

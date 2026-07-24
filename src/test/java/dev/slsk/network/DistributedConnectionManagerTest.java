@@ -22,7 +22,7 @@ import dev.slsk.common.IWaiter;
 import dev.slsk.common.WaitKey;
 import dev.slsk.diagnostics.IDiagnosticFactory;
 import dev.slsk.exceptions.ConnectionException;
-import dev.slsk.messaging.handlers.IDistributedMessageHandler;
+import dev.slsk.messaging.handlers.DistributedMessageHandler;
 import dev.slsk.messaging.messages.AcceptChildrenCommand;
 import dev.slsk.messaging.messages.BranchLevelCommand;
 import dev.slsk.messaging.messages.BranchRootCommand;
@@ -631,9 +631,9 @@ class DistributedConnectionManagerTest {
         private final FakeWaiter waiter;
         private final IMessageConnection server;
         private final AtomicInteger token = new AtomicInteger(TOKEN);
-        private final IDistributedMessageHandler handler = (IDistributedMessageHandler) Proxy.newProxyInstance(
-                IDistributedMessageHandler.class.getClassLoader(),
-                new Class<?>[] {IDistributedMessageHandler.class},
+        private final DistributedMessageHandler handler = (DistributedMessageHandler) Proxy.newProxyInstance(
+                DistributedMessageHandler.class.getClassLoader(),
+                new Class<?>[] {DistributedMessageHandler.class},
                 (proxy, method, arguments) -> defaultValue(method.getReturnType()));
         private SoulseekClientStates state = SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN);
 
@@ -673,7 +673,7 @@ class DistributedConnectionManagerTest {
         }
 
         @Override
-        public IDistributedMessageHandler getDistributedMessageHandler() {
+        public DistributedMessageHandler getDistributedMessageHandler() {
             return handler;
         }
     }

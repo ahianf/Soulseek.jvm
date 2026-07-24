@@ -23,11 +23,11 @@ import dev.slsk.eventargs.SoulseekClientDisconnectedEventArgs;
 import dev.slsk.exceptions.KickedFromServerException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
-import dev.slsk.messaging.handlers.IDistributedMessageHandler;
-import dev.slsk.messaging.handlers.IPeerMessageHandler;
-import dev.slsk.messaging.handlers.IServerMessageHandler;
+import dev.slsk.messaging.handlers.DistributedMessageHandler;
+import dev.slsk.messaging.handlers.PeerMessageHandler;
 import dev.slsk.messaging.handlers.PeerMessageHandlerEventListener;
 import dev.slsk.messaging.handlers.ServerMessageEvent;
+import dev.slsk.messaging.handlers.ServerMessageHandler;
 import dev.slsk.messaging.handlers.ServerMessageHandlerEventListener;
 import dev.slsk.network.IConnectionFactory;
 import dev.slsk.network.IDistributedConnectionManager;
@@ -364,7 +364,7 @@ class SoulseekClientTest {
         private final SearchResponderProbe search = new SearchResponderProbe();
         private final DistributedManagerProbe distributed = new DistributedManagerProbe();
         private final IListenerHandler listenerHandler = diagnosticProxy(IListenerHandler.class);
-        private final IDistributedMessageHandler distributedHandler = diagnosticProxy(IDistributedMessageHandler.class);
+        private final DistributedMessageHandler distributedHandler = diagnosticProxy(DistributedMessageHandler.class);
         private final IPeerConnectionManager peerManager = diagnosticProxy(IPeerConnectionManager.class);
         private final SoulseekClient client;
 
@@ -426,8 +426,8 @@ class SoulseekClientTest {
     private static final class PeerHandlerProbe {
         private PeerMessageHandlerEventListener<DownloadDeniedEventArgs> denied;
         private PeerMessageHandlerEventListener<DownloadFailedEventArgs> failed;
-        private final IPeerMessageHandler proxy = (IPeerMessageHandler) Proxy.newProxyInstance(
-                IPeerMessageHandler.class.getClassLoader(), new Class<?>[] {IPeerMessageHandler.class}, this::invoke);
+        private final PeerMessageHandler proxy = (PeerMessageHandler) Proxy.newProxyInstance(
+                PeerMessageHandler.class.getClassLoader(), new Class<?>[] {PeerMessageHandler.class}, this::invoke);
 
         @SuppressWarnings("unchecked")
         private Object invoke(Object ignored, Method method, Object[] arguments) {
@@ -450,10 +450,8 @@ class SoulseekClientTest {
 
     private static final class ServerHandlerProbe {
         private final Map<ServerMessageEvent, ServerMessageHandlerEventListener<?>> listeners = new HashMap<>();
-        private final IServerMessageHandler proxy = (IServerMessageHandler) Proxy.newProxyInstance(
-                IServerMessageHandler.class.getClassLoader(),
-                new Class<?>[] {IServerMessageHandler.class},
-                this::invoke);
+        private final ServerMessageHandler proxy = (ServerMessageHandler) Proxy.newProxyInstance(
+                ServerMessageHandler.class.getClassLoader(), new Class<?>[] {ServerMessageHandler.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("addListener")) {

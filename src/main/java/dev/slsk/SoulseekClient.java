@@ -62,11 +62,11 @@ import dev.slsk.exceptions.UserNotFoundException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.handlers.BrowseResponseConnection;
+import dev.slsk.messaging.handlers.DefaultDistributedMessageHandler;
+import dev.slsk.messaging.handlers.DefaultPeerMessageHandler;
+import dev.slsk.messaging.handlers.DefaultServerMessageHandler;
 import dev.slsk.messaging.handlers.DistributedMessageHandler;
 import dev.slsk.messaging.handlers.DistributedMessageHandlerClient;
-import dev.slsk.messaging.handlers.IDistributedMessageHandler;
-import dev.slsk.messaging.handlers.IPeerMessageHandler;
-import dev.slsk.messaging.handlers.IServerMessageHandler;
 import dev.slsk.messaging.handlers.PeerMessageHandler;
 import dev.slsk.messaging.handlers.PeerMessageHandlerClient;
 import dev.slsk.messaging.handlers.ServerMessageEvent;
@@ -229,11 +229,11 @@ public class SoulseekClient
     private final IConnectionFactory connectionFactory;
     private final IListenerHandler listenerHandler;
     private final ISearchResponder searchResponder;
-    private final IPeerMessageHandler peerMessageHandler;
-    private final IDistributedMessageHandler distributedMessageHandler;
+    private final PeerMessageHandler peerMessageHandler;
+    private final DistributedMessageHandler distributedMessageHandler;
     private final IPeerConnectionManager peerConnectionManager;
     private final IDistributedConnectionManager distributedConnectionManager;
-    private final IServerMessageHandler serverMessageHandler;
+    private final ServerMessageHandler serverMessageHandler;
     private final IDiagnosticFactory diagnostic;
     private volatile ClientListenerFactory clientListenerFactory = Listener::new;
     private final AtomicBoolean closed = new AtomicBoolean();
@@ -290,9 +290,9 @@ public class SoulseekClient
             IConnectionFactory connectionFactory,
             IPeerConnectionManager peerConnectionManager,
             IDistributedConnectionManager distributedConnectionManager,
-            IServerMessageHandler serverMessageHandler,
-            IPeerMessageHandler peerMessageHandler,
-            IDistributedMessageHandler distributedMessageHandler,
+            ServerMessageHandler serverMessageHandler,
+            PeerMessageHandler peerMessageHandler,
+            DistributedMessageHandler distributedMessageHandler,
             IListener listener,
             IListenerHandler listenerHandler,
             ISearchResponder searchResponder,
@@ -336,16 +336,17 @@ public class SoulseekClient
 
         this.listenerHandler = listenerHandler == null ? new ListenerHandler(this) : listenerHandler;
         this.searchResponder = searchResponder == null ? new SearchResponder(this) : searchResponder;
-        this.peerMessageHandler = peerMessageHandler == null ? new PeerMessageHandler(this) : peerMessageHandler;
-        this.distributedMessageHandler =
-                distributedMessageHandler == null ? new DistributedMessageHandler(this) : distributedMessageHandler;
+        this.peerMessageHandler = peerMessageHandler == null ? new DefaultPeerMessageHandler(this) : peerMessageHandler;
+        this.distributedMessageHandler = distributedMessageHandler == null
+                ? new DefaultDistributedMessageHandler(this)
+                : distributedMessageHandler;
         this.peerConnectionManager =
                 peerConnectionManager == null ? new PeerConnectionManager(this) : peerConnectionManager;
         this.distributedConnectionManager = distributedConnectionManager == null
                 ? new DistributedConnectionManager(this)
                 : distributedConnectionManager;
         this.serverMessageHandler =
-                serverMessageHandler == null ? new ServerMessageHandler(this) : serverMessageHandler;
+                serverMessageHandler == null ? new DefaultServerMessageHandler(this) : serverMessageHandler;
 
         bindEvents();
         cleanupScheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -2735,7 +2736,7 @@ public class SoulseekClient
     }
 
     @Override
-    public final IDistributedMessageHandler getDistributedMessageHandler() {
+    public final DistributedMessageHandler getDistributedMessageHandler() {
         return distributedMessageHandler;
     }
 
@@ -2750,7 +2751,7 @@ public class SoulseekClient
     }
 
     @Override
-    public final IPeerMessageHandler getPeerMessageHandler() {
+    public final PeerMessageHandler getPeerMessageHandler() {
         return peerMessageHandler;
     }
 
@@ -2759,7 +2760,7 @@ public class SoulseekClient
         return listener;
     }
 
-    final IServerMessageHandler getServerMessageHandler() {
+    final ServerMessageHandler getServerMessageHandler() {
         return serverMessageHandler;
     }
 
