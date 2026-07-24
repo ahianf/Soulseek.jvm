@@ -38,9 +38,12 @@ import dev.slsk.eventargs.SoulseekClientStateChangedEventArgs;
 import dev.slsk.eventargs.TransferProgressUpdatedEventArgs;
 import dev.slsk.eventargs.TransferStateChangedEventArgs;
 import dev.slsk.eventargs.UserCannotConnectEventArgs;
+import dev.slsk.exceptions.AddressException;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.DuplicateTokenException;
 import dev.slsk.exceptions.KickedFromServerException;
+import dev.slsk.exceptions.ListenException;
+import dev.slsk.exceptions.LoginRejectedException;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.RoomJoinForbiddenException;
 import dev.slsk.exceptions.SoulseekClientException;
@@ -72,6 +75,8 @@ import dev.slsk.messaging.messages.GivePrivilegesCommand;
 import dev.slsk.messaging.messages.IOutgoingMessage;
 import dev.slsk.messaging.messages.JoinRoomRequest;
 import dev.slsk.messaging.messages.LeaveRoomRequest;
+import dev.slsk.messaging.messages.LoginRequest;
+import dev.slsk.messaging.messages.LoginResponse;
 import dev.slsk.messaging.messages.NewPassword;
 import dev.slsk.messaging.messages.PlaceInQueueRequest;
 import dev.slsk.messaging.messages.PlaceInQueueResponse;
@@ -82,12 +87,14 @@ import dev.slsk.messaging.messages.PrivateRoomDropMembershipCommand;
 import dev.slsk.messaging.messages.PrivateRoomDropOwnershipCommand;
 import dev.slsk.messaging.messages.PrivateRoomRemoveOperator;
 import dev.slsk.messaging.messages.PrivateRoomRemoveUser;
+import dev.slsk.messaging.messages.PrivateRoomToggle;
 import dev.slsk.messaging.messages.RoomListRequest;
 import dev.slsk.messaging.messages.RoomMessageCommand;
 import dev.slsk.messaging.messages.RoomSearchRequest;
 import dev.slsk.messaging.messages.SearchRequest;
 import dev.slsk.messaging.messages.SendUploadSpeedCommand;
 import dev.slsk.messaging.messages.ServerPing;
+import dev.slsk.messaging.messages.SetListenPortCommand;
 import dev.slsk.messaging.messages.SetOnlineStatusCommand;
 import dev.slsk.messaging.messages.SetRoomTickerCommand;
 import dev.slsk.messaging.messages.SetSharedCountsCommand;
@@ -118,6 +125,7 @@ import dev.slsk.network.PeerConnectionManager;
 import dev.slsk.network.PeerConnectionManagerClient;
 import dev.slsk.network.PeerEndpoint;
 import dev.slsk.network.tcp.IListener;
+import dev.slsk.network.tcp.Listener;
 import dev.slsk.options.BrowseOptions;
 import dev.slsk.options.BrowseProgress;
 import dev.slsk.options.SearchOptions;
@@ -132,6 +140,7 @@ import dev.slsk.transfer.TransferInternal;
 import java.io.ByteArrayOutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -165,6 +174,8 @@ public class SoulseekClient
                 ServerMessageHandlerClient {
 
     private static final int MAJOR_VERSION = 170;
+    private static final String DEFAULT_ADDRESS = "server.slsknet.org";
+    private static final int DEFAULT_PORT = 2271;
     private static volatile boolean raiseEventsAsynchronously;
 
     private final SoulseekClientOptions options;
@@ -172,6 +183,7 @@ public class SoulseekClient
     private final IWaiter waiter;
     private final TokenFactory tokenFactory;
     private final Semaphore searchSemaphore;
+    private final Semaphore stateSemaphore = new Semaphore(1);
     private final IOAdapter ioAdapter;
     private final TokenBucket uploadTokenBucket;
     private final TokenBucket downloadTokenBucket;
@@ -863,6 +875,108 @@ public class SoulseekClient
                     }
                     return null;
                 });
+    }
+
+    /**
+     * Connects to the default Soulseek server and logs in.
+     *
+     * @param requestedUsername the login username
+     * @param password the login password
+     * @return the connection operation
+     */
+    public CompletableFuture<Void> connectAsync(String requestedUsername, String password) {
+        return connectAsync(DEFAULT_ADDRESS, DEFAULT_PORT, requestedUsername, password, CancellationToken.none());
+    }
+
+    /**
+     * Connects to the default Soulseek server and logs in.
+     *
+     * @param requestedUsername the login username
+     * @param password the login password
+     * @param cancellationToken the cancellation token
+     * @return the connection operation
+     */
+    public CompletableFuture<Void> connectAsync(
+            String requestedUsername, String password, CancellationToken cancellationToken) {
+        return connectAsync(DEFAULT_ADDRESS, DEFAULT_PORT, requestedUsername, password, cancellationToken);
+    }
+
+    /**
+     * Connects to a Soulseek server and logs in.
+     *
+     * @param requestedAddress the server address
+     * @param requestedPort the server port
+     * @param requestedUsername the login username
+     * @param password the login password
+     * @return the connection operation
+     */
+    public CompletableFuture<Void> connectAsync(
+            String requestedAddress, int requestedPort, String requestedUsername, String password) {
+        return connectAsync(requestedAddress, requestedPort, requestedUsername, password, CancellationToken.none());
+    }
+
+    /**
+     * Connects to a Soulseek server and logs in.
+     *
+     * @param requestedAddress the server address
+     * @param requestedPort the server port
+     * @param requestedUsername the login username
+     * @param password the login password
+     * @param cancellationToken the cancellation token
+     * @return the connection operation
+     */
+    public CompletableFuture<Void> connectAsync(
+            String requestedAddress,
+            int requestedPort,
+            String requestedUsername,
+            String password,
+            CancellationToken cancellationToken) {
+        requireText(requestedAddress, "address");
+        if (requestedPort < 0 || requestedPort > 65_535) {
+            throw new IllegalArgumentException("port must be between 0 and 65535 (specified: " + requestedPort + ")");
+        }
+        requireNonEmpty(requestedUsername, "username");
+        requireNonEmpty(password, "password");
+        if (state.hasFlag(SoulseekClientStates.CONNECTING) || state.hasFlag(SoulseekClientStates.LOGGING_IN)) {
+            throw new IllegalStateException("A connection is already in the process of " + "being established");
+        }
+        if (state.hasFlag(SoulseekClientStates.CONNECTED)) {
+            throw new IllegalStateException("The client is already connected");
+        }
+
+        InetAddress serverAddress;
+        try {
+            serverAddress = InetAddress.getByName(requestedAddress);
+        } catch (UnknownHostException failure) {
+            throw new AddressException(
+                    "Failed to resolve address '" + requestedAddress + "': " + failureMessage(failure), failure);
+        }
+
+        if (options.isEnableListener()) {
+            Listener probe = null;
+            try {
+                probe = new Listener(
+                        options.getListenIPAddress(), options.getListenPort(), options.getIncomingConnectionOptions());
+                probe.start();
+            } catch (Throwable failure) {
+                throw new ListenException("Failed to start listening on "
+                        + options.getListenIPAddress() + ":"
+                        + options.getListenPort()
+                        + "; the IP and/or port may be in use or "
+                        + "are otherwise unavailable");
+            } finally {
+                if (probe != null) {
+                    probe.stop();
+                }
+            }
+        }
+
+        return connectInternalAsync(
+                requestedAddress,
+                new InetSocketAddress(serverAddress, requestedPort),
+                requestedUsername,
+                password,
+                defaultToken(cancellationToken));
     }
 
     public CompletableFuture<BrowseResponse> browseAsync(String requestedUsername) {
@@ -2118,6 +2232,134 @@ public class SoulseekClient
         raise(Event.BROWSE_PROGRESS_UPDATED, eventArgs);
     }
 
+    private CompletableFuture<Void> connectInternalAsync(
+            String requestedAddress,
+            InetSocketAddress requestedEndPoint,
+            String requestedUsername,
+            String password,
+            CancellationToken cancellationToken) {
+        CompletableFuture<Void> serialized = acquirePermit(stateSemaphore, cancellationToken)
+                .thenCompose(ignored -> {
+                    CompletableFuture<Void> attempt;
+                    if (state.hasFlag(SoulseekClientStates.CONNECTED)
+                            && state.hasFlag(SoulseekClientStates.LOGGED_IN)) {
+                        attempt = CompletableFuture.completedFuture(null);
+                    } else {
+                        attempt = performConnectAsync(
+                                requestedAddress, requestedEndPoint, requestedUsername, password, cancellationToken);
+                    }
+                    return attempt.whenComplete((result, failure) -> stateSemaphore.release());
+                });
+
+        return serialized.handle((result, failure) -> {
+            if (failure == null) {
+                return result;
+            }
+            Throwable cause = unwrap(failure);
+            Throwable reported;
+            if (cause instanceof LoginRejectedException
+                    || cause instanceof CancellationException
+                    || cause instanceof TimeoutException) {
+                reported = cause;
+            } else {
+                reported = new SoulseekClientException("Failed to connect: " + failureMessage(cause), cause);
+            }
+            disconnect(failureMessage(reported), asException(reported));
+            throw new CompletionException(reported);
+        });
+    }
+
+    private CompletableFuture<Void> performConnectAsync(
+            String requestedAddress,
+            InetSocketAddress requestedEndPoint,
+            String requestedUsername,
+            String password,
+            CancellationToken cancellationToken) {
+        try {
+            changeState(SoulseekClientStates.CONNECTING, "Connecting", null);
+
+            if (options.isEnableListener()) {
+                listener = new Listener(
+                        options.getListenIPAddress(), options.getListenPort(), options.getIncomingConnectionOptions());
+                listener.addAcceptedListener(listenerHandler::handleConnection);
+                listener.start();
+            }
+
+            serverConnection = connectionFactory.getServerConnection(
+                    requestedEndPoint,
+                    (sender, eventArgs) ->
+                            changeState(SoulseekClientStates.CONNECTED, "Connected to " + ipEndPoint, null),
+                    (sender, eventArgs) -> disconnect(eventArgs.getMessage(), eventArgs.getException()),
+                    serverMessageHandler::handleMessageRead,
+                    serverMessageHandler::handleMessageWritten,
+                    options.getServerConnectionOptions());
+
+            CompletableFuture<Void> connectOperation;
+            try {
+                connectOperation = serverConnection.connectAsync(cancellationToken);
+            } catch (Throwable failure) {
+                connectOperation = CompletableFuture.failedFuture(failure);
+            }
+            return connectOperation.thenCompose(ignored -> {
+                address = requestedAddress;
+                ipEndPoint = requestedEndPoint;
+                changeState(SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGING_IN), "Logging in", null);
+                return loginAsync(requestedUsername, password, cancellationToken);
+            });
+        } catch (Throwable failure) {
+            return CompletableFuture.failedFuture(failure);
+        }
+    }
+
+    private CompletableFuture<Void> loginAsync(
+            String requestedUsername, String password, CancellationToken cancellationToken) {
+        CompletableFuture<LoginResponse> loginWait;
+        try {
+            loginWait = waiter.waitAsync(
+                    new WaitKey(MessageCode.Server.LOGIN), LoginResponse.class, null, cancellationToken);
+        } catch (Throwable failure) {
+            return CompletableFuture.failedFuture(failure);
+        }
+
+        ByteArrayOutputStream loginMessages = new ByteArrayOutputStream();
+        loginMessages.writeBytes(new LoginRequest(minorVersion, requestedUsername, password).toByteArray());
+        loginMessages.writeBytes(new SetListenPortCommand(options.getListenPort()).toByteArray());
+
+        return invokeServerByteWrite(loginMessages.toByteArray(), cancellationToken)
+                .thenCompose(ignored -> loginWait)
+                .thenCompose(response -> {
+                    if (!response.isSucceeded()) {
+                        return CompletableFuture.failedFuture(new LoginRejectedException(
+                                "The server rejected login attempt: " + response.getMessage()));
+                    }
+                    serverInfo = serverInfo.with(null, null, null, response.isSupporter());
+                    raise(Event.SERVER_INFO_RECEIVED, serverInfo);
+                    username = requestedUsername;
+                    changeState(SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN), "Logged in", null);
+                    return sendConfigurationMessagesAsync(cancellationToken);
+                });
+    }
+
+    private CompletableFuture<Void> sendConfigurationMessagesAsync(CancellationToken cancellationToken) {
+        return invokeServerWrite(new SetListenPortCommand(options.getListenPort()), cancellationToken)
+                .thenCompose(ignored -> invokeServerWrite(
+                        new PrivateRoomToggle(options.isAcceptPrivateRoomInvitations()), cancellationToken))
+                .thenCompose(ignored -> {
+                    try {
+                        return distributedConnectionManager.updateStatusAsync(cancellationToken);
+                    } catch (Throwable failure) {
+                        return CompletableFuture.failedFuture(failure);
+                    }
+                });
+    }
+
+    private static Exception asException(Throwable failure) {
+        if (failure instanceof Exception exception) {
+            return exception;
+        }
+        return new RuntimeException(failure);
+    }
+
     private SearchInvocation validateSearch(
             SearchQuery initialQuery, SearchScope initialScope, Integer initialToken, SearchOptions initialOptions) {
         SearchQuery query = validateSearchQuery(initialQuery);
@@ -2258,6 +2500,18 @@ public class SoulseekClient
     }
 
     private CompletableFuture<Void> acquireSearchPermit(CancellationToken cancellationToken) {
+        return acquirePermit(searchSemaphore, cancellationToken);
+    }
+
+    private static CompletableFuture<Void> acquirePermit(Semaphore semaphore, CancellationToken cancellationToken) {
+        try {
+            cancellationToken.throwIfCancellationRequested();
+            if (semaphore.tryAcquire()) {
+                return CompletableFuture.completedFuture(null);
+            }
+        } catch (Throwable failure) {
+            return CompletableFuture.failedFuture(failure);
+        }
         CompletableFuture<Void> result = new CompletableFuture<>();
         CancellationRegistration registration = cancellationToken.register(
                 () -> result.completeExceptionally(new CancellationException("The operation was cancelled")));
@@ -2265,9 +2519,9 @@ public class SoulseekClient
             try {
                 while (!result.isDone()) {
                     cancellationToken.throwIfCancellationRequested();
-                    if (searchSemaphore.tryAcquire(50, TimeUnit.MILLISECONDS)) {
+                    if (semaphore.tryAcquire(50, TimeUnit.MILLISECONDS)) {
                         if (!result.complete(null)) {
-                            searchSemaphore.release();
+                            semaphore.release();
                         }
                         return;
                     }
