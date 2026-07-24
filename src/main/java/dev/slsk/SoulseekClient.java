@@ -44,10 +44,9 @@ import java.util.function.Consumer;
 /**
  * A client for the Soulseek file sharing network.
  *
- * <p>This is the direct Java counterpart of the public C#
- * {@code ISoulseekClient} contract. C# optional parameters are represented by
- * progressive overloads ending in a canonical overload that accepts a
- * {@link CancellationSignal}.</p>
+ * <p>C# optional parameters from the pinned behavioral baseline are
+ * represented by progressive overloads ending in a canonical overload that
+ * accepts a {@link CancellationSignal}.</p>
  */
 public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
     /**
