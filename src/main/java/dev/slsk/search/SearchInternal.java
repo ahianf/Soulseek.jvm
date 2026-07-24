@@ -4,8 +4,8 @@
 
 package dev.slsk.search;
 
-import dev.slsk.CancellationRegistration;
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
+import dev.slsk.CancellationSubscription;
 import dev.slsk.Search;
 import dev.slsk.SearchQuery;
 import dev.slsk.SearchResponse;
@@ -241,10 +241,10 @@ public final class SearchInternal implements AutoCloseable {
     }
 
     /** Waits until this search completes or the caller cancels. */
-    public CompletableFuture<Void> waitForCompletion(CancellationToken cancellationToken) {
-        Objects.requireNonNull(cancellationToken, "cancellationToken");
+    public CompletableFuture<Void> waitForCompletion(CancellationSignal cancellationSignal) {
+        Objects.requireNonNull(cancellationSignal, "cancellationSignal");
         CompletableFuture<Void> result = new CompletableFuture<>();
-        CancellationRegistration registration = cancellationToken.register(
+        CancellationSubscription registration = cancellationSignal.register(
                 () -> result.completeExceptionally(new CancellationException("Operation cancelled")));
         completion.whenComplete((ignored, failure) -> {
             if (failure == null) {
@@ -259,7 +259,7 @@ public final class SearchInternal implements AutoCloseable {
 
     /** Waits without a cancellable caller token. */
     public CompletableFuture<Void> waitForCompletion() {
-        return waitForCompletion(CancellationToken.none());
+        return waitForCompletion(CancellationSignal.none());
     }
 
     /** Creates the public immutable snapshot of this search. */

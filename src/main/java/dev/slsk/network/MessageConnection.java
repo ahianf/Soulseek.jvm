@@ -4,7 +4,7 @@
 
 package dev.slsk.network;
 
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.network.tcp.Connection;
 import java.util.concurrent.CompletableFuture;
@@ -43,10 +43,10 @@ public interface MessageConnection extends Connection {
     void startReadingContinuously();
 
     /** Writes an outgoing message. */
-    CompletableFuture<Void> writeAsync(OutgoingMessage message, CancellationToken cancellationToken);
+    CompletableFuture<Void> writeAsync(OutgoingMessage message, CancellationSignal cancellationSignal);
 
     /** Writes an outgoing message without a cancellable token. */
     default CompletableFuture<Void> writeAsync(OutgoingMessage message) {
-        return writeAsync(message, CancellationToken.none());
+        return writeAsync(message, CancellationSignal.none());
     }
 }

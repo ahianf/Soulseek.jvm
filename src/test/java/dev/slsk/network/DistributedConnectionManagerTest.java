@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import dev.slsk.SoulseekClientStates;
 import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
@@ -777,33 +777,33 @@ class DistributedConnectionManagerTest {
 
         @Override
         public CompletableFuture<Void> waitAsync(WaitKey key) {
-            return waitAsync(key, Void.class, null, CancellationToken.none());
+            return waitAsync(key, Void.class, null, CancellationSignal.none());
         }
 
         @Override
         public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout) {
-            return waitAsync(key, Void.class, timeout, CancellationToken.none());
+            return waitAsync(key, Void.class, timeout, CancellationSignal.none());
         }
 
         @Override
-        public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout, CancellationToken cancellationToken) {
-            return waitAsync(key, Void.class, timeout, cancellationToken);
+        public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout, CancellationSignal cancellationSignal) {
+            return waitAsync(key, Void.class, timeout, cancellationSignal);
         }
 
         @Override
         public <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType) {
-            return waitAsync(key, resultType, null, CancellationToken.none());
+            return waitAsync(key, resultType, null, CancellationSignal.none());
         }
 
         @Override
         public <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType, Integer timeout) {
-            return waitAsync(key, resultType, timeout, CancellationToken.none());
+            return waitAsync(key, resultType, timeout, CancellationSignal.none());
         }
 
         @SuppressWarnings("unchecked")
         @Override
         public <T> CompletableFuture<T> waitAsync(
-                WaitKey key, Class<T> resultType, Integer timeout, CancellationToken cancellationToken) {
+                WaitKey key, Class<T> resultType, Integer timeout, CancellationSignal cancellationSignal) {
             if (key.getToken().startsWith(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION)) {
                 return (CompletableFuture<T>) solicitationFuture;
             }
@@ -816,8 +816,8 @@ class DistributedConnectionManagerTest {
         }
 
         @Override
-        public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key, CancellationToken cancellationToken) {
-            return waitAsync(key, null, cancellationToken);
+        public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key, CancellationSignal cancellationSignal) {
+            return waitAsync(key, null, cancellationSignal);
         }
 
         @Override
@@ -827,8 +827,8 @@ class DistributedConnectionManagerTest {
 
         @Override
         public <T> CompletableFuture<T> waitIndefinitelyAsync(
-                WaitKey key, Class<T> resultType, CancellationToken cancellationToken) {
-            return waitAsync(key, resultType, null, cancellationToken);
+                WaitKey key, Class<T> resultType, CancellationSignal cancellationSignal) {
+            return waitAsync(key, resultType, null, cancellationSignal);
         }
 
         @Override

@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import dev.slsk.TransferStates;
 import java.util.ArrayList;
 import java.util.List;
@@ -70,10 +70,10 @@ class TransferOptionsTest {
         assertEquals(
                 Integer.MAX_VALUE,
                 options.getGovernor()
-                        .grantAsync(null, 1, CancellationToken.none())
+                        .grantAsync(null, 1, CancellationSignal.none())
                         .join());
         assertNull(options.getSlotAwaiter()
-                .awaitSlotAsync(null, CancellationToken.none())
+                .awaitSlotAsync(null, CancellationSignal.none())
                 .join());
         assertNull(options.getStateChanged());
         assertNull(options.getProgressUpdated());

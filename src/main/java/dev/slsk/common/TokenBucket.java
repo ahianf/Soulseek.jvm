@@ -4,8 +4,8 @@
 
 package dev.slsk.common;
 
-import dev.slsk.CancellationRegistration;
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
+import dev.slsk.CancellationSubscription;
 import java.util.ArrayDeque;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
@@ -75,20 +75,20 @@ public final class TokenBucket implements AutoCloseable {
      * @return a future containing the provided token count
      */
     public CompletableFuture<Integer> getAsync(int count) {
-        return getAsync(count, CancellationToken.none());
+        return getAsync(count, CancellationSignal.none());
     }
 
     /**
      * Asynchronously retrieves tokens.
      *
      * @param count the requested token count
-     * @param cancellationToken the cancellation token
+     * @param cancellationSignal the cancellation signal
      * @return a future containing the provided token count
      */
-    public CompletableFuture<Integer> getAsync(int count, CancellationToken cancellationToken) {
-        Objects.requireNonNull(cancellationToken, "cancellationToken");
+    public CompletableFuture<Integer> getAsync(int count, CancellationSignal cancellationSignal) {
+        Objects.requireNonNull(cancellationSignal, "cancellationSignal");
 
-        if (cancellationToken.isCancellationRequested()) {
+        if (cancellationSignal.isCancellationRequested()) {
             return CompletableFuture.failedFuture(new CancellationException("The operation was cancelled"));
         }
 
@@ -112,7 +112,7 @@ public final class TokenBucket implements AutoCloseable {
             if (becomesActive) {
                 request.active = true;
             } else {
-                request.registration = cancellationToken.register(() -> cancelFromToken(request));
+                request.registration = cancellationSignal.register(() -> cancelFromToken(request));
             }
 
             request.future.whenComplete((result, exception) -> {
@@ -243,7 +243,7 @@ public final class TokenBucket implements AutoCloseable {
         private final int count;
         private final CompletableFuture<Integer> future = new CompletableFuture<>();
         private boolean active;
-        private CancellationRegistration registration;
+        private CancellationSubscription registration;
 
         private Request(int count) {
             this.count = count;

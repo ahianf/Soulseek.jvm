@@ -9,21 +9,21 @@ import java.util.concurrent.CancellationException;
 /**
  * An immutable observation handle for cooperative cancellation.
  */
-public final class CancellationToken {
-    private static final CancellationToken NONE = new CancellationToken(new CancellationState(false));
+public final class CancellationSignal {
+    private static final CancellationSignal NONE = new CancellationSignal(new CancellationState(false));
 
     private final CancellationState state;
 
-    CancellationToken(CancellationState state) {
+    CancellationSignal(CancellationState state) {
         this.state = state;
     }
 
     /**
-     * Returns a token that can never be cancelled.
+     * Returns a signal that can never be cancelled.
      *
-     * @return the non-cancellable token
+     * @return the non-cancellable signal
      */
-    public static CancellationToken none() {
+    public static CancellationSignal none() {
         return NONE;
     }
 
@@ -54,9 +54,9 @@ public final class CancellationToken {
      * method returns.
      *
      * @param listener the cancellation listener
-     * @return a registration that can remove the listener
+     * @return a subscription that can remove the listener
      */
-    public CancellationRegistration register(Runnable listener) {
+    public CancellationSubscription register(Runnable listener) {
         return state.register(Objects.requireNonNull(listener, "listener"));
     }
 }

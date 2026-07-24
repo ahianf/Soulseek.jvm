@@ -4,7 +4,7 @@
 
 package dev.slsk.network.tcp;
 
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import dev.slsk.options.ConnectionOptions;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -73,11 +73,11 @@ public interface Connection extends AutoCloseable {
     int getWriteQueueDepth();
 
     /** Connects to the configured endpoint. */
-    CompletableFuture<Void> connectAsync(CancellationToken cancellationToken);
+    CompletableFuture<Void> connectAsync(CancellationSignal cancellationSignal);
 
     /** Connects without a cancellable token. */
     default CompletableFuture<Void> connectAsync() {
-        return connectAsync(CancellationToken.none());
+        return connectAsync(CancellationSignal.none());
     }
 
     /** Disconnects without optional details. */
@@ -97,11 +97,11 @@ public interface Connection extends AutoCloseable {
     TcpClient handoffTcpClient();
 
     /** Reads an exact byte count into a new array. */
-    CompletableFuture<byte[]> readAsync(long length, CancellationToken cancellationToken);
+    CompletableFuture<byte[]> readAsync(long length, CancellationSignal cancellationSignal);
 
     /** Reads an exact byte count without a cancellable token. */
     default CompletableFuture<byte[]> readAsync(long length) {
-        return readAsync(length, CancellationToken.none());
+        return readAsync(length, CancellationSignal.none());
     }
 
     /** Reads an exact byte count into a stream. */
@@ -110,27 +110,27 @@ public interface Connection extends AutoCloseable {
             OutputStream outputStream,
             ConnectionGovernor governor,
             ConnectionReporter reporter,
-            CancellationToken cancellationToken);
+            CancellationSignal cancellationSignal);
 
     /** Reads to a stream using source defaults. */
     default CompletableFuture<Void> readAsync(long length, OutputStream outputStream, ConnectionGovernor governor) {
-        return readAsync(length, outputStream, governor, null, CancellationToken.none());
+        return readAsync(length, outputStream, governor, null, CancellationSignal.none());
     }
 
     /** Waits for this connection to disconnect. */
-    CompletableFuture<String> waitForDisconnect(CancellationToken cancellationToken);
+    CompletableFuture<String> waitForDisconnect(CancellationSignal cancellationSignal);
 
     /** Waits without a cancellable token. */
     default CompletableFuture<String> waitForDisconnect() {
-        return waitForDisconnect(CancellationToken.none());
+        return waitForDisconnect(CancellationSignal.none());
     }
 
     /** Writes an array. */
-    CompletableFuture<Void> writeAsync(byte[] bytes, CancellationToken cancellationToken);
+    CompletableFuture<Void> writeAsync(byte[] bytes, CancellationSignal cancellationSignal);
 
     /** Writes an array without a cancellable token. */
     default CompletableFuture<Void> writeAsync(byte[] bytes) {
-        return writeAsync(bytes, CancellationToken.none());
+        return writeAsync(bytes, CancellationSignal.none());
     }
 
     /** Writes an exact byte count from a stream. */
@@ -139,16 +139,16 @@ public interface Connection extends AutoCloseable {
             InputStream inputStream,
             ConnectionGovernor governor,
             ConnectionReporter reporter,
-            CancellationToken cancellationToken);
+            CancellationSignal cancellationSignal);
 
     /** Writes from a stream using source defaults. */
     default CompletableFuture<Void> writeAsync(long length, InputStream inputStream) {
-        return writeAsync(length, inputStream, null, null, CancellationToken.none());
+        return writeAsync(length, inputStream, null, null, CancellationSignal.none());
     }
 
     /** Writes from a stream using a governor. */
     default CompletableFuture<Void> writeAsync(long length, InputStream inputStream, ConnectionGovernor governor) {
-        return writeAsync(length, inputStream, governor, null, CancellationToken.none());
+        return writeAsync(length, inputStream, governor, null, CancellationSignal.none());
     }
 
     /** Disposes the connection. */

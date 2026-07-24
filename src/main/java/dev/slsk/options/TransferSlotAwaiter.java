@@ -4,7 +4,7 @@
 
 package dev.slsk.options;
 
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import dev.slsk.Transfer;
 import java.util.concurrent.CompletableFuture;
 
@@ -17,8 +17,8 @@ public interface TransferSlotAwaiter {
      * Waits for a slot for the transfer.
      *
      * @param transfer the transfer
-     * @param cancellationToken the cancellation token
+     * @param cancellationSignal the cancellation signal
      * @return a future completed when the slot is acquired
      */
-    CompletableFuture<Void> awaitSlotAsync(Transfer transfer, CancellationToken cancellationToken);
+    CompletableFuture<Void> awaitSlotAsync(Transfer transfer, CancellationSignal cancellationSignal);
 }

@@ -19,15 +19,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class CancellationTokenTest {
+class CancellationSignalTest {
     @Test
-    @DisplayName("None is a stable non-cancellable token")
+    @DisplayName("None is a stable non-cancellable signal")
     void noneIsStableAndNonCancellable() {
-        CancellationToken token = CancellationToken.none();
+        CancellationSignal token = CancellationSignal.none();
         AtomicInteger calls = new AtomicInteger();
 
-        try (CancellationRegistration ignored = token.register(calls::incrementAndGet)) {
-            assertSame(token, CancellationToken.none());
+        try (CancellationSubscription ignored = token.register(calls::incrementAndGet)) {
+            assertSame(token, CancellationSignal.none());
             assertFalse(token.isCancellationRequested());
             assertDoesNotThrow(token::throwIfCancellationRequested);
         }
@@ -38,8 +38,8 @@ class CancellationTokenTest {
     @Test
     @DisplayName("Cancellation is observable and idempotent")
     void cancellationIsObservableAndIdempotent() {
-        try (CancellationTokenSource source = new CancellationTokenSource()) {
-            CancellationToken token = source.getToken();
+        try (CancellationController source = new CancellationController()) {
+            CancellationSignal token = source.getSignal();
             AtomicInteger calls = new AtomicInteger();
             token.register(calls::incrementAndGet);
 
@@ -55,25 +55,25 @@ class CancellationTokenTest {
     @Test
     @DisplayName("Pre-cancellation invokes new listeners synchronously")
     void preCancellationInvokesNewListenersSynchronously() {
-        try (CancellationTokenSource source = new CancellationTokenSource()) {
+        try (CancellationController source = new CancellationController()) {
             source.cancel();
             AtomicInteger calls = new AtomicInteger();
 
-            try (CancellationRegistration ignored = source.getToken().register(calls::incrementAndGet)) {
+            try (CancellationSubscription ignored = source.getSignal().register(calls::incrementAndGet)) {
                 assertEquals(1, calls.get());
             }
         }
     }
 
     @Test
-    @DisplayName("Closing a registration removes its listener")
-    void closingRegistrationRemovesListener() {
-        try (CancellationTokenSource source = new CancellationTokenSource()) {
+    @DisplayName("Closing a subscription removes its listener")
+    void closingSubscriptionRemovesListener() {
+        try (CancellationController source = new CancellationController()) {
             AtomicInteger calls = new AtomicInteger();
-            CancellationRegistration registration = source.getToken().register(calls::incrementAndGet);
+            CancellationSubscription subscription = source.getSignal().register(calls::incrementAndGet);
 
-            registration.close();
-            registration.close();
+            subscription.close();
+            subscription.close();
             source.cancel();
 
             assertEquals(0, calls.get());
@@ -83,11 +83,11 @@ class CancellationTokenTest {
     @Test
     @DisplayName("Cancellation listeners run in reverse registration order")
     void listenersRunInReverseRegistrationOrder() {
-        try (CancellationTokenSource source = new CancellationTokenSource()) {
+        try (CancellationController source = new CancellationController()) {
             List<Integer> order = new ArrayList<>();
-            source.getToken().register(() -> order.add(1));
-            source.getToken().register(() -> order.add(2));
-            source.getToken().register(() -> order.add(3));
+            source.getSignal().register(() -> order.add(1));
+            source.getSignal().register(() -> order.add(2));
+            source.getSignal().register(() -> order.add(3));
 
             source.cancel();
 
@@ -98,15 +98,15 @@ class CancellationTokenTest {
     @Test
     @DisplayName("Listener failures do not prevent later listeners")
     void listenerFailuresDoNotPreventLaterListeners() {
-        try (CancellationTokenSource source = new CancellationTokenSource()) {
+        try (CancellationController source = new CancellationController()) {
             List<Integer> calls = new ArrayList<>();
             RuntimeException first = new RuntimeException("first");
             RuntimeException second = new RuntimeException("second");
-            source.getToken().register(() -> {
+            source.getSignal().register(() -> {
                 calls.add(1);
                 throw first;
             });
-            source.getToken().register(() -> {
+            source.getSignal().register(() -> {
                 calls.add(2);
                 throw second;
             });
@@ -123,30 +123,30 @@ class CancellationTokenTest {
     @Test
     @DisplayName("Closing a source is idempotent and releases listeners")
     void closingSourceIsIdempotentAndReleasesListeners() {
-        CancellationTokenSource source = new CancellationTokenSource();
+        CancellationController source = new CancellationController();
         AtomicInteger calls = new AtomicInteger();
-        source.getToken().register(calls::incrementAndGet);
+        source.getSignal().register(calls::incrementAndGet);
 
         source.close();
         source.close();
 
         assertEquals(0, calls.get());
         assertThrows(IllegalStateException.class, source::cancel);
-        assertThrows(IllegalStateException.class, () -> source.getToken().register(() -> {}));
+        assertThrows(IllegalStateException.class, () -> source.getSignal().register(() -> {}));
     }
 
     @Test
     @DisplayName("Register and cancel race invokes a listener at most once")
     void registerAndCancelRaceInvokesListenerAtMostOnce() throws InterruptedException {
         for (int iteration = 0; iteration < 100; iteration++) {
-            try (CancellationTokenSource source = new CancellationTokenSource()) {
+            try (CancellationController source = new CancellationController()) {
                 AtomicInteger calls = new AtomicInteger();
                 CountDownLatch start = new CountDownLatch(1);
                 List<Throwable> failures = Collections.synchronizedList(new ArrayList<>());
 
                 Thread registerThread = Thread.ofPlatform().start(() -> {
                     await(start, failures);
-                    source.getToken().register(calls::incrementAndGet);
+                    source.getSignal().register(calls::incrementAndGet);
                 });
                 Thread cancelThread = Thread.ofPlatform().start(() -> {
                     await(start, failures);

@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.ConnectionWriteException;
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.messaging.messages.OutgoingMessage;
@@ -178,9 +178,9 @@ class MessageConnectionTest {
         DefaultMessageConnection connection = new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 4, client);
         byte[] bytes = new byte[] {4, 0, 0, 0, 1, 2, 3, 4};
         AtomicReference<MessageEvent> written = new AtomicReference<>();
-        AtomicReference<CancellationToken> tokenSeen = new AtomicReference<>();
+        AtomicReference<CancellationSignal> tokenSeen = new AtomicReference<>();
         stream.tokenSeen = tokenSeen;
-        CancellationToken token = CancellationToken.none();
+        CancellationSignal token = CancellationSignal.none();
         connection.addMessageWrittenListener((sender, args) -> {
             assertSame(connection, sender);
             written.set(args);
@@ -309,7 +309,7 @@ class MessageConnectionTest {
                 int destinationPort,
                 String username,
                 String password,
-                CancellationToken cancellationToken) {
+                CancellationSignal cancellationSignal) {
             if (connectAction != null) {
                 connectAction.run();
             }
@@ -337,7 +337,7 @@ class MessageConnectionTest {
         private boolean blockReads;
         private CompletableFuture<Integer> blockedRead;
         private Exception writeFailure;
-        private AtomicReference<CancellationToken> tokenSeen;
+        private AtomicReference<CancellationSignal> tokenSeen;
 
         private FakeStream() {
             this(new byte[0]);
@@ -365,7 +365,7 @@ class MessageConnectionTest {
 
         @Override
         public synchronized CompletableFuture<Integer> readAsync(
-                byte[] buffer, int offset, int size, CancellationToken cancellationToken) {
+                byte[] buffer, int offset, int size, CancellationSignal cancellationSignal) {
             if (blockReads) {
                 blockedRead = new CompletableFuture<>();
                 return blockedRead;
@@ -381,9 +381,9 @@ class MessageConnectionTest {
 
         @Override
         public synchronized CompletableFuture<Void> writeAsync(
-                byte[] buffer, int offset, int size, CancellationToken cancellationToken) {
+                byte[] buffer, int offset, int size, CancellationSignal cancellationSignal) {
             if (tokenSeen != null) {
-                tokenSeen.set(cancellationToken);
+                tokenSeen.set(cancellationSignal);
             }
             if (writeFailure != null) {
                 return CompletableFuture.failedFuture(writeFailure);

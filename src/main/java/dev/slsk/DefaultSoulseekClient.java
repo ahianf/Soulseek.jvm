@@ -860,48 +860,48 @@ final class DefaultSoulseekClient
     }
 
     public CompletableFuture<Void> sendPrivateMessageAsync(String requestedUsername, String message) {
-        return sendPrivateMessageAsync(requestedUsername, message, CancellationToken.none());
+        return sendPrivateMessageAsync(requestedUsername, message, CancellationSignal.none());
     }
 
     public CompletableFuture<Void> sendPrivateMessageAsync(
-            String requestedUsername, String message, CancellationToken cancellationToken) {
+            String requestedUsername, String message, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireNonEmpty(message, "message");
         requireLoggedIn("send a private message");
         return writeServerAsync(
                 new PrivateMessageCommand(requestedUsername, message),
-                cancellationToken,
+                cancellationSignal,
                 "Failed to send private message to user " + requestedUsername + ": ");
     }
 
     public CompletableFuture<Void> addPrivateRoomMemberAsync(String roomName, String requestedUsername) {
-        return addPrivateRoomMemberAsync(roomName, requestedUsername, CancellationToken.none());
+        return addPrivateRoomMemberAsync(roomName, requestedUsername, CancellationSignal.none());
     }
 
     public CompletableFuture<Void> addPrivateRoomMemberAsync(
-            String roomName, String requestedUsername, CancellationToken cancellationToken) {
+            String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(roomName, "roomName");
         requireText(requestedUsername, "username");
         requireLoggedIn("add members to private rooms");
         return executeCorrelatedServerCommand(
                 new PrivateRoomAddUser(roomName, requestedUsername),
                 new WaitKey(MessageCode.Server.PRIVATE_ROOM_ADD_USER, roomName, requestedUsername),
-                cancellationToken,
+                cancellationSignal,
                 "Failed to add user " + requestedUsername + " as member of private room " + roomName + ": ");
     }
 
     public CompletableFuture<Void> changePasswordAsync(String password) {
-        return changePasswordAsync(password, CancellationToken.none());
+        return changePasswordAsync(password, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> changePasswordAsync(String password, CancellationToken cancellationToken) {
+    public CompletableFuture<Void> changePasswordAsync(String password, CancellationSignal cancellationSignal) {
         requireText(password, "password");
         requireLoggedIn("change a password");
         return executeCorrelatedServerRequest(
                         new NewPassword(password),
                         new WaitKey(MessageCode.Server.NEW_PASSWORD),
                         String.class,
-                        cancellationToken,
+                        cancellationSignal,
                         "Failed to change password: ")
                 .thenApply(response -> {
                     if (!password.equals(response)) {
@@ -921,7 +921,7 @@ final class DefaultSoulseekClient
      * @return the connection operation
      */
     public CompletableFuture<Void> connectAsync(String requestedUsername, String password) {
-        return connectAsync(DEFAULT_ADDRESS, DEFAULT_PORT, requestedUsername, password, CancellationToken.none());
+        return connectAsync(DEFAULT_ADDRESS, DEFAULT_PORT, requestedUsername, password, CancellationSignal.none());
     }
 
     /**
@@ -929,12 +929,12 @@ final class DefaultSoulseekClient
      *
      * @param requestedUsername the login username
      * @param password the login password
-     * @param cancellationToken the cancellation token
+     * @param cancellationSignal the cancellation signal
      * @return the connection operation
      */
     public CompletableFuture<Void> connectAsync(
-            String requestedUsername, String password, CancellationToken cancellationToken) {
-        return connectAsync(DEFAULT_ADDRESS, DEFAULT_PORT, requestedUsername, password, cancellationToken);
+            String requestedUsername, String password, CancellationSignal cancellationSignal) {
+        return connectAsync(DEFAULT_ADDRESS, DEFAULT_PORT, requestedUsername, password, cancellationSignal);
     }
 
     /**
@@ -948,7 +948,7 @@ final class DefaultSoulseekClient
      */
     public CompletableFuture<Void> connectAsync(
             String requestedAddress, int requestedPort, String requestedUsername, String password) {
-        return connectAsync(requestedAddress, requestedPort, requestedUsername, password, CancellationToken.none());
+        return connectAsync(requestedAddress, requestedPort, requestedUsername, password, CancellationSignal.none());
     }
 
     /**
@@ -958,7 +958,7 @@ final class DefaultSoulseekClient
      * @param requestedPort the server port
      * @param requestedUsername the login username
      * @param password the login password
-     * @param cancellationToken the cancellation token
+     * @param cancellationSignal the cancellation signal
      * @return the connection operation
      */
     public CompletableFuture<Void> connectAsync(
@@ -966,7 +966,7 @@ final class DefaultSoulseekClient
             int requestedPort,
             String requestedUsername,
             String password,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         requireText(requestedAddress, "address");
         if (requestedPort < 0 || requestedPort > 65_535) {
             throw new IllegalArgumentException("port must be between 0 and 65535 (specified: " + requestedPort + ")");
@@ -1012,28 +1012,28 @@ final class DefaultSoulseekClient
                 new InetSocketAddress(serverAddress, requestedPort),
                 requestedUsername,
                 password,
-                defaultToken(cancellationToken));
+                defaultToken(cancellationSignal));
     }
 
     public CompletableFuture<BrowseResponse> browseAsync(String requestedUsername) {
-        return browseAsync(requestedUsername, null, CancellationToken.none());
+        return browseAsync(requestedUsername, null, CancellationSignal.none());
     }
 
     public CompletableFuture<BrowseResponse> browseAsync(String requestedUsername, BrowseOptions browseOptions) {
-        return browseAsync(requestedUsername, browseOptions, CancellationToken.none());
+        return browseAsync(requestedUsername, browseOptions, CancellationSignal.none());
     }
 
     public CompletableFuture<BrowseResponse> browseAsync(
-            String requestedUsername, CancellationToken cancellationToken) {
-        return browseAsync(requestedUsername, null, cancellationToken);
+            String requestedUsername, CancellationSignal cancellationSignal) {
+        return browseAsync(requestedUsername, null, cancellationSignal);
     }
 
     public CompletableFuture<BrowseResponse> browseAsync(
-            String requestedUsername, BrowseOptions browseOptions, CancellationToken cancellationToken) {
+            String requestedUsername, BrowseOptions browseOptions, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireLoggedIn("browse");
         BrowseOptions operationOptions = browseOptions == null ? new BrowseOptions() : browseOptions;
-        CancellationToken token = defaultToken(cancellationToken);
+        CancellationSignal token = defaultToken(cancellationSignal);
         WaitKey browseWaitKey = new WaitKey(MessageCode.Peer.BROWSE_RESPONSE, requestedUsername);
         CompletableFuture<BrowseResponse> browseWait;
         CompletableFuture<BrowseResponseConnection> connectionWait;
@@ -1100,22 +1100,22 @@ final class DefaultSoulseekClient
     }
 
     public CompletableFuture<Void> connectToUserAsync(String requestedUsername) {
-        return connectToUserAsync(requestedUsername, false, CancellationToken.none());
+        return connectToUserAsync(requestedUsername, false, CancellationSignal.none());
     }
 
     public CompletableFuture<Void> connectToUserAsync(String requestedUsername, boolean invalidateCache) {
-        return connectToUserAsync(requestedUsername, invalidateCache, CancellationToken.none());
+        return connectToUserAsync(requestedUsername, invalidateCache, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> connectToUserAsync(String requestedUsername, CancellationToken cancellationToken) {
-        return connectToUserAsync(requestedUsername, false, cancellationToken);
+    public CompletableFuture<Void> connectToUserAsync(String requestedUsername, CancellationSignal cancellationSignal) {
+        return connectToUserAsync(requestedUsername, false, cancellationSignal);
     }
 
     public CompletableFuture<Void> connectToUserAsync(
-            String requestedUsername, boolean invalidateCache, CancellationToken cancellationToken) {
+            String requestedUsername, boolean invalidateCache, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireLoggedIn("connect to other users");
-        CancellationToken token = defaultToken(cancellationToken);
+        CancellationSignal token = defaultToken(cancellationSignal);
         CompletableFuture<Void> operation = getUserEndpointAsync(requestedUsername, token)
                 .thenCompose(endpoint -> {
                     if (invalidateCache
@@ -1131,58 +1131,58 @@ final class DefaultSoulseekClient
     }
 
     public CompletableFuture<Integer> getPrivilegesAsync() {
-        return getPrivilegesAsync(CancellationToken.none());
+        return getPrivilegesAsync(CancellationSignal.none());
     }
 
-    public CompletableFuture<Integer> getPrivilegesAsync(CancellationToken cancellationToken) {
+    public CompletableFuture<Integer> getPrivilegesAsync(CancellationSignal cancellationSignal) {
         requireLoggedIn("check privileges");
         return executeCorrelatedServerRequest(
                 new CheckPrivilegesRequest(),
                 new WaitKey(MessageCode.Server.CHECK_PRIVILEGES),
                 Integer.class,
-                cancellationToken,
+                cancellationSignal,
                 "Failed to get privileges: ");
     }
 
     public CompletableFuture<RoomList> getRoomListAsync() {
-        return getRoomListAsync(CancellationToken.none());
+        return getRoomListAsync(CancellationSignal.none());
     }
 
-    public CompletableFuture<RoomList> getRoomListAsync(CancellationToken cancellationToken) {
+    public CompletableFuture<RoomList> getRoomListAsync(CancellationSignal cancellationSignal) {
         requireLoggedIn("fetch the list of chat rooms");
         return executeCorrelatedServerRequest(
                 new RoomListRequest(),
                 new WaitKey(MessageCode.Server.ROOM_LIST),
                 RoomList.class,
-                cancellationToken,
+                cancellationSignal,
                 "Failed to fetch the list of chat rooms from the server: ");
     }
 
     public CompletableFuture<List<Directory>> getDirectoryContentsAsync(
             String requestedUsername, String directoryName) {
-        return getDirectoryContentsAsync(requestedUsername, directoryName, null, CancellationToken.none());
+        return getDirectoryContentsAsync(requestedUsername, directoryName, null, CancellationSignal.none());
     }
 
     public CompletableFuture<List<Directory>> getDirectoryContentsAsync(
             String requestedUsername, String directoryName, int operationToken) {
-        return getDirectoryContentsAsync(requestedUsername, directoryName, operationToken, CancellationToken.none());
+        return getDirectoryContentsAsync(requestedUsername, directoryName, operationToken, CancellationSignal.none());
     }
 
     public CompletableFuture<List<Directory>> getDirectoryContentsAsync(
-            String requestedUsername, String directoryName, CancellationToken cancellationToken) {
-        return getDirectoryContentsAsync(requestedUsername, directoryName, null, cancellationToken);
+            String requestedUsername, String directoryName, CancellationSignal cancellationSignal) {
+        return getDirectoryContentsAsync(requestedUsername, directoryName, null, cancellationSignal);
     }
 
     public CompletableFuture<List<Directory>> getDirectoryContentsAsync(
             String requestedUsername,
             String directoryName,
             Integer operationToken,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireText(directoryName, "directoryName");
         requireLoggedIn("fetch directory contents");
         int tokenValue = operationToken == null ? getNextToken() : operationToken;
-        CancellationToken token = defaultToken(cancellationToken);
+        CancellationSignal token = defaultToken(cancellationSignal);
         CompletableFuture<List<Directory>> contentsWait;
         try {
             @SuppressWarnings("unchecked")
@@ -1213,11 +1213,11 @@ final class DefaultSoulseekClient
     }
 
     public CompletableFuture<Integer> getDownloadPlaceInQueueAsync(String requestedUsername, String filename) {
-        return getDownloadPlaceInQueueAsync(requestedUsername, filename, CancellationToken.none());
+        return getDownloadPlaceInQueueAsync(requestedUsername, filename, CancellationSignal.none());
     }
 
     public CompletableFuture<Integer> getDownloadPlaceInQueueAsync(
-            String requestedUsername, String filename, CancellationToken cancellationToken) {
+            String requestedUsername, String filename, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireText(filename, "filename");
         requireLoggedIn("check download queue position");
@@ -1228,7 +1228,7 @@ final class DefaultSoulseekClient
             throw new TransferNotFoundException(
                     "A download of " + filename + " from user " + requestedUsername + " is not active");
         }
-        CancellationToken token = defaultToken(cancellationToken);
+        CancellationSignal token = defaultToken(cancellationSignal);
         CompletableFuture<PlaceInQueueResponse> responseWait;
         try {
             responseWait = waiter.waitAsync(
@@ -1255,22 +1255,22 @@ final class DefaultSoulseekClient
     }
 
     public CompletableFuture<RoomData> joinRoomAsync(String roomName) {
-        return joinRoomAsync(roomName, false, CancellationToken.none());
+        return joinRoomAsync(roomName, false, CancellationSignal.none());
     }
 
     public CompletableFuture<RoomData> joinRoomAsync(String roomName, boolean isPrivate) {
-        return joinRoomAsync(roomName, isPrivate, CancellationToken.none());
+        return joinRoomAsync(roomName, isPrivate, CancellationSignal.none());
     }
 
-    public CompletableFuture<RoomData> joinRoomAsync(String roomName, CancellationToken cancellationToken) {
-        return joinRoomAsync(roomName, false, cancellationToken);
+    public CompletableFuture<RoomData> joinRoomAsync(String roomName, CancellationSignal cancellationSignal) {
+        return joinRoomAsync(roomName, false, cancellationSignal);
     }
 
     public CompletableFuture<RoomData> joinRoomAsync(
-            String roomName, boolean isPrivate, CancellationToken cancellationToken) {
+            String roomName, boolean isPrivate, CancellationSignal cancellationSignal) {
         requireText(roomName, "roomName");
         requireLoggedIn("join a chat room");
-        CancellationToken token = defaultToken(cancellationToken);
+        CancellationSignal token = defaultToken(cancellationSignal);
         CompletableFuture<RoomData> wait;
         try {
             wait = waiter.waitAsync(new WaitKey(MessageCode.Server.JOIN_ROOM, roomName), RoomData.class, null, token);
@@ -1304,13 +1304,13 @@ final class DefaultSoulseekClient
     }
 
     public CompletableFuture<Void> leaveRoomAsync(String roomName) {
-        return leaveRoomAsync(roomName, CancellationToken.none());
+        return leaveRoomAsync(roomName, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> leaveRoomAsync(String roomName, CancellationToken cancellationToken) {
+    public CompletableFuture<Void> leaveRoomAsync(String roomName, CancellationSignal cancellationSignal) {
         requireText(roomName, "roomName");
         requireLoggedIn("leave a chat room");
-        CancellationToken token = defaultToken(cancellationToken);
+        CancellationSignal token = defaultToken(cancellationSignal);
         CompletableFuture<Void> wait;
         try {
             wait = waiter.waitAsync(new WaitKey(MessageCode.Server.LEAVE_ROOM, roomName), null, token);
@@ -1339,46 +1339,47 @@ final class DefaultSoulseekClient
     }
 
     public CompletableFuture<Boolean> getUserPrivilegedAsync(String requestedUsername) {
-        return getUserPrivilegedAsync(requestedUsername, CancellationToken.none());
+        return getUserPrivilegedAsync(requestedUsername, CancellationSignal.none());
     }
 
     public CompletableFuture<Boolean> getUserPrivilegedAsync(
-            String requestedUsername, CancellationToken cancellationToken) {
+            String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireLoggedIn("check user privileges");
         return executeCorrelatedServerRequest(
                 new UserPrivilegesRequest(requestedUsername),
                 new WaitKey(MessageCode.Server.USER_PRIVILEGES, requestedUsername),
                 Boolean.class,
-                cancellationToken,
+                cancellationSignal,
                 "Failed to get privileges for " + requestedUsername + ": ",
                 UserOfflineException.class);
     }
 
     public CompletableFuture<UserStatistics> getUserStatisticsAsync(String requestedUsername) {
-        return getUserStatisticsAsync(requestedUsername, CancellationToken.none());
+        return getUserStatisticsAsync(requestedUsername, CancellationSignal.none());
     }
 
     public CompletableFuture<UserStatistics> getUserStatisticsAsync(
-            String requestedUsername, CancellationToken cancellationToken) {
+            String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireLoggedIn("fetch user statistics");
         return executeCorrelatedServerRequest(
                 new UserStatisticsRequest(requestedUsername),
                 new WaitKey(MessageCode.Server.GET_USER_STATS, requestedUsername),
                 UserStatistics.class,
-                cancellationToken,
+                cancellationSignal,
                 "Failed to retrieve statistics for user " + username + ": ");
     }
 
     public CompletableFuture<UserInfo> getUserInfoAsync(String requestedUsername) {
-        return getUserInfoAsync(requestedUsername, CancellationToken.none());
+        return getUserInfoAsync(requestedUsername, CancellationSignal.none());
     }
 
-    public CompletableFuture<UserInfo> getUserInfoAsync(String requestedUsername, CancellationToken cancellationToken) {
+    public CompletableFuture<UserInfo> getUserInfoAsync(
+            String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireLoggedIn("fetch user information");
-        CancellationToken token = defaultToken(cancellationToken);
+        CancellationSignal token = defaultToken(cancellationSignal);
         CompletableFuture<UserInfo> infoWait;
         try {
             infoWait = waiter.waitAsync(
@@ -1401,34 +1402,34 @@ final class DefaultSoulseekClient
     }
 
     public CompletableFuture<UserStatus> getUserStatusAsync(String requestedUsername) {
-        return getUserStatusAsync(requestedUsername, CancellationToken.none());
+        return getUserStatusAsync(requestedUsername, CancellationSignal.none());
     }
 
     public CompletableFuture<UserStatus> getUserStatusAsync(
-            String requestedUsername, CancellationToken cancellationToken) {
+            String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireLoggedIn("fetch user status");
         return executeCorrelatedServerRequest(
                 new UserStatusRequest(requestedUsername),
                 new WaitKey(MessageCode.Server.GET_STATUS, requestedUsername),
                 UserStatus.class,
-                cancellationToken,
+                cancellationSignal,
                 "Failed to retrieve status for user " + username + ": ",
                 UserOfflineException.class);
     }
 
     public CompletableFuture<UserData> watchUserAsync(String requestedUsername) {
-        return watchUserAsync(requestedUsername, CancellationToken.none());
+        return watchUserAsync(requestedUsername, CancellationSignal.none());
     }
 
-    public CompletableFuture<UserData> watchUserAsync(String requestedUsername, CancellationToken cancellationToken) {
+    public CompletableFuture<UserData> watchUserAsync(String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireLoggedIn("add users");
         return executeCorrelatedServerRequest(
                         new WatchUserRequest(requestedUsername),
                         new WaitKey(MessageCode.Server.WATCH_USER, requestedUsername),
                         WatchUserResponse.class,
-                        cancellationToken,
+                        cancellationSignal,
                         "Failed to watch user " + requestedUsername + ": ",
                         UserNotFoundException.class)
                 .thenApply(response -> {
@@ -1440,11 +1441,11 @@ final class DefaultSoulseekClient
     }
 
     public CompletableFuture<Void> grantUserPrivilegesAsync(String requestedUsername, int days) {
-        return grantUserPrivilegesAsync(requestedUsername, days, CancellationToken.none());
+        return grantUserPrivilegesAsync(requestedUsername, days, CancellationSignal.none());
     }
 
     public CompletableFuture<Void> grantUserPrivilegesAsync(
-            String requestedUsername, int days, CancellationToken cancellationToken) {
+            String requestedUsername, int days, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         if (days <= 0) {
             throw new IllegalArgumentException("The number of days granted must be greater than zero");
@@ -1452,17 +1453,17 @@ final class DefaultSoulseekClient
         requireLoggedIn("grant user privileges");
         return writeServerAsync(
                 new GivePrivilegesCommand(requestedUsername, days),
-                cancellationToken,
+                cancellationSignal,
                 "Failed to grant " + days + " days of privileges to " + requestedUsername + ": ");
     }
 
     public CompletableFuture<Long> pingServerAsync() {
-        return pingServerAsync(CancellationToken.none());
+        return pingServerAsync(CancellationSignal.none());
     }
 
-    public CompletableFuture<Long> pingServerAsync(CancellationToken cancellationToken) {
+    public CompletableFuture<Long> pingServerAsync(CancellationSignal cancellationSignal) {
         requireLoggedIn("send a ping");
-        CancellationToken token = defaultToken(cancellationToken);
+        CancellationSignal token = defaultToken(cancellationSignal);
         CompletableFuture<Void> wait;
         try {
             wait = waiter.waitAsync(new WaitKey(MessageCode.Server.PING), null, token);
@@ -1484,18 +1485,18 @@ final class DefaultSoulseekClient
      * @return whether reconnecting is required for full effect
      */
     public CompletableFuture<Boolean> reconfigureOptionsAsync(SoulseekClientOptionsPatch patch) {
-        return reconfigureOptionsAsync(patch, CancellationToken.none());
+        return reconfigureOptionsAsync(patch, CancellationSignal.none());
     }
 
     /**
      * Applies a patch to the current client options.
      *
      * @param patch the option substitutions
-     * @param cancellationToken the cancellation token
+     * @param cancellationSignal the cancellation signal
      * @return whether reconnecting is required for full effect
      */
     public CompletableFuture<Boolean> reconfigureOptionsAsync(
-            SoulseekClientOptionsPatch patch, CancellationToken cancellationToken) {
+            SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
         Objects.requireNonNull(patch, "patch");
         boolean addressChanged = patch.getListenIpAddress() != null
                 && !patch.getListenIpAddress().equals(options.getListenIpAddress());
@@ -1519,21 +1520,21 @@ final class DefaultSoulseekClient
                 }
             }
         }
-        return reconfigureOptionsInternalAsync(patch, defaultToken(cancellationToken));
+        return reconfigureOptionsInternalAsync(patch, defaultToken(cancellationSignal));
     }
 
     /** Downloads a remote file to a local file. */
     public CompletableFuture<Transfer> downloadAsync(
             String requestedUsername, String remoteFilename, String localFilename) {
         return downloadAsync(
-                requestedUsername, remoteFilename, localFilename, null, 0, null, null, CancellationToken.none());
+                requestedUsername, remoteFilename, localFilename, null, 0, null, null, CancellationSignal.none());
     }
 
     /** Downloads a remote file with an expected size. */
     public CompletableFuture<Transfer> downloadAsync(
             String requestedUsername, String remoteFilename, String localFilename, Long size) {
         return downloadAsync(
-                requestedUsername, remoteFilename, localFilename, size, 0, null, null, CancellationToken.none());
+                requestedUsername, remoteFilename, localFilename, size, 0, null, null, CancellationSignal.none());
     }
 
     /** Downloads a remote file with cancellation. */
@@ -1541,8 +1542,8 @@ final class DefaultSoulseekClient
             String requestedUsername,
             String remoteFilename,
             String localFilename,
-            CancellationToken cancellationToken) {
-        return downloadAsync(requestedUsername, remoteFilename, localFilename, null, 0, null, null, cancellationToken);
+            CancellationSignal cancellationSignal) {
+        return downloadAsync(requestedUsername, remoteFilename, localFilename, null, 0, null, null, cancellationSignal);
     }
 
     /** Downloads a remote file from a resume offset. */
@@ -1556,7 +1557,7 @@ final class DefaultSoulseekClient
                 startOffset,
                 null,
                 null,
-                CancellationToken.none());
+                CancellationSignal.none());
     }
 
     /** Downloads a remote file with a specific token. */
@@ -1575,7 +1576,7 @@ final class DefaultSoulseekClient
                 startOffset,
                 token,
                 null,
-                CancellationToken.none());
+                CancellationSignal.none());
     }
 
     /** Downloads a remote file using supplied transfer options. */
@@ -1595,7 +1596,7 @@ final class DefaultSoulseekClient
                 startOffset,
                 token,
                 transferOptions,
-                CancellationToken.none());
+                CancellationSignal.none());
     }
 
     /** Downloads a remote file to a local file. */
@@ -1607,7 +1608,7 @@ final class DefaultSoulseekClient
             long startOffset,
             Integer token,
             TransferOptions transferOptions,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireText(remoteFilename, "remoteFilename");
         requireText(localFilename, "localFilename");
@@ -1632,21 +1633,21 @@ final class DefaultSoulseekClient
                 startOffset,
                 transferToken,
                 options,
-                defaultToken(cancellationToken));
+                defaultToken(cancellationSignal));
     }
 
     /** Downloads data to a stream created by a factory. */
     public CompletableFuture<Transfer> downloadAsync(
             String requestedUsername, String remoteFilename, DownloadStreamFactory outputStreamFactory) {
         return downloadAsync(
-                requestedUsername, remoteFilename, outputStreamFactory, null, 0, null, null, CancellationToken.none());
+                requestedUsername, remoteFilename, outputStreamFactory, null, 0, null, null, CancellationSignal.none());
     }
 
     /** Downloads stream data with an expected size. */
     public CompletableFuture<Transfer> downloadAsync(
             String requestedUsername, String remoteFilename, DownloadStreamFactory outputStreamFactory, Long size) {
         return downloadAsync(
-                requestedUsername, remoteFilename, outputStreamFactory, size, 0, null, null, CancellationToken.none());
+                requestedUsername, remoteFilename, outputStreamFactory, size, 0, null, null, CancellationSignal.none());
     }
 
     /** Downloads stream data with cancellation. */
@@ -1654,9 +1655,9 @@ final class DefaultSoulseekClient
             String requestedUsername,
             String remoteFilename,
             DownloadStreamFactory outputStreamFactory,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         return downloadAsync(
-                requestedUsername, remoteFilename, outputStreamFactory, null, 0, null, null, cancellationToken);
+                requestedUsername, remoteFilename, outputStreamFactory, null, 0, null, null, cancellationSignal);
     }
 
     /** Downloads stream data from a resume offset. */
@@ -1674,7 +1675,7 @@ final class DefaultSoulseekClient
                 startOffset,
                 null,
                 null,
-                CancellationToken.none());
+                CancellationSignal.none());
     }
 
     /** Downloads stream data with a specific token. */
@@ -1693,7 +1694,7 @@ final class DefaultSoulseekClient
                 startOffset,
                 token,
                 null,
-                CancellationToken.none());
+                CancellationSignal.none());
     }
 
     /** Downloads stream data using supplied transfer options. */
@@ -1713,7 +1714,7 @@ final class DefaultSoulseekClient
                 startOffset,
                 token,
                 transferOptions,
-                CancellationToken.none());
+                CancellationSignal.none());
     }
 
     /** Downloads data to a stream created by a factory. */
@@ -1725,7 +1726,7 @@ final class DefaultSoulseekClient
             long startOffset,
             Integer token,
             TransferOptions transferOptions,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireText(remoteFilename, "remoteFilename");
         validateDownloadRange(size, startOffset);
@@ -1741,21 +1742,21 @@ final class DefaultSoulseekClient
                 startOffset,
                 transferToken,
                 transferOptions == null ? new TransferOptions() : transferOptions,
-                defaultToken(cancellationToken));
+                defaultToken(cancellationSignal));
     }
 
     /** Enqueues a local-file download. */
     public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
             String requestedUsername, String remoteFilename, String localFilename) {
         return enqueueDownloadAsync(
-                requestedUsername, remoteFilename, localFilename, null, 0, null, null, CancellationToken.none());
+                requestedUsername, remoteFilename, localFilename, null, 0, null, null, CancellationSignal.none());
     }
 
     /** Enqueues a local-file download with an expected size. */
     public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
             String requestedUsername, String remoteFilename, String localFilename, Long size) {
         return enqueueDownloadAsync(
-                requestedUsername, remoteFilename, localFilename, size, 0, null, null, CancellationToken.none());
+                requestedUsername, remoteFilename, localFilename, size, 0, null, null, CancellationSignal.none());
     }
 
     /** Enqueues a local-file download from a resume offset. */
@@ -1769,7 +1770,7 @@ final class DefaultSoulseekClient
                 startOffset,
                 null,
                 null,
-                CancellationToken.none());
+                CancellationSignal.none());
     }
 
     /** Enqueues a local-file download with a specific token. */
@@ -1788,7 +1789,7 @@ final class DefaultSoulseekClient
                 startOffset,
                 token,
                 null,
-                CancellationToken.none());
+                CancellationSignal.none());
     }
 
     /** Enqueues a local-file download using supplied options. */
@@ -1808,7 +1809,7 @@ final class DefaultSoulseekClient
                 startOffset,
                 token,
                 transferOptions,
-                CancellationToken.none());
+                CancellationSignal.none());
     }
 
     /** Enqueues a local-file download. */
@@ -1820,13 +1821,20 @@ final class DefaultSoulseekClient
             long startOffset,
             Integer token,
             TransferOptions transferOptions,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         CompletableFuture<Boolean> enqueued = new CompletableFuture<>();
         TransferOptions options = (transferOptions == null ? new TransferOptions() : transferOptions)
                 .withAdditionalStateChanged(change ->
                         completeDownloadEnqueue(enqueued, change.transfer().getState()));
         CompletableFuture<Transfer> download = downloadAsync(
-                requestedUsername, remoteFilename, localFilename, size, startOffset, token, options, cancellationToken);
+                requestedUsername,
+                remoteFilename,
+                localFilename,
+                size,
+                startOffset,
+                token,
+                options,
+                cancellationSignal);
         return nestedDownloadWhenEnqueued(enqueued, download);
     }
 
@@ -1834,14 +1842,14 @@ final class DefaultSoulseekClient
     public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
             String requestedUsername, String remoteFilename, DownloadStreamFactory outputStreamFactory) {
         return enqueueDownloadAsync(
-                requestedUsername, remoteFilename, outputStreamFactory, null, 0, null, null, CancellationToken.none());
+                requestedUsername, remoteFilename, outputStreamFactory, null, 0, null, null, CancellationSignal.none());
     }
 
     /** Enqueues a stream-factory download with an expected size. */
     public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
             String requestedUsername, String remoteFilename, DownloadStreamFactory outputStreamFactory, Long size) {
         return enqueueDownloadAsync(
-                requestedUsername, remoteFilename, outputStreamFactory, size, 0, null, null, CancellationToken.none());
+                requestedUsername, remoteFilename, outputStreamFactory, size, 0, null, null, CancellationSignal.none());
     }
 
     /** Enqueues a stream-factory download from a resume offset. */
@@ -1859,7 +1867,7 @@ final class DefaultSoulseekClient
                 startOffset,
                 null,
                 null,
-                CancellationToken.none());
+                CancellationSignal.none());
     }
 
     /** Enqueues a stream-factory download with a specific token. */
@@ -1878,7 +1886,7 @@ final class DefaultSoulseekClient
                 startOffset,
                 token,
                 null,
-                CancellationToken.none());
+                CancellationSignal.none());
     }
 
     /** Enqueues a stream-factory download using supplied options. */
@@ -1898,7 +1906,7 @@ final class DefaultSoulseekClient
                 startOffset,
                 token,
                 transferOptions,
-                CancellationToken.none());
+                CancellationSignal.none());
     }
 
     /** Enqueues a stream-factory download. */
@@ -1910,7 +1918,7 @@ final class DefaultSoulseekClient
             long startOffset,
             Integer token,
             TransferOptions transferOptions,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         CompletableFuture<Boolean> enqueued = new CompletableFuture<>();
         TransferOptions options = (transferOptions == null ? new TransferOptions() : transferOptions)
                 .withAdditionalStateChanged(change ->
@@ -1923,20 +1931,20 @@ final class DefaultSoulseekClient
                 startOffset,
                 token,
                 options,
-                cancellationToken);
+                cancellationSignal);
         return nestedDownloadWhenEnqueued(enqueued, download);
     }
 
     /** Uploads a local file to a peer. */
     public CompletableFuture<Transfer> uploadAsync(
             String requestedUsername, String remoteFilename, String localFilename) {
-        return uploadAsync(requestedUsername, remoteFilename, localFilename, null, null, CancellationToken.none());
+        return uploadAsync(requestedUsername, remoteFilename, localFilename, null, null, CancellationSignal.none());
     }
 
     /** Uploads a local file to a peer with a specific token. */
     public CompletableFuture<Transfer> uploadAsync(
             String requestedUsername, String remoteFilename, String localFilename, Integer token) {
-        return uploadAsync(requestedUsername, remoteFilename, localFilename, token, null, CancellationToken.none());
+        return uploadAsync(requestedUsername, remoteFilename, localFilename, token, null, CancellationSignal.none());
     }
 
     /** Uploads a local file with cancellation. */
@@ -1944,15 +1952,15 @@ final class DefaultSoulseekClient
             String requestedUsername,
             String remoteFilename,
             String localFilename,
-            CancellationToken cancellationToken) {
-        return uploadAsync(requestedUsername, remoteFilename, localFilename, null, null, cancellationToken);
+            CancellationSignal cancellationSignal) {
+        return uploadAsync(requestedUsername, remoteFilename, localFilename, null, null, cancellationSignal);
     }
 
     /** Uploads a local file using the supplied options. */
     public CompletableFuture<Transfer> uploadAsync(
             String requestedUsername, String remoteFilename, String localFilename, TransferOptions transferOptions) {
         return uploadAsync(
-                requestedUsername, remoteFilename, localFilename, null, transferOptions, CancellationToken.none());
+                requestedUsername, remoteFilename, localFilename, null, transferOptions, CancellationSignal.none());
     }
 
     /** Uploads a local file to a peer using the supplied options. */
@@ -1963,7 +1971,7 @@ final class DefaultSoulseekClient
             Integer token,
             TransferOptions transferOptions) {
         return uploadAsync(
-                requestedUsername, remoteFilename, localFilename, token, transferOptions, CancellationToken.none());
+                requestedUsername, remoteFilename, localFilename, token, transferOptions, CancellationSignal.none());
     }
 
     /** Uploads a local file to a peer. */
@@ -1973,7 +1981,7 @@ final class DefaultSoulseekClient
             String localFilename,
             Integer token,
             TransferOptions transferOptions,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireText(remoteFilename, "remoteFilename");
         requireText(localFilename, "localFilename");
@@ -2013,14 +2021,14 @@ final class DefaultSoulseekClient
                 },
                 transferToken,
                 fileOptions,
-                defaultToken(cancellationToken));
+                defaultToken(cancellationSignal));
     }
 
     /** Uploads data supplied by an asynchronous stream factory. */
     public CompletableFuture<Transfer> uploadAsync(
             String requestedUsername, String remoteFilename, long size, UploadStreamFactory inputStreamFactory) {
         return uploadAsync(
-                requestedUsername, remoteFilename, size, inputStreamFactory, null, null, CancellationToken.none());
+                requestedUsername, remoteFilename, size, inputStreamFactory, null, null, CancellationSignal.none());
     }
 
     /** Uploads stream data with a specific transfer token. */
@@ -2031,7 +2039,7 @@ final class DefaultSoulseekClient
             UploadStreamFactory inputStreamFactory,
             Integer token) {
         return uploadAsync(
-                requestedUsername, remoteFilename, size, inputStreamFactory, token, null, CancellationToken.none());
+                requestedUsername, remoteFilename, size, inputStreamFactory, token, null, CancellationSignal.none());
     }
 
     /** Uploads stream data with cancellation. */
@@ -2040,8 +2048,8 @@ final class DefaultSoulseekClient
             String remoteFilename,
             long size,
             UploadStreamFactory inputStreamFactory,
-            CancellationToken cancellationToken) {
-        return uploadAsync(requestedUsername, remoteFilename, size, inputStreamFactory, null, null, cancellationToken);
+            CancellationSignal cancellationSignal) {
+        return uploadAsync(requestedUsername, remoteFilename, size, inputStreamFactory, null, null, cancellationSignal);
     }
 
     /** Uploads stream data using the supplied options. */
@@ -2058,7 +2066,7 @@ final class DefaultSoulseekClient
                 inputStreamFactory,
                 null,
                 transferOptions,
-                CancellationToken.none());
+                CancellationSignal.none());
     }
 
     /** Uploads stream data using the supplied transfer options. */
@@ -2076,7 +2084,7 @@ final class DefaultSoulseekClient
                 inputStreamFactory,
                 token,
                 transferOptions,
-                CancellationToken.none());
+                CancellationSignal.none());
     }
 
     /** Uploads data supplied by an asynchronous stream factory. */
@@ -2087,7 +2095,7 @@ final class DefaultSoulseekClient
             UploadStreamFactory inputStreamFactory,
             Integer token,
             TransferOptions transferOptions,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireText(remoteFilename, "remoteFilename");
         if (size < 0) {
@@ -2104,21 +2112,21 @@ final class DefaultSoulseekClient
                 inputStreamFactory,
                 transferToken,
                 transferOptions == null ? new TransferOptions() : transferOptions,
-                defaultToken(cancellationToken));
+                defaultToken(cancellationSignal));
     }
 
     /** Enqueues a local-file upload and returns its nested completion future. */
     public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
             String requestedUsername, String remoteFilename, String localFilename) {
         return enqueueUploadAsync(
-                requestedUsername, remoteFilename, localFilename, null, null, CancellationToken.none());
+                requestedUsername, remoteFilename, localFilename, null, null, CancellationSignal.none());
     }
 
     /** Enqueues a local-file upload with a specific token. */
     public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
             String requestedUsername, String remoteFilename, String localFilename, Integer token) {
         return enqueueUploadAsync(
-                requestedUsername, remoteFilename, localFilename, token, null, CancellationToken.none());
+                requestedUsername, remoteFilename, localFilename, token, null, CancellationSignal.none());
     }
 
     /** Enqueues a local-file upload with cancellation. */
@@ -2126,8 +2134,8 @@ final class DefaultSoulseekClient
             String requestedUsername,
             String remoteFilename,
             String localFilename,
-            CancellationToken cancellationToken) {
-        return enqueueUploadAsync(requestedUsername, remoteFilename, localFilename, null, null, cancellationToken);
+            CancellationSignal cancellationSignal) {
+        return enqueueUploadAsync(requestedUsername, remoteFilename, localFilename, null, null, cancellationSignal);
     }
 
     /** Enqueues a local-file upload using supplied options. */
@@ -2138,7 +2146,7 @@ final class DefaultSoulseekClient
             Integer token,
             TransferOptions transferOptions) {
         return enqueueUploadAsync(
-                requestedUsername, remoteFilename, localFilename, token, transferOptions, CancellationToken.none());
+                requestedUsername, remoteFilename, localFilename, token, transferOptions, CancellationSignal.none());
     }
 
     /** Enqueues a local-file upload. */
@@ -2148,7 +2156,7 @@ final class DefaultSoulseekClient
             String localFilename,
             Integer token,
             TransferOptions transferOptions,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         CompletableFuture<Boolean> enqueued = new CompletableFuture<>();
         TransferOptions options = (transferOptions == null ? new TransferOptions() : transferOptions)
                 .withAdditionalStateChanged(change -> {
@@ -2157,7 +2165,7 @@ final class DefaultSoulseekClient
                     }
                 });
         CompletableFuture<Transfer> upload =
-                uploadAsync(requestedUsername, remoteFilename, localFilename, token, options, cancellationToken);
+                uploadAsync(requestedUsername, remoteFilename, localFilename, token, options, cancellationSignal);
         return enqueued.thenApply(ignored -> upload);
     }
 
@@ -2165,7 +2173,7 @@ final class DefaultSoulseekClient
     public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
             String requestedUsername, String remoteFilename, long size, UploadStreamFactory inputStreamFactory) {
         return enqueueUploadAsync(
-                requestedUsername, remoteFilename, size, inputStreamFactory, null, null, CancellationToken.none());
+                requestedUsername, remoteFilename, size, inputStreamFactory, null, null, CancellationSignal.none());
     }
 
     /** Enqueues a stream-factory upload with a specific token. */
@@ -2176,7 +2184,7 @@ final class DefaultSoulseekClient
             UploadStreamFactory inputStreamFactory,
             Integer token) {
         return enqueueUploadAsync(
-                requestedUsername, remoteFilename, size, inputStreamFactory, token, null, CancellationToken.none());
+                requestedUsername, remoteFilename, size, inputStreamFactory, token, null, CancellationSignal.none());
     }
 
     /** Enqueues a stream-factory upload with cancellation. */
@@ -2185,9 +2193,9 @@ final class DefaultSoulseekClient
             String remoteFilename,
             long size,
             UploadStreamFactory inputStreamFactory,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         return enqueueUploadAsync(
-                requestedUsername, remoteFilename, size, inputStreamFactory, null, null, cancellationToken);
+                requestedUsername, remoteFilename, size, inputStreamFactory, null, null, cancellationSignal);
     }
 
     /** Enqueues a stream-factory upload using supplied options. */
@@ -2205,7 +2213,7 @@ final class DefaultSoulseekClient
                 inputStreamFactory,
                 token,
                 transferOptions,
-                CancellationToken.none());
+                CancellationSignal.none());
     }
 
     /** Enqueues a stream-factory upload. */
@@ -2216,7 +2224,7 @@ final class DefaultSoulseekClient
             UploadStreamFactory inputStreamFactory,
             Integer token,
             TransferOptions transferOptions,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         CompletableFuture<Boolean> enqueued = new CompletableFuture<>();
         TransferOptions options = (transferOptions == null ? new TransferOptions() : transferOptions)
                 .withAdditionalStateChanged(change -> {
@@ -2225,135 +2233,136 @@ final class DefaultSoulseekClient
                     }
                 });
         CompletableFuture<Transfer> upload = uploadAsync(
-                requestedUsername, remoteFilename, size, inputStreamFactory, token, options, cancellationToken);
+                requestedUsername, remoteFilename, size, inputStreamFactory, token, options, cancellationSignal);
         return enqueued.thenApply(ignored -> upload);
     }
 
     public CompletableFuture<Void> addPrivateRoomModeratorAsync(String roomName, String requestedUsername) {
-        return addPrivateRoomModeratorAsync(roomName, requestedUsername, CancellationToken.none());
+        return addPrivateRoomModeratorAsync(roomName, requestedUsername, CancellationSignal.none());
     }
 
     public CompletableFuture<Void> addPrivateRoomModeratorAsync(
-            String roomName, String requestedUsername, CancellationToken cancellationToken) {
+            String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(roomName, "roomName");
         requireText(requestedUsername, "username");
         requireLoggedIn("add moderators to private rooms");
         return executeCorrelatedServerCommand(
                 new PrivateRoomAddOperator(roomName, requestedUsername),
                 new WaitKey(MessageCode.Server.PRIVATE_ROOM_ADD_OPERATOR, roomName, requestedUsername),
-                cancellationToken,
+                cancellationSignal,
                 "Failed to add user " + requestedUsername + " as moderator of private room " + roomName + ": ");
     }
 
     public CompletableFuture<Void> removePrivateRoomMemberAsync(String roomName, String requestedUsername) {
-        return removePrivateRoomMemberAsync(roomName, requestedUsername, CancellationToken.none());
+        return removePrivateRoomMemberAsync(roomName, requestedUsername, CancellationSignal.none());
     }
 
     public CompletableFuture<Void> removePrivateRoomMemberAsync(
-            String roomName, String requestedUsername, CancellationToken cancellationToken) {
+            String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(roomName, "roomName");
         requireText(requestedUsername, "username");
         requireLoggedIn("remove users from private rooms");
         return executeCorrelatedServerCommand(
                 new PrivateRoomRemoveUser(roomName, requestedUsername),
                 new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVE_USER, roomName, requestedUsername),
-                cancellationToken,
+                cancellationSignal,
                 "Failed to remove user " + requestedUsername + " as member of private room " + roomName + ": ");
     }
 
     public CompletableFuture<Void> removePrivateRoomModeratorAsync(String roomName, String requestedUsername) {
-        return removePrivateRoomModeratorAsync(roomName, requestedUsername, CancellationToken.none());
+        return removePrivateRoomModeratorAsync(roomName, requestedUsername, CancellationSignal.none());
     }
 
     public CompletableFuture<Void> removePrivateRoomModeratorAsync(
-            String roomName, String requestedUsername, CancellationToken cancellationToken) {
+            String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(roomName, "roomName");
         requireText(requestedUsername, "username");
         requireLoggedIn("remove moderators from private rooms");
         return executeCorrelatedServerCommand(
                 new PrivateRoomRemoveOperator(roomName, requestedUsername),
                 new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVE_OPERATOR, roomName, requestedUsername),
-                cancellationToken,
+                cancellationSignal,
                 "Failed to remove user " + requestedUsername + " as moderator of private room " + roomName + ": ");
     }
 
     public CompletableFuture<Void> dropPrivateRoomMembershipAsync(String roomName) {
-        return dropPrivateRoomMembershipAsync(roomName, CancellationToken.none());
+        return dropPrivateRoomMembershipAsync(roomName, CancellationSignal.none());
     }
 
     public CompletableFuture<Void> dropPrivateRoomMembershipAsync(
-            String roomName, CancellationToken cancellationToken) {
+            String roomName, CancellationSignal cancellationSignal) {
         requireText(roomName, "roomName");
         requireLoggedIn("drop private room membership");
         return executeCorrelatedServerCommand(
                 new PrivateRoomDropMembershipCommand(roomName),
                 new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVED, roomName),
-                cancellationToken,
+                cancellationSignal,
                 "Failed to drop membership of private room " + roomName + ": ");
     }
 
     public CompletableFuture<Void> dropPrivateRoomOwnershipAsync(String roomName) {
-        return dropPrivateRoomOwnershipAsync(roomName, CancellationToken.none());
+        return dropPrivateRoomOwnershipAsync(roomName, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> dropPrivateRoomOwnershipAsync(String roomName, CancellationToken cancellationToken) {
+    public CompletableFuture<Void> dropPrivateRoomOwnershipAsync(
+            String roomName, CancellationSignal cancellationSignal) {
         requireText(roomName, "roomName");
         requireLoggedIn("drop private room ownership");
         return executeCorrelatedServerCommand(
                 new PrivateRoomDropOwnershipCommand(roomName),
                 new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVED, roomName),
-                cancellationToken,
+                cancellationSignal,
                 "Failed to drop ownership of private room " + roomName + ": ");
     }
 
     public CompletableFuture<Void> sendRoomMessageAsync(String roomName, String message) {
-        return sendRoomMessageAsync(roomName, message, CancellationToken.none());
+        return sendRoomMessageAsync(roomName, message, CancellationSignal.none());
     }
 
     public CompletableFuture<Void> sendRoomMessageAsync(
-            String roomName, String message, CancellationToken cancellationToken) {
+            String roomName, String message, CancellationSignal cancellationSignal) {
         requireText(roomName, "roomName");
         requireNonEmpty(message, "message");
         requireLoggedIn("send a chat room message");
         return writeServerAsync(
                 new RoomMessageCommand(roomName, message),
-                cancellationToken,
+                cancellationSignal,
                 "Failed to send message to room " + roomName + ": ");
     }
 
     public CompletableFuture<Void> sendUploadSpeedAsync(int speed) {
-        return sendUploadSpeedAsync(speed, CancellationToken.none());
+        return sendUploadSpeedAsync(speed, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> sendUploadSpeedAsync(int speed, CancellationToken cancellationToken) {
+    public CompletableFuture<Void> sendUploadSpeedAsync(int speed, CancellationSignal cancellationSignal) {
         requireLoggedIn("set upload speed");
         if (speed <= 0) {
             throw new IllegalArgumentException("The upload speed must be greater than zero");
         }
-        return writeServerAsync(new SendUploadSpeedCommand(speed), cancellationToken, "Failed to set upload speed: ");
+        return writeServerAsync(new SendUploadSpeedCommand(speed), cancellationSignal, "Failed to set upload speed: ");
     }
 
     public CompletableFuture<Void> setRoomTickerAsync(String roomName, String message) {
-        return setRoomTickerAsync(roomName, message, CancellationToken.none());
+        return setRoomTickerAsync(roomName, message, CancellationSignal.none());
     }
 
     public CompletableFuture<Void> setRoomTickerAsync(
-            String roomName, String message, CancellationToken cancellationToken) {
+            String roomName, String message, CancellationSignal cancellationSignal) {
         requireText(roomName, "roomName");
         requireNonEmpty(message, "message");
         requireLoggedIn("set chat room tickers");
         return writeServerAsync(
                 new SetRoomTickerCommand(roomName, message),
-                cancellationToken,
+                cancellationSignal,
                 "Failed to set chat room ticker in room " + roomName + ": ");
     }
 
     public CompletableFuture<Void> setSharedCountsAsync(int directories, int files) {
-        return setSharedCountsAsync(directories, files, CancellationToken.none());
+        return setSharedCountsAsync(directories, files, CancellationSignal.none());
     }
 
     public CompletableFuture<Void> setSharedCountsAsync(
-            int directories, int files, CancellationToken cancellationToken) {
+            int directories, int files, CancellationSignal cancellationSignal) {
         if (directories < 0) {
             throw new IllegalArgumentException("The directory count must be equal to or greater than zero");
         }
@@ -2363,96 +2372,98 @@ final class DefaultSoulseekClient
         requireLoggedIn("set shared counts");
         return writeServerAsync(
                 new SetSharedCountsCommand(directories, files),
-                cancellationToken,
+                cancellationSignal,
                 "Failed to set shared counts to " + directories + " directories and " + files + " files: ");
     }
 
     public CompletableFuture<Void> setStatusAsync(UserPresence status) {
-        return setStatusAsync(status, CancellationToken.none());
+        return setStatusAsync(status, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> setStatusAsync(UserPresence status, CancellationToken cancellationToken) {
+    public CompletableFuture<Void> setStatusAsync(UserPresence status, CancellationSignal cancellationSignal) {
         requireLoggedIn("set online status");
         return writeServerAsync(
-                new SetOnlineStatusCommand(status), cancellationToken, "Failed to set user status to " + status + ": ");
+                new SetOnlineStatusCommand(status),
+                cancellationSignal,
+                "Failed to set user status to " + status + ": ");
     }
 
     public CompletableFuture<Void> startPublicChatAsync() {
-        return startPublicChatAsync(CancellationToken.none());
+        return startPublicChatAsync(CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> startPublicChatAsync(CancellationToken cancellationToken) {
+    public CompletableFuture<Void> startPublicChatAsync(CancellationSignal cancellationSignal) {
         requireLoggedIn("start public chat");
-        return writeServerAsync(new StartPublicChatCommand(), cancellationToken, "Failed to start public chat: ");
+        return writeServerAsync(new StartPublicChatCommand(), cancellationSignal, "Failed to start public chat: ");
     }
 
     public CompletableFuture<Void> stopPublicChatAsync() {
-        return stopPublicChatAsync(CancellationToken.none());
+        return stopPublicChatAsync(CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> stopPublicChatAsync(CancellationToken cancellationToken) {
+    public CompletableFuture<Void> stopPublicChatAsync(CancellationSignal cancellationSignal) {
         requireLoggedIn("stop public chat");
-        return writeServerAsync(new StopPublicChatCommand(), cancellationToken, "Failed to stop public chat: ");
+        return writeServerAsync(new StopPublicChatCommand(), cancellationSignal, "Failed to stop public chat: ");
     }
 
     public CompletableFuture<Void> unwatchUserAsync(String requestedUsername) {
-        return unwatchUserAsync(requestedUsername, CancellationToken.none());
+        return unwatchUserAsync(requestedUsername, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> unwatchUserAsync(String requestedUsername, CancellationToken cancellationToken) {
+    public CompletableFuture<Void> unwatchUserAsync(String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireLoggedIn("add users");
         return writeServerAsync(
                 new UnwatchUserCommand(requestedUsername),
-                cancellationToken,
+                cancellationSignal,
                 "Failed to unwatch user " + requestedUsername + ": ");
     }
 
     public CompletableFuture<Void> acknowledgePrivateMessageAsync(int privateMessageId) {
-        return acknowledgePrivateMessageAsync(privateMessageId, CancellationToken.none());
+        return acknowledgePrivateMessageAsync(privateMessageId, CancellationSignal.none());
     }
 
     @Override
     public CompletableFuture<Void> acknowledgePrivateMessageAsync(
-            int privateMessageId, CancellationToken cancellationToken) {
+            int privateMessageId, CancellationSignal cancellationSignal) {
         if (privateMessageId < 0) {
             throw new IllegalArgumentException("The private message ID must be greater than zero");
         }
         requireLoggedIn("acknowledge private messages");
         CompletableFuture<Void> write = writeServerAsync(
                 new AcknowledgePrivateMessageCommand(privateMessageId),
-                cancellationToken,
+                cancellationSignal,
                 "Failed to acknowledge private message with ID " + privateMessageId + ": ");
         return write.thenRun(() -> diagnostic.debug("Acknowledged private message ID " + privateMessageId));
     }
 
     public CompletableFuture<Void> acknowledgePrivilegeNotificationAsync(int privilegeNotificationId) {
-        return acknowledgePrivilegeNotificationAsync(privilegeNotificationId, CancellationToken.none());
+        return acknowledgePrivilegeNotificationAsync(privilegeNotificationId, CancellationSignal.none());
     }
 
     @Override
     public CompletableFuture<Void> acknowledgePrivilegeNotificationAsync(
-            int privilegeNotificationId, CancellationToken cancellationToken) {
+            int privilegeNotificationId, CancellationSignal cancellationSignal) {
         if (privilegeNotificationId < 0) {
             throw new IllegalArgumentException("The privilege notification ID must be greater than zero");
         }
         requireLoggedIn("acknowledge privilege notifications");
         return writeServerAsync(
                 new AcknowledgePrivilegeNotificationCommand(privilegeNotificationId),
-                cancellationToken,
+                cancellationSignal,
                 "Failed to acknowledge privilege notification with ID " + privilegeNotificationId + ": ");
     }
 
     public CompletableFuture<InetSocketAddress> getUserEndpointAsync(String requestedUsername) {
-        return getUserEndpointAsync(requestedUsername, CancellationToken.none());
+        return getUserEndpointAsync(requestedUsername, CancellationSignal.none());
     }
 
     @Override
     public CompletableFuture<InetSocketAddress> getUserEndpointAsync(
-            String requestedUsername, CancellationToken cancellationToken) {
+            String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireLoggedIn("fetch user endpoint");
-        CancellationToken token = defaultToken(cancellationToken);
+        CancellationSignal token = defaultToken(cancellationSignal);
         UserEndpointCache cache = options.getUserEndpointCache();
         if (cache != null) {
             CacheLookupResult<InetSocketAddress> cached = tryCacheGet(cache, requestedUsername);
@@ -2474,18 +2485,18 @@ final class DefaultSoulseekClient
      * @return the completed search and collected responses
      */
     public CompletableFuture<SearchResult> searchAsync(SearchQuery query) {
-        return searchAsync(query, null, null, null, CancellationToken.none());
+        return searchAsync(query, null, null, null, CancellationSignal.none());
     }
 
     /**
      * Searches the network and collects accepted responses.
      *
      * @param query the search query
-     * @param cancellationToken the cancellation token
+     * @param cancellationSignal the cancellation signal
      * @return the completed search and collected responses
      */
-    public CompletableFuture<SearchResult> searchAsync(SearchQuery query, CancellationToken cancellationToken) {
-        return searchAsync(query, null, null, null, cancellationToken);
+    public CompletableFuture<SearchResult> searchAsync(SearchQuery query, CancellationSignal cancellationSignal) {
+        return searchAsync(query, null, null, null, cancellationSignal);
     }
 
     /**
@@ -2496,7 +2507,7 @@ final class DefaultSoulseekClient
      * @return the completed search and collected responses
      */
     public CompletableFuture<SearchResult> searchAsync(SearchQuery query, SearchScope scope) {
-        return searchAsync(query, scope, null, null, CancellationToken.none());
+        return searchAsync(query, scope, null, null, CancellationSignal.none());
     }
 
     /**
@@ -2508,7 +2519,7 @@ final class DefaultSoulseekClient
      * @return the completed search and collected responses
      */
     public CompletableFuture<SearchResult> searchAsync(SearchQuery query, SearchScope scope, Integer token) {
-        return searchAsync(query, scope, token, null, CancellationToken.none());
+        return searchAsync(query, scope, token, null, CancellationSignal.none());
     }
 
     /**
@@ -2522,7 +2533,7 @@ final class DefaultSoulseekClient
      */
     public CompletableFuture<SearchResult> searchAsync(
             SearchQuery query, SearchScope scope, Integer token, SearchOptions searchOptions) {
-        return searchAsync(query, scope, token, searchOptions, CancellationToken.none());
+        return searchAsync(query, scope, token, searchOptions, CancellationSignal.none());
     }
 
     /**
@@ -2532,7 +2543,7 @@ final class DefaultSoulseekClient
      * @param scope the search scope, or {@code null} for the network
      * @param token the unique token, or {@code null} to generate one
      * @param searchOptions the search options, or {@code null} for defaults
-     * @param cancellationToken the cancellation token
+     * @param cancellationSignal the cancellation signal
      * @return the completed search and collected responses
      */
     public CompletableFuture<SearchResult> searchAsync(
@@ -2540,10 +2551,10 @@ final class DefaultSoulseekClient
             SearchScope scope,
             Integer token,
             SearchOptions searchOptions,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         SearchInvocation invocation = validateSearch(query, scope, token, searchOptions);
         List<SearchResponse> responses = Collections.synchronizedList(new ArrayList<>());
-        return searchToCallbackAsync(invocation, responses::add, defaultToken(cancellationToken))
+        return searchToCallbackAsync(invocation, responses::add, defaultToken(cancellationSignal))
                 .thenApply(search -> {
                     synchronized (responses) {
                         return new SearchResult(search, responses);
@@ -2559,7 +2570,7 @@ final class DefaultSoulseekClient
      * @return the completed search
      */
     public CompletableFuture<Search> searchAsync(SearchQuery query, Consumer<SearchResponse> responseHandler) {
-        return searchAsync(query, responseHandler, null, null, null, CancellationToken.none());
+        return searchAsync(query, responseHandler, null, null, null, CancellationSignal.none());
     }
 
     /**
@@ -2567,12 +2578,12 @@ final class DefaultSoulseekClient
      *
      * @param query the search query
      * @param responseHandler the response handler
-     * @param cancellationToken the cancellation token
+     * @param cancellationSignal the cancellation signal
      * @return the completed search
      */
     public CompletableFuture<Search> searchAsync(
-            SearchQuery query, Consumer<SearchResponse> responseHandler, CancellationToken cancellationToken) {
-        return searchAsync(query, responseHandler, null, null, null, cancellationToken);
+            SearchQuery query, Consumer<SearchResponse> responseHandler, CancellationSignal cancellationSignal) {
+        return searchAsync(query, responseHandler, null, null, null, cancellationSignal);
     }
 
     /**
@@ -2585,7 +2596,7 @@ final class DefaultSoulseekClient
      */
     public CompletableFuture<Search> searchAsync(
             SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope) {
-        return searchAsync(query, responseHandler, scope, null, null, CancellationToken.none());
+        return searchAsync(query, responseHandler, scope, null, null, CancellationSignal.none());
     }
 
     /**
@@ -2599,7 +2610,7 @@ final class DefaultSoulseekClient
      */
     public CompletableFuture<Search> searchAsync(
             SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope, Integer token) {
-        return searchAsync(query, responseHandler, scope, token, null, CancellationToken.none());
+        return searchAsync(query, responseHandler, scope, token, null, CancellationSignal.none());
     }
 
     /**
@@ -2618,7 +2629,7 @@ final class DefaultSoulseekClient
             SearchScope scope,
             Integer token,
             SearchOptions searchOptions) {
-        return searchAsync(query, responseHandler, scope, token, searchOptions, CancellationToken.none());
+        return searchAsync(query, responseHandler, scope, token, searchOptions, CancellationSignal.none());
     }
 
     /**
@@ -2630,7 +2641,7 @@ final class DefaultSoulseekClient
      * @param scope the search scope, or {@code null} for the network
      * @param token the unique token, or {@code null} to generate one
      * @param searchOptions the search options, or {@code null} for defaults
-     * @param cancellationToken the cancellation token
+     * @param cancellationSignal the cancellation signal
      * @return the completed search
      */
     public CompletableFuture<Search> searchAsync(
@@ -2639,11 +2650,11 @@ final class DefaultSoulseekClient
             SearchScope scope,
             Integer token,
             SearchOptions searchOptions,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         SearchQuery validatedQuery = validateSearchQuery(query);
         Objects.requireNonNull(responseHandler, "responseHandler");
         SearchInvocation invocation = validateSearch(validatedQuery, scope, token, searchOptions);
-        return searchToCallbackAsync(invocation, responseHandler, defaultToken(cancellationToken));
+        return searchToCallbackAsync(invocation, responseHandler, defaultToken(cancellationSignal));
     }
 
     /** Disconnects with the default reason. */
@@ -3041,8 +3052,8 @@ final class DefaultSoulseekClient
             InetSocketAddress requestedEndpoint,
             String requestedUsername,
             String password,
-            CancellationToken cancellationToken) {
-        CompletableFuture<Void> serialized = acquirePermit(stateSemaphore, cancellationToken)
+            CancellationSignal cancellationSignal) {
+        CompletableFuture<Void> serialized = acquirePermit(stateSemaphore, cancellationSignal)
                 .thenCompose(ignored -> {
                     CompletableFuture<Void> attempt;
                     if (state.hasFlag(SoulseekClientStates.CONNECTED)
@@ -3050,7 +3061,7 @@ final class DefaultSoulseekClient
                         attempt = CompletableFuture.completedFuture(null);
                     } else {
                         attempt = performConnectAsync(
-                                requestedAddress, requestedEndpoint, requestedUsername, password, cancellationToken);
+                                requestedAddress, requestedEndpoint, requestedUsername, password, cancellationSignal);
                     }
                     return attempt.whenComplete((result, failure) -> stateSemaphore.release());
                 });
@@ -3078,7 +3089,7 @@ final class DefaultSoulseekClient
             InetSocketAddress requestedEndpoint,
             String requestedUsername,
             String password,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         try {
             changeState(SoulseekClientStates.CONNECTING, "Connecting", null);
 
@@ -3100,7 +3111,7 @@ final class DefaultSoulseekClient
 
             CompletableFuture<Void> connectOperation;
             try {
-                connectOperation = serverConnection.connectAsync(cancellationToken);
+                connectOperation = serverConnection.connectAsync(cancellationSignal);
             } catch (Throwable failure) {
                 connectOperation = CompletableFuture.failedFuture(failure);
             }
@@ -3108,7 +3119,7 @@ final class DefaultSoulseekClient
                 address = requestedAddress;
                 ipEndpoint = requestedEndpoint;
                 changeState(SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGING_IN), "Logging in", null);
-                return loginAsync(requestedUsername, password, cancellationToken);
+                return loginAsync(requestedUsername, password, cancellationSignal);
             });
         } catch (Throwable failure) {
             return CompletableFuture.failedFuture(failure);
@@ -3116,11 +3127,11 @@ final class DefaultSoulseekClient
     }
 
     private CompletableFuture<Void> loginAsync(
-            String requestedUsername, String password, CancellationToken cancellationToken) {
+            String requestedUsername, String password, CancellationSignal cancellationSignal) {
         CompletableFuture<LoginResponse> loginWait;
         try {
             loginWait = waiter.waitAsync(
-                    new WaitKey(MessageCode.Server.LOGIN), LoginResponse.class, null, cancellationToken);
+                    new WaitKey(MessageCode.Server.LOGIN), LoginResponse.class, null, cancellationSignal);
         } catch (Throwable failure) {
             return CompletableFuture.failedFuture(failure);
         }
@@ -3129,7 +3140,7 @@ final class DefaultSoulseekClient
         loginMessages.writeBytes(new LoginRequest(minorVersion, requestedUsername, password).toByteArray());
         loginMessages.writeBytes(new SetListenPortCommand(options.getListenPort()).toByteArray());
 
-        return invokeServerByteWrite(loginMessages.toByteArray(), cancellationToken)
+        return invokeServerByteWrite(loginMessages.toByteArray(), cancellationSignal)
                 .thenCompose(ignored -> loginWait)
                 .thenCompose(response -> {
                     if (!response.isSucceeded()) {
@@ -3140,17 +3151,17 @@ final class DefaultSoulseekClient
                     raise(Event.SERVER_INFO_RECEIVED, serverInfo);
                     username = requestedUsername;
                     changeState(SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN), "Logged in", null);
-                    return sendConfigurationMessagesAsync(cancellationToken);
+                    return sendConfigurationMessagesAsync(cancellationSignal);
                 });
     }
 
-    private CompletableFuture<Void> sendConfigurationMessagesAsync(CancellationToken cancellationToken) {
-        return invokeServerWrite(new SetListenPortCommand(options.getListenPort()), cancellationToken)
+    private CompletableFuture<Void> sendConfigurationMessagesAsync(CancellationSignal cancellationSignal) {
+        return invokeServerWrite(new SetListenPortCommand(options.getListenPort()), cancellationSignal)
                 .thenCompose(ignored -> invokeServerWrite(
-                        new PrivateRoomToggle(options.isAcceptPrivateRoomInvitations()), cancellationToken))
+                        new PrivateRoomToggle(options.isAcceptPrivateRoomInvitations()), cancellationSignal))
                 .thenCompose(ignored -> {
                     try {
-                        return distributedConnectionManager.updateStatusAsync(cancellationToken);
+                        return distributedConnectionManager.updateStatusAsync(cancellationSignal);
                     } catch (Throwable failure) {
                         return CompletableFuture.failedFuture(failure);
                     }
@@ -3158,12 +3169,12 @@ final class DefaultSoulseekClient
     }
 
     private CompletableFuture<Boolean> reconfigureOptionsInternalAsync(
-            SoulseekClientOptionsPatch patch, CancellationToken cancellationToken) {
-        CompletableFuture<Boolean> serialized = acquirePermit(stateSemaphore, cancellationToken)
+            SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
+        CompletableFuture<Boolean> serialized = acquirePermit(stateSemaphore, cancellationSignal)
                 .thenCompose(ignored -> {
                     CompletableFuture<Boolean> operation;
                     try {
-                        operation = performReconfigureOptionsAsync(patch, cancellationToken);
+                        operation = performReconfigureOptionsAsync(patch, cancellationSignal);
                     } catch (Throwable failure) {
                         operation = CompletableFuture.failedFuture(failure);
                     }
@@ -3189,7 +3200,7 @@ final class DefaultSoulseekClient
     }
 
     private CompletableFuture<Boolean> performReconfigureOptionsAsync(
-            SoulseekClientOptionsPatch patch, CancellationToken cancellationToken) {
+            SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
         boolean connected = isConnectedAndLoggedIn();
         boolean enableDistributedNetworkChanged = patch.getEnableDistributedNetwork() != null
                 && patch.getEnableDistributedNetwork() != options.isEnableDistributedNetwork();
@@ -3252,7 +3263,7 @@ final class DefaultSoulseekClient
         }
         diagnostic.debug("Updating server with latest configuration");
         boolean requiresReconnect = reconnectRequired;
-        return sendConfigurationMessagesAsync(cancellationToken).thenApply(ignored -> {
+        return sendConfigurationMessagesAsync(cancellationSignal).thenApply(ignored -> {
             if (requiresReconnect) {
                 diagnostic.warning("Server reconnect required for options " + "to fully take effect");
             }
@@ -3337,7 +3348,7 @@ final class DefaultSoulseekClient
     private CompletableFuture<Search> searchToCallbackAsync(
             SearchInvocation invocation,
             Consumer<SearchResponse> responseHandler,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         SearchInternal search =
                 new SearchInternal(invocation.query(), invocation.scope(), invocation.token(), invocation.options());
         SearchStates[] previousState = {SearchStates.NONE};
@@ -3364,7 +3375,7 @@ final class DefaultSoulseekClient
                     + searchSemaphore.availablePermits()
                     + " available)");
             updateState.accept(SearchStates.QUEUED);
-            operation = acquireSearchPermit(cancellationToken).thenCompose(ignored -> {
+            operation = acquireSearchPermit(cancellationSignal).thenCompose(ignored -> {
                 diagnostic.debug("Acquired search semaphore for search '"
                         + invocation.query().getSearchText() + "'");
                 CompletableFuture<Search> activeSearch;
@@ -3383,9 +3394,9 @@ final class DefaultSoulseekClient
                         }
                         raise(Event.SEARCH_RESPONSE_RECEIVED, eventData);
                     });
-                    activeSearch = invokeServerByteWrite(message, cancellationToken)
+                    activeSearch = invokeServerByteWrite(message, cancellationSignal)
                             .thenRun(() -> updateState.accept(SearchStates.IN_PROGRESS))
-                            .thenCompose(ignoredWrite -> search.waitForCompletion(cancellationToken))
+                            .thenCompose(ignoredWrite -> search.waitForCompletion(cancellationSignal))
                             .thenApply(ignoredCompletion -> {
                                 updateState.accept(SearchStates.COMPLETED.or(search.getState()));
                                 diagnostic.debug("Search for '"
@@ -3439,8 +3450,8 @@ final class DefaultSoulseekClient
                 });
     }
 
-    private CompletableFuture<Void> acquireSearchPermit(CancellationToken cancellationToken) {
-        return acquirePermit(searchSemaphore, cancellationToken);
+    private CompletableFuture<Void> acquireSearchPermit(CancellationSignal cancellationSignal) {
+        return acquirePermit(searchSemaphore, cancellationSignal);
     }
 
     private static void validateDownloadRange(Long size, long startOffset) {
@@ -3507,7 +3518,7 @@ final class DefaultSoulseekClient
             long startOffset,
             int token,
             TransferOptions transferOptions,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         TransferOptions operationOptions = transferOptions == null ? new TransferOptions() : transferOptions;
         TransferInternal download = new TransferInternal(
                 TransferDirection.DOWNLOAD, requestedUsername, remoteFilename, token, operationOptions);
@@ -3526,7 +3537,7 @@ final class DefaultSoulseekClient
         }
 
         DownloadOperation operation =
-                new DownloadOperation(download, outputStreamFactory, operationOptions, cancellationToken, uniqueKey);
+                new DownloadOperation(download, outputStreamFactory, operationOptions, cancellationSignal, uniqueKey);
         return CompletableFuture.supplyAsync(operation::execute);
     }
 
@@ -3534,7 +3545,7 @@ final class DefaultSoulseekClient
         private final TransferInternal download;
         private final DownloadStreamFactory outputStreamFactory;
         private final TransferOptions transferOptions;
-        private final CancellationToken cancellationToken;
+        private final CancellationSignal cancellationSignal;
         private final String uniqueKey;
         private final AtomicBoolean globalPermit = new AtomicBoolean();
         private final CompletableFuture<Void> disconnected = new CompletableFuture<>();
@@ -3551,12 +3562,12 @@ final class DefaultSoulseekClient
                 TransferInternal download,
                 DownloadStreamFactory outputStreamFactory,
                 TransferOptions transferOptions,
-                CancellationToken cancellationToken,
+                CancellationSignal cancellationSignal,
                 String uniqueKey) {
             this.download = download;
             this.outputStreamFactory = outputStreamFactory;
             this.transferOptions = transferOptions;
-            this.cancellationToken = cancellationToken;
+            this.cancellationSignal = cancellationSignal;
             this.uniqueKey = uniqueKey;
             transferStartRequestedWaitKey =
                     new WaitKey(MessageCode.Peer.TRANSFER_REQUEST, download.getUsername(), download.getFilename());
@@ -3565,25 +3576,25 @@ final class DefaultSoulseekClient
         private Transfer execute() {
             try {
                 updateState(TransferStates.QUEUED.or(TransferStates.LOCALLY));
-                await(acquirePermit(globalDownloadSemaphore, cancellationToken));
+                await(acquirePermit(globalDownloadSemaphore, cancellationSignal));
                 globalPermit.set(true);
 
-                endpoint = await(getUserEndpointAsync(download.getUsername(), cancellationToken));
+                endpoint = await(getUserEndpointAsync(download.getUsername(), cancellationSignal));
                 MessageConnection peerConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
-                        download.getUsername(), endpoint, cancellationToken));
+                        download.getUsername(), endpoint, cancellationSignal));
 
                 CompletableFuture<TransferResponse> transferRequestAcknowledged = waiter.waitAsync(
                         new WaitKey(MessageCode.Peer.TRANSFER_RESPONSE, download.getUsername(), download.getToken()),
                         TransferResponse.class,
                         options.getPeerConnectionOptions().getInactivityTimeout(),
-                        cancellationToken);
+                        cancellationSignal);
                 CompletableFuture<TransferRequest> transferStartRequested = waiter.waitIndefinitelyAsync(
-                        transferStartRequestedWaitKey, TransferRequest.class, cancellationToken);
+                        transferStartRequestedWaitKey, TransferRequest.class, cancellationSignal);
 
                 await(invokeMessageWrite(
                         peerConnection,
                         new TransferRequest(TransferDirection.DOWNLOAD, download.getToken(), download.getFilename()),
-                        cancellationToken));
+                        cancellationSignal));
                 updateState(TransferStates.REQUESTED);
 
                 TransferResponse acknowledgement = await(transferRequestAcknowledged);
@@ -3628,7 +3639,7 @@ final class DefaultSoulseekClient
             }
             updateState(TransferStates.INITIALIZING);
             connection = await(peerConnectionManager.getTransferConnectionAsync(
-                    download.getUsername(), endpoint, acknowledgement.getToken(), cancellationToken));
+                    download.getUsername(), endpoint, acknowledgement.getToken(), cancellationSignal));
             download.setConnection(connection);
             return peerConnection;
         }
@@ -3645,14 +3656,14 @@ final class DefaultSoulseekClient
             updateState(TransferStates.INITIALIZING);
 
             MessageConnection refreshed = await(peerConnectionManager.getOrAddMessageConnectionAsync(
-                    download.getUsername(), endpoint, cancellationToken));
+                    download.getUsername(), endpoint, cancellationSignal));
             CompletableFuture<Connection> connectionTask = peerConnectionManager.awaitTransferConnectionAsync(
-                    download.getUsername(), download.getFilename(), download.getRemoteToken(), cancellationToken);
+                    download.getUsername(), download.getFilename(), download.getRemoteToken(), cancellationSignal);
             await(invokeMessageWrite(
                     refreshed,
                     new TransferResponse(
                             download.getRemoteToken(), download.getSize() == null ? 0 : download.getSize()),
-                    cancellationToken));
+                    cancellationSignal));
             try {
                 connection = await(connectionTask);
             } catch (Throwable failure) {
@@ -3661,7 +3672,7 @@ final class DefaultSoulseekClient
                     throw failure;
                 }
                 connection = await(peerConnectionManager.getTransferConnectionAsync(
-                        download.getUsername(), endpoint, download.getRemoteToken(), cancellationToken));
+                        download.getUsername(), endpoint, download.getRemoteToken(), cancellationSignal));
             }
             download.setConnection(connection);
             return refreshed;
@@ -3708,9 +3719,9 @@ final class DefaultSoulseekClient
         }
 
         private void readTransfer() {
-            try (CancellationTokenSource linkedSource = new CancellationTokenSource();
-                    CancellationRegistration registration = cancellationToken.register(linkedSource::cancel)) {
-                CancellationToken linkedToken = linkedSource.getToken();
+            try (CancellationController linkedController = new CancellationController();
+                    CancellationSubscription registration = cancellationSignal.register(linkedController::cancel)) {
+                CancellationSignal linkedToken = linkedController.getSignal();
                 byte[] offset = ByteBuffer.allocate(8)
                         .order(ByteOrder.LITTLE_ENDIAN)
                         .putLong(download.getStartOffset())
@@ -3743,7 +3754,7 @@ final class DefaultSoulseekClient
                         download.getRemoteTaskCompletionSource().handle((ignored, failure) -> 2);
                 int winner = await(CompletableFuture.anyOf(readRace, disconnectRace, remoteRace)
                         .thenApply(value -> (Integer) value));
-                linkedSource.cancel();
+                linkedController.cancel();
                 if (winner == 2) {
                     await(download.getRemoteTaskCompletionSource());
                 } else if (winner == 1) {
@@ -3970,7 +3981,7 @@ final class DefaultSoulseekClient
             UploadStreamFactory inputStreamFactory,
             int token,
             TransferOptions transferOptions,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         TransferOptions operationOptions = transferOptions == null ? new TransferOptions() : transferOptions;
         TransferInternal upload = new TransferInternal(
                 TransferDirection.UPLOAD, requestedUsername, remoteFilename, token, operationOptions);
@@ -3988,7 +3999,7 @@ final class DefaultSoulseekClient
         }
 
         UploadOperation operation =
-                new UploadOperation(upload, inputStreamFactory, operationOptions, cancellationToken, uniqueKey);
+                new UploadOperation(upload, inputStreamFactory, operationOptions, cancellationSignal, uniqueKey);
         return CompletableFuture.supplyAsync(operation::execute);
     }
 
@@ -4000,7 +4011,7 @@ final class DefaultSoulseekClient
         private final TransferInternal upload;
         private final UploadStreamFactory inputStreamFactory;
         private final TransferOptions transferOptions;
-        private final CancellationToken cancellationToken;
+        private final CancellationSignal cancellationSignal;
         private final String uniqueKey;
         private final AtomicBoolean perUserPermit = new AtomicBoolean();
         private final AtomicBoolean slot = new AtomicBoolean();
@@ -4019,24 +4030,24 @@ final class DefaultSoulseekClient
                 TransferInternal upload,
                 UploadStreamFactory inputStreamFactory,
                 TransferOptions transferOptions,
-                CancellationToken cancellationToken,
+                CancellationSignal cancellationSignal,
                 String uniqueKey) {
             this.upload = upload;
             this.inputStreamFactory = inputStreamFactory;
             this.transferOptions = transferOptions;
-            this.cancellationToken = cancellationToken;
+            this.cancellationSignal = cancellationSignal;
             this.uniqueKey = uniqueKey;
         }
 
         private Transfer execute() {
             try {
-                await(acquirePermit(uploadSemaphoreSyncRoot, cancellationToken));
+                await(acquirePermit(uploadSemaphoreSyncRoot, cancellationSignal));
                 CompletableFuture<Void> perUserWait;
                 try {
                     perUserSemaphore = uploadSemaphores.computeIfAbsent(
                             upload.getUsername(),
                             ignored -> new Semaphore(options.getMaximumConcurrentUploadsPerUser()));
-                    perUserWait = acquirePermit(perUserSemaphore, cancellationToken);
+                    perUserWait = acquirePermit(perUserSemaphore, cancellationSignal);
                 } finally {
                     uploadSemaphoreSyncRoot.release();
                 }
@@ -4050,7 +4061,7 @@ final class DefaultSoulseekClient
                         + upload.getUsername() + " acquired");
 
                 try {
-                    await(transferOptions.getSlotAwaiter().awaitSlotAsync(upload.toTransfer(), cancellationToken));
+                    await(transferOptions.getSlotAwaiter().awaitSlotAsync(upload.toTransfer(), cancellationSignal));
                     slot.set(true);
                 } catch (Throwable failure) {
                     Throwable cause = unwrap(failure);
@@ -4065,23 +4076,23 @@ final class DefaultSoulseekClient
                             cause);
                 }
 
-                await(acquirePermit(globalUploadSemaphore, cancellationToken));
+                await(acquirePermit(globalUploadSemaphore, cancellationSignal));
                 globalPermit.set(true);
 
-                endpoint = await(getUserEndpointAsync(upload.getUsername(), cancellationToken));
+                endpoint = await(getUserEndpointAsync(upload.getUsername(), cancellationSignal));
                 MessageConnection messageConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
-                        upload.getUsername(), endpoint, cancellationToken));
+                        upload.getUsername(), endpoint, cancellationSignal));
 
                 CompletableFuture<TransferResponse> transferRequestAcknowledged = waiter.waitAsync(
                         new WaitKey(MessageCode.Peer.TRANSFER_RESPONSE, upload.getUsername(), upload.getToken()),
                         TransferResponse.class,
                         options.getPeerConnectionOptions().getInactivityTimeout(),
-                        cancellationToken);
+                        cancellationSignal);
                 await(invokeMessageWrite(
                         messageConnection,
                         new TransferRequest(
                                 TransferDirection.UPLOAD, upload.getToken(), upload.getFilename(), upload.getSize()),
-                        cancellationToken));
+                        cancellationSignal));
                 updateState(TransferStates.REQUESTED);
 
                 TransferResponse acknowledgement = await(transferRequestAcknowledged);
@@ -4091,7 +4102,7 @@ final class DefaultSoulseekClient
 
                 updateState(TransferStates.INITIALIZING);
                 connection = await(peerConnectionManager.getTransferConnectionAsync(
-                        upload.getUsername(), endpoint, upload.getToken(), cancellationToken));
+                        upload.getUsername(), endpoint, upload.getToken(), cancellationSignal));
                 upload.setConnection(connection);
                 bindConnectionEvents();
 
@@ -4144,7 +4155,7 @@ final class DefaultSoulseekClient
 
         private void readStartOffset() {
             try {
-                byte[] bytes = await(connection.readAsync(8, cancellationToken));
+                byte[] bytes = await(connection.readAsync(8, cancellationSignal));
                 if (bytes.length != 8) {
                     throw new IOException("Expected 8 bytes but received " + bytes.length);
                 }
@@ -4182,7 +4193,7 @@ final class DefaultSoulseekClient
                                     .getGovernor()
                                     .grantAsync(upload.toTransfer(), requestedBytes, governorToken)
                                     .thenCompose(granted -> uploadTokenBucket.getAsync(
-                                            Math.min(requestedBytes, granted), cancellationToken)),
+                                            Math.min(requestedBytes, granted), cancellationSignal)),
                             (attemptedBytes, grantedBytes, transferredBytes) -> {
                                 if (transferOptions.getReporter() != null) {
                                     transferOptions
@@ -4195,7 +4206,7 @@ final class DefaultSoulseekClient
                                 }
                                 uploadTokenBucket.returnTokens(grantedBytes - transferredBytes);
                             },
-                            cancellationToken);
+                            cancellationSignal);
             CompletableFuture<Object> first = CompletableFuture.anyOf(write, disconnected);
             await(first);
             if (disconnected.isCompletedExceptionally() && !write.isDone()) {
@@ -4208,7 +4219,7 @@ final class DefaultSoulseekClient
             long deadline = System.nanoTime()
                     + TimeUnit.MILLISECONDS.toNanos(Math.max(0, transferOptions.getMaximumLingerTime()));
             try {
-                while (!cancellationToken.isCancellationRequested()) {
+                while (!cancellationSignal.isCancellationRequested()) {
                     long remainingNanos = deadline - System.nanoTime();
                     if (remainingNanos <= 0) {
                         connection.disconnect("Transfer complete, maximum linger " + "time exceeded");
@@ -4217,7 +4228,7 @@ final class DefaultSoulseekClient
                     long remainingMillis = Math.max(1, TimeUnit.NANOSECONDS.toMillis(remainingNanos));
                     try {
                         await(connection
-                                .readAsync(1, cancellationToken)
+                                .readAsync(1, cancellationSignal)
                                 .orTimeout(remainingMillis, TimeUnit.MILLISECONDS));
                     } catch (Throwable failure) {
                         Throwable cause = unwrap(failure);
@@ -4230,7 +4241,7 @@ final class DefaultSoulseekClient
                     await(CompletableFuture.runAsync(
                             () -> {}, CompletableFuture.delayedExecutor(100, TimeUnit.MILLISECONDS)));
                 }
-                cancellationToken.throwIfCancellationRequested();
+                cancellationSignal.throwIfCancellationRequested();
             } catch (Throwable failure) {
                 if (!(unwrap(failure) instanceof ConnectionReadException)) {
                     throw failure;
@@ -4328,13 +4339,13 @@ final class DefaultSoulseekClient
         private void notifyUploadFailure() {
             try {
                 InetSocketAddress currentEndpoint =
-                        await(getUserEndpointAsync(upload.getUsername(), CancellationToken.none()));
+                        await(getUserEndpointAsync(upload.getUsername(), CancellationSignal.none()));
                 MessageConnection messageConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
-                        upload.getUsername(), currentEndpoint, CancellationToken.none()));
+                        upload.getUsername(), currentEndpoint, CancellationSignal.none()));
                 OutgoingMessage message = upload.getState().hasFlag(TransferStates.CANCELLED)
                         ? new UploadDenied(upload.getFilename(), "Cancelled")
                         : new UploadFailed(upload.getFilename());
-                await(invokeMessageWrite(messageConnection, message, CancellationToken.none()));
+                await(invokeMessageWrite(messageConnection, message, CancellationSignal.none()));
             } catch (Throwable ignored) {
                 // Failure notification is intentionally best effort.
             }
@@ -4564,9 +4575,9 @@ final class DefaultSoulseekClient
         }
     }
 
-    private static CompletableFuture<Void> acquirePermit(Semaphore semaphore, CancellationToken cancellationToken) {
+    private static CompletableFuture<Void> acquirePermit(Semaphore semaphore, CancellationSignal cancellationSignal) {
         try {
-            cancellationToken.throwIfCancellationRequested();
+            cancellationSignal.throwIfCancellationRequested();
             if (semaphore.tryAcquire()) {
                 return CompletableFuture.completedFuture(null);
             }
@@ -4574,12 +4585,12 @@ final class DefaultSoulseekClient
             return CompletableFuture.failedFuture(failure);
         }
         CompletableFuture<Void> result = new CompletableFuture<>();
-        CancellationRegistration registration = cancellationToken.register(
+        CancellationSubscription registration = cancellationSignal.register(
                 () -> result.completeExceptionally(new CancellationException("The operation was cancelled")));
         CompletableFuture.runAsync(() -> {
             try {
                 while (!result.isDone()) {
-                    cancellationToken.throwIfCancellationRequested();
+                    cancellationSignal.throwIfCancellationRequested();
                     if (semaphore.tryAcquire(50, TimeUnit.MILLISECONDS)) {
                         if (!result.complete(null)) {
                             semaphore.release();
@@ -4615,22 +4626,22 @@ final class DefaultSoulseekClient
         };
     }
 
-    private CompletableFuture<Void> invokeServerByteWrite(byte[] message, CancellationToken cancellationToken) {
+    private CompletableFuture<Void> invokeServerByteWrite(byte[] message, CancellationSignal cancellationSignal) {
         try {
-            return serverConnection.writeAsync(message, defaultToken(cancellationToken));
+            return serverConnection.writeAsync(message, defaultToken(cancellationSignal));
         } catch (Throwable failure) {
             return CompletableFuture.failedFuture(failure);
         }
     }
 
     private CompletableFuture<Void> writeServerAsync(
-            OutgoingMessage message, CancellationToken cancellationToken, String failurePrefix) {
-        return mapClientFailure(invokeServerWrite(message, cancellationToken), failurePrefix);
+            OutgoingMessage message, CancellationSignal cancellationSignal, String failurePrefix) {
+        return mapClientFailure(invokeServerWrite(message, cancellationSignal), failurePrefix);
     }
 
     private CompletableFuture<Void> executeCorrelatedServerCommand(
-            OutgoingMessage message, WaitKey waitKey, CancellationToken cancellationToken, String failurePrefix) {
-        CancellationToken token = defaultToken(cancellationToken);
+            OutgoingMessage message, WaitKey waitKey, CancellationSignal cancellationSignal, String failurePrefix) {
+        CancellationSignal token = defaultToken(cancellationSignal);
         CompletableFuture<Void> wait;
         try {
             wait = waiter.waitAsync(waitKey, null, token);
@@ -4646,10 +4657,10 @@ final class DefaultSoulseekClient
             OutgoingMessage message,
             WaitKey waitKey,
             Class<T> resultType,
-            CancellationToken cancellationToken,
+            CancellationSignal cancellationSignal,
             String failurePrefix,
             Class<? extends Throwable>... preservedFailures) {
-        CancellationToken token = defaultToken(cancellationToken);
+        CancellationSignal token = defaultToken(cancellationSignal);
         CompletableFuture<T> wait;
         try {
             wait = waiter.waitAsync(waitKey, resultType, null, token);
@@ -4660,15 +4671,15 @@ final class DefaultSoulseekClient
         return mapClientFailure(operation, failurePrefix, preservedFailures);
     }
 
-    private CompletableFuture<Void> invokeServerWrite(OutgoingMessage message, CancellationToken cancellationToken) {
-        return invokeMessageWrite(serverConnection, message, cancellationToken);
+    private CompletableFuture<Void> invokeServerWrite(OutgoingMessage message, CancellationSignal cancellationSignal) {
+        return invokeMessageWrite(serverConnection, message, cancellationSignal);
     }
 
     private static CompletableFuture<Void> invokeMessageWrite(
-            MessageConnection connection, OutgoingMessage message, CancellationToken cancellationToken) {
+            MessageConnection connection, OutgoingMessage message, CancellationSignal cancellationSignal) {
         CompletableFuture<Void> operation;
         try {
-            operation = connection.writeAsync(message, defaultToken(cancellationToken));
+            operation = connection.writeAsync(message, defaultToken(cancellationSignal));
         } catch (Throwable failure) {
             operation = CompletableFuture.failedFuture(failure);
         }
@@ -4676,19 +4687,19 @@ final class DefaultSoulseekClient
     }
 
     private CompletableFuture<InetSocketAddress> retrieveUserEndpoint(
-            String requestedUsername, CancellationToken cancellationToken, UserEndpointCache cache) {
+            String requestedUsername, CancellationSignal cancellationSignal, UserEndpointCache cache) {
         CompletableFuture<UserAddressResponse> wait;
         try {
             wait = waiter.waitAsync(
                     new dev.slsk.common.WaitKey(MessageCode.Server.GET_PEER_ADDRESS, requestedUsername),
                     UserAddressResponse.class,
                     null,
-                    cancellationToken);
+                    cancellationSignal);
         } catch (Throwable failure) {
             return mapUserEndpointFailure(CompletableFuture.failedFuture(failure), requestedUsername);
         }
         CompletableFuture<InetSocketAddress> operation = invokeServerWrite(
-                        new UserAddressRequest(requestedUsername), cancellationToken)
+                        new UserAddressRequest(requestedUsername), cancellationSignal)
                 .thenCompose(ignored -> wait)
                 .thenApply(response -> {
                     if (response.getIpAddress().isAnyLocalAddress()) {
@@ -4739,8 +4750,8 @@ final class DefaultSoulseekClient
         }
     }
 
-    private static CancellationToken defaultToken(CancellationToken token) {
-        return token == null ? CancellationToken.none() : token;
+    private static CancellationSignal defaultToken(CancellationSignal token) {
+        return token == null ? CancellationSignal.none() : token;
     }
 
     private static <T> CompletableFuture<T> mapClientFailure(

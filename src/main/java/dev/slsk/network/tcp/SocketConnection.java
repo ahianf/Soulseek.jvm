@@ -4,8 +4,8 @@
 
 package dev.slsk.network.tcp;
 
-import dev.slsk.CancellationRegistration;
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
+import dev.slsk.CancellationSubscription;
 import dev.slsk.common.EventDispatch;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.ConnectionReadException;
@@ -200,13 +200,13 @@ public class SocketConnection implements Connection {
     }
 
     @Override
-    public CompletableFuture<Void> connectAsync(CancellationToken cancellationToken) {
+    public CompletableFuture<Void> connectAsync(CancellationSignal cancellationSignal) {
         if (state != ConnectionState.PENDING && state != ConnectionState.DISCONNECTED) {
             throw new IllegalStateException("Invalid attempt to connect a connected or "
                     + "transitioning connection (current state: "
                     + state + ")");
         }
-        CancellationToken token = cancellationToken == null ? CancellationToken.none() : cancellationToken;
+        CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
 
         changeState(ConnectionState.CONNECTING, "Connecting to " + formatEndpoint(ipEndpoint), null);
 
@@ -247,7 +247,7 @@ public class SocketConnection implements Connection {
             return connectFailureFuture(exception);
         }
 
-        CancellationRegistration registration =
+        CancellationSubscription registration =
                 token.register(() -> gate.completeExceptionally(new CancellationException("Operation cancelled")));
         connectTask.whenComplete((ignored, exception) -> {
             if (exception == null) {
@@ -300,9 +300,9 @@ public class SocketConnection implements Connection {
     }
 
     @Override
-    public CompletableFuture<byte[]> readAsync(long length, CancellationToken cancellationToken) {
+    public CompletableFuture<byte[]> readAsync(long length, CancellationSignal cancellationSignal) {
         validateRead(length);
-        CancellationToken token = cancellationToken == null ? CancellationToken.none() : cancellationToken;
+        CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         return async(() -> {
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             readInternal(length, output, SocketConnection::grantAll, null, token);
@@ -316,13 +316,13 @@ public class SocketConnection implements Connection {
             OutputStream outputStream,
             ConnectionGovernor governor,
             ConnectionReporter reporter,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         if (length < 0) {
             throw new IllegalArgumentException("The requested length must be greater than or equal " + "to zero");
         }
         Objects.requireNonNull(outputStream, "The specified output stream is null");
         validateConnected();
-        CancellationToken token = cancellationToken == null ? CancellationToken.none() : cancellationToken;
+        CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         ConnectionGovernor effectiveGovernor = governor == null ? SocketConnection::grantAll : governor;
         return async(() -> {
             readInternal(length, outputStream, effectiveGovernor, reporter, token);
@@ -331,20 +331,20 @@ public class SocketConnection implements Connection {
     }
 
     @Override
-    public CompletableFuture<String> waitForDisconnect(CancellationToken cancellationToken) {
-        if (cancellationToken != null) {
-            cancellationToken.register(() -> disconnect(null, new CancellationException("Operation cancelled")));
+    public CompletableFuture<String> waitForDisconnect(CancellationSignal cancellationSignal) {
+        if (cancellationSignal != null) {
+            cancellationSignal.register(() -> disconnect(null, new CancellationException("Operation cancelled")));
         }
         return disconnectFuture;
     }
 
     @Override
-    public CompletableFuture<Void> writeAsync(byte[] bytes, CancellationToken cancellationToken) {
+    public CompletableFuture<Void> writeAsync(byte[] bytes, CancellationSignal cancellationSignal) {
         if (bytes == null || bytes.length == 0) {
             throw new IllegalArgumentException("Invalid attempt to send empty data");
         }
         validateConnected();
-        CancellationToken token = cancellationToken == null ? CancellationToken.none() : cancellationToken;
+        CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         return async(() -> {
             writeInternal(
                     bytes.length, new java.io.ByteArrayInputStream(bytes), SocketConnection::grantAll, null, token);
@@ -358,13 +358,13 @@ public class SocketConnection implements Connection {
             InputStream inputStream,
             ConnectionGovernor governor,
             ConnectionReporter reporter,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         if (length <= 0) {
             throw new IllegalArgumentException("The requested length must be greater than or equal " + "to zero");
         }
         Objects.requireNonNull(inputStream, "The specified output stream is null");
         validateConnected();
-        CancellationToken token = cancellationToken == null ? CancellationToken.none() : cancellationToken;
+        CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         ConnectionGovernor effectiveGovernor = governor == null ? SocketConnection::grantAll : governor;
         return async(() -> {
             writeInternal(length, inputStream, effectiveGovernor, reporter, token);
@@ -447,7 +447,7 @@ public class SocketConnection implements Connection {
             OutputStream outputStream,
             ConnectionGovernor governor,
             ConnectionReporter reporter,
-            CancellationToken cancellationToken)
+            CancellationSignal cancellationSignal)
             throws Exception {
         resetInactivityTime();
         byte[] buffer = new byte[options.getReadBufferSize()];
@@ -455,24 +455,24 @@ public class SocketConnection implements Connection {
 
         try {
             while (!disposed && totalBytesRead < length) {
-                cancellationToken.throwIfCancellationRequested();
+                cancellationSignal.throwIfCancellationRequested();
                 long bytesRemaining = length - totalBytesRead;
                 int bytesToRead = bytesRemaining >= buffer.length ? buffer.length : (int) bytesRemaining;
-                int bytesGranted = Math.min(bytesToRead, await(governor.grantAsync(bytesToRead, cancellationToken)));
-                int bytesRead = await(stream.readAsync(buffer, 0, bytesGranted, cancellationToken));
+                int bytesGranted = Math.min(bytesToRead, await(governor.grantAsync(bytesToRead, cancellationSignal)));
+                int bytesRead = await(stream.readAsync(buffer, 0, bytesGranted, cancellationSignal));
                 if (bytesRead == 0) {
                     throw new ConnectionException("Remote connection closed");
                 }
-                cancellationToken.throwIfCancellationRequested();
+                cancellationSignal.throwIfCancellationRequested();
                 outputStream.write(buffer, 0, bytesRead);
                 totalBytesRead += bytesRead;
                 if (reporter != null) {
                     reporter.report(bytesToRead, bytesGranted, bytesRead);
                 }
-                emitProgress(dataReadListeners, totalBytesRead, length, cancellationToken);
+                emitProgress(dataReadListeners, totalBytesRead, length, cancellationSignal);
                 resetInactivityTime();
             }
-            cancellationToken.throwIfCancellationRequested();
+            cancellationSignal.throwIfCancellationRequested();
             outputStream.flush();
         } catch (Exception exception) {
             Exception actual = asException(unwrap(exception));
@@ -493,7 +493,7 @@ public class SocketConnection implements Connection {
             InputStream inputStream,
             ConnectionGovernor governor,
             ConnectionReporter reporter,
-            CancellationToken cancellationToken)
+            CancellationSignal cancellationSignal)
             throws Exception {
         if (writeQueueFull || !writeQueueSemaphore.tryAcquire()) {
             writeQueueFull = true;
@@ -501,7 +501,7 @@ public class SocketConnection implements Connection {
             throw new ConnectionWriteDroppedException(
                     "Dropped buffered message to " + formatEndpoint(ipEndpoint) + "; the write buffer is full");
         }
-        acquire(writeSemaphore, cancellationToken);
+        acquire(writeSemaphore, cancellationSignal);
 
         try {
             resetInactivityTime();
@@ -509,7 +509,7 @@ public class SocketConnection implements Connection {
             long totalBytesWritten = 0;
 
             while (totalBytesWritten < length) {
-                cancellationToken.throwIfCancellationRequested();
+                cancellationSignal.throwIfCancellationRequested();
                 if (disposed || state == ConnectionState.DISCONNECTING || state == ConnectionState.DISCONNECTED) {
                     throw new ConnectionWriteException("Write aborted after " + totalBytesWritten
                             + " bytes written; the connection has "
@@ -518,17 +518,17 @@ public class SocketConnection implements Connection {
                 }
                 long bytesRemaining = length - totalBytesWritten;
                 int bytesToRead = bytesRemaining >= buffer.length ? buffer.length : (int) bytesRemaining;
-                int bytesGranted = Math.min(bytesToRead, await(governor.grantAsync(bytesToRead, cancellationToken)));
+                int bytesGranted = Math.min(bytesToRead, await(governor.grantAsync(bytesToRead, cancellationSignal)));
                 int bytesRead = inputStream.read(buffer, 0, bytesGranted);
                 if (bytesRead < 0) {
                     bytesRead = 0;
                 }
-                await(stream.writeAsync(buffer, 0, bytesRead, cancellationToken));
+                await(stream.writeAsync(buffer, 0, bytesRead, cancellationSignal));
                 totalBytesWritten += bytesRead;
                 if (reporter != null) {
                     reporter.report(bytesToRead, bytesGranted, bytesRead);
                 }
-                emitProgress(dataWrittenListeners, totalBytesWritten, length, cancellationToken);
+                emitProgress(dataWrittenListeners, totalBytesWritten, length, cancellationSignal);
                 resetInactivityTime();
             }
         } catch (Exception exception) {
@@ -660,10 +660,10 @@ public class SocketConnection implements Connection {
                 "Failed to connect to " + formatEndpoint(ipEndpoint) + ": " + actual.getMessage(), actual);
     }
 
-    private static void acquire(Semaphore semaphore, CancellationToken cancellationToken) {
+    private static void acquire(Semaphore semaphore, CancellationSignal cancellationSignal) {
         try {
             while (true) {
-                cancellationToken.throwIfCancellationRequested();
+                cancellationSignal.throwIfCancellationRequested();
                 if (semaphore.tryAcquire(25, TimeUnit.MILLISECONDS)) {
                     return;
                 }
@@ -674,7 +674,7 @@ public class SocketConnection implements Connection {
         }
     }
 
-    private static CompletableFuture<Integer> grantAll(int requestedBytes, CancellationToken cancellationToken) {
+    private static CompletableFuture<Integer> grantAll(int requestedBytes, CancellationSignal cancellationSignal) {
         return CompletableFuture.completedFuture(Integer.MAX_VALUE);
     }
 
@@ -682,7 +682,7 @@ public class SocketConnection implements Connection {
             CopyOnWriteArrayList<ConnectionEventListener<T>> listeners,
             long currentLength,
             long totalLength,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         @SuppressWarnings("unchecked")
         T eventData = (T) new ConnectionDataEvent(currentLength, totalLength);
         Runnable dispatch = () -> {
@@ -691,7 +691,7 @@ public class SocketConnection implements Connection {
             }
         };
         if (EventDispatch.isAsynchronous()) {
-            if (!cancellationToken.isCancellationRequested()) {
+            if (!cancellationSignal.isCancellationRequested()) {
                 IO_EXECUTOR.execute(dispatch);
             }
         } else {

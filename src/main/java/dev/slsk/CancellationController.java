@@ -4,19 +4,19 @@
 package dev.slsk;
 
 /**
- * Requests cooperative cancellation through an associated token.
+ * Requests cooperative cancellation through an associated signal.
  */
-public final class CancellationTokenSource implements AutoCloseable {
+public final class CancellationController implements AutoCloseable {
     private final CancellationState state = new CancellationState(true);
-    private final CancellationToken token = new CancellationToken(state);
+    private final CancellationSignal signal = new CancellationSignal(state);
 
     /**
-     * Returns the immutable token associated with this source.
+     * Returns the immutable signal associated with this controller.
      *
-     * @return the cancellation token
+     * @return the cancellation signal
      */
-    public CancellationToken getToken() {
-        return token;
+    public CancellationSignal getSignal() {
+        return signal;
     }
 
     /**
@@ -32,7 +32,7 @@ public final class CancellationTokenSource implements AutoCloseable {
     /**
      * Releases all listener registrations without requesting cancellation.
      *
-     * <p>Closing the source more than once has no effect.
+     * <p>Closing the controller more than once has no effect.
      */
     @Override
     public void close() {

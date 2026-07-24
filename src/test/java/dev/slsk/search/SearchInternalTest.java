@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationTokenSource;
+import dev.slsk.CancellationController;
 import dev.slsk.File;
 import dev.slsk.Search;
 import dev.slsk.SearchQuery;
@@ -200,8 +200,8 @@ class SearchInternalTest {
         }
 
         try (SearchInternal search = search(42, new SearchOptions());
-                CancellationTokenSource source = new CancellationTokenSource()) {
-            var wait = search.waitForCompletion(source.getToken());
+                CancellationController source = new CancellationController()) {
+            var wait = search.waitForCompletion(source.getSignal());
             source.cancel();
             assertThrows(CancellationException.class, wait::join);
             assertEquals(SearchStates.NONE, search.getState());

@@ -108,8 +108,8 @@ class SoulseekClientConnectTest {
     @Test
     void connectsLogsInAndSendsConfigurationInOrder() {
         Fixture fixture = new Fixture();
-        CancellationTokenSource source = new CancellationTokenSource();
-        CancellationToken token = source.getToken();
+        CancellationController source = new CancellationController();
+        CancellationSignal token = source.getSignal();
         List<SoulseekClientStates> states = new ArrayList<>();
         fixture.client.addStateChangedListener((sender, eventData) -> states.add(eventData.getState()));
         fixture.connection.fireConnected = true;
@@ -219,12 +219,12 @@ class SoulseekClientConnectTest {
         assertEquals(SoulseekClientStates.DISCONNECTED, fixture.client.getState());
 
         Fixture cancelledFixture = new Fixture();
-        CancellationTokenSource source = new CancellationTokenSource();
+        CancellationController source = new CancellationController();
         source.cancel();
         assertInstanceOf(
                 CancellationException.class,
-                completionCause(
-                        cancelledFixture.client.connectAsync("127.0.0.1", 2271, "alice", "secret", source.getToken())));
+                completionCause(cancelledFixture.client.connectAsync(
+                        "127.0.0.1", 2271, "alice", "secret", source.getSignal())));
         assertEquals(0, cancelledFixture.connection.connectCount);
         assertEquals(SoulseekClientStates.DISCONNECTED, cancelledFixture.client.getState());
         fixture.close();
@@ -333,13 +333,13 @@ class SoulseekClientConnectTest {
         private final List<String> sequence;
         private final List<byte[]> rawMessages = new ArrayList<>();
         private final List<OutgoingMessage> outgoingMessages = new ArrayList<>();
-        private final List<CancellationToken> tokens = new ArrayList<>();
+        private final List<CancellationSignal> tokens = new ArrayList<>();
         private volatile CompletableFuture<Void> connectResult = CompletableFuture.completedFuture(null);
         private volatile CompletableFuture<Void> rawResult = CompletableFuture.completedFuture(null);
         private volatile CompletableFuture<Void> messageResult = CompletableFuture.completedFuture(null);
         private RuntimeException synchronousConnectFailure;
         private ConnectionFactoryProbe factory;
-        private CancellationToken connectToken;
+        private CancellationSignal connectToken;
         private int connectCount;
         private int disconnectCount;
         private boolean fireConnected;
@@ -353,7 +353,7 @@ class SoulseekClientConnectTest {
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("connectAsync")) {
                 connectCount++;
-                connectToken = (CancellationToken) arguments[0];
+                connectToken = (CancellationSignal) arguments[0];
                 if (synchronousConnectFailure != null) {
                     throw synchronousConnectFailure;
                 }
@@ -367,7 +367,7 @@ class SoulseekClientConnectTest {
                     && arguments[0] instanceof byte[] bytes) {
                 sequence.add("raw");
                 rawMessages.add(bytes);
-                tokens.add((CancellationToken) arguments[1]);
+                tokens.add((CancellationSignal) arguments[1]);
                 return rawResult;
             }
             if (method.getName().equals("writeAsync")
@@ -375,7 +375,7 @@ class SoulseekClientConnectTest {
                     && arguments[0] instanceof OutgoingMessage message) {
                 sequence.add("message");
                 outgoingMessages.add(message);
-                tokens.add((CancellationToken) arguments[1]);
+                tokens.add((CancellationSignal) arguments[1]);
                 return messageResult;
             }
             if (method.getName().equals("disconnect")) {
@@ -420,7 +420,7 @@ class SoulseekClientConnectTest {
     private static final class WaiterProbe {
         private final List<String> sequence;
         private LoginResponse response = new LoginResponse(true, "");
-        private CancellationToken token;
+        private CancellationSignal token;
         private final Waiter proxy = (Waiter)
                 Proxy.newProxyInstance(Waiter.class.getClassLoader(), new Class<?>[] {Waiter.class}, this::invoke);
 
@@ -433,7 +433,7 @@ class SoulseekClientConnectTest {
                 assertEquals(new WaitKey(MessageCode.Server.LOGIN), arguments[0]);
                 assertSame(LoginResponse.class, arguments[1]);
                 assertNull(arguments[2]);
-                token = (CancellationToken) arguments[3];
+                token = (CancellationSignal) arguments[3];
                 sequence.add("wait");
                 return CompletableFuture.completedFuture(response);
             }
@@ -444,7 +444,7 @@ class SoulseekClientConnectTest {
     private static final class DistributedProbe {
         private final List<String> sequence;
         private int updateCount;
-        private CancellationToken updateToken;
+        private CancellationSignal updateToken;
         private final DistributedConnectionManager proxy = (DistributedConnectionManager) Proxy.newProxyInstance(
                 DistributedConnectionManager.class.getClassLoader(),
                 new Class<?>[] {DistributedConnectionManager.class},
@@ -457,7 +457,7 @@ class SoulseekClientConnectTest {
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("updateStatusAsync")) {
                 updateCount++;
-                updateToken = (CancellationToken) arguments[0];
+                updateToken = (CancellationSignal) arguments[0];
                 sequence.add("distributed");
                 return CompletableFuture.completedFuture(null);
             }

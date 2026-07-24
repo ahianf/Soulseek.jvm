@@ -4,7 +4,7 @@
 
 package dev.slsk.network;
 
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import dev.slsk.DistributedNetworkInfo;
 import dev.slsk.diagnostics.DiagnosticSource;
 import dev.slsk.events.DistributedChildEvent;
@@ -69,10 +69,10 @@ public interface DistributedConnectionManager extends AutoCloseable, DiagnosticS
 
     CompletableFuture<Void> addParentConnectionAsync(Iterable<PeerEndpoint> parentCandidates);
 
-    CompletableFuture<Void> broadcastMessageAsync(byte[] bytes, CancellationToken cancellationToken);
+    CompletableFuture<Void> broadcastMessageAsync(byte[] bytes, CancellationSignal cancellationSignal);
 
     default CompletableFuture<Void> broadcastMessageAsync(byte[] bytes) {
-        return broadcastMessageAsync(bytes, CancellationToken.none());
+        return broadcastMessageAsync(bytes, CancellationSignal.none());
     }
 
     void demoteFromBranchRoot();
@@ -89,10 +89,10 @@ public interface DistributedConnectionManager extends AutoCloseable, DiagnosticS
 
     void setParentBranchRoot(String branchRoot);
 
-    CompletableFuture<Void> updateStatusAsync(CancellationToken cancellationToken);
+    CompletableFuture<Void> updateStatusAsync(CancellationSignal cancellationSignal);
 
     default CompletableFuture<Void> updateStatusAsync() {
-        return updateStatusAsync(CancellationToken.none());
+        return updateStatusAsync(CancellationSignal.none());
     }
 
     @Override

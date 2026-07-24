@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.BrowseResponse;
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import dev.slsk.Directory;
 import dev.slsk.File;
 import dev.slsk.RawBrowseResponse;
@@ -677,7 +677,7 @@ class PeerMessageHandlerTest {
         }
 
         @Override
-        public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout, CancellationToken cancellationToken) {
+        public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout, CancellationSignal cancellationSignal) {
             return waitAsync(key);
         }
 
@@ -693,7 +693,7 @@ class PeerMessageHandlerTest {
 
         @Override
         public <T> CompletableFuture<T> waitAsync(
-                WaitKey key, Class<T> resultType, Integer timeout, CancellationToken cancellationToken) {
+                WaitKey key, Class<T> resultType, Integer timeout, CancellationSignal cancellationSignal) {
             return waitAsync(key, resultType);
         }
 
@@ -703,7 +703,7 @@ class PeerMessageHandlerTest {
         }
 
         @Override
-        public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key, CancellationToken cancellationToken) {
+        public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key, CancellationSignal cancellationSignal) {
             return waitAsync(key);
         }
 
@@ -714,7 +714,7 @@ class PeerMessageHandlerTest {
 
         @Override
         public <T> CompletableFuture<T> waitIndefinitelyAsync(
-                WaitKey key, Class<T> resultType, CancellationToken cancellationToken) {
+                WaitKey key, Class<T> resultType, CancellationSignal cancellationSignal) {
             return waitAsync(key, resultType);
         }
 

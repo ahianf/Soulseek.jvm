@@ -4,7 +4,7 @@
 
 package dev.slsk.options;
 
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import dev.slsk.Transfer;
 import java.util.concurrent.CompletableFuture;
 
@@ -18,8 +18,8 @@ public interface TransferGovernor {
      *
      * @param transfer the transfer
      * @param requestedBytes the requested byte count
-     * @param cancellationToken the cancellation token
+     * @param cancellationSignal the cancellation signal
      * @return a future containing the granted byte count
      */
-    CompletableFuture<Integer> grantAsync(Transfer transfer, int requestedBytes, CancellationToken cancellationToken);
+    CompletableFuture<Integer> grantAsync(Transfer transfer, int requestedBytes, CancellationSignal cancellationSignal);
 }

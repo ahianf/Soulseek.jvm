@@ -40,8 +40,8 @@ class SoulseekClientPrivateRoomTest {
         WaiterProbe waiter = new WaiterProbe(sequence);
         ConnectionProbe connection = new ConnectionProbe(sequence);
         try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
-            CancellationTokenSource source = new CancellationTokenSource();
-            CancellationToken token = source.getToken();
+            CancellationController source = new CancellationController();
+            CancellationSignal token = source.getSignal();
             List<Case> cases = List.of(
                     new Case(
                             () -> client.addPrivateRoomMemberAsync("room", "member", token),
@@ -253,7 +253,7 @@ class SoulseekClientPrivateRoomTest {
     private static final class ConnectionProbe {
         private final List<String> sequence;
         private OutgoingMessage message;
-        private CancellationToken token;
+        private CancellationSignal token;
         private int writeCount;
         private CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
         private RuntimeException synchronousFailure;
@@ -271,7 +271,7 @@ class SoulseekClientPrivateRoomTest {
                 sequence.add("write");
                 writeCount++;
                 message = outgoing;
-                token = (CancellationToken) arguments[1];
+                token = (CancellationSignal) arguments[1];
                 if (synchronousFailure != null) {
                     throw synchronousFailure;
                 }
@@ -284,7 +284,7 @@ class SoulseekClientPrivateRoomTest {
     private static final class WaiterProbe {
         private final List<String> sequence;
         private WaitKey key;
-        private CancellationToken token;
+        private CancellationSignal token;
         private CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
         private RuntimeException synchronousFailure;
         private final Waiter proxy = (Waiter)
@@ -298,7 +298,7 @@ class SoulseekClientPrivateRoomTest {
             if (method.getName().equals("waitAsync") && arguments.length == 3) {
                 sequence.add("wait");
                 key = (WaitKey) arguments[0];
-                token = (CancellationToken) arguments[2];
+                token = (CancellationSignal) arguments[2];
                 if (synchronousFailure != null) {
                     throw synchronousFailure;
                 }

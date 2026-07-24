@@ -4,7 +4,7 @@
 
 package dev.slsk.messaging.handlers;
 
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import dev.slsk.RoomData;
 import dev.slsk.RoomInfo;
 import dev.slsk.RoomList;
@@ -415,7 +415,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         if (!client.getOptions().isAutoAcknowledgePrivilegeNotifications()) {
             return completed();
         }
-        return client.acknowledgePrivilegeNotificationAsync(notification.getId(), CancellationToken.none());
+        return client.acknowledgePrivilegeNotificationAsync(notification.getId(), CancellationSignal.none());
     }
 
     private CompletableFuture<Void> handlePrivateMessage(byte[] message) {
@@ -424,7 +424,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         if (!client.getOptions().isAutoAcknowledgePrivateMessages()) {
             return completed();
         }
-        return client.acknowledgePrivateMessageAsync(notification.getId(), CancellationToken.none());
+        return client.acknowledgePrivateMessageAsync(notification.getId(), CancellationSignal.none());
     }
 
     private CompletableFuture<Void> handleNetInfo(byte[] message) {

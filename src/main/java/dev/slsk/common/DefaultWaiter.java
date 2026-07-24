@@ -4,8 +4,8 @@
 
 package dev.slsk.common;
 
-import dev.slsk.CancellationRegistration;
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
+import dev.slsk.CancellationSubscription;
 import dev.slsk.exceptions.SoulseekClientException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -182,8 +182,8 @@ public final class DefaultWaiter implements Waiter {
     /**
      * Adds a void wait.
      */
-    public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout, CancellationToken cancellationToken) {
-        return waitAsync(key, Void.class, timeout, cancellationToken);
+    public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout, CancellationSignal cancellationSignal) {
+        return waitAsync(key, Void.class, timeout, cancellationSignal);
     }
 
     /**
@@ -204,14 +204,14 @@ public final class DefaultWaiter implements Waiter {
      * Adds a typed wait.
      */
     public <T> CompletableFuture<T> waitAsync(
-            WaitKey key, Class<T> resultType, Integer timeout, CancellationToken cancellationToken) {
+            WaitKey key, Class<T> resultType, Integer timeout, CancellationSignal cancellationSignal) {
         Objects.requireNonNull(key, "key");
         Objects.requireNonNull(resultType, "resultType");
         int effectiveTimeout = timeout == null ? defaultTimeout : timeout;
         if (effectiveTimeout < -1) {
             throw new IllegalArgumentException("timeout must be greater than or equal to -1");
         }
-        CancellationToken effectiveToken = cancellationToken == null ? CancellationToken.none() : cancellationToken;
+        CancellationSignal effectiveToken = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         PendingWait<T> wait =
                 new PendingWait<>(resultType, effectiveTimeout, () -> cancel(key), () -> timeout(key), effectiveToken);
 
@@ -235,14 +235,14 @@ public final class DefaultWaiter implements Waiter {
      * Adds a void wait that uses the source's maximum timeout.
      */
     public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key) {
-        return waitIndefinitelyAsync(key, (CancellationToken) null);
+        return waitIndefinitelyAsync(key, (CancellationSignal) null);
     }
 
     /**
      * Adds a void wait that uses the source's maximum timeout.
      */
-    public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key, CancellationToken cancellationToken) {
-        return waitAsync(key, Void.class, Integer.MAX_VALUE, cancellationToken);
+    public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key, CancellationSignal cancellationSignal) {
+        return waitAsync(key, Void.class, Integer.MAX_VALUE, cancellationSignal);
     }
 
     /**
@@ -256,8 +256,8 @@ public final class DefaultWaiter implements Waiter {
      * Adds a typed wait that uses the source's maximum timeout.
      */
     public <T> CompletableFuture<T> waitIndefinitelyAsync(
-            WaitKey key, Class<T> resultType, CancellationToken cancellationToken) {
-        return waitAsync(key, resultType, Integer.MAX_VALUE, cancellationToken);
+            WaitKey key, Class<T> resultType, CancellationSignal cancellationSignal) {
+        return waitAsync(key, resultType, Integer.MAX_VALUE, cancellationSignal);
     }
 
     /**
@@ -329,12 +329,12 @@ public final class DefaultWaiter implements Waiter {
      */
     static final class PendingWait<T> implements AutoCloseable {
         private final Runnable cancelAction;
-        private final CancellationToken cancellationToken;
+        private final CancellationSignal cancellationSignal;
         private final CompletableFuture<T> future = new CompletableFuture<>();
         private final Class<T> resultType;
         private final int timeout;
         private final Runnable timeoutAction;
-        private CancellationRegistration cancellationRegistration;
+        private CancellationSubscription cancellationSubscription;
         private boolean closed;
         private ScheduledFuture<?> timeoutTask;
 
@@ -343,12 +343,12 @@ public final class DefaultWaiter implements Waiter {
                 int timeout,
                 Runnable cancelAction,
                 Runnable timeoutAction,
-                CancellationToken cancellationToken) {
+                CancellationSignal cancellationSignal) {
             this.resultType = Objects.requireNonNull(resultType, "resultType");
             this.timeout = timeout;
             this.cancelAction = Objects.requireNonNull(cancelAction, "cancelAction");
             this.timeoutAction = Objects.requireNonNull(timeoutAction, "timeoutAction");
-            this.cancellationToken = Objects.requireNonNull(cancellationToken, "cancellationToken");
+            this.cancellationSignal = Objects.requireNonNull(cancellationSignal, "cancellationSignal");
         }
 
         /**
@@ -369,14 +369,14 @@ public final class DefaultWaiter implements Waiter {
          * Registers cancellation and timeout actions.
          */
         void register(ScheduledExecutorService scheduler) {
-            CancellationRegistration registration = cancellationToken.register(cancelAction);
+            CancellationSubscription registration = cancellationSignal.register(cancelAction);
 
             synchronized (this) {
                 if (closed) {
                     registration.close();
                     return;
                 }
-                cancellationRegistration = registration;
+                cancellationSubscription = registration;
             }
 
             if (timeout == -1) {
@@ -398,7 +398,7 @@ public final class DefaultWaiter implements Waiter {
          */
         @Override
         public void close() {
-            CancellationRegistration registration;
+            CancellationSubscription registration;
             ScheduledFuture<?> task;
 
             synchronized (this) {
@@ -406,8 +406,8 @@ public final class DefaultWaiter implements Waiter {
                     return;
                 }
                 closed = true;
-                registration = cancellationRegistration;
-                cancellationRegistration = null;
+                registration = cancellationSubscription;
+                cancellationSubscription = null;
                 task = timeoutTask;
                 timeoutTask = null;
             }

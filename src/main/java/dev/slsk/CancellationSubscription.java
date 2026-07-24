@@ -7,11 +7,11 @@ package dev.slsk;
  * A disposable subscription to cancellation.
  */
 @FunctionalInterface
-public interface CancellationRegistration extends AutoCloseable {
+public interface CancellationSubscription extends AutoCloseable {
     /**
      * Removes the cancellation listener.
      *
-     * <p>Closing a registration more than once has no effect.
+     * <p>Closing a subscription more than once has no effect.
      */
     @Override
     void close();

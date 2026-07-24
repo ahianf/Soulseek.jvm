@@ -5,7 +5,7 @@
 package dev.slsk.search;
 
 import dev.slsk.CacheLookupResult;
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import dev.slsk.RawSearchResponse;
 import dev.slsk.SearchQuery;
 import dev.slsk.SearchResponse;
@@ -220,7 +220,7 @@ public final class DefaultSearchResponder implements SearchResponder {
 
         CompletableFuture<InetSocketAddress> endpointFuture;
         try {
-            endpointFuture = client.getUserEndpointAsync(username, CancellationToken.none());
+            endpointFuture = client.getUserEndpointAsync(username, CancellationSignal.none());
         } catch (Throwable failure) {
             endpointFuture = CompletableFuture.failedFuture(failure);
         }
@@ -232,7 +232,7 @@ public final class DefaultSearchResponder implements SearchResponder {
                     try {
                         connectionFuture = client.getPeerConnectionManager()
                                 .getOrAddMessageConnectionAsync(
-                                        username, endpoint, responseToken, CancellationToken.none());
+                                        username, endpoint, responseToken, CancellationSignal.none());
                     } catch (Throwable failure) {
                         connectionFuture = CompletableFuture.failedFuture(failure);
                     }

@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CacheLookupResult;
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import dev.slsk.File;
 import dev.slsk.SearchResponse;
 import dev.slsk.SearchResponseCache;
@@ -327,7 +327,7 @@ class SearchResponderTest {
 
         @Override
         public CompletableFuture<InetSocketAddress> getUserEndpointAsync(
-                String username, CancellationToken cancellationToken) {
+                String username, CancellationSignal cancellationSignal) {
             if (endpointFailure != null) {
                 return CompletableFuture.failedFuture(endpointFailure);
             }
@@ -428,7 +428,7 @@ class SearchResponderTest {
 
         @Override
         public CompletableFuture<Connection> awaitTransferConnectionAsync(
-                String username, String filename, int remoteToken, CancellationToken cancellationToken) {
+                String username, String filename, int remoteToken, CancellationSignal cancellationSignal) {
             return unsupported();
         }
 
@@ -447,8 +447,8 @@ class SearchResponderTest {
 
         @Override
         public CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
-                String username, InetSocketAddress ipEndpoint, CancellationToken cancellationToken) {
-            return getOrAddMessageConnectionAsync(username, ipEndpoint, 0, cancellationToken);
+                String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal) {
+            return getOrAddMessageConnectionAsync(username, ipEndpoint, 0, cancellationSignal);
         }
 
         @Override
@@ -456,7 +456,7 @@ class SearchResponderTest {
                 String username,
                 InetSocketAddress ipEndpoint,
                 int solicitationToken,
-                CancellationToken cancellationToken) {
+                CancellationSignal cancellationSignal) {
             lastUsername = username;
             lastSolicitationToken = solicitationToken;
             if (connectionFailure != null) {
@@ -478,7 +478,7 @@ class SearchResponderTest {
 
         @Override
         public CompletableFuture<Connection> getTransferConnectionAsync(
-                String username, InetSocketAddress ipEndpoint, int token, CancellationToken cancellationToken) {
+                String username, InetSocketAddress ipEndpoint, int token, CancellationSignal cancellationSignal) {
             return unsupported();
         }
 

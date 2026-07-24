@@ -4,9 +4,9 @@
 
 package dev.slsk.network;
 
-import dev.slsk.CancellationRegistration;
-import dev.slsk.CancellationToken;
-import dev.slsk.CancellationTokenSource;
+import dev.slsk.CancellationController;
+import dev.slsk.CancellationSignal;
+import dev.slsk.CancellationSubscription;
 import dev.slsk.DistributedNetworkInfo;
 import dev.slsk.DistributedPeer;
 import dev.slsk.SoulseekClientStates;
@@ -78,7 +78,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     private final ConcurrentHashMap<String, CompletableFuture<MessageConnection>> childConnections =
             new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, InetSocketAddress> children = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, CancellationTokenSource> pendingInboundIndirectConnections =
+    private final ConcurrentHashMap<String, CancellationController> pendingInboundIndirectConnections =
             new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Integer, String> pendingSolicitations = new ConcurrentHashMap<>();
     private final CopyOnWriteArrayList<DistributedManagerEventListener<DistributedChildEvent>> childAddedListeners =
@@ -343,10 +343,10 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         diagnostic.debug("Parent candidates: "
                 + String.join(
                         ", ", snapshot.stream().map(PeerEndpoint::username).toList()));
-        CancellationTokenSource cancellation = new CancellationTokenSource();
+        CancellationController cancellation = new CancellationController();
         List<CompletableFuture<ParentCandidate>> tasks = snapshot.stream()
                 .map(candidate -> getParentCandidateConnectionAsync(
-                        candidate.username(), candidate.ipEndpoint(), cancellation.getToken()))
+                        candidate.username(), candidate.ipEndpoint(), cancellation.getSignal()))
                 .toList();
 
         CompletableFuture<Void> settled = CompletableFuture.allOf(
@@ -424,9 +424,9 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     }
 
     @Override
-    public CompletableFuture<Void> broadcastMessageAsync(byte[] bytes, CancellationToken cancellationToken) {
+    public CompletableFuture<Void> broadcastMessageAsync(byte[] bytes, CancellationSignal cancellationSignal) {
         long started = System.nanoTime();
-        CancellationToken effectiveToken = token(cancellationToken);
+        CancellationSignal effectiveToken = token(cancellationSignal);
         List<CompletableFuture<Void>> writes = childConnections.values().stream()
                 .map(future -> future.thenCompose(connection -> {
                             if (connection == null || connection.getState() != ConnectionState.CONNECTED) {
@@ -556,7 +556,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     }
 
     @Override
-    public CompletableFuture<Void> updateStatusAsync(CancellationToken cancellationToken) {
+    public CompletableFuture<Void> updateStatusAsync(CancellationSignal cancellationSignal) {
         SoulseekClientStates state = client.getState();
         if (!state.hasFlag(SoulseekClientStates.CONNECTED) || !state.hasFlag(SoulseekClientStates.LOGGED_IN)) {
             return CompletableFuture.completedFuture(null);
@@ -588,7 +588,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                 new AcceptChildrenCommand(accept).toByteArray(),
                 new HaveNoParentsCommand(haveNoParents).toByteArray());
         return client.getServerConnection()
-                .writeAsync(payload, token(cancellationToken))
+                .writeAsync(payload, token(cancellationSignal))
                 .handle((ignored, failure) -> {
                     if (failure == null) {
                         raiseStateChanged();
@@ -700,7 +700,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
 
         CompletableFuture<Void> prior = CompletableFuture.completedFuture(null);
         if (cached != null) {
-            CancellationTokenSource pending = pendingInboundIndirectConnections.get(username);
+            CancellationController pending = pendingInboundIndirectConnections.get(username);
             if (pending != null) {
                 diagnostic.debug("Cancelling pending indirect child connection to " + username);
                 pending.cancel();
@@ -766,14 +766,14 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.INDIRECT));
         attachChildMessageListeners(connection);
         connection.addDisconnectedListener((sender, args) -> sender.close());
-        CancellationTokenSource cancellation = new CancellationTokenSource();
+        CancellationController cancellation = new CancellationController();
         pendingInboundIndirectConnections.put(response.getUsername(), cancellation);
 
         return connection
-                .connectAsync(cancellation.getToken())
+                .connectAsync(cancellation.getSignal())
                 .thenCompose(ignored -> connection.writeAsync(
-                        new PierceFirewall(response.getToken()).toByteArray(), cancellation.getToken()))
-                .thenCompose(ignored -> connection.writeAsync(getBranchInformation(), cancellation.getToken()))
+                        new PierceFirewall(response.getToken()).toByteArray(), cancellation.getSignal()))
+                .thenCompose(ignored -> connection.writeAsync(getBranchInformation(), cancellation.getSignal()))
                 .handle((ignored, failure) -> {
                     pendingInboundIndirectConnections.remove(response.getUsername(), cancellation);
                     cancellation.close();
@@ -797,9 +797,9 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     }
 
     private CompletableFuture<ParentCandidate> getParentCandidateConnectionAsync(
-            String username, InetSocketAddress ipEndpoint, CancellationToken cancellationToken) {
-        LinkedCancellation directCancellation = new LinkedCancellation(cancellationToken);
-        LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationToken);
+            String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal) {
+        LinkedCancellation directCancellation = new LinkedCancellation(cancellationSignal);
+        LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationSignal);
         diagnostic.debug("Attempting simultaneous direct and indirect parent candidate " + "connections to " + username
                 + " (" + ipEndpoint + ")");
         CompletableFuture<MessageConnection> direct =
@@ -818,7 +818,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                             + (directWon ? "indirect" : "direct") + " connection.");
                     (directWon ? indirectCancellation : directCancellation).cancel();
                     CompletableFuture<BranchInformation> initialization =
-                            waitForParentCandidateConnectionInitializationAsync(connection, cancellationToken);
+                            waitForParentCandidateConnectionInitializationAsync(connection, cancellationSignal);
                     CompletableFuture<Void> negotiation;
                     try {
                         if (directWon) {
@@ -828,7 +828,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                                                     Constants.ConnectionType.DISTRIBUTED,
                                                     client.getNextToken())
                                             .toByteArray(),
-                                    token(cancellationToken));
+                                    token(cancellationSignal));
                         } else {
                             connection.startReadingContinuously();
                             negotiation = CompletableFuture.completedFuture(null);
@@ -880,13 +880,13 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     }
 
     private CompletableFuture<MessageConnection> getParentCandidateConnectionDirectAsync(
-            String username, InetSocketAddress ipEndpoint, CancellationToken cancellationToken) {
+            String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal) {
         diagnostic.debug("Attempting direct parent candidate connection to " + username + " (" + ipEndpoint + ")");
         MessageConnection connection = connectionFactory.getDistributedConnection(
                 username, ipEndpoint, client.getOptions().getDistributedConnectionOptions());
         connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT));
         connection.addDisconnectedListener(parentCandidateDisconnectedListener);
-        return connection.connectAsync(cancellationToken).handle((ignored, failure) -> {
+        return connection.connectAsync(cancellationSignal).handle((ignored, failure) -> {
             if (failure != null) {
                 diagnostic.debug("Failed to establish a direct parent candidate "
                         + "connection to " + username + " ("
@@ -904,7 +904,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     }
 
     private CompletableFuture<MessageConnection> getParentCandidateConnectionIndirectAsync(
-            String username, CancellationToken cancellationToken) {
+            String username, CancellationSignal cancellationSignal) {
         int solicitationToken = client.getNextToken();
         diagnostic.debug(
                 "Soliciting indirect parent candidate connection to " + username + " with token " + solicitationToken);
@@ -912,7 +912,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         return client.getServerConnection()
                 .writeAsync(
                         new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.DISTRIBUTED),
-                        cancellationToken)
+                        cancellationSignal)
                 .thenCompose(ignored -> client.getWaiter()
                         .waitAsync(
                                 new WaitKey(
@@ -923,7 +923,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                                 client.getOptions()
                                         .getDistributedConnectionOptions()
                                         .getConnectTimeout(),
-                                cancellationToken))
+                                cancellationSignal))
                 .thenApply(accepted -> {
                     try {
                         MessageConnection connection = connectionFactory.getDistributedConnection(
@@ -961,25 +961,25 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     }
 
     private CompletableFuture<BranchInformation> waitForParentCandidateConnectionInitializationAsync(
-            MessageConnection connection, CancellationToken cancellationToken) {
+            MessageConnection connection, CancellationSignal cancellationSignal) {
         connection.addMessageReadListener(parentInitializationListener);
         CompletableFuture<Integer> branchLevel = client.getWaiter()
                 .waitAsync(
                         new WaitKey(Constants.WaitKey.BRANCH_LEVEL_MESSAGE, connection.getId()),
                         Integer.class,
                         null,
-                        token(cancellationToken));
+                        token(cancellationSignal));
         CompletableFuture<String> branchRoot = client.getWaiter()
                 .waitAsync(
                         new WaitKey(Constants.WaitKey.BRANCH_ROOT_MESSAGE, connection.getId()),
                         String.class,
                         null,
-                        token(cancellationToken));
+                        token(cancellationSignal));
         CompletableFuture<Void> search = client.getWaiter()
                 .waitAsync(
                         new WaitKey(Constants.WaitKey.SEARCH_REQUEST_MESSAGE, connection.getId()),
                         null,
-                        token(cancellationToken));
+                        token(cancellationSignal));
         return branchLevel
                 .thenCombine(search, (level, ignored) -> level)
                 .thenCompose(level -> {
@@ -1158,8 +1158,8 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         return result;
     }
 
-    private static CancellationToken token(CancellationToken token) {
-        return token == null ? CancellationToken.none() : token;
+    private static CancellationSignal token(CancellationSignal token) {
+        return token == null ? CancellationSignal.none() : token;
     }
 
     private static Throwable unwrap(Throwable failure) {
@@ -1182,15 +1182,15 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     private record BranchInformation(int level, String root) {}
 
     private static final class LinkedCancellation implements AutoCloseable {
-        private final CancellationTokenSource source = new CancellationTokenSource();
-        private final CancellationRegistration registration;
+        private final CancellationController source = new CancellationController();
+        private final CancellationSubscription registration;
 
-        private LinkedCancellation(CancellationToken parent) {
+        private LinkedCancellation(CancellationSignal parent) {
             registration = DefaultDistributedConnectionManager.token(parent).register(source::cancel);
         }
 
-        private CancellationToken token() {
-            return source.getToken();
+        private CancellationSignal token() {
+            return source.getSignal();
         }
 
         private void cancel() {

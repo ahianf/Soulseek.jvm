@@ -4,7 +4,7 @@
 
 package dev.slsk.common;
 
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import java.util.concurrent.CompletableFuture;
 
 /** Correlates asynchronous responses with keyed waits. */
@@ -29,23 +29,23 @@ public interface Waiter extends AutoCloseable {
 
     CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout);
 
-    CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout, CancellationToken cancellationToken);
+    CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout, CancellationSignal cancellationSignal);
 
     <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType);
 
     <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType, Integer timeout);
 
     <T> CompletableFuture<T> waitAsync(
-            WaitKey key, Class<T> resultType, Integer timeout, CancellationToken cancellationToken);
+            WaitKey key, Class<T> resultType, Integer timeout, CancellationSignal cancellationSignal);
 
     CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key);
 
-    CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key, CancellationToken cancellationToken);
+    CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key, CancellationSignal cancellationSignal);
 
     <T> CompletableFuture<T> waitIndefinitelyAsync(WaitKey key, Class<T> resultType);
 
     <T> CompletableFuture<T> waitIndefinitelyAsync(
-            WaitKey key, Class<T> resultType, CancellationToken cancellationToken);
+            WaitKey key, Class<T> resultType, CancellationSignal cancellationSignal);
 
     @Override
     void close();

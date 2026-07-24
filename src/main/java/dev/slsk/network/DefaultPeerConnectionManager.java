@@ -4,9 +4,9 @@
 
 package dev.slsk.network;
 
-import dev.slsk.CancellationRegistration;
-import dev.slsk.CancellationToken;
-import dev.slsk.CancellationTokenSource;
+import dev.slsk.CancellationController;
+import dev.slsk.CancellationSignal;
+import dev.slsk.CancellationSubscription;
 import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
 import dev.slsk.diagnostics.DiagnosticEvent;
@@ -47,7 +47,7 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
     private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
     private final ConcurrentHashMap<String, CompletableFuture<MessageConnection>> messageConnections =
             new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, CancellationTokenSource> pendingInboundIndirectConnections =
+    private final ConcurrentHashMap<String, CancellationController> pendingInboundIndirectConnections =
             new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Integer, String> pendingSolicitations = new ConcurrentHashMap<>();
     private final ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedListener =
@@ -126,9 +126,9 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
 
     @Override
     public CompletableFuture<Connection> awaitTransferConnectionAsync(
-            String username, String filename, int remoteToken, CancellationToken cancellationToken) {
-        LinkedCancellation directCancellation = new LinkedCancellation(cancellationToken);
-        LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationToken);
+            String username, String filename, int remoteToken, CancellationSignal cancellationSignal) {
+        LinkedCancellation directCancellation = new LinkedCancellation(cancellationSignal);
+        LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationSignal);
         diagnostic.debug("Waiting for a direct or indirect transfer connection from "
                 + username + " with remote token " + remoteToken + " for "
                 + filename);
@@ -248,17 +248,20 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
 
     @Override
     public CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
-            String username, InetSocketAddress ipEndpoint, CancellationToken cancellationToken) {
-        return getOrAddMessageConnectionAsync(username, ipEndpoint, client.getNextToken(), cancellationToken);
+            String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal) {
+        return getOrAddMessageConnectionAsync(username, ipEndpoint, client.getNextToken(), cancellationSignal);
     }
 
     @Override
     public CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
-            String username, InetSocketAddress ipEndpoint, int solicitationToken, CancellationToken cancellationToken) {
+            String username,
+            InetSocketAddress ipEndpoint,
+            int solicitationToken,
+            CancellationSignal cancellationSignal) {
         AtomicBoolean cached = new AtomicBoolean(true);
         CompletableFuture<MessageConnection> future = messageConnections.computeIfAbsent(username, key -> {
             cached.set(false);
-            return establishRacingMessageConnection(username, ipEndpoint, solicitationToken, cancellationToken);
+            return establishRacingMessageConnection(username, ipEndpoint, solicitationToken, cancellationSignal);
         });
         return future.handle((connection, failure) -> {
             if (failure != null) {
@@ -364,9 +367,9 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
 
     @Override
     public CompletableFuture<Connection> getTransferConnectionAsync(
-            String username, InetSocketAddress ipEndpoint, int token, CancellationToken cancellationToken) {
-        LinkedCancellation directCancellation = new LinkedCancellation(cancellationToken);
-        LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationToken);
+            String username, InetSocketAddress ipEndpoint, int token, CancellationSignal cancellationSignal) {
+        LinkedCancellation directCancellation = new LinkedCancellation(cancellationSignal);
+        LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationSignal);
         diagnostic.debug("Attempting simultaneous direct and indirect transfer " + "connections to " + username + " ("
                 + ipEndpoint + ")");
         CompletableFuture<Connection> direct =
@@ -386,11 +389,11 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                     if (directWon) {
                         byte[] request = new PeerInit(client.getUsername(), Constants.ConnectionType.TRANSFER, token)
                                 .toByteArray();
-                        negotiation = winner.value().writeAsync(request, token(cancellationToken));
+                        negotiation = winner.value().writeAsync(request, token(cancellationSignal));
                     }
                     return negotiation
                             .thenCompose(ignored ->
-                                    winner.value().writeAsync(littleEndianBytes(token), token(cancellationToken)))
+                                    winner.value().writeAsync(littleEndianBytes(token), token(cancellationSignal)))
                             .handle((ignored, failure) -> {
                                 directCancellation.close();
                                 indirectCancellation.close();
@@ -481,7 +484,7 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
 
         CompletableFuture<Void> supersede = CompletableFuture.completedFuture(null);
         if (cached != null) {
-            CancellationTokenSource pending = pendingInboundIndirectConnections.get(username);
+            CancellationController pending = pendingInboundIndirectConnections.get(username);
             if (pending != null) {
                 diagnostic.debug("Cancelling pending inbound indirect message connection " + "to " + username);
                 pending.cancel();
@@ -524,13 +527,13 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                 client.getOptions().getPeerConnectionOptions());
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.INDIRECT));
         attachPeerMessageListeners(connection);
-        CancellationTokenSource cancellation = new CancellationTokenSource();
+        CancellationController cancellation = new CancellationController();
         pendingInboundIndirectConnections.put(response.getUsername(), cancellation);
 
         return connection
-                .connectAsync(cancellation.getToken())
+                .connectAsync(cancellation.getSignal())
                 .thenCompose(ignored -> connection.writeAsync(
-                        new PierceFirewall(response.getToken()).toByteArray(), cancellation.getToken()))
+                        new PierceFirewall(response.getToken()).toByteArray(), cancellation.getSignal()))
                 .handle((ignored, failure) -> {
                     pendingInboundIndirectConnections.remove(response.getUsername(), cancellation);
                     cancellation.close();
@@ -548,9 +551,12 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
     }
 
     private CompletableFuture<MessageConnection> establishRacingMessageConnection(
-            String username, InetSocketAddress ipEndpoint, int solicitationToken, CancellationToken cancellationToken) {
-        LinkedCancellation directCancellation = new LinkedCancellation(cancellationToken);
-        LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationToken);
+            String username,
+            InetSocketAddress ipEndpoint,
+            int solicitationToken,
+            CancellationSignal cancellationSignal) {
+        LinkedCancellation directCancellation = new LinkedCancellation(cancellationSignal);
+        LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationSignal);
         diagnostic.debug("Attempting simultaneous direct and indirect message " + "connections to " + username + " ("
                 + ipEndpoint + ")");
         CompletableFuture<MessageConnection> direct =
@@ -579,7 +585,7 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                                                     Constants.ConnectionType.PEER,
                                                     client.getNextToken())
                                             .toByteArray(),
-                                    token(cancellationToken));
+                                    token(cancellationSignal));
                         } else {
                             connection.startReadingContinuously();
                             negotiation = CompletableFuture.completedFuture(null);
@@ -625,14 +631,14 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
     }
 
     private CompletableFuture<MessageConnection> getMessageConnectionOutboundDirectAsync(
-            String username, InetSocketAddress ipEndpoint, CancellationToken cancellationToken) {
+            String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal) {
         diagnostic.debug("Attempting direct message connection to " + username + " (" + ipEndpoint + ")");
         MessageConnection connection = connectionFactory.getMessageConnection(
                 username, ipEndpoint, client.getOptions().getPeerConnectionOptions());
         connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT));
         attachPeerMessageListeners(connection);
         connection.addDisconnectedListener(provisionalDisconnectedListener);
-        return connection.connectAsync(cancellationToken).handle((ignored, failure) -> {
+        return connection.connectAsync(cancellationSignal).handle((ignored, failure) -> {
             if (failure != null) {
                 diagnostic.debug("Failed to establish a direct message connection to "
                         + username + " (" + ipEndpoint + "): "
@@ -649,19 +655,19 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
     }
 
     private CompletableFuture<MessageConnection> getMessageConnectionOutboundIndirectAsync(
-            String username, int solicitationToken, CancellationToken cancellationToken) {
+            String username, int solicitationToken, CancellationSignal cancellationSignal) {
         diagnostic.debug("Soliciting indirect message connection to " + username + " with token " + solicitationToken);
         pendingSolicitations.putIfAbsent(solicitationToken, username);
         CompletableFuture<Connection> incoming = client.getServerConnection()
                 .writeAsync(
                         new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.PEER),
-                        cancellationToken)
+                        cancellationSignal)
                 .thenCompose(ignored -> client.getWaiter()
                         .waitAsync(
                                 new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),
                                 Connection.class,
                                 client.getOptions().getPeerConnectionOptions().getConnectTimeout(),
-                                cancellationToken));
+                                cancellationSignal));
 
         return incoming.thenApply(accepted -> {
                     try {
@@ -699,7 +705,7 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
     }
 
     private CompletableFuture<Connection> getTransferConnectionOutboundDirectAsync(
-            InetSocketAddress ipEndpoint, int token, CancellationToken cancellationToken) {
+            InetSocketAddress ipEndpoint, int token, CancellationSignal cancellationSignal) {
         diagnostic.debug("Attempting direct transfer connection for token " + token + " to " + ipEndpoint);
         Connection connection = connectionFactory.getTransferConnection(
                 ipEndpoint, client.getOptions().getTransferConnectionOptions());
@@ -710,7 +716,7 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                         + disconnectMessage(eventData) + ". (type: "
                         + connection.getType() + ", id: "
                         + connection.getId() + ")"));
-        return connection.connectAsync(cancellationToken).handle((ignored, failure) -> {
+        return connection.connectAsync(cancellationSignal).handle((ignored, failure) -> {
             if (failure != null) {
                 diagnostic.debug("Failed to establish a direct transfer connection "
                         + "for token " + token + " to (" + ipEndpoint
@@ -727,14 +733,14 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
     }
 
     private CompletableFuture<Connection> getTransferConnectionOutboundIndirectAsync(
-            String username, int token, CancellationToken cancellationToken) {
+            String username, int token, CancellationSignal cancellationSignal) {
         diagnostic.debug("Soliciting indirect transfer connection to " + username + " with token " + token);
         int solicitationToken = client.getNextToken();
         pendingSolicitations.putIfAbsent(solicitationToken, username);
         return client.getServerConnection()
                 .writeAsync(
                         new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.TRANSFER),
-                        cancellationToken)
+                        cancellationSignal)
                 .thenCompose(ignored -> client.getWaiter()
                         .waitAsync(
                                 new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),
@@ -742,7 +748,7 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                                 client.getOptions()
                                         .getTransferConnectionOptions()
                                         .getConnectTimeout(),
-                                cancellationToken))
+                                cancellationSignal))
                 .thenApply(accepted -> {
                     try {
                         Connection connection = connectionFactory.getTransferConnection(
@@ -866,8 +872,8 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                 .array();
     }
 
-    private static CancellationToken token(CancellationToken token) {
-        return token == null ? CancellationToken.none() : token;
+    private static CancellationSignal token(CancellationSignal token) {
+        return token == null ? CancellationSignal.none() : token;
     }
 
     private static Throwable unwrap(Throwable failure) {
@@ -893,15 +899,15 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
     private record Winner<T>(T value, CompletableFuture<T> source) {}
 
     private static final class LinkedCancellation implements AutoCloseable {
-        private final CancellationTokenSource source = new CancellationTokenSource();
-        private final CancellationRegistration registration;
+        private final CancellationController source = new CancellationController();
+        private final CancellationSubscription registration;
 
-        private LinkedCancellation(CancellationToken parent) {
+        private LinkedCancellation(CancellationSignal parent) {
             registration = DefaultPeerConnectionManager.token(parent).register(source::cancel);
         }
 
-        private CancellationToken token() {
-            return source.getToken();
+        private CancellationSignal token() {
+            return source.getSignal();
         }
 
         private void cancel() {

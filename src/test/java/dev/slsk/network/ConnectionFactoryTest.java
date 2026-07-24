@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import dev.slsk.network.tcp.Connection;
 import dev.slsk.network.tcp.NetworkStream;
 import dev.slsk.network.tcp.SocketConnection;
@@ -165,7 +165,7 @@ class ConnectionFactoryTest {
                 int destinationPort,
                 String username,
                 String password,
-                CancellationToken cancellationToken) {
+                CancellationSignal cancellationSignal) {
             return CompletableFuture.completedFuture(new ProxyEndpoint("127.0.0.1", proxyPort));
         }
 
@@ -210,7 +210,7 @@ class ConnectionFactoryTest {
 
         @Override
         public synchronized CompletableFuture<Integer> readAsync(
-                byte[] buffer, int offset, int size, CancellationToken cancellationToken) {
+                byte[] buffer, int offset, int size, CancellationSignal cancellationSignal) {
             int count = Math.min(size, input.length - position);
             if (count == 0) {
                 pendingRead = new CompletableFuture<>();
@@ -223,7 +223,7 @@ class ConnectionFactoryTest {
 
         @Override
         public synchronized CompletableFuture<Void> writeAsync(
-                byte[] buffer, int offset, int size, CancellationToken cancellationToken) {
+                byte[] buffer, int offset, int size, CancellationSignal cancellationSignal) {
             for (byte value : Arrays.copyOfRange(buffer, offset, offset + size)) {
                 written.add(value);
             }

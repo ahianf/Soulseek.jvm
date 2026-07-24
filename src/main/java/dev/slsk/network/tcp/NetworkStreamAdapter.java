@@ -4,8 +4,8 @@
 
 package dev.slsk.network.tcp;
 
-import dev.slsk.CancellationRegistration;
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
+import dev.slsk.CancellationSubscription;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -54,10 +54,10 @@ final class NetworkStreamAdapter implements NetworkStream {
 
     @Override
     public CompletableFuture<Integer> readAsync(
-            byte[] buffer, int offset, int size, CancellationToken cancellationToken) {
+            byte[] buffer, int offset, int size, CancellationSignal cancellationSignal) {
         Objects.requireNonNull(buffer, "buffer");
         Objects.checkFromIndexSize(offset, size, buffer.length);
-        CancellationToken token = Objects.requireNonNull(cancellationToken, "cancellationToken");
+        CancellationSignal token = Objects.requireNonNull(cancellationSignal, "cancellationSignal");
         if (token.isCancellationRequested()) {
             return cancelledFuture();
         }
@@ -77,10 +77,10 @@ final class NetworkStreamAdapter implements NetworkStream {
 
     @Override
     public CompletableFuture<Void> writeAsync(
-            byte[] buffer, int offset, int size, CancellationToken cancellationToken) {
+            byte[] buffer, int offset, int size, CancellationSignal cancellationSignal) {
         Objects.requireNonNull(buffer, "buffer");
         Objects.checkFromIndexSize(offset, size, buffer.length);
-        CancellationToken token = Objects.requireNonNull(cancellationToken, "cancellationToken");
+        CancellationSignal token = Objects.requireNonNull(cancellationSignal, "cancellationSignal");
         if (token.isCancellationRequested()) {
             return cancelledFuture();
         }
@@ -109,8 +109,8 @@ final class NetworkStreamAdapter implements NetworkStream {
     }
 
     private static <T> CompletableFuture<T> observeCancellation(
-            CompletableFuture<T> operation, CancellationToken token) {
-        CancellationRegistration registration = token.register(() -> operation.cancel(false));
+            CompletableFuture<T> operation, CancellationSignal token) {
+        CancellationSubscription registration = token.register(() -> operation.cancel(false));
         operation.whenComplete((ignored, exception) -> registration.close());
         return operation;
     }

@@ -50,8 +50,8 @@ class SoulseekClientEndpointTest {
     void returnsExpectedEndpointUsingExactCorrelationAndToken() {
         Fixture fixture = new Fixture(null);
         fixture.waiter.result = CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT));
-        CancellationTokenSource source = new CancellationTokenSource();
-        CancellationToken token = source.getToken();
+        CancellationController source = new CancellationController();
+        CancellationSignal token = source.getSignal();
 
         InetSocketAddress actual =
                 fixture.client.getUserEndpointAsync("alice", token).join();
@@ -263,7 +263,7 @@ class SoulseekClientEndpointTest {
 
     private static final class ConnectionProbe {
         private OutgoingMessage message;
-        private CancellationToken token;
+        private CancellationSignal token;
         private int writes;
         private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
@@ -274,7 +274,7 @@ class SoulseekClientEndpointTest {
                     && arguments[0] instanceof OutgoingMessage outgoing) {
                 writes++;
                 message = outgoing;
-                token = (CancellationToken) arguments[1];
+                token = (CancellationSignal) arguments[1];
                 return CompletableFuture.completedFuture(null);
             }
             return defaultValue(method.getReturnType());
@@ -284,7 +284,7 @@ class SoulseekClientEndpointTest {
     private static final class WaiterProbe {
         private WaitKey key;
         private Class<?> resultType;
-        private CancellationToken token;
+        private CancellationSignal token;
         private int registrations;
         private CompletableFuture<UserAddressResponse> result = new CompletableFuture<>();
         private Throwable synchronousFailure;
@@ -296,7 +296,7 @@ class SoulseekClientEndpointTest {
                 registrations++;
                 key = (WaitKey) arguments[0];
                 resultType = (Class<?>) arguments[1];
-                token = (CancellationToken) arguments[3];
+                token = (CancellationSignal) arguments[3];
                 if (synchronousFailure != null) {
                     throw synchronousFailure;
                 }

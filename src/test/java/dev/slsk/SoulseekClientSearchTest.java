@@ -59,7 +59,7 @@ class SoulseekClientSearchTest {
         assertThrows(
                 DuplicateTokenException.class,
                 () -> fixture.client.searchAsync(
-                        SearchQuery.fromText("valid"), null, 42, null, CancellationToken.none()));
+                        SearchQuery.fromText("valid"), null, 42, null, CancellationSignal.none()));
         fixture.client.getSearches().remove(42);
         existing.close();
         fixture.close();
@@ -71,7 +71,7 @@ class SoulseekClientSearchTest {
         SearchOptions options = options(40, 250, false);
 
         SearchResult result = fixture.client
-                .searchAsync(SearchQuery.fromText("a"), null, 10, options, CancellationToken.none())
+                .searchAsync(SearchQuery.fromText("a"), null, 10, options, CancellationSignal.none())
                 .join();
 
         assertArrayEquals(new SearchRequest("a", 10).toByteArray(), fixture.server.messages.get(0));
@@ -87,7 +87,7 @@ class SoulseekClientSearchTest {
                 options(40, 250, true, change -> states.add(change.search().getState()), null);
 
         SearchResult result = fixture.client
-                .searchAsync(SearchQuery.fromText("foo a -bar"), null, 11, options, CancellationToken.none())
+                .searchAsync(SearchQuery.fromText("foo a -bar"), null, 11, options, CancellationSignal.none())
                 .join();
 
         assertArrayEquals(new SearchRequest("foo -bar", 11).toByteArray(), fixture.server.messages.get(0));
@@ -131,7 +131,7 @@ class SoulseekClientSearchTest {
         SearchOptions options = options(2_000, 1, true, null, received -> optionResponses.incrementAndGet());
 
         CompletableFuture<SearchResult> task =
-                fixture.client.searchAsync(SearchQuery.fromText("query"), null, 30, options, CancellationToken.none());
+                fixture.client.searchAsync(SearchQuery.fromText("query"), null, 30, options, CancellationSignal.none());
         waitUntil(() -> {
             SearchInternal active = fixture.client.getSearches().get(30);
             return active != null && active.getState().equals(SearchStates.IN_PROGRESS);
@@ -169,7 +169,7 @@ class SoulseekClientSearchTest {
                 SearchScope.getNetwork(),
                 31,
                 options,
-                CancellationToken.none());
+                CancellationSignal.none());
         waitUntil(() -> fixture.client.getSearches().containsKey(31)
                 && fixture.client.getSearches().get(31).getState().equals(SearchStates.IN_PROGRESS));
         SearchResponse response = new SearchResponse("bob", 31, true, 1, 0, List.of(new File(2, "file", 3, "ext")));
@@ -187,9 +187,9 @@ class SoulseekClientSearchTest {
     @Test
     void generatesTokenAndTracksActiveSearch() {
         Fixture fixture = new Fixture();
-        CancellationTokenSource source = new CancellationTokenSource();
+        CancellationController source = new CancellationController();
         CompletableFuture<SearchResult> task = fixture.client.searchAsync(
-                SearchQuery.fromText("query"), null, null, options(2_000, 250, true), source.getToken());
+                SearchQuery.fromText("query"), null, null, options(2_000, 250, true), source.getSignal());
 
         waitUntil(() -> fixture.client.getSearches().size() == 1);
         SearchInternal active = fixture.client.getSearches().values().iterator().next();
@@ -203,22 +203,22 @@ class SoulseekClientSearchTest {
     @Test
     void preservesCancellationAndWriteTimeoutButWrapsOtherErrors() {
         Fixture fixture = new Fixture();
-        CancellationTokenSource source = new CancellationTokenSource();
+        CancellationController source = new CancellationController();
         source.cancel();
         CompletableFuture<SearchResult> cancelled = fixture.client.searchAsync(
-                SearchQuery.fromText("cancelled"), null, 40, options(2_000, 250, true), source.getToken());
+                SearchQuery.fromText("cancelled"), null, 40, options(2_000, 250, true), source.getSignal());
         assertInstanceOf(CancellationException.class, completionCause(cancelled));
 
         TimeoutException timeout = new TimeoutException("write");
         fixture.server.result = CompletableFuture.failedFuture(timeout);
         CompletableFuture<SearchResult> timedOut = fixture.client.searchAsync(
-                SearchQuery.fromText("timeout"), null, 41, options(2_000, 250, true), CancellationToken.none());
+                SearchQuery.fromText("timeout"), null, 41, options(2_000, 250, true), CancellationSignal.none());
         assertSame(timeout, completionCause(timedOut));
 
         IllegalStateException error = new IllegalStateException("boom");
         fixture.server.result = CompletableFuture.failedFuture(error);
         CompletableFuture<SearchResult> failed = fixture.client.searchAsync(
-                SearchQuery.fromText("error"), null, 42, options(2_000, 250, true), CancellationToken.none());
+                SearchQuery.fromText("error"), null, 42, options(2_000, 250, true), CancellationSignal.none());
         SoulseekClientException wrapped = assertInstanceOf(SoulseekClientException.class, completionCause(failed));
         assertSame(error, wrapped.getCause());
         assertTrue(wrapped.getMessage().contains("error (42)"));
@@ -229,15 +229,15 @@ class SoulseekClientSearchTest {
     void limitsConcurrentSearchesAndReleasesQueuedSearch() {
         Fixture fixture = new Fixture();
         SearchOptions options = options(2_000, 250, true);
-        CancellationTokenSource firstSource = new CancellationTokenSource();
-        CancellationTokenSource secondSource = new CancellationTokenSource();
-        CancellationTokenSource thirdSource = new CancellationTokenSource();
+        CancellationController firstSource = new CancellationController();
+        CancellationController secondSource = new CancellationController();
+        CancellationController thirdSource = new CancellationController();
         CompletableFuture<SearchResult> first =
-                fixture.client.searchAsync(SearchQuery.fromText("one"), null, 51, options, firstSource.getToken());
+                fixture.client.searchAsync(SearchQuery.fromText("one"), null, 51, options, firstSource.getSignal());
         CompletableFuture<SearchResult> second =
-                fixture.client.searchAsync(SearchQuery.fromText("two"), null, 52, options, secondSource.getToken());
+                fixture.client.searchAsync(SearchQuery.fromText("two"), null, 52, options, secondSource.getSignal());
         CompletableFuture<SearchResult> third =
-                fixture.client.searchAsync(SearchQuery.fromText("three"), null, 53, options, thirdSource.getToken());
+                fixture.client.searchAsync(SearchQuery.fromText("three"), null, 53, options, thirdSource.getSignal());
 
         waitUntil(() -> fixture.server.messages.size() == 2);
         assertEquals(SearchStates.QUEUED, fixture.client.getSearches().get(53).getState());
@@ -255,7 +255,8 @@ class SoulseekClientSearchTest {
     private static void assertScopeMessage(SearchScope scope, byte[] expected) {
         Fixture fixture = new Fixture();
         SearchResult result = fixture.client
-                .searchAsync(SearchQuery.fromText("query"), scope, 20, options(30, 250, true), CancellationToken.none())
+                .searchAsync(
+                        SearchQuery.fromText("query"), scope, 20, options(30, 250, true), CancellationSignal.none())
                 .join();
         assertArrayEquals(expected, fixture.server.messages.get(0));
         assertTrue(result.search().getState().hasFlag(SearchStates.TIMED_OUT));

@@ -47,8 +47,8 @@ class SoulseekClientServerRequestTest {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
         try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
-            CancellationTokenSource source = new CancellationTokenSource();
-            CancellationToken token = source.getToken();
+            CancellationController source = new CancellationController();
+            CancellationSignal token = source.getSignal();
             waiter.result = new CompletableFuture<String>();
 
             CompletableFuture<Void> operation = client.changePasswordAsync("new password", token);
@@ -76,8 +76,8 @@ class SoulseekClientServerRequestTest {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
         try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
-            CancellationTokenSource source = new CancellationTokenSource();
-            CancellationToken token = source.getToken();
+            CancellationController source = new CancellationController();
+            CancellationSignal token = source.getSignal();
             waiter.result = CompletableFuture.completedFuture(42);
 
             int result = client.getPrivilegesAsync(token).join();
@@ -96,8 +96,8 @@ class SoulseekClientServerRequestTest {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
         try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
-            CancellationTokenSource source = new CancellationTokenSource();
-            CancellationToken token = source.getToken();
+            CancellationController source = new CancellationController();
+            CancellationSignal token = source.getSignal();
             waiter.result = new CompletableFuture<Void>();
 
             CompletableFuture<Long> operation = client.pingServerAsync(token);
@@ -118,8 +118,8 @@ class SoulseekClientServerRequestTest {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
         try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
-            CancellationTokenSource source = new CancellationTokenSource();
-            CancellationToken token = source.getToken();
+            CancellationController source = new CancellationController();
+            CancellationSignal token = source.getSignal();
 
             client.grantUserPrivilegesAsync("alice", 7, token).join();
 
@@ -136,8 +136,8 @@ class SoulseekClientServerRequestTest {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
         try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
-            CancellationTokenSource source = new CancellationTokenSource();
-            CancellationToken token = source.getToken();
+            CancellationController source = new CancellationController();
+            CancellationSignal token = source.getSignal();
 
             waiter.result = CompletableFuture.completedFuture(true);
             assertTrue(client.getUserPrivilegedAsync("alice", token).join());
@@ -197,8 +197,8 @@ class SoulseekClientServerRequestTest {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
         try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
-            CancellationTokenSource source = new CancellationTokenSource();
-            CancellationToken token = source.getToken();
+            CancellationController source = new CancellationController();
+            CancellationSignal token = source.getSignal();
 
             RoomList roomList = new RoomList(List.of(), List.of(), List.of(), List.of());
             waiter.result = CompletableFuture.completedFuture(roomList);
@@ -490,7 +490,7 @@ class SoulseekClientServerRequestTest {
 
     private static final class ConnectionProbe {
         private dev.slsk.messaging.messages.OutgoingMessage message;
-        private CancellationToken token;
+        private CancellationSignal token;
         private int writeCount;
         private CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
         private RuntimeException synchronousFailure;
@@ -503,7 +503,7 @@ class SoulseekClientServerRequestTest {
                     && arguments[0] instanceof dev.slsk.messaging.messages.OutgoingMessage outgoing) {
                 writeCount++;
                 message = outgoing;
-                token = (CancellationToken) arguments[1];
+                token = (CancellationSignal) arguments[1];
                 if (synchronousFailure != null) {
                     throw synchronousFailure;
                 }
@@ -516,7 +516,7 @@ class SoulseekClientServerRequestTest {
     private static final class WaiterProbe {
         private WaitKey key;
         private Class<?> resultType;
-        private CancellationToken token;
+        private CancellationSignal token;
         private int argumentCount;
         private int registrations;
         private CompletableFuture<?> result = CompletableFuture.completedFuture(null);
@@ -530,7 +530,7 @@ class SoulseekClientServerRequestTest {
                 argumentCount = arguments.length;
                 key = (WaitKey) arguments[0];
                 resultType = arguments.length == 4 ? (Class<?>) arguments[1] : null;
-                token = (CancellationToken) arguments[arguments.length - 1];
+                token = (CancellationSignal) arguments[arguments.length - 1];
                 if (synchronousFailure != null) {
                     throw synchronousFailure;
                 }

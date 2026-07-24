@@ -60,8 +60,8 @@ class SoulseekClientPeerRequestTest {
         fixture.waiter.results.put(
                 UserAddressResponse.class,
                 CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));
-        CancellationTokenSource source = new CancellationTokenSource();
-        CancellationToken token = source.getToken();
+        CancellationController source = new CancellationController();
+        CancellationSignal token = source.getSignal();
 
         fixture.client.connectToUserAsync("alice", token).join();
 
@@ -105,8 +105,8 @@ class SoulseekClientPeerRequestTest {
         fixture.waiter.results.put(
                 UserAddressResponse.class,
                 CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));
-        CancellationTokenSource source = new CancellationTokenSource();
-        CancellationToken token = source.getToken();
+        CancellationController source = new CancellationController();
+        CancellationSignal token = source.getSignal();
 
         UserInfo actual = fixture.client.getUserInfoAsync("alice", token).join();
 
@@ -218,11 +218,11 @@ class SoulseekClientPeerRequestTest {
                 CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));
         List<Directory> source = new ArrayList<>(List.of(new Directory("shared")));
         fixture.waiter.results.put(List.class, CompletableFuture.completedFuture(source));
-        CancellationTokenSource cancellationSource = new CancellationTokenSource();
-        CancellationToken cancellationToken = cancellationSource.getToken();
+        CancellationController cancellationController = new CancellationController();
+        CancellationSignal cancellationSignal = cancellationController.getSignal();
 
         List<Directory> result = fixture.client
-                .getDirectoryContentsAsync("alice", "shared", 123, cancellationToken)
+                .getDirectoryContentsAsync("alice", "shared", 123, cancellationSignal)
                 .join();
 
         assertEquals(1, result.size());
@@ -233,8 +233,8 @@ class SoulseekClientPeerRequestTest {
         FolderContentsRequest request = assertInstanceOf(FolderContentsRequest.class, fixture.peer.message);
         assertEquals(123, request.getToken());
         assertEquals("shared", request.getDirectoryName());
-        assertSame(cancellationToken, fixture.peer.token);
-        fixture.waiter.tokens.forEach(recorded -> assertSame(cancellationToken, recorded));
+        assertSame(cancellationSignal, fixture.peer.token);
+        fixture.waiter.tokens.forEach(recorded -> assertSame(cancellationSignal, recorded));
         fixture.close();
     }
 
@@ -248,8 +248,8 @@ class SoulseekClientPeerRequestTest {
                 PlaceInQueueResponse.class, CompletableFuture.completedFuture(new PlaceInQueueResponse("file", 17)));
         fixture.client.setDownloadsForTest(
                 new HashMap<>(Map.of(1, new TransferInternal(TransferDirection.DOWNLOAD, "alice", "file", 1))));
-        CancellationTokenSource source = new CancellationTokenSource();
-        CancellationToken token = source.getToken();
+        CancellationController source = new CancellationController();
+        CancellationSignal token = source.getSignal();
 
         int result = fixture.client
                 .getDownloadPlaceInQueueAsync("alice", "file", token)
@@ -353,8 +353,8 @@ class SoulseekClientPeerRequestTest {
         List<BrowseProgressUpdatedEvent> events = new ArrayList<>();
         List<dev.slsk.options.BrowseProgress> callbacks = new ArrayList<>();
         fixture.client.addBrowseProgressUpdatedListener((sender, eventData) -> events.add(eventData));
-        CancellationTokenSource source = new CancellationTokenSource();
-        CancellationToken token = source.getToken();
+        CancellationController source = new CancellationController();
+        CancellationSignal token = source.getSignal();
 
         BrowseResponse actual = fixture.client
                 .browseAsync("alice", new BrowseOptions(1234, callbacks::add), token)
@@ -522,7 +522,7 @@ class SoulseekClientPeerRequestTest {
 
     private static final class ConnectionProbe {
         private OutgoingMessage message;
-        private CancellationToken token;
+        private CancellationSignal token;
         private CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
         private RuntimeException synchronousFailure;
         private ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedListener;
@@ -535,7 +535,7 @@ class SoulseekClientPeerRequestTest {
                     && arguments.length == 2
                     && arguments[0] instanceof OutgoingMessage outgoing) {
                 message = outgoing;
-                token = (CancellationToken) arguments[1];
+                token = (CancellationSignal) arguments[1];
                 if (synchronousFailure != null) {
                     throw synchronousFailure;
                 }
@@ -566,7 +566,7 @@ class SoulseekClientPeerRequestTest {
     private static final class WaiterProbe {
         private final Map<Class<?>, CompletableFuture<?>> results = new HashMap<>();
         private final List<WaitKey> keys = new ArrayList<>();
-        private final List<CancellationToken> tokens = new ArrayList<>();
+        private final List<CancellationSignal> tokens = new ArrayList<>();
         private Integer lastTimeout;
         private WaitKey failedKey;
         private final Waiter proxy = (Waiter)
@@ -579,13 +579,13 @@ class SoulseekClientPeerRequestTest {
                 if (arguments[2] != null) {
                     lastTimeout = (Integer) arguments[2];
                 }
-                tokens.add((CancellationToken) arguments[3]);
+                tokens.add((CancellationSignal) arguments[3]);
                 return results.getOrDefault(resultType, new CompletableFuture<>());
             }
             if (method.getName().equals("waitIndefinitelyAsync") && arguments.length == 3) {
                 keys.add((WaitKey) arguments[0]);
                 Class<?> resultType = (Class<?>) arguments[1];
-                tokens.add((CancellationToken) arguments[2]);
+                tokens.add((CancellationSignal) arguments[2]);
                 return results.getOrDefault(resultType, new CompletableFuture<>());
             }
             if (method.getName().equals("fail")) {
@@ -610,7 +610,7 @@ class SoulseekClientPeerRequestTest {
         private final MessageConnection connection;
         private String username;
         private InetSocketAddress endpoint;
-        private CancellationToken token;
+        private CancellationSignal token;
         private int invalidations;
         private boolean invalidationResult;
         private RuntimeException synchronousFailure;
@@ -634,7 +634,7 @@ class SoulseekClientPeerRequestTest {
                 }
                 username = (String) arguments[0];
                 endpoint = (InetSocketAddress) arguments[1];
-                token = (CancellationToken) arguments[2];
+                token = (CancellationSignal) arguments[2];
                 return CompletableFuture.completedFuture(connection);
             }
             return defaultValue(method.getReturnType());

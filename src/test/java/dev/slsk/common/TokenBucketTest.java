@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationTokenSource;
+import dev.slsk.CancellationController;
 import java.time.Duration;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -140,9 +140,9 @@ class TokenBucketTest {
     @DisplayName("Pre-cancelled requests complete with cancellation")
     void preCancelledRequestsCompleteWithCancellation() {
         try (TokenBucket bucket = new TokenBucket(1, 10_000);
-                CancellationTokenSource source = new CancellationTokenSource()) {
+                CancellationController source = new CancellationController()) {
             source.cancel();
-            CompletableFuture<Integer> future = bucket.getAsync(1, source.getToken());
+            CompletableFuture<Integer> future = bucket.getAsync(1, source.getSignal());
 
             assertThrows(CancellationException.class, future::join);
         }
@@ -152,10 +152,10 @@ class TokenBucketTest {
     @DisplayName("Queued requests observe cancellation")
     void queuedRequestsObserveCancellation() {
         try (TokenBucket bucket = new TokenBucket(1, 10_000);
-                CancellationTokenSource source = new CancellationTokenSource()) {
+                CancellationController source = new CancellationController()) {
             bucket.getAsync(1).join();
             CompletableFuture<Integer> active = bucket.getAsync(1);
-            CompletableFuture<Integer> queued = bucket.getAsync(1, source.getToken());
+            CompletableFuture<Integer> queued = bucket.getAsync(1, source.getSignal());
 
             source.cancel();
 

@@ -10,8 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationToken;
-import dev.slsk.CancellationTokenSource;
+import dev.slsk.CancellationController;
+import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.ProxyException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -43,7 +43,7 @@ class TcpAdapterTest {
                             2234,
                             null,
                             null,
-                            CancellationToken.none())
+                            CancellationSignal.none())
                     .get(3, TimeUnit.SECONDS);
 
             assertEquals("127.0.0.1", endpoint.proxyAddress());
@@ -66,7 +66,7 @@ class TcpAdapterTest {
                             80,
                             "alice",
                             "secret",
-                            CancellationToken.none())
+                            CancellationSignal.none())
                     .get(3, TimeUnit.SECONDS);
 
             assertEquals("foo", endpoint.proxyAddress());
@@ -91,7 +91,7 @@ class TcpAdapterTest {
                                     80,
                                     null,
                                     null,
-                                    CancellationToken.none())
+                                    CancellationSignal.none())
                             .get(3, TimeUnit.SECONDS));
 
             ProxyException exception = (ProxyException) failure.getCause();
@@ -160,15 +160,15 @@ class TcpAdapterTest {
                 byte[] received = new byte[3];
                 assertEquals(
                         3,
-                        stream.readAsync(received, 0, received.length, CancellationToken.none())
+                        stream.readAsync(received, 0, received.length, CancellationSignal.none())
                                 .get(3, TimeUnit.SECONDS));
                 assertArrayEquals(new byte[] {1, 2, 3}, received);
-                stream.writeAsync(new byte[] {4, 5}, 0, 2, CancellationToken.none())
+                stream.writeAsync(new byte[] {4, 5}, 0, 2, CancellationSignal.none())
                         .get(3, TimeUnit.SECONDS);
 
-                try (CancellationTokenSource source = new CancellationTokenSource()) {
+                try (CancellationController source = new CancellationController()) {
                     source.cancel();
-                    CompletableFuture<Integer> cancelled = stream.readAsync(new byte[1], 0, 1, source.getToken());
+                    CompletableFuture<Integer> cancelled = stream.readAsync(new byte[1], 0, 1, source.getSignal());
                     assertTrue(cancelled.isCancelled());
                 }
             }

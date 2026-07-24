@@ -4,7 +4,7 @@
 
 package dev.slsk.network.tcp;
 
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 
@@ -23,10 +23,10 @@ public interface NetworkStream extends AutoCloseable {
     void setWriteTimeout(int timeout);
 
     /** Reads up to {@code size} bytes asynchronously. */
-    CompletableFuture<Integer> readAsync(byte[] buffer, int offset, int size, CancellationToken cancellationToken);
+    CompletableFuture<Integer> readAsync(byte[] buffer, int offset, int size, CancellationSignal cancellationSignal);
 
     /** Writes {@code size} bytes asynchronously. */
-    CompletableFuture<Void> writeAsync(byte[] buffer, int offset, int size, CancellationToken cancellationToken);
+    CompletableFuture<Void> writeAsync(byte[] buffer, int offset, int size, CancellationSignal cancellationSignal);
 
     /** Closes the stream. */
     @Override

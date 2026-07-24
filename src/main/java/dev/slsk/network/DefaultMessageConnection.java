@@ -4,7 +4,7 @@
 
 package dev.slsk.network;
 
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import dev.slsk.common.CommonUtils;
 import dev.slsk.common.EventDispatch;
 import dev.slsk.exceptions.MessageException;
@@ -148,7 +148,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
     }
 
     @Override
-    public CompletableFuture<Void> writeAsync(OutgoingMessage message, CancellationToken cancellationToken) {
+    public CompletableFuture<Void> writeAsync(OutgoingMessage message, CancellationSignal cancellationSignal) {
         if (message == null) {
             throw new IllegalArgumentException("The specified message is null");
         }
@@ -158,7 +158,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
         } catch (Exception exception) {
             throw new MessageException("Failed to convert the message to a byte array", exception);
         }
-        CancellationToken token = cancellationToken == null ? CancellationToken.none() : cancellationToken;
+        CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         return super.writeAsync(bytes, token).thenRun(() -> raiseMessageWritten(bytes, token));
     }
 
@@ -178,14 +178,14 @@ public final class DefaultMessageConnection extends SocketConnection implements 
                     ByteArrayOutputStream message = new ByteArrayOutputStream();
                     try {
                         byte[] lengthBytes =
-                                readAsync(4, CancellationToken.none()).join();
+                                readAsync(4, CancellationSignal.none()).join();
                         int length = ByteBuffer.wrap(lengthBytes)
                                 .order(ByteOrder.LITTLE_ENDIAN)
                                 .getInt();
                         message.writeBytes(lengthBytes);
 
                         byte[] codeBytes =
-                                readAsync(codeLength, CancellationToken.none()).join();
+                                readAsync(codeLength, CancellationSignal.none()).join();
                         codeHolder[0] = codeBytes;
                         message.writeBytes(codeBytes);
 
@@ -193,7 +193,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
                         raiseMessageReceived(length, codeBytes);
 
                         addDataReadListener(payloadProgress);
-                        byte[] payload = readAsync(length - codeLength, CancellationToken.none())
+                        byte[] payload = readAsync(length - codeLength, CancellationSignal.none())
                                 .join();
                         message.writeBytes(payload);
                         raiseMessageRead(message.toByteArray());
@@ -219,7 +219,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
                         listener.handle(this, eventData);
                     }
                 },
-                CancellationToken.none());
+                CancellationSignal.none());
     }
 
     private void raiseMessageReceived(long length, byte[] code) {
@@ -237,10 +237,10 @@ public final class DefaultMessageConnection extends SocketConnection implements 
                         listener.handle(this, eventData);
                     }
                 },
-                CancellationToken.none());
+                CancellationSignal.none());
     }
 
-    private void raiseMessageWritten(byte[] message, CancellationToken cancellationToken) {
+    private void raiseMessageWritten(byte[] message, CancellationSignal cancellationSignal) {
         MessageEvent eventData = new MessageEvent(message);
         dispatch(
                 () -> {
@@ -248,12 +248,12 @@ public final class DefaultMessageConnection extends SocketConnection implements 
                         listener.handle(this, eventData);
                     }
                 },
-                cancellationToken);
+                cancellationSignal);
     }
 
-    private static void dispatch(Runnable event, CancellationToken cancellationToken) {
+    private static void dispatch(Runnable event, CancellationSignal cancellationSignal) {
         if (EventDispatch.isAsynchronous()) {
-            if (!cancellationToken.isCancellationRequested()) {
+            if (!cancellationSignal.isCancellationRequested()) {
                 CompletableFuture.runAsync(event);
             }
         } else {

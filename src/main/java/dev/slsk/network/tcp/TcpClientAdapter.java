@@ -4,7 +4,7 @@
 
 package dev.slsk.network.tcp;
 
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.ProxyException;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -79,7 +79,7 @@ final class TcpClientAdapter implements TcpClient {
             int destinationPort,
             String username,
             String password,
-            CancellationToken cancellationToken) {
+            CancellationSignal cancellationSignal) {
         Objects.requireNonNull(proxyAddress, "proxyAddress");
         validatePort(proxyPort, "proxyPort");
         Objects.requireNonNull(destinationAddress, "destinationAddress");
@@ -93,7 +93,7 @@ final class TcpClientAdapter implements TcpClient {
         if (password != null && password.length() > 255) {
             throw new IllegalArgumentException("The password length must be less than or equal to " + "255 characters");
         }
-        CancellationToken token = cancellationToken == null ? CancellationToken.none() : cancellationToken;
+        CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         return CompletableFuture.supplyAsync(() -> connectThroughProxyInternal(
                 proxyAddress, proxyPort, destinationAddress, destinationPort, token, username, password));
     }
@@ -121,7 +121,7 @@ final class TcpClientAdapter implements TcpClient {
             int proxyPort,
             InetAddress destinationAddress,
             int destinationPort,
-            CancellationToken cancellationToken,
+            CancellationSignal cancellationSignal,
             String username,
             String password) {
         boolean usingCredentials = username != null && !username.isEmpty() && password != null && !password.isEmpty();
@@ -134,8 +134,8 @@ final class TcpClientAdapter implements TcpClient {
             byte[] auth = usingCredentials
                     ? new byte[] {SOCKS_5, 0x02, AUTH_ANONYMOUS, AUTH_USERNAME}
                     : new byte[] {SOCKS_5, 0x01, AUTH_ANONYMOUS};
-            write(stream, auth, cancellationToken);
-            byte[] authResponse = read(stream, buffer, 2, cancellationToken);
+            write(stream, auth, cancellationSignal);
+            byte[] authResponse = read(stream, buffer, 2, cancellationSignal);
 
             if (authResponse[0] != SOCKS_5) {
                 throw new ProxyException("Invalid SOCKS version (expected: "
@@ -157,9 +157,9 @@ final class TcpClientAdapter implements TcpClient {
                     addAll(credentials, username.getBytes(StandardCharsets.US_ASCII));
                     credentials.add((byte) password.length());
                     addAll(credentials, password.getBytes(StandardCharsets.US_ASCII));
-                    write(stream, toByteArray(credentials), cancellationToken);
+                    write(stream, toByteArray(credentials), cancellationSignal);
 
-                    byte[] response = read(stream, buffer, 2, cancellationToken);
+                    byte[] response = read(stream, buffer, 2, cancellationSignal);
                     if (response.length != 2) {
                         throw new ProxyException("Abnormal authentication response from server");
                     }
@@ -189,9 +189,9 @@ final class TcpClientAdapter implements TcpClient {
             addAll(connection, destinationAddress.getAddress());
             connection.add((byte) (destinationPort >>> 8));
             connection.add((byte) destinationPort);
-            write(stream, toByteArray(connection), cancellationToken);
+            write(stream, toByteArray(connection), cancellationSignal);
 
-            byte[] connectionResponse = read(stream, buffer, 4, CancellationToken.none());
+            byte[] connectionResponse = read(stream, buffer, 4, CancellationSignal.none());
             if (connectionResponse[0] != SOCKS_5) {
                 throw new ProxyException("Invalid SOCKS version (expected: "
                         + unsigned(SOCKS_5)
@@ -207,19 +207,19 @@ final class TcpClientAdapter implements TcpClient {
             try {
                 boundAddress = switch (connectionResponse[3]) {
                     case IPV4 ->
-                        InetAddress.getByAddress(read(stream, buffer, 4, CancellationToken.none()))
+                        InetAddress.getByAddress(read(stream, buffer, 4, CancellationSignal.none()))
                                 .getHostAddress();
                     case DOMAIN -> {
-                        byte[] length = read(stream, buffer, 1, CancellationToken.none());
+                        byte[] length = read(stream, buffer, 1, CancellationSignal.none());
                         if (length[0] == ERROR) {
                             throw new ProxyException("Invalid domain name");
                         }
                         yield new String(
-                                read(stream, buffer, unsigned(length[0]), CancellationToken.none()),
+                                read(stream, buffer, unsigned(length[0]), CancellationSignal.none()),
                                 StandardCharsets.US_ASCII);
                     }
                     case IPV6 ->
-                        InetAddress.getByAddress(read(stream, buffer, 16, CancellationToken.none()))
+                        InetAddress.getByAddress(read(stream, buffer, 16, CancellationSignal.none()))
                                 .getHostAddress();
                     default ->
                         throw new ProxyException("Unknown SOCKS Address type (expected: one of "
@@ -236,7 +236,7 @@ final class TcpClientAdapter implements TcpClient {
                 throw new ProxyException("Invalid address response from server: " + exception.getMessage());
             }
 
-            byte[] port = read(stream, buffer, 2, CancellationToken.none());
+            byte[] port = read(stream, buffer, 2, CancellationSignal.none());
             int boundPort = (unsigned(port[0]) << 8) | unsigned(port[1]);
             return new ProxyEndpoint(boundAddress, boundPort);
         } catch (ProxyException exception) {
@@ -247,15 +247,15 @@ final class TcpClientAdapter implements TcpClient {
         }
     }
 
-    private static byte[] read(NetworkStream stream, byte[] buffer, int length, CancellationToken cancellationToken) {
-        int bytesRead = await(stream.readAsync(buffer, 0, length, cancellationToken));
+    private static byte[] read(NetworkStream stream, byte[] buffer, int length, CancellationSignal cancellationSignal) {
+        int bytesRead = await(stream.readAsync(buffer, 0, length, cancellationSignal));
         byte[] result = new byte[bytesRead];
         System.arraycopy(buffer, 0, result, 0, bytesRead);
         return result;
     }
 
-    private static void write(NetworkStream stream, byte[] data, CancellationToken cancellationToken) {
-        await(stream.writeAsync(data, 0, data.length, cancellationToken));
+    private static void write(NetworkStream stream, byte[] data, CancellationSignal cancellationSignal) {
+        await(stream.writeAsync(data, 0, data.length, cancellationSignal));
     }
 
     private static <T> T await(CompletableFuture<T> future) {

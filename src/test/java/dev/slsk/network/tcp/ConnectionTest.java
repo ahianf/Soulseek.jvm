@@ -13,8 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationToken;
-import dev.slsk.CancellationTokenSource;
+import dev.slsk.CancellationController;
+import dev.slsk.CancellationSignal;
 import dev.slsk.common.EventDispatch;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.ConnectionReadException;
@@ -148,7 +148,7 @@ class ConnectionTest {
         ConnectionOptions options = options(8, 8, 3, 100, -1, proxy, null);
         SocketConnection connection = new SocketConnection(ENDPOINT, options, client);
 
-        connection.connectAsync(CancellationToken.none()).get(1, TimeUnit.SECONDS);
+        connection.connectAsync(CancellationSignal.none()).get(1, TimeUnit.SECONDS);
 
         assertEquals(0, client.connectCalls);
         assertEquals(1, client.proxyCalls);
@@ -182,11 +182,11 @@ class ConnectionTest {
         client.connectFuture = new CompletableFuture<>();
         SocketConnection connection = new SocketConnection(ENDPOINT, options(8, 8, 3, 5_000, -1, null, null), client);
 
-        try (CancellationTokenSource source = new CancellationTokenSource()) {
+        try (CancellationController source = new CancellationController()) {
             source.cancel();
             assertThrows(
                     CancellationException.class,
-                    () -> connection.connectAsync(source.getToken()).get(1, TimeUnit.SECONDS));
+                    () -> connection.connectAsync(source.getSignal()).get(1, TimeUnit.SECONDS));
         }
         assertEquals(ConnectionState.DISCONNECTED, connection.getState());
         connection.close();
@@ -231,8 +231,8 @@ class ConnectionTest {
     void waitCancellationDisconnects() {
         FakeTcpClient client = new FakeTcpClient(new FakeStream(), true);
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), client);
-        try (CancellationTokenSource source = new CancellationTokenSource()) {
-            CompletableFuture<String> wait = connection.waitForDisconnect(source.getToken());
+        try (CancellationController source = new CancellationController()) {
+            CompletableFuture<String> wait = connection.waitForDisconnect(source.getSignal());
             source.cancel();
             assertThrows(CancellationException.class, wait::join);
         }
@@ -543,7 +543,7 @@ class ConnectionTest {
                 int destinationPort,
                 String username,
                 String password,
-                CancellationToken cancellationToken) {
+                CancellationSignal cancellationSignal) {
             proxyCalls++;
             lastProxyAddress = proxyAddress;
             lastProxyPort = proxyPort;
@@ -607,7 +607,7 @@ class ConnectionTest {
 
         @Override
         public CompletableFuture<Integer> readAsync(
-                byte[] buffer, int offset, int size, CancellationToken cancellationToken) {
+                byte[] buffer, int offset, int size, CancellationSignal cancellationSignal) {
             readSizes.add(size);
             if (readFailure != null) {
                 return CompletableFuture.failedFuture(readFailure);
@@ -622,7 +622,7 @@ class ConnectionTest {
 
         @Override
         public CompletableFuture<Void> writeAsync(
-                byte[] buffer, int offset, int size, CancellationToken cancellationToken) {
+                byte[] buffer, int offset, int size, CancellationSignal cancellationSignal) {
             if (writeFailure != null) {
                 return CompletableFuture.failedFuture(writeFailure);
             }

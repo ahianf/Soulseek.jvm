@@ -9,13 +9,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Shared mutable state behind a cancellation token and its source.
+ * Shared mutable state behind a cancellation signal and its controller.
  */
 final class CancellationState {
-    private static final CancellationRegistration EMPTY_REGISTRATION = () -> {};
+    private static final CancellationSubscription EMPTY_SUBSCRIPTION = () -> {};
 
     private final boolean cancellable;
-    private final Map<Registration, Runnable> listeners = new LinkedHashMap<>();
+    private final Map<Subscription, Runnable> listeners = new LinkedHashMap<>();
     private boolean cancellationRequested;
     private boolean closed;
 
@@ -27,30 +27,30 @@ final class CancellationState {
         return cancellationRequested;
     }
 
-    CancellationRegistration register(Runnable listener) {
+    CancellationSubscription register(Runnable listener) {
         boolean runImmediately;
-        Registration registration = null;
+        Subscription subscription = null;
 
         synchronized (this) {
             if (!cancellable) {
-                return EMPTY_REGISTRATION;
+                return EMPTY_SUBSCRIPTION;
             }
             if (closed) {
-                throw new IllegalStateException("The cancellation token source is closed");
+                throw new IllegalStateException("The cancellation signal source is closed");
             }
 
             runImmediately = cancellationRequested;
             if (!runImmediately) {
-                registration = new Registration(this);
-                listeners.put(registration, listener);
+                subscription = new Subscription(this);
+                listeners.put(subscription, listener);
             }
         }
 
         if (runImmediately) {
             listener.run();
-            return EMPTY_REGISTRATION;
+            return EMPTY_SUBSCRIPTION;
         }
-        return registration;
+        return subscription;
     }
 
     void cancel() {
@@ -58,7 +58,7 @@ final class CancellationState {
 
         synchronized (this) {
             if (closed) {
-                throw new IllegalStateException("The cancellation token source is closed");
+                throw new IllegalStateException("The cancellation signal source is closed");
             }
             if (cancellationRequested) {
                 return;
@@ -95,14 +95,14 @@ final class CancellationState {
         listeners.clear();
     }
 
-    private synchronized void unregister(Registration registration) {
-        listeners.remove(registration);
+    private synchronized void unsubscribe(Subscription subscription) {
+        listeners.remove(subscription);
     }
 
-    private static final class Registration implements CancellationRegistration {
+    private static final class Subscription implements CancellationSubscription {
         private CancellationState state;
 
-        private Registration(CancellationState state) {
+        private Subscription(CancellationState state) {
             this.state = state;
         }
 
@@ -116,7 +116,7 @@ final class CancellationState {
             }
 
             if (current != null) {
-                current.unregister(this);
+                current.unsubscribe(this);
             }
         }
     }

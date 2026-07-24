@@ -99,8 +99,8 @@ class SoulseekClientReconfigureTest {
     void connectedClientSendsConfigurationAndForwardsToken() {
         Fixture fixture = new Fixture();
         fixture.client.setStateForTest(loggedIn());
-        CancellationTokenSource source = new CancellationTokenSource();
-        CancellationToken token = source.getToken();
+        CancellationController source = new CancellationController();
+        CancellationSignal token = source.getSignal();
 
         boolean reconnect = fixture.client
                 .reconfigureOptionsAsync(new SoulseekClientOptionsPatch(), token)
@@ -262,12 +262,12 @@ class SoulseekClientReconfigureTest {
     @Test
     void preservesCancellationAndTimeoutButWrapsOtherErrorsWithoutRollback() {
         Fixture cancelledFixture = new Fixture();
-        CancellationTokenSource source = new CancellationTokenSource();
+        CancellationController source = new CancellationController();
         source.cancel();
         assertInstanceOf(
                 CancellationException.class,
                 completionCause(cancelledFixture.client.reconfigureOptionsAsync(
-                        new SoulseekClientOptionsPatch(), source.getToken())));
+                        new SoulseekClientOptionsPatch(), source.getSignal())));
         assertSame(cancelledFixture.options, cancelledFixture.client.getOptions());
 
         Fixture timeoutFixture = new Fixture();
@@ -430,7 +430,7 @@ class SoulseekClientReconfigureTest {
 
     private static final class ServerProbe {
         private final List<OutgoingMessage> messages = new ArrayList<>();
-        private final List<CancellationToken> tokens = new ArrayList<>();
+        private final List<CancellationSignal> tokens = new ArrayList<>();
         private Throwable failure;
         private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
@@ -440,7 +440,7 @@ class SoulseekClientReconfigureTest {
                     && arguments.length == 2
                     && arguments[0] instanceof OutgoingMessage outgoing) {
                 messages.add(outgoing);
-                tokens.add((CancellationToken) arguments[1]);
+                tokens.add((CancellationSignal) arguments[1]);
                 if (failure != null) {
                     if (failure instanceof RuntimeException runtime) {
                         throw runtime;
@@ -455,7 +455,7 @@ class SoulseekClientReconfigureTest {
 
     private static final class DistributedProbe {
         private int updateCount;
-        private CancellationToken token;
+        private CancellationSignal token;
         private final DistributedConnectionManager proxy = (DistributedConnectionManager) Proxy.newProxyInstance(
                 DistributedConnectionManager.class.getClassLoader(),
                 new Class<?>[] {DistributedConnectionManager.class},
@@ -464,7 +464,7 @@ class SoulseekClientReconfigureTest {
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("updateStatusAsync")) {
                 updateCount++;
-                token = (CancellationToken) arguments[0];
+                token = (CancellationSignal) arguments[0];
                 return CompletableFuture.completedFuture(null);
             }
             return defaultValue(method.getReturnType());

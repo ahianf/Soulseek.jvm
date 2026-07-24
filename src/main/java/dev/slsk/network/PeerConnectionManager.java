@@ -4,7 +4,7 @@
 
 package dev.slsk.network;
 
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import dev.slsk.diagnostics.DiagnosticSource;
 import dev.slsk.messaging.messages.ConnectToPeerResponse;
 import dev.slsk.network.tcp.Connection;
@@ -24,17 +24,20 @@ public interface PeerConnectionManager extends AutoCloseable, DiagnosticSource {
     CompletableFuture<Void> addOrUpdateMessageConnectionAsync(String username, Connection incomingConnection);
 
     CompletableFuture<Connection> awaitTransferConnectionAsync(
-            String username, String filename, int remoteToken, CancellationToken cancellationToken);
+            String username, String filename, int remoteToken, CancellationSignal cancellationSignal);
 
     CompletableFuture<MessageConnection> getCachedMessageConnectionAsync(String username);
 
     CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(ConnectToPeerResponse connectToPeerResponse);
 
     CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
-            String username, InetSocketAddress ipEndpoint, CancellationToken cancellationToken);
+            String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal);
 
     CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
-            String username, InetSocketAddress ipEndpoint, int solicitationToken, CancellationToken cancellationToken);
+            String username,
+            InetSocketAddress ipEndpoint,
+            int solicitationToken,
+            CancellationSignal cancellationSignal);
 
     CompletableFuture<TransferConnectionResult> getTransferConnectionAsync(
             String username, int token, Connection incomingConnection);
@@ -42,7 +45,7 @@ public interface PeerConnectionManager extends AutoCloseable, DiagnosticSource {
     CompletableFuture<TransferConnectionResult> getTransferConnectionAsync(ConnectToPeerResponse connectToPeerResponse);
 
     CompletableFuture<Connection> getTransferConnectionAsync(
-            String username, InetSocketAddress ipEndpoint, int token, CancellationToken cancellationToken);
+            String username, InetSocketAddress ipEndpoint, int token, CancellationSignal cancellationSignal);
 
     void removeAndDisposeAll();
 

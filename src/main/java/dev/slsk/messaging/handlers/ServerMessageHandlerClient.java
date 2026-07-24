@@ -4,7 +4,7 @@
 
 package dev.slsk.messaging.handlers;
 
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import dev.slsk.common.Waiter;
 import dev.slsk.network.DistributedConnectionManager;
 import dev.slsk.network.PeerConnectionManager;
@@ -35,7 +35,7 @@ public interface ServerMessageHandlerClient {
 
     SearchResponder getSearchResponder();
 
-    CompletableFuture<Void> acknowledgePrivateMessageAsync(int id, CancellationToken cancellationToken);
+    CompletableFuture<Void> acknowledgePrivateMessageAsync(int id, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> acknowledgePrivilegeNotificationAsync(int id, CancellationToken cancellationToken);
+    CompletableFuture<Void> acknowledgePrivilegeNotificationAsync(int id, CancellationSignal cancellationSignal);
 }

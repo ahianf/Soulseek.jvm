@@ -4,7 +4,7 @@
 
 package dev.slsk.network.tcp;
 
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -36,7 +36,7 @@ public interface TcpClient extends AutoCloseable {
             int destinationPort,
             String username,
             String password,
-            CancellationToken cancellationToken);
+            CancellationSignal cancellationSignal);
 
     /** Returns the network stream used to exchange data. */
     NetworkStream getStream() throws IOException;

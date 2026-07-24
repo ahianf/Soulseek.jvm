@@ -576,7 +576,7 @@ class SoulseekClientTest {
 
         @Override
         public CompletableFuture<Void> waitAsync(
-                dev.slsk.common.WaitKey key, Integer timeout, dev.slsk.CancellationToken cancellationToken) {
+                dev.slsk.common.WaitKey key, Integer timeout, dev.slsk.CancellationSignal cancellationSignal) {
             return waitAsync(key);
         }
 
@@ -595,7 +595,7 @@ class SoulseekClientTest {
                 dev.slsk.common.WaitKey key,
                 Class<T> resultType,
                 Integer timeout,
-                dev.slsk.CancellationToken cancellationToken) {
+                dev.slsk.CancellationSignal cancellationSignal) {
             return waitAsync(key, resultType);
         }
 
@@ -606,7 +606,7 @@ class SoulseekClientTest {
 
         @Override
         public CompletableFuture<Void> waitIndefinitelyAsync(
-                dev.slsk.common.WaitKey key, dev.slsk.CancellationToken cancellationToken) {
+                dev.slsk.common.WaitKey key, dev.slsk.CancellationSignal cancellationSignal) {
             return waitAsync(key);
         }
 
@@ -617,7 +617,7 @@ class SoulseekClientTest {
 
         @Override
         public <T> CompletableFuture<T> waitIndefinitelyAsync(
-                dev.slsk.common.WaitKey key, Class<T> resultType, dev.slsk.CancellationToken cancellationToken) {
+                dev.slsk.common.WaitKey key, Class<T> resultType, dev.slsk.CancellationSignal cancellationSignal) {
             return waitAsync(key, resultType);
         }
 

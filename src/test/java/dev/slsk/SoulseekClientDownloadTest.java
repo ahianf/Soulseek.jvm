@@ -93,7 +93,7 @@ class SoulseekClientDownloadTest {
                             0,
                             null,
                             null,
-                            CancellationToken.none()));
+                            CancellationSignal.none()));
 
             fixture.client.setStateForTest(SoulseekClientStates.DISCONNECTED);
             assertThrows(
@@ -152,7 +152,7 @@ class SoulseekClientDownloadTest {
                             0,
                             11,
                             options(),
-                            CancellationToken.none())
+                            CancellationSignal.none())
                     .join();
 
             assertEquals(bytes.length, result.getSize());
@@ -191,7 +191,7 @@ class SoulseekClientDownloadTest {
             });
 
             Throwable failure = failureOf(fixture.client.downloadAsync(
-                    "alice", "file", outputFactory(), 4L, 0, 12, options(), CancellationToken.none()));
+                    "alice", "file", outputFactory(), 4L, 0, 12, options(), CancellationSignal.none()));
 
             TransferSizeMismatchException mismatch = assertInstanceOf(TransferSizeMismatchException.class, failure);
             assertEquals(4, mismatch.getLocalSize());
@@ -215,7 +215,7 @@ class SoulseekClientDownloadTest {
             });
 
             Throwable failure = failureOf(fixture.client.downloadAsync(
-                    "alice", "file", outputFactory(), 5L, 0, 30, options(), CancellationToken.none()));
+                    "alice", "file", outputFactory(), 5L, 0, 30, options(), CancellationSignal.none()));
 
             TransferSizeMismatchException mismatch = assertInstanceOf(TransferSizeMismatchException.class, failure);
             assertEquals(5, mismatch.getLocalSize());
@@ -231,7 +231,7 @@ class SoulseekClientDownloadTest {
             fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(13, "not shared"));
 
             Throwable failure = failureOf(fixture.client.downloadAsync(
-                    "alice", "file", outputFactory(), 1L, 0, 13, options(), CancellationToken.none()));
+                    "alice", "file", outputFactory(), 1L, 0, 13, options(), CancellationSignal.none()));
 
             assertInstanceOf(TransferRejectedException.class, failure);
         }
@@ -256,7 +256,7 @@ class SoulseekClientDownloadTest {
                             0,
                             14,
                             options(),
-                            CancellationToken.none())
+                            CancellationSignal.none())
                     .join();
 
             assertEquals(99, result.getRemoteToken());
@@ -281,7 +281,7 @@ class SoulseekClientDownloadTest {
                     CompletableFuture.failedFuture(new ConnectionException("peer did not connect"));
 
             Transfer result = fixture.client
-                    .downloadAsync("alice", "file", outputFactory(), 1L, 0, 15, options(), CancellationToken.none())
+                    .downloadAsync("alice", "file", outputFactory(), 1L, 0, 15, options(), CancellationSignal.none())
                     .join();
 
             assertTrue(result.getState().hasFlag(TransferStates.SUCCEEDED));
@@ -299,7 +299,7 @@ class SoulseekClientDownloadTest {
 
             CompletableFuture<Transfer> download = fixture.client
                     .enqueueDownloadAsync(
-                            "alice", "file", outputFactory(), null, 0, 16, options(), CancellationToken.none())
+                            "alice", "file", outputFactory(), null, 0, 16, options(), CancellationSignal.none())
                     .join();
 
             assertFalse(download.isDone());
@@ -316,7 +316,7 @@ class SoulseekClientDownloadTest {
             fixture.waiter.response = CompletableFuture.failedFuture(rejection);
 
             Throwable failure = failureOf(fixture.client.enqueueDownloadAsync(
-                    "alice", "file", outputFactory(), 1L, 0, 17, options(), CancellationToken.none()));
+                    "alice", "file", outputFactory(), 1L, 0, 17, options(), CancellationSignal.none()));
 
             assertSame(rejection, failure);
         }
@@ -338,7 +338,7 @@ class SoulseekClientDownloadTest {
                             2,
                             18,
                             options(),
-                            CancellationToken.none())
+                            CancellationSignal.none())
                     .join();
 
             assertArrayEquals(
@@ -360,13 +360,13 @@ class SoulseekClientDownloadTest {
             fixture.transfer.data = new byte[] {2};
             fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(19, 2));
             Throwable failure = failureOf(fixture.client.downloadAsync(
-                    "alice", "file", outputFactory(), 2L, 1, 19, options(), CancellationToken.none()));
+                    "alice", "file", outputFactory(), 2L, 1, 19, options(), CancellationSignal.none()));
             assertInstanceOf(SoulseekClientException.class, failure);
 
             TransferOptions noSeek = new TransferOptions(null, null, null, null, null, null, 3_000, true, false);
             fixture.transfer.data = new byte[] {2};
             Transfer result = fixture.client
-                    .downloadAsync("alice", "other", outputFactory(), 2L, 1, 20, noSeek, CancellationToken.none())
+                    .downloadAsync("alice", "other", outputFactory(), 2L, 1, 20, noSeek, CancellationSignal.none())
                     .join();
             assertEquals(
                     1, result.getBytesTransferred(), "final progress follows stream position when seek is bypassed");
@@ -394,7 +394,7 @@ class SoulseekClientDownloadTest {
                     (transfer, attempted, granted, actual) -> reports.add(List.of(attempted, granted, actual)));
 
             fixture.client
-                    .downloadAsync("alice", "file", outputFactory(), 5L, 0, 21, options, CancellationToken.none())
+                    .downloadAsync("alice", "file", outputFactory(), 5L, 0, 21, options, CancellationSignal.none())
                     .join();
 
             assertFalse(grants.isEmpty());
@@ -422,7 +422,7 @@ class SoulseekClientDownloadTest {
             });
 
             Throwable failure = failureOf(fixture.client.downloadAsync(
-                    "alice", "file", outputFactory(), 1L, 0, 22, options(), CancellationToken.none()));
+                    "alice", "file", outputFactory(), 1L, 0, 22, options(), CancellationSignal.none()));
 
             SoulseekClientException mapped = assertInstanceOf(SoulseekClientException.class, failure);
             assertInstanceOf(TransferReportedFailedException.class, mapped.getCause());
@@ -450,7 +450,7 @@ class SoulseekClientDownloadTest {
             });
 
             Throwable failure = failureOf(fixture.client.downloadAsync(
-                    "alice", "file", outputFactory(), 1L, 0, 31, options(), CancellationToken.none()));
+                    "alice", "file", outputFactory(), 1L, 0, 31, options(), CancellationSignal.none()));
 
             assertSame(rejection, failure);
             assertSame(rejection, terminal.get(0).getException());
@@ -466,7 +466,7 @@ class SoulseekClientDownloadTest {
             fixture.transfer.disconnectOnRead = socketFailure;
 
             Throwable failure = failureOf(fixture.client.downloadAsync(
-                    "alice", "file", outputFactory(), 1L, 0, 23, options(), CancellationToken.none()));
+                    "alice", "file", outputFactory(), 1L, 0, 23, options(), CancellationSignal.none()));
 
             SoulseekClientException mapped = assertInstanceOf(SoulseekClientException.class, failure);
             ConnectionException connection = assertInstanceOf(ConnectionException.class, mapped.getCause());
@@ -483,14 +483,14 @@ class SoulseekClientDownloadTest {
             assertSame(
                     timeout,
                     failureOf(timeoutFixture.client.downloadAsync(
-                            "alice", "file", outputFactory(), 1L, 0, 24, options(), CancellationToken.none())));
+                            "alice", "file", outputFactory(), 1L, 0, 24, options(), CancellationSignal.none())));
 
             CancellationException cancellation = new CancellationException("cancelled");
             cancellationFixture.waiter.response = CompletableFuture.failedFuture(cancellation);
             assertSame(
                     cancellation,
                     failureOf(cancellationFixture.client.downloadAsync(
-                            "alice", "file", outputFactory(), 1L, 0, 25, options(), CancellationToken.none())));
+                            "alice", "file", outputFactory(), 1L, 0, 25, options(), CancellationSignal.none())));
         }
     }
 
@@ -502,7 +502,7 @@ class SoulseekClientDownloadTest {
             first.transfer.data = new byte[] {1, 2};
             first.waiter.response = CompletableFuture.completedFuture(new TransferResponse(26, 2));
             first.client
-                    .downloadAsync("alice", "file", file.toString(), 2L, 0, 26, options(), CancellationToken.none())
+                    .downloadAsync("alice", "file", file.toString(), 2L, 0, 26, options(), CancellationSignal.none())
                     .join();
             assertArrayEquals(new byte[] {1, 2}, Files.readAllBytes(file));
         }
@@ -511,7 +511,7 @@ class SoulseekClientDownloadTest {
             second.transfer.data = new byte[] {3, 4};
             second.waiter.response = CompletableFuture.completedFuture(new TransferResponse(27, 4));
             second.client
-                    .downloadAsync("alice", "file", file.toString(), 4L, 2, 27, options(), CancellationToken.none())
+                    .downloadAsync("alice", "file", file.toString(), 4L, 2, 27, options(), CancellationSignal.none())
                     .join();
             assertArrayEquals(new byte[] {1, 2, 3, 4}, Files.readAllBytes(file));
         } finally {
@@ -534,7 +534,7 @@ class SoulseekClientDownloadTest {
                             0,
                             28,
                             options().withDisposalOptions(null, true),
-                            CancellationToken.none())
+                            CancellationSignal.none())
                     .join();
             assertTrue(disposable.flushed.get());
             assertTrue(disposable.closed.get());
@@ -550,7 +550,7 @@ class SoulseekClientDownloadTest {
                             0,
                             29,
                             options().withDisposalOptions(null, false),
-                            CancellationToken.none())
+                            CancellationSignal.none())
                     .join();
             assertFalse(retained.closed.get());
         }
@@ -575,7 +575,7 @@ class SoulseekClientDownloadTest {
                             0,
                             32,
                             options().withDisposalOptions(null, true),
-                            CancellationToken.none())
+                            CancellationSignal.none())
                     .join();
 
             assertTrue(transfer.getState().hasFlag(TransferStates.SUCCEEDED));
@@ -840,7 +840,7 @@ class SoulseekClientDownloadTest {
                 OutputStream output = (OutputStream) arguments[1];
                 ConnectionGovernor governor = (ConnectionGovernor) arguments[2];
                 ConnectionReporter reporter = (ConnectionReporter) arguments[3];
-                CancellationToken token = (CancellationToken) arguments[4];
+                CancellationSignal token = (CancellationSignal) arguments[4];
                 int sourceOffset = 0;
                 long transferred = 0;
                 while (transferred < length) {

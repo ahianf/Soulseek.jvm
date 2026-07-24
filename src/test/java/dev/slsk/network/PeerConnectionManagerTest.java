@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationToken;
+import dev.slsk.CancellationSignal;
 import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
 import dev.slsk.common.Waiter;
@@ -248,7 +248,7 @@ class PeerConnectionManagerTest {
         fixture.waiter.defaultFuture = CompletableFuture.failedFuture(new RuntimeException("indirect"));
 
         Connection result = fixture.manager()
-                .getTransferConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationToken.none())
+                .getTransferConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none())
                 .join();
 
         assertSame(direct.connection(), result);
@@ -273,7 +273,7 @@ class PeerConnectionManagerTest {
         fixture.waiter.defaultFuture = CompletableFuture.completedFuture(accepted.connection());
 
         Connection result = fixture.manager()
-                .getTransferConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationToken.none())
+                .getTransferConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none())
                 .join();
 
         assertSame(indirect.connection(), result);
@@ -299,7 +299,7 @@ class PeerConnectionManagerTest {
         CompletionException thrown = assertThrows(
                 CompletionException.class,
                 () -> fixture.manager()
-                        .getTransferConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationToken.none())
+                        .getTransferConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none())
                         .join());
 
         assertTrue(assertInstanceOf(ConnectionException.class, thrown.getCause())
@@ -356,7 +356,7 @@ class PeerConnectionManagerTest {
         fixture.waiter.defaultFuture = CompletableFuture.failedFuture(new RuntimeException("indirect"));
 
         MessageConnection result = fixture.manager()
-                .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationToken.none())
+                .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none())
                 .join();
 
         assertSame(direct.messageConnection(), result);
@@ -379,7 +379,7 @@ class PeerConnectionManagerTest {
         fixture.waiter.defaultFuture = CompletableFuture.completedFuture(accepted.connection());
 
         MessageConnection result = fixture.manager()
-                .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationToken.none())
+                .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none())
                 .join();
 
         assertSame(indirect.messageConnection(), result);
@@ -404,7 +404,7 @@ class PeerConnectionManagerTest {
         CompletionException thrown = assertThrows(
                 CompletionException.class,
                 () -> fixture.manager()
-                        .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationToken.none())
+                        .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none())
                         .join());
 
         assertInstanceOf(ConnectionException.class, thrown.getCause());
@@ -424,7 +424,7 @@ class PeerConnectionManagerTest {
         CompletionException thrown = assertThrows(
                 CompletionException.class,
                 () -> fixture.manager()
-                        .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationToken.none())
+                        .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none())
                         .join());
 
         ConnectionException mapped = assertInstanceOf(ConnectionException.class, thrown.getCause());
@@ -442,9 +442,9 @@ class PeerConnectionManagerTest {
         fixture.waiter.defaultFuture = CompletableFuture.failedFuture(new RuntimeException("indirect"));
 
         CompletableFuture<MessageConnection> first = fixture.manager()
-                .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationToken.none());
+                .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none());
         CompletableFuture<MessageConnection> second = fixture.manager()
-                .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN + 1, CancellationToken.none());
+                .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN + 1, CancellationSignal.none());
         connect.complete(null);
 
         assertSame(first.join(), second.join());
@@ -465,7 +465,7 @@ class PeerConnectionManagerTest {
                 direct.connection(),
                 directFixture
                         .manager()
-                        .awaitTransferConnectionAsync(USERNAME, "file", TOKEN, CancellationToken.none())
+                        .awaitTransferConnectionAsync(USERNAME, "file", TOKEN, CancellationSignal.none())
                         .join());
 
         Fixture indirectFixture = new Fixture();
@@ -480,7 +480,7 @@ class PeerConnectionManagerTest {
                 indirect.connection(),
                 indirectFixture
                         .manager()
-                        .awaitTransferConnectionAsync(USERNAME, "file", TOKEN, CancellationToken.none())
+                        .awaitTransferConnectionAsync(USERNAME, "file", TOKEN, CancellationSignal.none())
                         .join());
 
         Fixture failedFixture = new Fixture();
@@ -489,7 +489,7 @@ class PeerConnectionManagerTest {
                 CompletionException.class,
                 () -> failedFixture
                         .manager()
-                        .awaitTransferConnectionAsync(USERNAME, "file", TOKEN, CancellationToken.none())
+                        .awaitTransferConnectionAsync(USERNAME, "file", TOKEN, CancellationSignal.none())
                         .join());
         assertInstanceOf(ConnectionException.class, thrown.getCause());
     }
@@ -723,33 +723,33 @@ class PeerConnectionManagerTest {
 
         @Override
         public CompletableFuture<Void> waitAsync(WaitKey key) {
-            return waitAsync(key, Void.class, null, CancellationToken.none());
+            return waitAsync(key, Void.class, null, CancellationSignal.none());
         }
 
         @Override
         public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout) {
-            return waitAsync(key, Void.class, timeout, CancellationToken.none());
+            return waitAsync(key, Void.class, timeout, CancellationSignal.none());
         }
 
         @Override
-        public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout, CancellationToken cancellationToken) {
-            return waitAsync(key, Void.class, timeout, cancellationToken);
+        public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout, CancellationSignal cancellationSignal) {
+            return waitAsync(key, Void.class, timeout, cancellationSignal);
         }
 
         @Override
         public <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType) {
-            return waitAsync(key, resultType, null, CancellationToken.none());
+            return waitAsync(key, resultType, null, CancellationSignal.none());
         }
 
         @Override
         public <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType, Integer timeout) {
-            return waitAsync(key, resultType, timeout, CancellationToken.none());
+            return waitAsync(key, resultType, timeout, CancellationSignal.none());
         }
 
         @SuppressWarnings("unchecked")
         @Override
         public <T> CompletableFuture<T> waitAsync(
-                WaitKey key, Class<T> resultType, Integer timeout, CancellationToken cancellationToken) {
+                WaitKey key, Class<T> resultType, Integer timeout, CancellationSignal cancellationSignal) {
             return (CompletableFuture<T>) futures.getOrDefault(key, defaultFuture);
         }
 
@@ -759,8 +759,8 @@ class PeerConnectionManagerTest {
         }
 
         @Override
-        public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key, CancellationToken cancellationToken) {
-            return waitAsync(key, null, cancellationToken);
+        public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key, CancellationSignal cancellationSignal) {
+            return waitAsync(key, null, cancellationSignal);
         }
 
         @Override
@@ -770,8 +770,8 @@ class PeerConnectionManagerTest {
 
         @Override
         public <T> CompletableFuture<T> waitIndefinitelyAsync(
-                WaitKey key, Class<T> resultType, CancellationToken cancellationToken) {
-            return waitAsync(key, resultType, null, cancellationToken);
+                WaitKey key, Class<T> resultType, CancellationSignal cancellationSignal) {
+            return waitAsync(key, resultType, null, cancellationSignal);
         }
 
         @Override

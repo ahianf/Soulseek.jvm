@@ -11,8 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationToken;
-import dev.slsk.CancellationTokenSource;
+import dev.slsk.CancellationController;
+import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.SoulseekClientException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -136,9 +136,9 @@ class WaiterTest {
     @DisplayName("Caller cancellation dequeues a wait")
     void callerCancellationDequeuesWait() {
         try (DefaultWaiter waiter = new DefaultWaiter();
-                CancellationTokenSource source = new CancellationTokenSource()) {
+                CancellationController source = new CancellationController()) {
             WaitKey key = new WaitKey("login");
-            CompletableFuture<String> wait = waiter.waitAsync(key, String.class, 30_000, source.getToken());
+            CompletableFuture<String> wait = waiter.waitAsync(key, String.class, 30_000, source.getSignal());
 
             source.cancel();
 
@@ -151,11 +151,11 @@ class WaiterTest {
     @DisplayName("Pre-cancelled token is handled after enqueue")
     void preCancelledTokenIsHandledAfterEnqueue() {
         try (DefaultWaiter waiter = new DefaultWaiter();
-                CancellationTokenSource source = new CancellationTokenSource()) {
+                CancellationController source = new CancellationController()) {
             source.cancel();
             WaitKey key = new WaitKey("login");
 
-            CompletableFuture<String> wait = waiter.waitAsync(key, String.class, 30_000, source.getToken());
+            CompletableFuture<String> wait = waiter.waitAsync(key, String.class, 30_000, source.getSignal());
 
             assertThrows(CancellationException.class, wait::join);
             assertFalse(waiter.hasWait(key));
@@ -166,10 +166,10 @@ class WaiterTest {
     @DisplayName("Cancellation callback preserves source FIFO disposition")
     void cancellationCallbackPreservesFifoDisposition() {
         try (DefaultWaiter waiter = new DefaultWaiter();
-                CancellationTokenSource secondSource = new CancellationTokenSource()) {
+                CancellationController secondSource = new CancellationController()) {
             WaitKey key = new WaitKey("login");
             CompletableFuture<String> first = waiter.waitAsync(key, String.class, 30_000);
-            CompletableFuture<String> second = waiter.waitAsync(key, String.class, 30_000, secondSource.getToken());
+            CompletableFuture<String> second = waiter.waitAsync(key, String.class, 30_000, secondSource.getSignal());
 
             secondSource.cancel();
 
@@ -289,10 +289,10 @@ class WaiterTest {
     @DisplayName("PendingWait close works before and after registration")
     void pendingWaitCloseWorksBeforeAndAfterRegistration() {
         try (ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor()) {
-            DefaultWaiter.PendingWait<String> unregistered =
-                    new DefaultWaiter.PendingWait<>(String.class, 30_000, () -> {}, () -> {}, CancellationToken.none());
-            DefaultWaiter.PendingWait<String> registered =
-                    new DefaultWaiter.PendingWait<>(String.class, 30_000, () -> {}, () -> {}, CancellationToken.none());
+            DefaultWaiter.PendingWait<String> unregistered = new DefaultWaiter.PendingWait<>(
+                    String.class, 30_000, () -> {}, () -> {}, CancellationSignal.none());
+            DefaultWaiter.PendingWait<String> registered = new DefaultWaiter.PendingWait<>(
+                    String.class, 30_000, () -> {}, () -> {}, CancellationSignal.none());
 
             assertDoesNotThrow(unregistered::close);
             registered.register(scheduler);

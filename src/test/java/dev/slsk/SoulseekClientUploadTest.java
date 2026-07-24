@@ -93,9 +93,9 @@ class SoulseekClientUploadTest {
     }
 
     @Test
-    void permitsZeroSizeUploadAndUsesGivenCancellationToken() {
+    void permitsZeroSizeUploadAndUsesGivenCancellationSignal() {
         try (Fixture fixture = new Fixture()) {
-            CancellationTokenSource source = new CancellationTokenSource();
+            CancellationController source = new CancellationController();
             fixture.transfer.size = 0;
 
             Transfer result = fixture.client
@@ -106,12 +106,12 @@ class SoulseekClientUploadTest {
                             offset -> completedStream(new byte[0]),
                             41,
                             options(20),
-                            source.getToken())
+                            source.getSignal())
                     .join();
 
             assertEquals(0, result.getSize());
-            assertSame(source.getToken(), fixture.message.lastToken);
-            assertSame(source.getToken(), fixture.peerManager.transferToken);
+            assertSame(source.getSignal(), fixture.message.lastToken);
+            assertSame(source.getSignal(), fixture.peerManager.transferToken);
             assertTrue(result.getState().hasFlag(TransferStates.SUCCEEDED));
         }
     }
@@ -123,7 +123,7 @@ class SoulseekClientUploadTest {
         Files.write(file, bytes);
         try (Fixture fixture = new Fixture()) {
             Transfer result = fixture.client
-                    .uploadAsync("alice", "remote", file.toString(), 7, options(20), CancellationToken.none())
+                    .uploadAsync("alice", "remote", file.toString(), 7, options(20), CancellationSignal.none())
                     .join();
 
             assertEquals(bytes.length, result.getSize());
@@ -179,7 +179,7 @@ class SoulseekClientUploadTest {
                             offset -> completedStream(new byte[] {1}),
                             10,
                             options(20),
-                            CancellationToken.none())
+                            CancellationSignal.none())
                     .join();
 
             assertTrue(result.getState().hasFlag(TransferStates.SUCCEEDED));
@@ -200,7 +200,7 @@ class SoulseekClientUploadTest {
                             offset -> completedStream(new byte[] {1}),
                             12,
                             options,
-                            CancellationToken.none())
+                            CancellationSignal.none())
                     .join();
 
             assertFalse(upload.isDone());
@@ -237,7 +237,7 @@ class SoulseekClientUploadTest {
                             offset -> completedStream(bytes),
                             22,
                             options,
-                            CancellationToken.none())
+                            CancellationSignal.none())
                     .join();
 
             List<TransferStates> expected = List.of(
@@ -277,7 +277,7 @@ class SoulseekClientUploadTest {
                             offset -> completedStream(bytes),
                             31,
                             options(20),
-                            CancellationToken.none())
+                            CancellationSignal.none())
                     .join();
 
             assertEquals(2, result.getStartOffset());
@@ -300,7 +300,7 @@ class SoulseekClientUploadTest {
                             offset -> completedStream(new byte[] {1, 2, 3}),
                             32,
                             options(20),
-                            CancellationToken.none())
+                            CancellationSignal.none())
                     .join();
 
             assertEquals(0, fixture.transfer.writeCalls);
@@ -319,7 +319,7 @@ class SoulseekClientUploadTest {
                     offset -> completedStream(new byte[] {1, 2, 3}),
                     33,
                     options(20),
-                    CancellationToken.none()));
+                    CancellationSignal.none()));
             assertInstanceOf(SoulseekClientException.class, tooLong);
             assertInstanceOf(TransferException.class, tooLong.getCause());
 
@@ -336,7 +336,7 @@ class SoulseekClientUploadTest {
                     }),
                     34,
                     options(20),
-                    CancellationToken.none()));
+                    CancellationSignal.none()));
             assertInstanceOf(SoulseekClientException.class, notSeekable);
         }
     }
@@ -355,7 +355,7 @@ class SoulseekClientUploadTest {
                             offset -> completedStream(new byte[] {9, 8, 7}),
                             35,
                             options,
-                            CancellationToken.none())
+                            CancellationSignal.none())
                     .join();
 
             assertArrayEquals(new byte[] {9, 8}, fixture.transfer.written.toByteArray());
@@ -388,7 +388,7 @@ class SoulseekClientUploadTest {
                             offset -> completedStream(new byte[] {1, 2, 3, 4, 5}),
                             36,
                             options,
-                            CancellationToken.none())
+                            CancellationSignal.none())
                     .join();
 
             assertFalse(governorRequests.isEmpty());
@@ -415,7 +415,7 @@ class SoulseekClientUploadTest {
                     offset -> completedStream(new byte[] {1}),
                     40,
                     options(20),
-                    CancellationToken.none()));
+                    CancellationSignal.none()));
 
             assertInstanceOf(TransferRejectedException.class, failure);
             assertEquals(1, terminal.size());
@@ -450,7 +450,7 @@ class SoulseekClientUploadTest {
                     offset -> completedStream(new byte[] {1}),
                     41,
                     options,
-                    CancellationToken.none()));
+                    CancellationSignal.none()));
 
             assertSame(cancellation, failure);
             assertTrue(terminal.get(0).getState().hasFlag(TransferStates.CANCELLED));
@@ -484,7 +484,7 @@ class SoulseekClientUploadTest {
                     offset -> completedStream(new byte[] {1}),
                     42,
                     options,
-                    CancellationToken.none()));
+                    CancellationSignal.none()));
 
             assertSame(timeout, failure);
             assertTrue(terminal.get(0).getState().hasFlag(TransferStates.TIMED_OUT));
@@ -508,7 +508,7 @@ class SoulseekClientUploadTest {
                             null,
                             null,
                             null),
-                    CancellationToken.none()));
+                    CancellationSignal.none()));
             SoulseekClientException mapped = assertInstanceOf(SoulseekClientException.class, failure);
             assertInstanceOf(TransferException.class, mapped.getCause());
 
@@ -524,7 +524,7 @@ class SoulseekClientUploadTest {
                                 released.incrementAndGet();
                                 throw new RuntimeException("ignored");
                             }),
-                            CancellationToken.none())
+                            CancellationSignal.none())
                     .join();
             assertEquals(1, released.get());
         }
@@ -542,7 +542,7 @@ class SoulseekClientUploadTest {
                             offset -> CompletableFuture.completedFuture(disposable),
                             45,
                             options(20).withDisposalOptions(true),
-                            CancellationToken.none())
+                            CancellationSignal.none())
                     .join();
             assertTrue(disposable.closed.get());
 
@@ -555,7 +555,7 @@ class SoulseekClientUploadTest {
                             offset -> CompletableFuture.completedFuture(retained),
                             46,
                             options(20).withDisposalOptions(false),
-                            CancellationToken.none())
+                            CancellationSignal.none())
                     .join();
             assertFalse(retained.closed.get());
         }
@@ -572,7 +572,7 @@ class SoulseekClientUploadTest {
                     offset -> completedStream(new byte[] {1}),
                     47,
                     options(20),
-                    CancellationToken.none()));
+                    CancellationSignal.none()));
             assertInstanceOf(SoulseekClientException.class, malformed);
             assertFalse(fixture.client.getUploadsInternal().containsKey(47));
 
@@ -585,7 +585,7 @@ class SoulseekClientUploadTest {
                     offset -> completedStream(new byte[] {1}),
                     48,
                     options(20),
-                    CancellationToken.none()));
+                    CancellationSignal.none()));
             assertInstanceOf(SoulseekClientException.class, write);
             assertSame(fixture.transfer.writeFailure, write.getCause());
             assertFalse(fixture.client.getUniqueKeys().containsKey("Upload:alice:other"));
@@ -611,7 +611,7 @@ class SoulseekClientUploadTest {
                     offset -> completedStream(new byte[] {1}),
                     49,
                     options(20),
-                    CancellationToken.none()));
+                    CancellationSignal.none()));
 
             SoulseekClientException mapped = assertInstanceOf(SoulseekClientException.class, failure);
             ConnectionException connection = assertInstanceOf(ConnectionException.class, mapped.getCause());
@@ -763,7 +763,7 @@ class SoulseekClientUploadTest {
     private static final class PeerManagerProbe {
         private final MessageConnection messageConnection;
         private final Connection transferConnection;
-        private CancellationToken transferToken;
+        private CancellationSignal transferToken;
         private final PeerConnectionManager proxy = (PeerConnectionManager) Proxy.newProxyInstance(
                 PeerConnectionManager.class.getClassLoader(),
                 new Class<?>[] {PeerConnectionManager.class},
@@ -785,7 +785,7 @@ class SoulseekClientUploadTest {
                     && arguments != null
                     && arguments.length == 4
                     && arguments[0] instanceof String) {
-                transferToken = (CancellationToken) arguments[3];
+                transferToken = (CancellationSignal) arguments[3];
                 return CompletableFuture.completedFuture(transferConnection);
             }
             return defaultValue(method.getReturnType());
@@ -794,7 +794,7 @@ class SoulseekClientUploadTest {
 
     private static final class MessageConnectionProbe {
         private final List<OutgoingMessage> messages = new ArrayList<>();
-        private CancellationToken lastToken;
+        private CancellationSignal lastToken;
         private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
@@ -804,7 +804,7 @@ class SoulseekClientUploadTest {
                     && arguments.length == 2
                     && arguments[0] instanceof OutgoingMessage message) {
                 messages.add(message);
-                lastToken = (CancellationToken) arguments[1];
+                lastToken = (CancellationSignal) arguments[1];
                 return CompletableFuture.completedFuture(null);
             }
             if (method.getName().equals("getState")) {
@@ -868,7 +868,7 @@ class SoulseekClientUploadTest {
                 InputStream stream = (InputStream) arguments[1];
                 ConnectionGovernor governor = (ConnectionGovernor) arguments[2];
                 ConnectionReporter reporter = (ConnectionReporter) arguments[3];
-                CancellationToken token = (CancellationToken) arguments[4];
+                CancellationSignal token = (CancellationSignal) arguments[4];
                 long transferred = 0;
                 while (transferred < length) {
                     int attempted = (int) Math.min(Integer.MAX_VALUE, length - transferred);

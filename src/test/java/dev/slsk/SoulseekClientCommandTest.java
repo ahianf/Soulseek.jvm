@@ -35,11 +35,11 @@ import org.junit.jupiter.api.Test;
 
 class SoulseekClientCommandTest {
     @Test
-    void sendsExpectedCommandsAndForwardsCancellationToken() {
+    void sendsExpectedCommandsAndForwardsCancellationSignal() {
         ConnectionProbe connection = new ConnectionProbe();
         try (DefaultSoulseekClient client = loggedInClient(connection)) {
-            CancellationTokenSource source = new CancellationTokenSource();
-            CancellationToken token = source.getToken();
+            CancellationController source = new CancellationController();
+            CancellationSignal token = source.getSignal();
 
             client.sendPrivateMessageAsync("alice", "private", token).join();
             client.sendRoomMessageAsync("room", "public", token).join();
@@ -239,7 +239,7 @@ class SoulseekClientCommandTest {
 
     private static final class ConnectionProbe {
         private final List<OutgoingMessage> messages = new ArrayList<>();
-        private final List<CancellationToken> tokens = new ArrayList<>();
+        private final List<CancellationSignal> tokens = new ArrayList<>();
         private CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
         private RuntimeException synchronousFailure;
         private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
@@ -250,7 +250,7 @@ class SoulseekClientCommandTest {
                     && arguments.length == 2
                     && arguments[0] instanceof OutgoingMessage message) {
                 messages.add(message);
-                tokens.add((CancellationToken) arguments[1]);
+                tokens.add((CancellationSignal) arguments[1]);
                 if (synchronousFailure != null) {
                     throw synchronousFailure;
                 }
