@@ -1,0 +1,510 @@
+// SPDX-FileCopyrightText: JP Dillingham
+// SPDX-FileCopyrightText: 2026 Ahian Fernandez
+// SPDX-License-Identifier: GPL-3.0-only
+
+package dev.slsk.network;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import dev.slsk.CacheLookupResult;
+import dev.slsk.ISearchResponseCache;
+import dev.slsk.SearchResponseCacheRecord;
+import dev.slsk.common.Constants;
+import dev.slsk.common.WaitKey;
+import dev.slsk.common.Waiter;
+import dev.slsk.diagnostics.DiagnosticEventArgs;
+import dev.slsk.diagnostics.DiagnosticLevel;
+import dev.slsk.diagnostics.IDiagnosticFactory;
+import dev.slsk.messaging.messages.PeerInit;
+import dev.slsk.messaging.messages.PierceFirewall;
+import dev.slsk.network.tcp.IConnection;
+import dev.slsk.network.tcp.IListener;
+import dev.slsk.network.tcp.ListenerAcceptedEventListener;
+import dev.slsk.options.ConnectionOptions;
+import dev.slsk.options.SoulseekClientOptions;
+import dev.slsk.search.ISearchResponder;
+import java.lang.reflect.Proxy;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.ArrayDeque;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.Test;
+
+class ListenerHandlerTest {
+    @Test
+    void constructorValidatesClientAndDefaultDiagnosticRaisesEvents() throws Exception {
+        assertThrows(NullPointerException.class, () -> new ListenerHandler(null));
+        try (Fixture fixture = fixture(null)) {
+            ListenerHandler handler = new ListenerHandler(fixture.client);
+            AtomicReference<DiagnosticEventArgs> event = new AtomicReference<>();
+            handler.addDiagnosticGeneratedListener((sender, args) -> event.set(args));
+            handler.getDiagnostic().info("test");
+            assertEquals("test", event.get().getMessage());
+        }
+    }
+
+    @Test
+    void readFailureAndUnrecognizedMessageDisconnectAndClose() throws Exception {
+        try (Fixture fixture = fixture(null)) {
+            ConnectionProbe readFailure = ConnectionProbe.failure(new RuntimeException("read"));
+            fixture.handler.handleConnectionAsync(readFailure.proxy).join();
+            assertNotNull(readFailure.disconnectedException);
+            assertTrue(readFailure.closed);
+            assertTrue(fixture.diagnostic.debug.stream().anyMatch(text -> text.contains("Failed to initialize")));
+
+            ConnectionProbe unknown = ConnectionProbe.message(new byte[] {1});
+            fixture.handler.handleConnectionAsync(unknown.proxy).join();
+            assertTrue(unknown.disconnectedException.getMessage().contains("Unrecognized initialization message"));
+            assertTrue(unknown.closed);
+        }
+    }
+
+    @Test
+    void peerAndDistributedInitializationsRouteConnections() throws Exception {
+        try (Fixture fixture = fixture(null)) {
+            ConnectionProbe peer =
+                    ConnectionProbe.message(new PeerInit("alice", Constants.ConnectionType.PEER, 1).toByteArray());
+            fixture.handler.handleConnectionAsync(peer.proxy).join();
+            assertEquals("alice", fixture.peer.addedUsername);
+            assertSame(peer.proxy, fixture.peer.addedConnection);
+
+            ConnectionProbe distributed =
+                    ConnectionProbe.message(new PeerInit("bob", Constants.ConnectionType.DISTRIBUTED, 2).toByteArray());
+            fixture.handler.handleConnectionAsync(distributed.proxy).join();
+            assertEquals("bob", fixture.distributed.addedUsername);
+            assertSame(distributed.proxy, fixture.distributed.addedConnection);
+        }
+    }
+
+    @Test
+    void expectedTransferCompletesDirectWait() throws Exception {
+        try (Fixture fixture = fixture(null)) {
+            IConnection transferConnection = ConnectionProbe.message(new byte[] {1}).proxy;
+            fixture.peer.transferResult = new TransferConnectionResult(transferConnection, 24);
+            WaitKey key = new WaitKey(Constants.WaitKey.DIRECT_TRANSFER, "alice", 24);
+            CompletableFuture<IConnection> wait = fixture.waiter.waitAsync(key, IConnection.class, -1, null);
+            ConnectionProbe incoming =
+                    ConnectionProbe.message(new PeerInit("alice", Constants.ConnectionType.TRANSFER, 7).toByteArray());
+
+            fixture.handler.handleConnectionAsync(incoming.proxy).join();
+
+            assertSame(transferConnection, wait.join());
+            assertEquals(7, fixture.peer.transferToken);
+            assertSame(incoming.proxy, fixture.peer.transferIncoming);
+        }
+    }
+
+    @Test
+    void unexpectedTransferIsRejected() throws Exception {
+        try (Fixture fixture = fixture(null)) {
+            ConnectionProbe transfer = ConnectionProbe.message(new byte[] {1});
+            fixture.peer.transferResult = new TransferConnectionResult(transfer.proxy, 24);
+            ConnectionProbe incoming =
+                    ConnectionProbe.message(new PeerInit("alice", Constants.ConnectionType.TRANSFER, 7).toByteArray());
+
+            fixture.handler.handleConnectionAsync(incoming.proxy).join();
+
+            assertEquals("Transfer connection rejected: unknown token", transfer.disconnectMessage);
+        }
+    }
+
+    @Test
+    void peerAndDistributedPierceFirewallCompleteSolicitedWaits() throws Exception {
+        try (Fixture fixture = fixture(null)) {
+            fixture.peer.pending = Map.of(8, "alice");
+            WaitKey peerKey = new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, "alice", 8);
+            CompletableFuture<IConnection> peerWait = fixture.waiter.waitAsync(peerKey, IConnection.class, -1, null);
+            ConnectionProbe peer = ConnectionProbe.message(new PierceFirewall(8).toByteArray());
+            fixture.handler.handleConnectionAsync(peer.proxy).join();
+            assertSame(peer.proxy, peerWait.join());
+
+            fixture.peer.pending = Map.of();
+            fixture.distributed.pending = Map.of(9, "bob");
+            WaitKey distributedKey = new WaitKey(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION, "bob", 9);
+            CompletableFuture<IConnection> distributedWait =
+                    fixture.waiter.waitAsync(distributedKey, IConnection.class, -1, null);
+            ConnectionProbe distributed = ConnectionProbe.message(new PierceFirewall(9).toByteArray());
+            fixture.handler.handleConnectionAsync(distributed.proxy).join();
+            assertSame(distributed.proxy, distributedWait.join());
+        }
+    }
+
+    @Test
+    void cachedSearchPierceAddsConnectionThenResponds() throws Exception {
+        TestCache cache = new TestCache();
+        cache.lookup = CacheLookupResult.found(new SearchResponseCacheRecord("alice", 1, "query", null));
+        try (Fixture fixture = fixture(cache)) {
+            ConnectionProbe connection = ConnectionProbe.message(new PierceFirewall(11).toByteArray());
+
+            fixture.handler.handleConnectionAsync(connection.proxy).join();
+
+            assertEquals("alice", fixture.peer.addedUsername);
+            assertSame(connection.proxy, fixture.peer.addedConnection);
+            assertEquals(11, fixture.searchResponder.responseToken);
+            assertEquals(11, cache.lastLookupToken);
+        }
+    }
+
+    @Test
+    void unknownPierceFirewallDisconnectsAndDisposes() throws Exception {
+        try (Fixture fixture = fixture(null)) {
+            ConnectionProbe connection = ConnectionProbe.message(new PierceFirewall(12).toByteArray());
+
+            fixture.handler.handleConnectionAsync(connection.proxy).join();
+
+            assertTrue(connection
+                    .disconnectedException
+                    .getMessage()
+                    .contains("Unknown PierceFirewall attempt with token 12"));
+            assertTrue(connection.closed);
+        }
+    }
+
+    @Test
+    void unknownPeerInitTypeIsIgnoredLikeSource() throws Exception {
+        try (Fixture fixture = fixture(null)) {
+            ConnectionProbe connection = ConnectionProbe.message(new PeerInit("alice", "X", 1).toByteArray());
+
+            fixture.handler.handleConnectionAsync(connection.proxy).join();
+
+            assertNull(connection.disconnectedException);
+            assertFalse(connection.closed);
+            assertNull(fixture.peer.addedUsername);
+            assertNull(fixture.distributed.addedUsername);
+        }
+    }
+
+    private static Fixture fixture(TestCache cache) throws Exception {
+        PeerProbe peer = new PeerProbe();
+        DistributedProbe distributed = new DistributedProbe();
+        SearchResponderProbe search = new SearchResponderProbe();
+        Waiter waiter = new Waiter();
+        SoulseekClientOptions options = options(cache);
+        TestListener listener = new TestListener();
+        TestClient client = new TestClient(options, listener, peer.proxy, distributed.proxy, waiter, search.proxy);
+        RecordingDiagnostic diagnostic = new RecordingDiagnostic();
+        return new Fixture(
+                client, peer, distributed, search, waiter, diagnostic, new ListenerHandler(client, diagnostic));
+    }
+
+    private static SoulseekClientOptions options(ISearchResponseCache cache) {
+        return new SoulseekClientOptions(
+                true,
+                null,
+                50_000,
+                true,
+                true,
+                25,
+                2,
+                10,
+                Integer.MAX_VALUE,
+                Integer.MAX_VALUE,
+                Integer.MAX_VALUE,
+                true,
+                5_000,
+                true,
+                true,
+                false,
+                DiagnosticLevel.TRACE,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                cache,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false);
+    }
+
+    private record Fixture(
+            TestClient client,
+            PeerProbe peer,
+            DistributedProbe distributed,
+            SearchResponderProbe searchResponder,
+            Waiter waiter,
+            RecordingDiagnostic diagnostic,
+            ListenerHandler handler)
+            implements AutoCloseable {
+        @Override
+        public void close() {
+            waiter.close();
+        }
+    }
+
+    private record TestClient(
+            SoulseekClientOptions options,
+            IListener listener,
+            IPeerConnectionManager peerConnectionManager,
+            IDistributedConnectionManager distributedConnectionManager,
+            Waiter waiter,
+            ISearchResponder searchResponder)
+            implements ListenerHandlerClient {
+        @Override
+        public SoulseekClientOptions getOptions() {
+            return options;
+        }
+
+        @Override
+        public IListener getListener() {
+            return listener;
+        }
+
+        @Override
+        public IPeerConnectionManager getPeerConnectionManager() {
+            return peerConnectionManager;
+        }
+
+        @Override
+        public IDistributedConnectionManager getDistributedConnectionManager() {
+            return distributedConnectionManager;
+        }
+
+        @Override
+        public Waiter getWaiter() {
+            return waiter;
+        }
+
+        @Override
+        public ISearchResponder getSearchResponder() {
+            return searchResponder;
+        }
+    }
+
+    private static final class TestListener implements IListener {
+        @Override
+        public void addAcceptedListener(ListenerAcceptedEventListener listener) {}
+
+        @Override
+        public void removeAcceptedListener(ListenerAcceptedEventListener listener) {}
+
+        @Override
+        public ConnectionOptions getConnectionOptions() {
+            return new ConnectionOptions();
+        }
+
+        @Override
+        public InetAddress getIpAddress() {
+            return InetAddress.getLoopbackAddress();
+        }
+
+        @Override
+        public boolean isListening() {
+            return true;
+        }
+
+        @Override
+        public int getPort() {
+            return 50_000;
+        }
+
+        @Override
+        public void start() {}
+
+        @Override
+        public void stop() {}
+    }
+
+    private static final class ConnectionProbe {
+        private final IConnection proxy;
+        private final ArrayDeque<CompletableFuture<byte[]>> reads = new ArrayDeque<>();
+        private String disconnectMessage;
+        private Exception disconnectedException;
+        private boolean closed;
+
+        private ConnectionProbe() {
+            InetSocketAddress endpoint = new InetSocketAddress("127.0.0.1", 1234);
+            UUID id = UUID.randomUUID();
+            proxy = (IConnection) Proxy.newProxyInstance(
+                    getClass().getClassLoader(), new Class<?>[] {IConnection.class}, (ignored, method, arguments) -> {
+                        return switch (method.getName()) {
+                            case "getIpEndPoint" -> endpoint;
+                            case "getId" -> id;
+                            case "readAsync" -> reads.removeFirst();
+                            case "disconnect" -> {
+                                disconnectMessage =
+                                        arguments == null || arguments.length == 0 ? null : (String) arguments[0];
+                                disconnectedException =
+                                        arguments != null && arguments.length > 1 ? (Exception) arguments[1] : null;
+                                yield null;
+                            }
+                            case "close" -> {
+                                closed = true;
+                                yield null;
+                            }
+                            case "toString" -> "connection";
+                            default -> defaultValue(method.getReturnType());
+                        };
+                    });
+        }
+
+        static ConnectionProbe message(byte[] fullMessage) {
+            ConnectionProbe probe = new ConnectionProbe();
+            byte[] body;
+            if (fullMessage.length >= 4
+                    && ByteBuffer.wrap(fullMessage)
+                                    .order(ByteOrder.LITTLE_ENDIAN)
+                                    .getInt()
+                            == fullMessage.length - 4) {
+                body = java.util.Arrays.copyOfRange(fullMessage, 4, fullMessage.length);
+            } else {
+                body = fullMessage;
+            }
+            probe.reads.add(CompletableFuture.completedFuture(ByteBuffer.allocate(4)
+                    .order(ByteOrder.LITTLE_ENDIAN)
+                    .putInt(body.length)
+                    .array()));
+            probe.reads.add(CompletableFuture.completedFuture(body));
+            return probe;
+        }
+
+        static ConnectionProbe failure(Throwable failure) {
+            ConnectionProbe probe = new ConnectionProbe();
+            probe.reads.add(CompletableFuture.failedFuture(failure));
+            return probe;
+        }
+    }
+
+    private static final class PeerProbe {
+        private Map<Integer, String> pending = Map.of();
+        private String addedUsername;
+        private IConnection addedConnection;
+        private int transferToken;
+        private IConnection transferIncoming;
+        private TransferConnectionResult transferResult;
+        private final IPeerConnectionManager proxy = (IPeerConnectionManager) Proxy.newProxyInstance(
+                getClass().getClassLoader(),
+                new Class<?>[] {IPeerConnectionManager.class},
+                (ignored, method, arguments) -> {
+                    return switch (method.getName()) {
+                        case "getPendingSolicitations" -> pending;
+                        case "addOrUpdateMessageConnectionAsync" -> {
+                            addedUsername = (String) arguments[0];
+                            addedConnection = (IConnection) arguments[1];
+                            yield CompletableFuture.completedFuture(null);
+                        }
+                        case "getTransferConnectionAsync" -> {
+                            transferToken = (Integer) arguments[1];
+                            transferIncoming = (IConnection) arguments[2];
+                            yield CompletableFuture.completedFuture(transferResult);
+                        }
+                        case "toString" -> "peerManager";
+                        default -> defaultValue(method.getReturnType());
+                    };
+                });
+    }
+
+    private static final class DistributedProbe {
+        private Map<Integer, String> pending = Map.of();
+        private String addedUsername;
+        private IConnection addedConnection;
+        private final IDistributedConnectionManager proxy = (IDistributedConnectionManager) Proxy.newProxyInstance(
+                getClass().getClassLoader(),
+                new Class<?>[] {IDistributedConnectionManager.class},
+                (ignored, method, arguments) -> {
+                    return switch (method.getName()) {
+                        case "getPendingSolicitations" -> pending;
+                        case "addOrUpdateChildConnectionAsync" -> {
+                            addedUsername = (String) arguments[0];
+                            addedConnection = (IConnection) arguments[1];
+                            yield CompletableFuture.completedFuture(null);
+                        }
+                        case "toString" -> "distributedManager";
+                        default -> defaultValue(method.getReturnType());
+                    };
+                });
+    }
+
+    private static final class SearchResponderProbe {
+        private int responseToken;
+        private final ISearchResponder proxy = (ISearchResponder) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[] {ISearchResponder.class}, (ignored, method, arguments) -> {
+                    if (method.getName().equals("tryRespondAsync") && arguments.length == 1) {
+                        responseToken = (Integer) arguments[0];
+                        return CompletableFuture.completedFuture(true);
+                    }
+                    return defaultValue(method.getReturnType());
+                });
+    }
+
+    private static final class TestCache implements ISearchResponseCache {
+        private CacheLookupResult<SearchResponseCacheRecord> lookup = CacheLookupResult.notFound();
+        private int lastLookupToken;
+
+        @Override
+        public void addOrUpdate(int responseToken, SearchResponseCacheRecord response) {}
+
+        @Override
+        public CacheLookupResult<SearchResponseCacheRecord> tryGet(int responseToken) {
+            lastLookupToken = responseToken;
+            return lookup;
+        }
+
+        @Override
+        public CacheLookupResult<SearchResponseCacheRecord> tryRemove(int responseToken) {
+            return CacheLookupResult.notFound();
+        }
+    }
+
+    private static final class RecordingDiagnostic implements IDiagnosticFactory {
+        private final java.util.ArrayList<String> debug = new java.util.ArrayList<>();
+
+        @Override
+        public void trace(String message) {}
+
+        @Override
+        public void trace(String message, Throwable exception) {}
+
+        @Override
+        public void debug(String message) {
+            debug.add(message);
+        }
+
+        @Override
+        public void debug(String message, Throwable exception) {
+            debug.add(message);
+        }
+
+        @Override
+        public void info(String message) {}
+
+        @Override
+        public void warning(String message) {}
+
+        @Override
+        public void warning(String message, Throwable exception) {}
+    }
+
+    private static Object defaultValue(Class<?> type) {
+        if (!type.isPrimitive()) {
+            return null;
+        }
+        if (type == boolean.class) {
+            return false;
+        }
+        if (type == int.class) {
+            return 0;
+        }
+        if (type == double.class) {
+            return 0d;
+        }
+        return null;
+    }
+}
