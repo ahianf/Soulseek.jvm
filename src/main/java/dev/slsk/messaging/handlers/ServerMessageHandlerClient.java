@@ -1,0 +1,41 @@
+// SPDX-FileCopyrightText: JP Dillingham
+// SPDX-FileCopyrightText: 2026 Ahian Fernandez
+// SPDX-License-Identifier: GPL-3.0-only
+
+package dev.slsk.messaging.handlers;
+
+import dev.slsk.CancellationToken;
+import dev.slsk.common.IWaiter;
+import dev.slsk.network.IDistributedConnectionManager;
+import dev.slsk.network.IPeerConnectionManager;
+import dev.slsk.options.SoulseekClientOptions;
+import dev.slsk.search.ISearchResponder;
+import dev.slsk.search.SearchInternal;
+import dev.slsk.transfer.TransferInternal;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+
+/** Internal client state and operations used by the server handler. */
+public interface ServerMessageHandlerClient {
+    SoulseekClientOptions getOptions();
+
+    String getUsername();
+
+    IWaiter getWaiter();
+
+    Map<Integer, SearchInternal> getSearches();
+
+    Map<Integer, TransferInternal> getDownloads();
+
+    IPeerConnectionManager getPeerConnectionManager();
+
+    IDistributedConnectionManager getDistributedConnectionManager();
+
+    IDistributedMessageHandler getDistributedMessageHandler();
+
+    ISearchResponder getSearchResponder();
+
+    CompletableFuture<Void> acknowledgePrivateMessageAsync(int id, CancellationToken cancellationToken);
+
+    CompletableFuture<Void> acknowledgePrivilegeNotificationAsync(int id, CancellationToken cancellationToken);
+}
