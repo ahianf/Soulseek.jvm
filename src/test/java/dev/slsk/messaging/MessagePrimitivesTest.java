@@ -191,11 +191,11 @@ class MessagePrimitivesTest {
 
         assertEquals(8, reader.getLength());
         assertEquals(8, reader.getRemaining());
-        assertTrue(reader.isHasMoreData());
+        assertTrue(reader.hasMoreData());
         assertEquals(1, reader.readInteger());
         assertEquals(4, reader.getPosition());
         reader.seek(8);
-        assertFalse(reader.isHasMoreData());
+        assertFalse(reader.hasMoreData());
         assertEquals(0, reader.getRemaining());
         assertThrows(IllegalArgumentException.class, () -> reader.seek(-1));
         assertThrows(IllegalArgumentException.class, () -> reader.seek(9));

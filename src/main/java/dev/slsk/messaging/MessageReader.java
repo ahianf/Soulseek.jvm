@@ -64,7 +64,7 @@ public final class MessageReader<T extends Enum<T> & ProtocolCode> {
     /**
      * Returns whether unread payload data remains.
      */
-    public boolean isHasMoreData() {
+    public boolean hasMoreData() {
         return position < payload.length;
     }
 

@@ -57,7 +57,7 @@ class SearchResponseFactoryTest {
         SearchResponse parsed = SearchResponseFactory.fromByteArray(bytes);
         assertEquals("alice", parsed.getUsername());
         assertEquals(0x12345678, parsed.getToken());
-        assertTrue(parsed.isHasFreeUploadSlot());
+        assertTrue(parsed.hasFreeUploadSlot());
         assertEquals(1000, parsed.getUploadSpeed());
         assertEquals(7, parsed.getQueueLength());
         assertEquals(1, parsed.getFileCount());
@@ -84,7 +84,7 @@ class SearchResponseFactoryTest {
 
         assertEquals("u", parsed.getUsername());
         assertEquals(1, parsed.getToken());
-        assertFalse(parsed.isHasFreeUploadSlot());
+        assertFalse(parsed.hasFreeUploadSlot());
         assertEquals(2, parsed.getUploadSpeed());
         assertEquals(3, parsed.getQueueLength());
         assertEquals(0, parsed.getFileCount());
@@ -110,7 +110,7 @@ class SearchResponseFactoryTest {
 
         SearchResponse parsed = SearchResponseFactory.fromByteArray(bytes);
 
-        assertTrue(parsed.isHasFreeUploadSlot());
+        assertTrue(parsed.hasFreeUploadSlot());
         assertEquals(3, parsed.getQueueLength());
         assertEquals(1, parsed.getLockedFileCount());
         assertFileEquals(locked, parsed.getLockedFiles().getFirst());
@@ -134,7 +134,7 @@ class SearchResponseFactoryTest {
 
         SearchResponse parsed = SearchResponseFactory.fromByteArray(bytes);
 
-        assertTrue(parsed.isHasFreeUploadSlot());
+        assertTrue(parsed.hasFreeUploadSlot());
         assertEquals(0, parsed.getLockedFileCount());
     }
 

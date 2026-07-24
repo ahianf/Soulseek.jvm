@@ -54,7 +54,7 @@ public final class WatchUserResponse implements IncomingMessage {
         long uploadCount = reader.readLong();
         int fileCount = reader.readInteger();
         int directoryCount = reader.readInteger();
-        String countryCode = reader.isHasMoreData() ? reader.readString() : null;
+        String countryCode = reader.hasMoreData() ? reader.readString() : null;
         return new WatchUserResponse(
                 username,
                 true,

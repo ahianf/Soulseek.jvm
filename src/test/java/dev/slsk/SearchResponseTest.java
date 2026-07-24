@@ -28,7 +28,7 @@ class SearchResponseTest {
 
         assertEquals("alice", response.getUsername());
         assertEquals(17, response.getToken());
-        assertEquals(true, response.isHasFreeUploadSlot());
+        assertEquals(true, response.hasFreeUploadSlot());
         assertEquals(99, response.getUploadSpeed());
         assertEquals(3, response.getQueueLength());
         assertEquals(1, response.getFileCount());
@@ -75,7 +75,7 @@ class SearchResponseTest {
 
         assertEquals("alice", copy.getUsername());
         assertEquals(17, copy.getToken());
-        assertEquals(true, copy.isHasFreeUploadSlot());
+        assertEquals(true, copy.hasFreeUploadSlot());
         assertEquals(99, copy.getUploadSpeed());
         assertEquals(3, copy.getQueueLength());
         assertEquals(1, copy.getFileCount());

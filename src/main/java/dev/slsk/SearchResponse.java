@@ -75,7 +75,7 @@ public class SearchResponse {
     }
 
     /** Returns whether the peer has a free upload slot. */
-    public boolean isHasFreeUploadSlot() {
+    public boolean hasFreeUploadSlot() {
         return hasFreeUploadSlot;
     }
 

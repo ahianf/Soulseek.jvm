@@ -205,7 +205,7 @@ public final class SearchInternal implements AutoCloseable {
                     response = new SearchResponse(
                             response.getUsername(),
                             response.getToken(),
-                            response.isHasFreeUploadSlot(),
+                            response.hasFreeUploadSlot(),
                             response.getUploadSpeed(),
                             response.getQueueLength(),
                             files,

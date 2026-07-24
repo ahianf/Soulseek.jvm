@@ -67,7 +67,7 @@ public final class JoinRoomResponse implements IncomingMessage {
                     slots.get(index)));
         }
 
-        if (!reader.isHasMoreData()) {
+        if (!reader.hasMoreData()) {
             return new RoomData(roomName, users);
         }
 

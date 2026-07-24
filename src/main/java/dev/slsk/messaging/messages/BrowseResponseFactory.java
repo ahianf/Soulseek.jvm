@@ -34,9 +34,9 @@ public final class BrowseResponseFactory {
         for (int index = 0; index < directoryCount; index++) {
             directories.add(reader.readDirectory());
         }
-        if (reader.isHasMoreData()) {
+        if (reader.hasMoreData()) {
             reader.readInteger();
-            if (reader.isHasMoreData()) {
+            if (reader.hasMoreData()) {
                 int lockedCount = reader.readInteger();
                 for (int index = 0; index < lockedCount; index++) {
                     lockedDirectories.add(reader.readDirectory());

@@ -12,7 +12,7 @@ public final class HaveNoParentsCommand extends ByteServerMessage {
         super(MessageCode.Server.HAVE_NO_PARENTS, haveNoParents);
     }
 
-    public boolean isHaveNoParents() {
+    public boolean hasNoParents() {
         return value();
     }
 }

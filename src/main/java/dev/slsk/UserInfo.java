@@ -61,7 +61,7 @@ public class UserInfo {
      *
      * @return whether an upload slot is free
      */
-    public final boolean isHasFreeUploadSlot() {
+    public final boolean hasFreeUploadSlot() {
         return freeUploadSlot;
     }
 
@@ -70,7 +70,7 @@ public class UserInfo {
      *
      * @return whether picture data was supplied
      */
-    public final boolean isHasPicture() {
+    public final boolean hasPicture() {
         return picturePresent;
     }
 

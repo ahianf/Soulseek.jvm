@@ -68,7 +68,7 @@ public final class TransferResponse implements IncomingMessage, OutgoingMessage 
 
         int parsedToken = reader.readInteger();
         boolean allowed = reader.readByte() == 1;
-        if (allowed && reader.isHasMoreData()) {
+        if (allowed && reader.hasMoreData()) {
             return new TransferResponse(parsedToken, reader.readLong());
         } else if (!allowed) {
             return new TransferResponse(parsedToken, reader.readString());

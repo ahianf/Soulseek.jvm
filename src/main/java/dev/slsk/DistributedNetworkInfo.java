@@ -89,7 +89,7 @@ public class DistributedNetworkInfo {
      *
      * @return whether children can be accepted
      */
-    public final boolean isCanAcceptChildren() {
+    public final boolean canAcceptChildren() {
         return acceptChildren;
     }
 
@@ -116,7 +116,7 @@ public class DistributedNetworkInfo {
      *
      * @return whether a parent is established
      */
-    public final boolean isHasParent() {
+    public final boolean hasParent() {
         return parentPresent;
     }
 

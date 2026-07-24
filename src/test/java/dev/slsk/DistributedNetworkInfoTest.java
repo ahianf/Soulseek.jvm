@@ -31,10 +31,10 @@ class DistributedNetworkInfoTest {
         assertEquals("root", info.getBranchRoot());
         assertTrue(info.isBranchRoot());
         assertEquals(4, info.getChildLimit());
-        assertTrue(info.isCanAcceptChildren());
+        assertTrue(info.canAcceptChildren());
         assertEquals(List.of(child), info.getChildren());
         assertSame(parent, info.getParent());
-        assertTrue(info.isHasParent());
+        assertTrue(info.hasParent());
     }
 
     @Test
@@ -49,8 +49,8 @@ class DistributedNetworkInfoTest {
         assertNull(info.getBranchRoot());
         assertNull(info.getChildren());
         assertFalse(info.isBranchRoot());
-        assertFalse(info.isCanAcceptChildren());
-        assertFalse(info.isHasParent());
+        assertFalse(info.canAcceptChildren());
+        assertFalse(info.hasParent());
         assertNull(info.getParent().username());
         assertNull(info.getParent().ipEndpoint());
     }

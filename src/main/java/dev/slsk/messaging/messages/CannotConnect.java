@@ -38,7 +38,7 @@ public final class CannotConnect implements IncomingMessage, OutgoingMessage {
         MessageReader<MessageCode.Server> reader =
                 ServerMessageParser.reader(bytes, MessageCode.Server.CANNOT_CONNECT, "CannotConnect");
         int token = reader.readInteger();
-        String username = reader.isHasMoreData() ? reader.readString() : null;
+        String username = reader.hasMoreData() ? reader.readString() : null;
         return new CannotConnect(token, username);
     }
 

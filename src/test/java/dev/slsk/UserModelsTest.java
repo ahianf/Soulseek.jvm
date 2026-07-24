@@ -54,8 +54,8 @@ class UserModelsTest {
         assertEquals("description", info.getDescription());
         assertEquals(4, info.getUploadSlots());
         assertEquals(5, info.getQueueLength());
-        assertTrue(info.isHasFreeUploadSlot());
-        assertTrue(info.isHasPicture());
+        assertTrue(info.hasFreeUploadSlot());
+        assertTrue(info.hasPicture());
         assertSame(picture, info.getPicture());
     }
 
@@ -68,7 +68,7 @@ class UserModelsTest {
         picture[0] = 9;
 
         assertEquals(9, info.getPicture()[0]);
-        assertFalse(info.isHasFreeUploadSlot());
+        assertFalse(info.hasFreeUploadSlot());
     }
 
     @Test
@@ -76,7 +76,7 @@ class UserModelsTest {
     void userInfoDefaultsPictureToNull() {
         UserInfo info = new UserInfo("description", 4, 5, false);
 
-        assertFalse(info.isHasPicture());
+        assertFalse(info.hasPicture());
         assertNull(info.getPicture());
     }
 
@@ -85,7 +85,7 @@ class UserModelsTest {
     void userInfoTreatsEmptyPictureAsConfigured() {
         UserInfo info = new UserInfo("description", 4, 5, false, new byte[0]);
 
-        assertTrue(info.isHasPicture());
+        assertTrue(info.hasPicture());
     }
 
     @Test

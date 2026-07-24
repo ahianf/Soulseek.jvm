@@ -53,7 +53,7 @@ class CompressionCompatibilityTest {
         assertEquals(SIZE, reader.readLong());
         assertEquals(TEXT, reader.readString());
         assertArrayEquals(tail(), reader.readBytes(256));
-        assertFalse(reader.isHasMoreData());
+        assertFalse(reader.hasMoreData());
     }
 
     private static byte[] fixture(String name) throws IOException {

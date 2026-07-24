@@ -42,13 +42,13 @@ public final class UserInfoResponseFactory {
         MessageBuilder builder = new MessageBuilder()
                 .writeCode(MessageCode.Peer.INFO_RESPONSE)
                 .writeString(userInfo.getDescription())
-                .writeByte(userInfo.isHasPicture() ? 1 : 0);
-        if (userInfo.isHasPicture()) {
+                .writeByte(userInfo.hasPicture() ? 1 : 0);
+        if (userInfo.hasPicture()) {
             builder.writeInteger(userInfo.getPicture().length).writeBytes(userInfo.getPicture());
         }
         return builder.writeInteger(userInfo.getUploadSlots())
                 .writeInteger(userInfo.getQueueLength())
-                .writeByte(userInfo.isHasFreeUploadSlot() ? 1 : 0)
+                .writeByte(userInfo.hasFreeUploadSlot() ? 1 : 0)
                 .build();
     }
 }

@@ -33,8 +33,8 @@ class ScalarServerCommandTest {
 
         assertEquals(true, accepted.isAccepted());
         assertEquals(false, rejected.isAccepted());
-        assertEquals(true, noParents.isHaveNoParents());
-        assertEquals(false, hasParent.isHaveNoParents());
+        assertEquals(true, noParents.hasNoParents());
+        assertEquals(false, hasParent.hasNoParents());
         assertByte(accepted, MessageCode.Server.ACCEPT_CHILDREN, 1);
         assertByte(rejected, MessageCode.Server.ACCEPT_CHILDREN, 0);
         assertByte(noParents, MessageCode.Server.HAVE_NO_PARENTS, 1);

@@ -53,7 +53,7 @@ public final class ConsoleExample {
             SearchResult searchResult =
                     client.searchAsync(SearchQuery.fromText(args[0])).join();
             List<SearchResponse> responses = searchResult.responses().stream()
-                    .sorted(Comparator.comparing(SearchResponse::isHasFreeUploadSlot)
+                    .sorted(Comparator.comparing(SearchResponse::hasFreeUploadSlot)
                             .reversed()
                             .thenComparing(SearchResponse::getUploadSpeed, Comparator.reverseOrder()))
                     .toList();

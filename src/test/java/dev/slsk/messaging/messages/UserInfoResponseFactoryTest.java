@@ -65,11 +65,11 @@ class UserInfoResponseFactoryTest {
 
         UserInfo parsed = UserInfoResponseFactory.fromByteArray(bytes);
         assertEquals("d", parsed.getDescription());
-        assertTrue(parsed.isHasPicture());
+        assertTrue(parsed.hasPicture());
         assertArrayEquals(picture, parsed.getPicture());
         assertEquals(2, parsed.getUploadSlots());
         assertEquals(3, parsed.getQueueLength());
-        assertTrue(parsed.isHasFreeUploadSlot());
+        assertTrue(parsed.hasFreeUploadSlot());
         assertSame(picture, outgoing.getPicture());
     }
 
@@ -109,11 +109,11 @@ class UserInfoResponseFactoryTest {
 
         UserInfo parsed = UserInfoResponseFactory.fromByteArray(bytes);
         assertEquals("d", parsed.getDescription());
-        assertFalse(parsed.isHasPicture());
+        assertFalse(parsed.hasPicture());
         assertNull(parsed.getPicture());
         assertEquals(-2, parsed.getUploadSlots());
         assertEquals(-3, parsed.getQueueLength());
-        assertFalse(parsed.isHasFreeUploadSlot());
+        assertFalse(parsed.hasFreeUploadSlot());
     }
 
     @Test
@@ -131,9 +131,9 @@ class UserInfoResponseFactoryTest {
 
         UserInfo parsed = UserInfoResponseFactory.fromByteArray(bytes);
 
-        assertTrue(parsed.isHasPicture());
+        assertTrue(parsed.hasPicture());
         assertEquals(0, parsed.getPicture().length);
-        assertTrue(parsed.isHasFreeUploadSlot());
+        assertTrue(parsed.hasFreeUploadSlot());
     }
 
     @Test

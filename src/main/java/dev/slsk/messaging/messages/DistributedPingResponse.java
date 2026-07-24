@@ -37,7 +37,7 @@ public final class DistributedPingResponse implements IncomingMessage, OutgoingM
                     + "(expected: 0, received: " + code.getValue() + ")");
         }
 
-        int parsedToken = reader.isHasMoreData() ? reader.readInteger() : 0;
+        int parsedToken = reader.hasMoreData() ? reader.readInteger() : 0;
         return new DistributedPingResponse(parsedToken);
     }
 

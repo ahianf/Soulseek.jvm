@@ -33,11 +33,11 @@ public final class SearchResponseFactory {
         boolean hasFreeUploadSlot = reader.readByte() > 0;
         int uploadSpeed = reader.readInteger();
         int queueLength = reader.readInteger();
-        if (reader.isHasMoreData()) {
+        if (reader.hasMoreData()) {
             reader.readInteger();
         }
         List<File> lockedFiles = List.of();
-        if (reader.isHasMoreData()) {
+        if (reader.hasMoreData()) {
             lockedFiles = reader.readFiles(reader.readInteger());
         }
         return new SearchResponse(username, token, hasFreeUploadSlot, uploadSpeed, queueLength, files, lockedFiles);
@@ -54,7 +54,7 @@ public final class SearchResponseFactory {
         for (File file : searchResponse.getFiles()) {
             builder.writeFile(file);
         }
-        builder.writeByte(searchResponse.isHasFreeUploadSlot() ? 1 : 0)
+        builder.writeByte(searchResponse.hasFreeUploadSlot() ? 1 : 0)
                 .writeInteger(searchResponse.getUploadSpeed())
                 .writeInteger(searchResponse.getQueueLength())
                 .writeInteger(0)

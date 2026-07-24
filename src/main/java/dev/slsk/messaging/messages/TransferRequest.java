@@ -63,7 +63,7 @@ public final class TransferRequest implements IncomingMessage, OutgoingMessage {
         TransferDirection parsedDirection = TransferDirection.fromValue(reader.readInteger());
         int parsedToken = reader.readInteger();
         String parsedFilename = reader.readString();
-        long parsedFileSize = reader.isHasMoreData() ? reader.readLong() : 0;
+        long parsedFileSize = reader.hasMoreData() ? reader.readLong() : 0;
         return new TransferRequest(parsedDirection, parsedToken, parsedFilename, parsedFileSize);
     }
 
