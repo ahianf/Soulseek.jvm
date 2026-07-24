@@ -57,7 +57,10 @@ import dev.slsk.messaging.handlers.ServerMessageHandler;
 import dev.slsk.messaging.handlers.ServerMessageHandlerClient;
 import dev.slsk.messaging.messages.AcknowledgePrivateMessageCommand;
 import dev.slsk.messaging.messages.AcknowledgePrivilegeNotificationCommand;
+import dev.slsk.messaging.messages.CheckPrivilegesRequest;
+import dev.slsk.messaging.messages.GivePrivilegesCommand;
 import dev.slsk.messaging.messages.IOutgoingMessage;
+import dev.slsk.messaging.messages.NewPassword;
 import dev.slsk.messaging.messages.PrivateMessageCommand;
 import dev.slsk.messaging.messages.PrivateRoomAddOperator;
 import dev.slsk.messaging.messages.PrivateRoomAddUser;
@@ -67,6 +70,7 @@ import dev.slsk.messaging.messages.PrivateRoomRemoveOperator;
 import dev.slsk.messaging.messages.PrivateRoomRemoveUser;
 import dev.slsk.messaging.messages.RoomMessageCommand;
 import dev.slsk.messaging.messages.SendUploadSpeedCommand;
+import dev.slsk.messaging.messages.ServerPing;
 import dev.slsk.messaging.messages.SetOnlineStatusCommand;
 import dev.slsk.messaging.messages.SetRoomTickerCommand;
 import dev.slsk.messaging.messages.SetSharedCountsCommand;
@@ -802,6 +806,81 @@ public class SoulseekClient
                 "Failed to add user " + requestedUsername + " as member of private room " + roomName + ": ");
     }
 
+    public CompletableFuture<Void> changePasswordAsync(String password) {
+        return changePasswordAsync(password, CancellationToken.none());
+    }
+
+    public CompletableFuture<Void> changePasswordAsync(String password, CancellationToken cancellationToken) {
+        requireText(password, "password");
+        requireLoggedIn("change a password");
+        return executeCorrelatedServerRequest(
+                        new NewPassword(password),
+                        new WaitKey(MessageCode.Server.NEW_PASSWORD),
+                        String.class,
+                        cancellationToken,
+                        "Failed to change password: ")
+                .thenApply(response -> {
+                    if (!password.equals(response)) {
+                        throw new SoulseekClientException("Probably failed to change password; the response "
+                                + "from the server doesn't match the specified "
+                                + "password");
+                    }
+                    return null;
+                });
+    }
+
+    public CompletableFuture<Integer> getPrivilegesAsync() {
+        return getPrivilegesAsync(CancellationToken.none());
+    }
+
+    public CompletableFuture<Integer> getPrivilegesAsync(CancellationToken cancellationToken) {
+        requireLoggedIn("check privileges");
+        return executeCorrelatedServerRequest(
+                new CheckPrivilegesRequest(),
+                new WaitKey(MessageCode.Server.CHECK_PRIVILEGES),
+                Integer.class,
+                cancellationToken,
+                "Failed to get privileges: ");
+    }
+
+    public CompletableFuture<Void> grantUserPrivilegesAsync(String requestedUsername, int days) {
+        return grantUserPrivilegesAsync(requestedUsername, days, CancellationToken.none());
+    }
+
+    public CompletableFuture<Void> grantUserPrivilegesAsync(
+            String requestedUsername, int days, CancellationToken cancellationToken) {
+        requireText(requestedUsername, "username");
+        if (days <= 0) {
+            throw new IllegalArgumentException("The number of days granted must be greater than zero");
+        }
+        requireLoggedIn("grant user privileges");
+        return writeServerAsync(
+                new GivePrivilegesCommand(requestedUsername, days),
+                cancellationToken,
+                "Failed to grant " + days + " days of privileges to " + requestedUsername + ": ");
+    }
+
+    public CompletableFuture<Long> pingServerAsync() {
+        return pingServerAsync(CancellationToken.none());
+    }
+
+    public CompletableFuture<Long> pingServerAsync(CancellationToken cancellationToken) {
+        requireLoggedIn("send a ping");
+        CancellationToken token = defaultToken(cancellationToken);
+        CompletableFuture<Void> wait;
+        try {
+            wait = waiter.waitAsync(new WaitKey(MessageCode.Server.PING), null, token);
+        } catch (Throwable failure) {
+            return mapClientFailure(CompletableFuture.failedFuture(failure), "Failed to ping the server: ");
+        }
+        long started = System.nanoTime();
+        CompletableFuture<Void> responseWait = wait;
+        CompletableFuture<Long> operation = invokeServerWrite(new ServerPing(), token)
+                .thenCompose(ignored -> responseWait)
+                .thenApply(ignored -> TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
+        return mapClientFailure(operation, "Failed to ping the server: ");
+    }
+
     public CompletableFuture<Void> addPrivateRoomModeratorAsync(String roomName, String requestedUsername) {
         return addPrivateRoomModeratorAsync(roomName, requestedUsername, CancellationToken.none());
     }
@@ -1409,6 +1488,23 @@ public class SoulseekClient
         return mapClientFailure(operation, failurePrefix);
     }
 
+    private <T> CompletableFuture<T> executeCorrelatedServerRequest(
+            IOutgoingMessage message,
+            WaitKey waitKey,
+            Class<T> resultType,
+            CancellationToken cancellationToken,
+            String failurePrefix) {
+        CancellationToken token = defaultToken(cancellationToken);
+        CompletableFuture<T> wait;
+        try {
+            wait = waiter.waitAsync(waitKey, resultType, null, token);
+        } catch (Throwable failure) {
+            return mapClientFailure(CompletableFuture.failedFuture(failure), failurePrefix);
+        }
+        CompletableFuture<T> operation = invokeServerWrite(message, token).thenCompose(ignored -> wait);
+        return mapClientFailure(operation, failurePrefix);
+    }
+
     private CompletableFuture<Void> invokeServerWrite(IOutgoingMessage message, CancellationToken cancellationToken) {
         CompletableFuture<Void> operation;
         try {
@@ -1478,10 +1574,10 @@ public class SoulseekClient
         return token == null ? CancellationToken.none() : token;
     }
 
-    private static CompletableFuture<Void> mapClientFailure(CompletableFuture<Void> operation, String prefix) {
-        return operation.handle((ignored, failure) -> {
+    private static <T> CompletableFuture<T> mapClientFailure(CompletableFuture<T> operation, String prefix) {
+        return operation.handle((result, failure) -> {
             if (failure == null) {
-                return null;
+                return result;
             }
             Throwable cause = unwrap(failure);
             if (cause instanceof CancellationException || cause instanceof TimeoutException) {
