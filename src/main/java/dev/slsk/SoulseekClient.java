@@ -215,6 +215,7 @@ public class SoulseekClient
     private final Semaphore searchSemaphore;
     private final Semaphore stateSemaphore = new Semaphore(1);
     private final Semaphore globalUploadSemaphore;
+    private final Semaphore uploadSemaphoreSyncRoot = new Semaphore(1);
     private final IOAdapter ioAdapter;
     private final TokenBucket uploadTokenBucket;
     private final TokenBucket downloadTokenBucket;
@@ -344,7 +345,7 @@ public class SoulseekClient
             thread.setDaemon(true);
             return thread;
         });
-        cleanupScheduler.scheduleAtFixedRate(() -> {}, 5, 5, TimeUnit.MINUTES);
+        cleanupScheduler.scheduleAtFixedRate(() -> cleanupUploadSemaphoresAsync(), 15, 15, TimeUnit.MINUTES);
     }
 
     /** Returns whether client events are configured as asynchronous. */
@@ -2377,6 +2378,14 @@ public class SoulseekClient
         return uniqueKeys;
     }
 
+    final Map<String, Semaphore> getUploadSemaphoresForTest() {
+        return uploadSemaphores;
+    }
+
+    final Semaphore getUploadSemaphoreSyncRootForTest() {
+        return uploadSemaphoreSyncRoot;
+    }
+
     void setStateForTest(SoulseekClientStates value) {
         state = value;
     }
@@ -3109,9 +3118,16 @@ public class SoulseekClient
 
         private Transfer execute() {
             try {
-                perUserSemaphore = uploadSemaphores.computeIfAbsent(
-                        upload.getUsername(), ignored -> new Semaphore(options.getMaximumConcurrentUploadsPerUser()));
-                CompletableFuture<Void> perUserWait = acquirePermit(perUserSemaphore, cancellationToken);
+                await(acquirePermit(uploadSemaphoreSyncRoot, cancellationToken));
+                CompletableFuture<Void> perUserWait;
+                try {
+                    perUserSemaphore = uploadSemaphores.computeIfAbsent(
+                            upload.getUsername(),
+                            ignored -> new Semaphore(options.getMaximumConcurrentUploadsPerUser()));
+                    perUserWait = acquirePermit(perUserSemaphore, cancellationToken);
+                } finally {
+                    uploadSemaphoreSyncRoot.release();
+                }
 
                 updateState(TransferStates.QUEUED.or(TransferStates.LOCALLY));
 
@@ -3465,6 +3481,30 @@ public class SoulseekClient
                 }
             }
             return 0;
+        }
+    }
+
+    CompletableFuture<Void> cleanupUploadSemaphoresAsync() {
+        if (!uploadSemaphoreSyncRoot.tryAcquire()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        try {
+            for (Map.Entry<String, Semaphore> entry : uploadSemaphores.entrySet()) {
+                Semaphore semaphore = entry.getValue();
+                if (!semaphore.tryAcquire()) {
+                    continue;
+                }
+                if (uploadSemaphores.remove(entry.getKey(), semaphore)) {
+                    diagnostic.debug("Cleaned up upload semaphore for " + entry.getKey());
+                } else {
+                    semaphore.release();
+                }
+            }
+            return CompletableFuture.completedFuture(null);
+        } catch (Throwable failure) {
+            return CompletableFuture.failedFuture(failure);
+        } finally {
+            uploadSemaphoreSyncRoot.release();
         }
     }
 
