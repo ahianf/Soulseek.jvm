@@ -12,11 +12,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import dev.slsk.common.IWaiter;
 import dev.slsk.common.WaitKey;
 import dev.slsk.diagnostics.IDiagnosticFactory;
+import dev.slsk.eventargs.BrowseProgressUpdatedEventArgs;
+import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferNotFoundException;
 import dev.slsk.exceptions.UserEndPointException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.messaging.MessageCode;
+import dev.slsk.messaging.handlers.BrowseResponseConnection;
+import dev.slsk.messaging.messages.BrowseRequest;
 import dev.slsk.messaging.messages.FolderContentsRequest;
 import dev.slsk.messaging.messages.IOutgoingMessage;
 import dev.slsk.messaging.messages.PlaceInQueueRequest;
@@ -26,6 +30,12 @@ import dev.slsk.messaging.messages.UserAddressResponse;
 import dev.slsk.messaging.messages.UserInfoRequest;
 import dev.slsk.network.IMessageConnection;
 import dev.slsk.network.IPeerConnectionManager;
+import dev.slsk.network.MessageConnectionEventListener;
+import dev.slsk.network.MessageDataEventArgs;
+import dev.slsk.network.MessageReceivedEventArgs;
+import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
+import dev.slsk.network.tcp.ConnectionEventListener;
+import dev.slsk.options.BrowseOptions;
 import dev.slsk.transfer.TransferInternal;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -328,6 +338,119 @@ class SoulseekClientPeerRequestTest {
         queueFixture.close();
     }
 
+    @Test
+    void browseReturnsResponseAndReportsInitialAndFinalProgress() {
+        Fixture fixture = new Fixture();
+        BrowseResponse response = new BrowseResponse(List.of(new Directory("shared")));
+        fixture.waiter.results.put(BrowseResponse.class, CompletableFuture.completedFuture(response));
+        fixture.waiter.results.put(
+                BrowseResponseConnection.class,
+                CompletableFuture.completedFuture(new BrowseResponseConnection(
+                        new MessageReceivedEventArgs(104, new byte[] {1, 2, 3, 4}), fixture.peer.proxy)));
+        fixture.waiter.results.put(
+                UserAddressResponse.class,
+                CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));
+        List<BrowseProgressUpdatedEventArgs> events = new ArrayList<>();
+        List<dev.slsk.options.BrowseProgress> callbacks = new ArrayList<>();
+        fixture.client.addBrowseProgressUpdatedListener((sender, eventArgs) -> events.add(eventArgs));
+        CancellationTokenSource source = new CancellationTokenSource();
+        CancellationToken token = source.getToken();
+
+        BrowseResponse actual = fixture.client
+                .browseAsync("alice", new BrowseOptions(1234, callbacks::add), token)
+                .join();
+
+        assertSame(response, actual);
+        assertInstanceOf(BrowseRequest.class, fixture.peer.message);
+        assertEquals(
+                List.of(
+                        new WaitKey(MessageCode.Peer.BROWSE_RESPONSE, "alice"),
+                        new WaitKey(dev.slsk.common.Constants.WaitKey.BROWSE_RESPONSE_CONNECTION, "alice"),
+                        new WaitKey(MessageCode.Server.GET_PEER_ADDRESS, "alice")),
+                fixture.waiter.keys);
+        assertEquals(1234, fixture.waiter.lastTimeout);
+        assertEquals(2, events.size());
+        assertEquals(0.0, events.get(0).getPercentComplete());
+        assertEquals(100.0, events.get(1).getPercentComplete());
+        assertEquals(2, callbacks.size());
+        assertEquals(0.0, callbacks.get(0).percentComplete());
+        assertEquals(100.0, callbacks.get(1).percentComplete());
+        fixture.waiter.tokens.forEach(recorded -> assertSame(token, recorded));
+        assertSame(token, fixture.peer.token);
+        fixture.close();
+    }
+
+    @Test
+    void browseValidatesAndPreservesSourceFailureClasses() {
+        Fixture fixture = new Fixture();
+        for (String bad : new String[] {null, "", " ", "\t"}) {
+            assertThrows(IllegalArgumentException.class, () -> fixture.client.browseAsync(bad));
+        }
+        fixture.client.setStateForTest(SoulseekClientStates.DISCONNECTED);
+        assertThrows(IllegalStateException.class, () -> fixture.client.browseAsync("alice"));
+        fixture.client.setStateForTest(SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN));
+
+        fixture.waiter.results.put(BrowseResponse.class, new CompletableFuture<>());
+        TimeoutException timeout = new TimeoutException("header timed out");
+        fixture.waiter.results.put(BrowseResponseConnection.class, CompletableFuture.failedFuture(timeout));
+        fixture.waiter.results.put(
+                UserAddressResponse.class,
+                CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));
+        assertSame(timeout, failureOf(fixture.client.browseAsync("alice")));
+
+        UserOfflineException offline = new UserOfflineException("offline");
+        fixture.waiter.results.put(BrowseResponseConnection.class, new CompletableFuture<>());
+        fixture.waiter.results.put(UserAddressResponse.class, CompletableFuture.failedFuture(offline));
+        assertSame(offline, failureOf(fixture.client.browseAsync("bob")));
+
+        CancellationException cancellation = new CancellationException("cancelled");
+        fixture.waiter.results.put(BrowseResponse.class, CompletableFuture.failedFuture(cancellation));
+        fixture.waiter.results.put(
+                BrowseResponseConnection.class,
+                CompletableFuture.completedFuture(new BrowseResponseConnection(
+                        new MessageReceivedEventArgs(5, new byte[] {1}), fixture.peer.proxy)));
+        fixture.waiter.results.put(
+                UserAddressResponse.class,
+                CompletableFuture.completedFuture(new UserAddressResponse("carol", ENDPOINT)));
+        assertSame(cancellation, failureOf(fixture.client.browseAsync("carol")));
+        fixture.close();
+    }
+
+    @Test
+    void browseFailsIndefiniteWaitOnSetupFailureAndDisconnect() {
+        Fixture setupFixture = new Fixture();
+        setupFixture.waiter.results.put(BrowseResponse.class, new CompletableFuture<>());
+        setupFixture.waiter.results.put(BrowseResponseConnection.class, new CompletableFuture<>());
+        setupFixture.waiter.results.put(
+                UserAddressResponse.class,
+                CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));
+        RuntimeException expected = new RuntimeException("write failed");
+        setupFixture.peer.synchronousFailure = expected;
+
+        SoulseekClientException mapped =
+                assertInstanceOf(SoulseekClientException.class, failureOf(setupFixture.client.browseAsync("alice")));
+        assertSame(expected, mapped.getCause());
+        assertEquals(new WaitKey(MessageCode.Peer.BROWSE_RESPONSE, "alice"), setupFixture.waiter.failedKey);
+        setupFixture.close();
+
+        Fixture disconnectFixture = new Fixture();
+        disconnectFixture.waiter.results.put(BrowseResponse.class, new CompletableFuture<>());
+        disconnectFixture.waiter.results.put(
+                BrowseResponseConnection.class,
+                CompletableFuture.completedFuture(new BrowseResponseConnection(
+                        new MessageReceivedEventArgs(5, new byte[] {1}), disconnectFixture.peer.proxy)));
+        disconnectFixture.waiter.results.put(
+                UserAddressResponse.class, CompletableFuture.completedFuture(new UserAddressResponse("bob", ENDPOINT)));
+
+        CompletableFuture<BrowseResponse> operation = disconnectFixture.client.browseAsync("bob");
+        disconnectFixture.peer.raiseDisconnected("gone");
+
+        SoulseekClientException disconnected = assertInstanceOf(SoulseekClientException.class, failureOf(operation));
+        ConnectionException cause = assertInstanceOf(ConnectionException.class, disconnected.getCause());
+        assertEquals("Peer connection disconnected unexpectedly: gone", cause.getMessage());
+        disconnectFixture.close();
+    }
+
     private static Throwable failureOf(CompletableFuture<?> future) {
         try {
             future.join();
@@ -402,6 +525,8 @@ class SoulseekClientPeerRequestTest {
         private CancellationToken token;
         private CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
         private RuntimeException synchronousFailure;
+        private ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedListener;
+        private MessageConnectionEventListener<MessageDataEventArgs> messageDataListener;
         private final IMessageConnection proxy = (IMessageConnection) Proxy.newProxyInstance(
                 IMessageConnection.class.getClassLoader(), new Class<?>[] {IMessageConnection.class}, this::invoke);
 
@@ -416,7 +541,25 @@ class SoulseekClientPeerRequestTest {
                 }
                 return result;
             }
+            if (method.getName().equals("addDisconnectedListener")) {
+                disconnectedListener = cast(arguments[0]);
+                return null;
+            }
+            if (method.getName().equals("addMessageDataReadListener")) {
+                messageDataListener = cast(arguments[0]);
+                return null;
+            }
+            if (method.getName().equals("removeMessageDataReadListener")) {
+                if (messageDataListener == arguments[0]) {
+                    messageDataListener = null;
+                }
+                return null;
+            }
             return defaultValue(method.getReturnType());
+        }
+
+        private void raiseDisconnected(String message) {
+            disconnectedListener.handle(proxy, new ConnectionDisconnectedEventArgs(message));
         }
     }
 
@@ -424,6 +567,8 @@ class SoulseekClientPeerRequestTest {
         private final Map<Class<?>, CompletableFuture<?>> results = new HashMap<>();
         private final List<WaitKey> keys = new ArrayList<>();
         private final List<CancellationToken> tokens = new ArrayList<>();
+        private Integer lastTimeout;
+        private WaitKey failedKey;
         private final IWaiter proxy = (IWaiter)
                 Proxy.newProxyInstance(IWaiter.class.getClassLoader(), new Class<?>[] {IWaiter.class}, this::invoke);
 
@@ -431,11 +576,34 @@ class SoulseekClientPeerRequestTest {
             if (method.getName().equals("waitAsync") && arguments.length == 4) {
                 keys.add((WaitKey) arguments[0]);
                 Class<?> resultType = (Class<?>) arguments[1];
+                if (arguments[2] != null) {
+                    lastTimeout = (Integer) arguments[2];
+                }
                 tokens.add((CancellationToken) arguments[3]);
                 return results.getOrDefault(resultType, new CompletableFuture<>());
             }
+            if (method.getName().equals("waitIndefinitelyAsync") && arguments.length == 3) {
+                keys.add((WaitKey) arguments[0]);
+                Class<?> resultType = (Class<?>) arguments[1];
+                tokens.add((CancellationToken) arguments[2]);
+                return results.getOrDefault(resultType, new CompletableFuture<>());
+            }
+            if (method.getName().equals("fail")) {
+                failedKey = (WaitKey) arguments[0];
+                Throwable failure = (Throwable) arguments[1];
+                CompletableFuture<?> browse = results.get(BrowseResponse.class);
+                if (browse != null && !browse.isDone()) {
+                    browse.completeExceptionally(failure);
+                }
+                return null;
+            }
             return defaultValue(method.getReturnType());
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T cast(Object value) {
+        return (T) value;
     }
 
     private static final class PeerManagerProbe {

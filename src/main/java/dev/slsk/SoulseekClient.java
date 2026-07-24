@@ -4,6 +4,7 @@
 
 package dev.slsk;
 
+import dev.slsk.common.Constants;
 import dev.slsk.common.IOAdapter;
 import dev.slsk.common.IWaiter;
 import dev.slsk.common.TokenBucket;
@@ -37,6 +38,7 @@ import dev.slsk.eventargs.SoulseekClientStateChangedEventArgs;
 import dev.slsk.eventargs.TransferProgressUpdatedEventArgs;
 import dev.slsk.eventargs.TransferStateChangedEventArgs;
 import dev.slsk.eventargs.UserCannotConnectEventArgs;
+import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.KickedFromServerException;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.RoomJoinForbiddenException;
@@ -49,6 +51,7 @@ import dev.slsk.exceptions.UserEndPointException;
 import dev.slsk.exceptions.UserNotFoundException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.messaging.MessageCode;
+import dev.slsk.messaging.handlers.BrowseResponseConnection;
 import dev.slsk.messaging.handlers.DistributedMessageHandler;
 import dev.slsk.messaging.handlers.DistributedMessageHandlerClient;
 import dev.slsk.messaging.handlers.IDistributedMessageHandler;
@@ -61,6 +64,7 @@ import dev.slsk.messaging.handlers.ServerMessageHandler;
 import dev.slsk.messaging.handlers.ServerMessageHandlerClient;
 import dev.slsk.messaging.messages.AcknowledgePrivateMessageCommand;
 import dev.slsk.messaging.messages.AcknowledgePrivilegeNotificationCommand;
+import dev.slsk.messaging.messages.BrowseRequest;
 import dev.slsk.messaging.messages.CheckPrivilegesRequest;
 import dev.slsk.messaging.messages.FolderContentsRequest;
 import dev.slsk.messaging.messages.GivePrivilegesCommand;
@@ -109,6 +113,8 @@ import dev.slsk.network.PeerConnectionManager;
 import dev.slsk.network.PeerConnectionManagerClient;
 import dev.slsk.network.PeerEndpoint;
 import dev.slsk.network.tcp.IListener;
+import dev.slsk.options.BrowseOptions;
+import dev.slsk.options.BrowseProgress;
 import dev.slsk.options.SoulseekClientOptions;
 import dev.slsk.search.ISearchResponder;
 import dev.slsk.search.SearchInternal;
@@ -844,6 +850,90 @@ public class SoulseekClient
                     }
                     return null;
                 });
+    }
+
+    public CompletableFuture<BrowseResponse> browseAsync(String requestedUsername) {
+        return browseAsync(requestedUsername, null, CancellationToken.none());
+    }
+
+    public CompletableFuture<BrowseResponse> browseAsync(String requestedUsername, BrowseOptions browseOptions) {
+        return browseAsync(requestedUsername, browseOptions, CancellationToken.none());
+    }
+
+    public CompletableFuture<BrowseResponse> browseAsync(
+            String requestedUsername, CancellationToken cancellationToken) {
+        return browseAsync(requestedUsername, null, cancellationToken);
+    }
+
+    public CompletableFuture<BrowseResponse> browseAsync(
+            String requestedUsername, BrowseOptions browseOptions, CancellationToken cancellationToken) {
+        requireText(requestedUsername, "username");
+        requireLoggedIn("browse");
+        BrowseOptions operationOptions = browseOptions == null ? new BrowseOptions() : browseOptions;
+        CancellationToken token = defaultToken(cancellationToken);
+        WaitKey browseWaitKey = new WaitKey(MessageCode.Peer.BROWSE_RESPONSE, requestedUsername);
+        CompletableFuture<BrowseResponse> browseWait;
+        CompletableFuture<BrowseResponseConnection> connectionWait;
+        try {
+            browseWait = waiter.waitIndefinitelyAsync(browseWaitKey, BrowseResponse.class, token);
+            connectionWait = waiter.waitAsync(
+                    new WaitKey(Constants.WaitKey.BROWSE_RESPONSE_CONNECTION, requestedUsername),
+                    BrowseResponseConnection.class,
+                    operationOptions.getResponseTimeout(),
+                    token);
+        } catch (Throwable failure) {
+            return mapClientFailure(
+                    CompletableFuture.failedFuture(failure),
+                    "Failed to browse user " + requestedUsername + ": ",
+                    UserOfflineException.class);
+        }
+
+        CompletableFuture<BrowseResponseConnection> setup = getUserEndPointAsync(requestedUsername, token)
+                .thenCompose(endpoint ->
+                        peerConnectionManager.getOrAddMessageConnectionAsync(requestedUsername, endpoint, token))
+                .thenCompose(connection -> invokeMessageWrite(connection, new BrowseRequest(), token))
+                .thenCompose(ignored -> connectionWait);
+        CompletableFuture<BrowseResponse> operation = setup.handle((responseConnection, failure) -> {
+                    if (failure == null) {
+                        return responseConnection;
+                    }
+                    Throwable cause = unwrap(failure);
+                    waiter.fail(browseWaitKey, cause);
+                    throw new CompletionException(cause);
+                })
+                .thenCompose(responseConnection -> {
+                    IMessageConnection connection = responseConnection.connection();
+                    long responseLength = responseConnection.eventArgs().getLength() - 4;
+                    AtomicBoolean completionEventFired = new AtomicBoolean();
+                    dev.slsk.network.MessageConnectionEventListener<dev.slsk.network.MessageDataEventArgs>
+                            progressListener = (sender, eventArgs) -> updateBrowseProgress(
+                            requestedUsername,
+                            operationOptions,
+                            eventArgs.getCurrentLength(),
+                            eventArgs.getTotalLength(),
+                            completionEventFired);
+                    connection.addDisconnectedListener((sender, eventArgs) -> waiter.fail(
+                            browseWaitKey,
+                            new ConnectionException(
+                                    "Peer connection disconnected " + "unexpectedly: " + eventArgs.getMessage(),
+                                    eventArgs.getException())));
+                    connection.addMessageDataReadListener(progressListener);
+                    updateBrowseProgress(requestedUsername, operationOptions, 0, responseLength, completionEventFired);
+                    return browseWait.thenApply(response -> {
+                        connection.removeMessageDataReadListener(progressListener);
+                        if (!completionEventFired.get()) {
+                            updateBrowseProgress(
+                                    requestedUsername,
+                                    operationOptions,
+                                    responseLength,
+                                    responseLength,
+                                    completionEventFired);
+                        }
+                        return response;
+                    });
+                });
+        return mapClientFailure(
+                operation, "Failed to browse user " + requestedUsername + ": ", UserOfflineException.class);
     }
 
     public CompletableFuture<Void> connectToUserAsync(String requestedUsername) {
@@ -1810,6 +1900,30 @@ public class SoulseekClient
         if (value == null || value.isEmpty()) {
             throw new IllegalArgumentException(name + " must not be null or empty");
         }
+    }
+
+    private void updateBrowseProgress(
+            String requestedUsername,
+            BrowseOptions operationOptions,
+            long bytesTransferred,
+            long size,
+            AtomicBoolean completionEventFired) {
+        BrowseProgressUpdatedEventArgs eventArgs =
+                new BrowseProgressUpdatedEventArgs(requestedUsername, bytesTransferred, size);
+        if (Double.compare(eventArgs.getPercentComplete(), 100.0) == 0) {
+            completionEventFired.set(true);
+        }
+        if (operationOptions.getProgressUpdated() != null) {
+            operationOptions
+                    .getProgressUpdated()
+                    .onProgressUpdated(new BrowseProgress(
+                            eventArgs.getUsername(),
+                            eventArgs.getBytesTransferred(),
+                            eventArgs.getBytesRemaining(),
+                            eventArgs.getPercentComplete(),
+                            eventArgs.getSize()));
+        }
+        raise(Event.BROWSE_PROGRESS_UPDATED, eventArgs);
     }
 
     private CompletableFuture<Void> writeServerAsync(
