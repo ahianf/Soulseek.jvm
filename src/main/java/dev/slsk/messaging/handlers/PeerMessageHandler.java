@@ -397,8 +397,8 @@ public final class PeerMessageHandler implements IPeerMessageHandler {
     private CompletableFuture<Void> handleTransferRequest(IMessageConnection connection, byte[] message) {
         TransferRequest request = TransferRequest.fromByteArray(message);
         if (request.getDirection() == TransferDirection.UPLOAD) {
-            boolean tracked = !client.getDownloads().isEmpty()
-                    && client.getDownloads().values().stream()
+            boolean tracked = !client.getDownloadDictionary().isEmpty()
+                    && client.getDownloadDictionary().values().stream()
                             .anyMatch(download -> Objects.equals(download.getUsername(), connection.getUsername())
                                     && Objects.equals(download.getFilename(), request.getFilename()));
             if (tracked) {

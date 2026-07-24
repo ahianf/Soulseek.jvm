@@ -18,5 +18,5 @@ public interface PeerMessageHandlerClient {
 
     Map<Integer, SearchInternal> getSearches();
 
-    Map<Integer, TransferInternal> getDownloads();
+    Map<Integer, TransferInternal> getDownloadDictionary();
 }

@@ -624,7 +624,7 @@ class PeerMessageHandlerTest {
         }
 
         @Override
-        public Map<Integer, TransferInternal> getDownloads() {
+        public Map<Integer, TransferInternal> getDownloadDictionary() {
             return downloads;
         }
     }

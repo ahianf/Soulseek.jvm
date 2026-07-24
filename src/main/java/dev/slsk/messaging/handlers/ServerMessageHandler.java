@@ -508,8 +508,8 @@ public final class ServerMessageHandler implements IServerMessageHandler {
                 + response.getUsername() + " ("
                 + response.getIpEndPoint() + ") for remote token "
                 + response.getToken());
-        boolean expected = !client.getDownloads().isEmpty()
-                && client.getDownloads().values().stream()
+        boolean expected = !client.getDownloadDictionary().isEmpty()
+                && client.getDownloadDictionary().values().stream()
                         .anyMatch(transfer -> Objects.equals(transfer.getUsername(), response.getUsername()));
         if (!expected) {
             return CompletableFuture.failedFuture(new SoulseekClientException("Unexpected transfer request from "
@@ -522,7 +522,7 @@ public final class ServerMessageHandler implements IServerMessageHandler {
     }
 
     private void correlateTransferConnection(ConnectToPeerResponse response, TransferConnectionResult result) {
-        TransferInternal download = client.getDownloads().values().stream()
+        TransferInternal download = client.getDownloadDictionary().values().stream()
                 .filter(transfer -> Objects.equals(transfer.getRemoteToken(), result.remoteToken())
                         && Objects.equals(transfer.getUsername(), response.getUsername()))
                 .findFirst()
