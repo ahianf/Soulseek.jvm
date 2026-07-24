@@ -18,16 +18,16 @@ import dev.slsk.diagnostics.DiagnosticEventArgs;
 import dev.slsk.diagnostics.DiagnosticEventListener;
 import dev.slsk.diagnostics.DiagnosticSink;
 import dev.slsk.diagnostics.FilteringDiagnosticSink;
-import dev.slsk.eventargs.PrivateMessageReceivedEventArgs;
-import dev.slsk.eventargs.PrivilegeNotificationReceivedEventArgs;
-import dev.slsk.eventargs.PublicChatMessageReceivedEventArgs;
-import dev.slsk.eventargs.RoomJoinedEventArgs;
-import dev.slsk.eventargs.RoomLeftEventArgs;
-import dev.slsk.eventargs.RoomMessageReceivedEventArgs;
-import dev.slsk.eventargs.RoomTickerAddedEventArgs;
-import dev.slsk.eventargs.RoomTickerListReceivedEventArgs;
-import dev.slsk.eventargs.RoomTickerRemovedEventArgs;
-import dev.slsk.eventargs.UserCannotConnectEventArgs;
+import dev.slsk.events.PrivateMessageReceivedEvent;
+import dev.slsk.events.PrivilegeNotificationReceivedEvent;
+import dev.slsk.events.PublicChatMessageReceivedEvent;
+import dev.slsk.events.RoomJoinedEvent;
+import dev.slsk.events.RoomLeftEvent;
+import dev.slsk.events.RoomMessageReceivedEvent;
+import dev.slsk.events.RoomTickerAddedEvent;
+import dev.slsk.events.RoomTickerListReceivedEvent;
+import dev.slsk.events.RoomTickerRemovedEvent;
+import dev.slsk.events.UserCannotConnectEvent;
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.exceptions.RoomJoinForbiddenException;
 import dev.slsk.exceptions.SoulseekClientException;
@@ -243,8 +243,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 case ADD_PRIVILEGED_USER -> {
                     raise(
                             ServerMessageEvent.PRIVILEGE_NOTIFICATION_RECEIVED,
-                            new PrivilegeNotificationReceivedEventArgs(
-                                    PrivilegedUserNotification.fromByteArray(message)));
+                            new PrivilegeNotificationReceivedEvent(PrivilegedUserNotification.fromByteArray(message)));
                     yield completed();
                 }
                 case NOTIFY_PRIVILEGES -> handlePrivilegeNotification(message);
@@ -308,52 +307,51 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                     client.getWaiter().complete(new WaitKey(code, response.getRoomName()));
                     raise(
                             ServerMessageEvent.ROOM_LEFT,
-                            new RoomLeftEventArgs(response.getRoomName(), client.getUsername()));
+                            new RoomLeftEvent(response.getRoomName(), client.getUsername()));
                     yield completed();
                 }
                 case SAY_IN_CHAT_ROOM -> {
                     raise(
                             ServerMessageEvent.ROOM_MESSAGE_RECEIVED,
-                            new RoomMessageReceivedEventArgs(RoomMessageNotification.fromByteArray(message)));
+                            new RoomMessageReceivedEvent(RoomMessageNotification.fromByteArray(message)));
                     yield completed();
                 }
                 case PUBLIC_CHAT -> {
                     raise(
                             ServerMessageEvent.PUBLIC_CHAT_MESSAGE_RECEIVED,
-                            new PublicChatMessageReceivedEventArgs(
-                                    PublicChatMessageNotification.fromByteArray(message)));
+                            new PublicChatMessageReceivedEvent(PublicChatMessageNotification.fromByteArray(message)));
                     yield completed();
                 }
                 case USER_JOINED_ROOM -> {
                     raise(
                             ServerMessageEvent.ROOM_JOINED,
-                            new RoomJoinedEventArgs(UserJoinedRoomNotification.fromByteArray(message)));
+                            new RoomJoinedEvent(UserJoinedRoomNotification.fromByteArray(message)));
                     yield completed();
                 }
                 case USER_LEFT_ROOM -> {
                     raise(
                             ServerMessageEvent.ROOM_LEFT,
-                            new RoomLeftEventArgs(UserLeftRoomNotification.fromByteArray(message)));
+                            new RoomLeftEvent(UserLeftRoomNotification.fromByteArray(message)));
                     yield completed();
                 }
                 case ROOM_TICKERS -> {
                     raise(
                             ServerMessageEvent.ROOM_TICKER_LIST_RECEIVED,
-                            new RoomTickerListReceivedEventArgs(RoomTickerListNotification.fromByteArray(message)));
+                            new RoomTickerListReceivedEvent(RoomTickerListNotification.fromByteArray(message)));
                     yield completed();
                 }
                 case ROOM_TICKER_ADD -> {
                     RoomTickerAddedNotification added = RoomTickerAddedNotification.fromByteArray(message);
                     raise(
                             ServerMessageEvent.ROOM_TICKER_ADDED,
-                            new RoomTickerAddedEventArgs(added.getRoomName(), added.getTicker()));
+                            new RoomTickerAddedEvent(added.getRoomName(), added.getTicker()));
                     yield completed();
                 }
                 case ROOM_TICKER_REMOVE -> {
                     RoomTickerRemovedNotification removed = RoomTickerRemovedNotification.fromByteArray(message);
                     raise(
                             ServerMessageEvent.ROOM_TICKER_REMOVED,
-                            new RoomTickerRemovedEventArgs(removed.getRoomName(), removed.getUsername()));
+                            new RoomTickerRemovedEvent(removed.getRoomName(), removed.getUsername()));
                     yield completed();
                 }
                 case PRIVATE_ROOM_ADD_USER -> {
@@ -413,7 +411,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         PrivilegeNotification notification = PrivilegeNotification.fromByteArray(message);
         raise(
                 ServerMessageEvent.PRIVILEGE_NOTIFICATION_RECEIVED,
-                new PrivilegeNotificationReceivedEventArgs(notification.getUsername(), notification.getId()));
+                new PrivilegeNotificationReceivedEvent(notification.getUsername(), notification.getId()));
         if (!client.getOptions().isAutoAcknowledgePrivilegeNotifications()) {
             return completed();
         }
@@ -422,7 +420,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
 
     private CompletableFuture<Void> handlePrivateMessage(byte[] message) {
         PrivateMessageNotification notification = PrivateMessageNotification.fromByteArray(message);
-        raise(ServerMessageEvent.PRIVATE_MESSAGE_RECEIVED, new PrivateMessageReceivedEventArgs(notification));
+        raise(ServerMessageEvent.PRIVATE_MESSAGE_RECEIVED, new PrivateMessageReceivedEvent(notification));
         if (!client.getOptions().isAutoAcknowledgePrivateMessages()) {
             return completed();
         }
@@ -460,7 +458,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                         : " from user " + cannotConnect.getUsername()));
         client.getSearchResponder().tryDiscard(cannotConnect.getToken());
         if (cannotConnect.getUsername() != null && !cannotConnect.getUsername().isEmpty()) {
-            raise(ServerMessageEvent.USER_CANNOT_CONNECT, new UserCannotConnectEventArgs(cannotConnect));
+            raise(ServerMessageEvent.USER_CANNOT_CONNECT, new UserCannotConnectEvent(cannotConnect));
         }
     }
 

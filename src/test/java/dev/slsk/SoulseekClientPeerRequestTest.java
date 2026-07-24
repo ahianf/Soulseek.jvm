@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import dev.slsk.common.WaitKey;
 import dev.slsk.common.Waiter;
 import dev.slsk.diagnostics.DiagnosticSink;
-import dev.slsk.eventargs.BrowseProgressUpdatedEventArgs;
+import dev.slsk.events.BrowseProgressUpdatedEvent;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferNotFoundException;
@@ -350,7 +350,7 @@ class SoulseekClientPeerRequestTest {
         fixture.waiter.results.put(
                 UserAddressResponse.class,
                 CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));
-        List<BrowseProgressUpdatedEventArgs> events = new ArrayList<>();
+        List<BrowseProgressUpdatedEvent> events = new ArrayList<>();
         List<dev.slsk.options.BrowseProgress> callbacks = new ArrayList<>();
         fixture.client.addBrowseProgressUpdatedListener((sender, eventArgs) -> events.add(eventArgs));
         CancellationTokenSource source = new CancellationTokenSource();

@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.eventargs.UserCannotConnectEventArgs;
+import dev.slsk.events.UserCannotConnectEvent;
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.messaging.MessageBuilder;
@@ -127,7 +127,7 @@ class ConnectionServerResponseTest {
         assertNull(CannotConnect.fromByteArray(tokenOnly.toByteArray()).getUsername());
         assertArrayEquals(tokenOnly.toByteArray(), new CannotConnect(-42, "").toByteArray());
 
-        UserCannotConnectEventArgs eventArgs = new UserCannotConnectEventArgs(withName);
+        UserCannotConnectEvent eventArgs = new UserCannotConnectEvent(withName);
         assertEquals(-42, eventArgs.getToken());
         assertEquals("alice", eventArgs.getUsername());
     }

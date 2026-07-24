@@ -15,8 +15,8 @@ import dev.slsk.diagnostics.DiagnosticEventArgs;
 import dev.slsk.diagnostics.DiagnosticEventListener;
 import dev.slsk.diagnostics.DiagnosticSink;
 import dev.slsk.diagnostics.FilteringDiagnosticSink;
-import dev.slsk.eventargs.SearchRequestEventArgs;
-import dev.slsk.eventargs.SearchRequestResponseEventArgs;
+import dev.slsk.events.SearchRequestEvent;
+import dev.slsk.events.SearchRequestResponseEvent;
 import dev.slsk.network.MessageConnection;
 import dev.slsk.options.SearchResponseResolver;
 import java.net.InetSocketAddress;
@@ -30,11 +30,11 @@ public final class DefaultSearchResponder implements SearchResponder {
     private final SearchResponderClient client;
     private final DiagnosticSink diagnostic;
     private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<SearchResponderEventListener<SearchRequestEventArgs>> requestListeners =
+    private final CopyOnWriteArrayList<SearchResponderEventListener<SearchRequestEvent>> requestListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<SearchResponderEventListener<SearchRequestResponseEventArgs>>
+    private final CopyOnWriteArrayList<SearchResponderEventListener<SearchRequestResponseEvent>>
             responseDeliveredListeners = new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<SearchResponderEventListener<SearchRequestResponseEventArgs>>
+    private final CopyOnWriteArrayList<SearchResponderEventListener<SearchRequestResponseEvent>>
             responseFailedListeners = new CopyOnWriteArrayList<>();
 
     /** Creates a responder with its default diagnostic factory. */
@@ -61,34 +61,33 @@ public final class DefaultSearchResponder implements SearchResponder {
     }
 
     @Override
-    public void addRequestReceivedListener(SearchResponderEventListener<SearchRequestEventArgs> listener) {
+    public void addRequestReceivedListener(SearchResponderEventListener<SearchRequestEvent> listener) {
         requestListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override
-    public void removeRequestReceivedListener(SearchResponderEventListener<SearchRequestEventArgs> listener) {
+    public void removeRequestReceivedListener(SearchResponderEventListener<SearchRequestEvent> listener) {
         requestListeners.remove(listener);
     }
 
     @Override
-    public void addResponseDeliveredListener(SearchResponderEventListener<SearchRequestResponseEventArgs> listener) {
+    public void addResponseDeliveredListener(SearchResponderEventListener<SearchRequestResponseEvent> listener) {
         responseDeliveredListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override
-    public void removeResponseDeliveredListener(SearchResponderEventListener<SearchRequestResponseEventArgs> listener) {
+    public void removeResponseDeliveredListener(SearchResponderEventListener<SearchRequestResponseEvent> listener) {
         responseDeliveredListeners.remove(listener);
     }
 
     @Override
-    public void addResponseDeliveryFailedListener(
-            SearchResponderEventListener<SearchRequestResponseEventArgs> listener) {
+    public void addResponseDeliveryFailedListener(SearchResponderEventListener<SearchRequestResponseEvent> listener) {
         responseFailedListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override
     public void removeResponseDeliveryFailedListener(
-            SearchResponderEventListener<SearchRequestResponseEventArgs> listener) {
+            SearchResponderEventListener<SearchRequestResponseEvent> listener) {
         responseFailedListeners.remove(listener);
     }
 
@@ -118,7 +117,7 @@ public final class DefaultSearchResponder implements SearchResponder {
     @Override
     public CompletableFuture<Boolean> tryRespondAsync(String username, int token, String query) {
         try {
-            raiseRequestReceived(new SearchRequestEventArgs(username, token, query));
+            raiseRequestReceived(new SearchRequestEvent(username, token, query));
         } catch (Throwable failure) {
             return CompletableFuture.failedFuture(failure);
         }
@@ -317,22 +316,22 @@ public final class DefaultSearchResponder implements SearchResponder {
         diagnosticListeners.forEach(listener -> listener.handle(this, args));
     }
 
-    private void raiseRequestReceived(SearchRequestEventArgs args) {
+    private void raiseRequestReceived(SearchRequestEvent args) {
         requestListeners.forEach(listener -> listener.handle(this, args));
     }
 
     private void raiseResponseDelivered(SearchResponseCacheRecord record) {
-        SearchRequestResponseEventArgs args = toEventArgs(record);
+        SearchRequestResponseEvent args = toEventArgs(record);
         responseDeliveredListeners.forEach(listener -> listener.handle(this, args));
     }
 
     private void raiseResponseFailed(SearchResponseCacheRecord record) {
-        SearchRequestResponseEventArgs args = toEventArgs(record);
+        SearchRequestResponseEvent args = toEventArgs(record);
         responseFailedListeners.forEach(listener -> listener.handle(this, args));
     }
 
-    private static SearchRequestResponseEventArgs toEventArgs(SearchResponseCacheRecord record) {
-        return new SearchRequestResponseEventArgs(
+    private static SearchRequestResponseEvent toEventArgs(SearchResponseCacheRecord record) {
+        return new SearchRequestResponseEvent(
                 record.username(), record.token(), record.query(), record.searchResponse());
     }
 

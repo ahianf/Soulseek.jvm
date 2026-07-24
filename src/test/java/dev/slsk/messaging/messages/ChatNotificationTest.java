@@ -9,10 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.slsk.RoomTicker;
-import dev.slsk.eventargs.PrivateMessageReceivedEventArgs;
-import dev.slsk.eventargs.PublicChatMessageReceivedEventArgs;
-import dev.slsk.eventargs.RoomMessageReceivedEventArgs;
-import dev.slsk.eventargs.RoomTickerListReceivedEventArgs;
+import dev.slsk.events.PrivateMessageReceivedEvent;
+import dev.slsk.events.PublicChatMessageReceivedEvent;
+import dev.slsk.events.RoomMessageReceivedEvent;
+import dev.slsk.events.RoomTickerListReceivedEvent;
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.messaging.MessageBuilder;
@@ -154,23 +154,23 @@ class ChatNotificationTest {
     @Test
     @DisplayName("Protocol notifications map to public event arguments")
     void notificationsMapToEventArguments() {
-        PrivateMessageReceivedEventArgs privateArgs =
-                new PrivateMessageReceivedEventArgs(PrivateMessageNotification.fromByteArray(privateMessage(0)));
+        PrivateMessageReceivedEvent privateArgs =
+                new PrivateMessageReceivedEvent(PrivateMessageNotification.fromByteArray(privateMessage(0)));
         assertEquals(42, privateArgs.getId());
         assertEquals("alice", privateArgs.getUsername());
         assertEquals(true, privateArgs.isReplayed());
 
-        RoomMessageReceivedEventArgs roomArgs = new RoomMessageReceivedEventArgs(
+        RoomMessageReceivedEvent roomArgs = new RoomMessageReceivedEvent(
                 RoomMessageNotification.fromByteArray(threeStrings(MessageCode.Server.SAY_IN_CHAT_ROOM)));
         assertChat(roomArgs.getRoomName(), roomArgs.getUsername(), roomArgs.getMessage());
 
-        PublicChatMessageReceivedEventArgs publicArgs = new PublicChatMessageReceivedEventArgs(
+        PublicChatMessageReceivedEvent publicArgs = new PublicChatMessageReceivedEvent(
                 PublicChatMessageNotification.fromByteArray(threeStrings(MessageCode.Server.PUBLIC_CHAT)));
         assertChat(publicArgs.getRoomName(), publicArgs.getUsername(), publicArgs.getMessage());
 
         RoomTickerListNotification list =
                 new RoomTickerListNotification("room", 99, List.of(new RoomTicker("alice", "hello")));
-        RoomTickerListReceivedEventArgs tickerArgs = new RoomTickerListReceivedEventArgs(list);
+        RoomTickerListReceivedEvent tickerArgs = new RoomTickerListReceivedEvent(list);
         assertEquals("room", tickerArgs.getRoomName());
         assertEquals(1, tickerArgs.getTickerCount());
     }

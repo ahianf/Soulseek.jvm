@@ -16,10 +16,10 @@ import dev.slsk.common.TokenFactory;
 import dev.slsk.common.Waiter;
 import dev.slsk.diagnostics.DiagnosticEventArgs;
 import dev.slsk.diagnostics.DiagnosticEventListener;
-import dev.slsk.eventargs.DistributedChildEventArgs;
-import dev.slsk.eventargs.DownloadDeniedEventArgs;
-import dev.slsk.eventargs.DownloadFailedEventArgs;
-import dev.slsk.eventargs.SoulseekClientDisconnectedEventArgs;
+import dev.slsk.events.DistributedChildEvent;
+import dev.slsk.events.DownloadDeniedEvent;
+import dev.slsk.events.DownloadFailedEvent;
+import dev.slsk.events.SoulseekClientDisconnectedEvent;
 import dev.slsk.exceptions.KickedFromServerException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
@@ -105,7 +105,7 @@ class SoulseekClientTest {
         fixture.client.addStateChangedListener((sender, eventArgs) -> order.add("state:" + eventArgs.getState()));
         fixture.client.addConnectedListener((sender, eventArgs) -> order.add("connected"));
         fixture.client.addLoggedInListener((sender, eventArgs) -> order.add("logged"));
-        AtomicReference<SoulseekClientDisconnectedEventArgs> disconnected = new AtomicReference<>();
+        AtomicReference<SoulseekClientDisconnectedEvent> disconnected = new AtomicReference<>();
         fixture.client.addDisconnectedListener((sender, eventArgs) -> disconnected.set(eventArgs));
 
         fixture.client.changeState(SoulseekClientStates.CONNECTED, "connected", null);
@@ -155,12 +155,12 @@ class SoulseekClientTest {
         fixture.client.setDownloadsForTest(new HashMap<>(Map.of(
                 1, first,
                 2, second)));
-        AtomicReference<DownloadDeniedEventArgs> denied = new AtomicReference<>();
-        AtomicReference<DownloadFailedEventArgs> failed = new AtomicReference<>();
+        AtomicReference<DownloadDeniedEvent> denied = new AtomicReference<>();
+        AtomicReference<DownloadFailedEvent> failed = new AtomicReference<>();
         fixture.client.addDownloadDeniedListener((sender, eventArgs) -> denied.set(eventArgs));
         fixture.client.addDownloadFailedListener((sender, eventArgs) -> failed.set(eventArgs));
 
-        fixture.peer.raiseDenied(new DownloadDeniedEventArgs("user", "file", "rejected"));
+        fixture.peer.raiseDenied(new DownloadDeniedEvent("user", "file", "rejected"));
         assertInstanceOf(TransferRejectedException.class, failure(first.getRemoteTaskCompletionSource()));
         assertInstanceOf(TransferRejectedException.class, failure(second.getRemoteTaskCompletionSource()));
         assertEquals("rejected", denied.get().getMessage());
@@ -170,7 +170,7 @@ class SoulseekClientTest {
         fixture.client.setDownloadsForTest(new HashMap<>(Map.of(
                 3, first,
                 4, second)));
-        fixture.peer.raiseFailed(new DownloadFailedEventArgs("user", "file"));
+        fixture.peer.raiseFailed(new DownloadFailedEvent("user", "file"));
         assertInstanceOf(TransferReportedFailedException.class, failure(first.getRemoteTaskCompletionSource()));
         assertInstanceOf(TransferReportedFailedException.class, failure(second.getRemoteTaskCompletionSource()));
         assertEquals("file", failed.get().getFilename());
@@ -197,7 +197,7 @@ class SoulseekClientTest {
         assertEquals(true, fixture.client.getServerInfo().isSupporter());
         assertEquals(1, kicked.get());
         assertEquals(SoulseekClientStates.DISCONNECTED, fixture.client.getState());
-        AtomicReference<SoulseekClientDisconnectedEventArgs> disconnect = new AtomicReference<>();
+        AtomicReference<SoulseekClientDisconnectedEvent> disconnect = new AtomicReference<>();
         fixture.client.addDisconnectedListener((sender, value) -> disconnect.set(value));
         fixture.client.setStateForTest(SoulseekClientStates.CONNECTED);
         fixture.server.raise(ServerMessageEvent.KICKED_FROM_SERVER, null);
@@ -221,9 +221,9 @@ class SoulseekClientTest {
         assertSame(expected, diagnostic.get());
         fixture.client.removeDiagnosticGeneratedListener(diagnosticListener);
 
-        AtomicReference<DistributedChildEventArgs> child = new AtomicReference<>();
+        AtomicReference<DistributedChildEvent> child = new AtomicReference<>();
         fixture.client.addDistributedChildAddedListener((sender, value) -> child.set(value));
-        DistributedChildEventArgs childArgs = new DistributedChildEventArgs("child", ENDPOINT);
+        DistributedChildEvent childArgs = new DistributedChildEvent("child", ENDPOINT);
         fixture.distributed.raise("addChildAddedListener", childArgs);
         assertSame(childArgs, child.get());
         fixture.close();
@@ -424,26 +424,26 @@ class SoulseekClientTest {
     }
 
     private static final class PeerHandlerProbe {
-        private PeerMessageHandlerEventListener<DownloadDeniedEventArgs> denied;
-        private PeerMessageHandlerEventListener<DownloadFailedEventArgs> failed;
+        private PeerMessageHandlerEventListener<DownloadDeniedEvent> denied;
+        private PeerMessageHandlerEventListener<DownloadFailedEvent> failed;
         private final PeerMessageHandler proxy = (PeerMessageHandler) Proxy.newProxyInstance(
                 PeerMessageHandler.class.getClassLoader(), new Class<?>[] {PeerMessageHandler.class}, this::invoke);
 
         @SuppressWarnings("unchecked")
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("addDownloadDeniedListener")) {
-                denied = (PeerMessageHandlerEventListener<DownloadDeniedEventArgs>) arguments[0];
+                denied = (PeerMessageHandlerEventListener<DownloadDeniedEvent>) arguments[0];
             } else if (method.getName().equals("addDownloadFailedListener")) {
-                failed = (PeerMessageHandlerEventListener<DownloadFailedEventArgs>) arguments[0];
+                failed = (PeerMessageHandlerEventListener<DownloadFailedEvent>) arguments[0];
             }
             return defaultValue(method.getReturnType());
         }
 
-        private void raiseDenied(DownloadDeniedEventArgs eventArgs) {
+        private void raiseDenied(DownloadDeniedEvent eventArgs) {
             denied.handle(proxy, eventArgs);
         }
 
-        private void raiseFailed(DownloadFailedEventArgs eventArgs) {
+        private void raiseFailed(DownloadFailedEvent eventArgs) {
             failed.handle(proxy, eventArgs);
         }
     }

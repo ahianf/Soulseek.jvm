@@ -64,7 +64,7 @@ class PublicApiDispositionTest {
         int publicTypes = 0;
 
         for (String packageName : List.of(
-                "dev.slsk", "dev.slsk.diagnostics", "dev.slsk.eventargs", "dev.slsk.exceptions", "dev.slsk.options")) {
+                "dev.slsk", "dev.slsk.diagnostics", "dev.slsk.events", "dev.slsk.exceptions", "dev.slsk.options")) {
             Path packagePath = Path.of("src", "main", "java", packageName.replace('.', '/'));
             try (Stream<Path> paths = Files.list(packagePath)) {
                 for (Path path : paths.filter(candidate -> candidate.toString().endsWith(".java"))

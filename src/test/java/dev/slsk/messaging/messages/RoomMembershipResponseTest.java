@@ -13,8 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.RoomData;
 import dev.slsk.UserData;
 import dev.slsk.UserPresence;
-import dev.slsk.eventargs.RoomJoinedEventArgs;
-import dev.slsk.eventargs.RoomLeftEventArgs;
+import dev.slsk.events.RoomJoinedEvent;
+import dev.slsk.events.RoomLeftEvent;
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.messaging.MessageBuilder;
@@ -114,7 +114,7 @@ class RoomMembershipResponseTest {
         assertEquals(14, data.getSlotsFree());
         assertEquals("", data.getCountryCode());
 
-        RoomJoinedEventArgs eventArgs = new RoomJoinedEventArgs(notification);
+        RoomJoinedEvent eventArgs = new RoomJoinedEvent(notification);
         assertEquals("room", eventArgs.getRoomName());
         assertEquals("alice", eventArgs.getUsername());
         assertSame(data, eventArgs.getUserData());
@@ -134,7 +134,7 @@ class RoomMembershipResponseTest {
         assertEquals("room", parsed.getRoomName());
         assertEquals("alice", parsed.getUsername());
 
-        RoomLeftEventArgs eventArgs = new RoomLeftEventArgs(parsed);
+        RoomLeftEvent eventArgs = new RoomLeftEvent(parsed);
         assertEquals("room", eventArgs.getRoomName());
         assertEquals("alice", eventArgs.getUsername());
     }

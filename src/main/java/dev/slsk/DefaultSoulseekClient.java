@@ -15,29 +15,29 @@ import dev.slsk.diagnostics.DiagnosticEventListener;
 import dev.slsk.diagnostics.DiagnosticSink;
 import dev.slsk.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.diagnostics.GlobalDiagnostic;
-import dev.slsk.eventargs.BrowseProgressUpdatedEventArgs;
-import dev.slsk.eventargs.DistributedChildEventArgs;
-import dev.slsk.eventargs.DistributedParentEventArgs;
-import dev.slsk.eventargs.DownloadDeniedEventArgs;
-import dev.slsk.eventargs.DownloadFailedEventArgs;
-import dev.slsk.eventargs.PrivateMessageReceivedEventArgs;
-import dev.slsk.eventargs.PrivilegeNotificationReceivedEventArgs;
-import dev.slsk.eventargs.PublicChatMessageReceivedEventArgs;
-import dev.slsk.eventargs.RoomJoinedEventArgs;
-import dev.slsk.eventargs.RoomLeftEventArgs;
-import dev.slsk.eventargs.RoomMessageReceivedEventArgs;
-import dev.slsk.eventargs.RoomTickerAddedEventArgs;
-import dev.slsk.eventargs.RoomTickerListReceivedEventArgs;
-import dev.slsk.eventargs.RoomTickerRemovedEventArgs;
-import dev.slsk.eventargs.SearchRequestEventArgs;
-import dev.slsk.eventargs.SearchRequestResponseEventArgs;
-import dev.slsk.eventargs.SearchResponseReceivedEventArgs;
-import dev.slsk.eventargs.SearchStateChangedEventArgs;
-import dev.slsk.eventargs.SoulseekClientDisconnectedEventArgs;
-import dev.slsk.eventargs.SoulseekClientStateChangedEventArgs;
-import dev.slsk.eventargs.TransferProgressUpdatedEventArgs;
-import dev.slsk.eventargs.TransferStateChangedEventArgs;
-import dev.slsk.eventargs.UserCannotConnectEventArgs;
+import dev.slsk.events.BrowseProgressUpdatedEvent;
+import dev.slsk.events.DistributedChildEvent;
+import dev.slsk.events.DistributedParentEvent;
+import dev.slsk.events.DownloadDeniedEvent;
+import dev.slsk.events.DownloadFailedEvent;
+import dev.slsk.events.PrivateMessageReceivedEvent;
+import dev.slsk.events.PrivilegeNotificationReceivedEvent;
+import dev.slsk.events.PublicChatMessageReceivedEvent;
+import dev.slsk.events.RoomJoinedEvent;
+import dev.slsk.events.RoomLeftEvent;
+import dev.slsk.events.RoomMessageReceivedEvent;
+import dev.slsk.events.RoomTickerAddedEvent;
+import dev.slsk.events.RoomTickerListReceivedEvent;
+import dev.slsk.events.RoomTickerRemovedEvent;
+import dev.slsk.events.SearchRequestEvent;
+import dev.slsk.events.SearchRequestResponseEvent;
+import dev.slsk.events.SearchResponseReceivedEvent;
+import dev.slsk.events.SearchStateChangedEvent;
+import dev.slsk.events.SoulseekClientDisconnectedEvent;
+import dev.slsk.events.SoulseekClientStateChangedEvent;
+import dev.slsk.events.TransferProgressUpdatedEvent;
+import dev.slsk.events.TransferStateChangedEvent;
+import dev.slsk.events.UserCannotConnectEvent;
 import dev.slsk.exceptions.AddressException;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.ConnectionReadException;
@@ -453,13 +453,12 @@ final class DefaultSoulseekClient
         return minorVersion;
     }
 
-    public final void addBrowseProgressUpdatedListener(
-            SoulseekClientEventListener<BrowseProgressUpdatedEventArgs> value) {
+    public final void addBrowseProgressUpdatedListener(SoulseekClientEventListener<BrowseProgressUpdatedEvent> value) {
         add(Event.BROWSE_PROGRESS_UPDATED, value);
     }
 
     public final void removeBrowseProgressUpdatedListener(
-            SoulseekClientEventListener<BrowseProgressUpdatedEventArgs> value) {
+            SoulseekClientEventListener<BrowseProgressUpdatedEvent> value) {
         remove(Event.BROWSE_PROGRESS_UPDATED, value);
     }
 
@@ -487,31 +486,29 @@ final class DefaultSoulseekClient
         remove(Event.DIAGNOSTIC_GENERATED, value);
     }
 
-    public final void addDisconnectedListener(SoulseekClientEventListener<SoulseekClientDisconnectedEventArgs> value) {
+    public final void addDisconnectedListener(SoulseekClientEventListener<SoulseekClientDisconnectedEvent> value) {
         add(Event.DISCONNECTED, value);
     }
 
-    public final void removeDisconnectedListener(
-            SoulseekClientEventListener<SoulseekClientDisconnectedEventArgs> value) {
+    public final void removeDisconnectedListener(SoulseekClientEventListener<SoulseekClientDisconnectedEvent> value) {
         remove(Event.DISCONNECTED, value);
     }
 
-    public final void addDistributedChildAddedListener(SoulseekClientEventListener<DistributedChildEventArgs> value) {
+    public final void addDistributedChildAddedListener(SoulseekClientEventListener<DistributedChildEvent> value) {
         add(Event.DISTRIBUTED_CHILD_ADDED, value);
     }
 
-    public final void removeDistributedChildAddedListener(
-            SoulseekClientEventListener<DistributedChildEventArgs> value) {
+    public final void removeDistributedChildAddedListener(SoulseekClientEventListener<DistributedChildEvent> value) {
         remove(Event.DISTRIBUTED_CHILD_ADDED, value);
     }
 
     public final void addDistributedChildDisconnectedListener(
-            SoulseekClientEventListener<DistributedChildEventArgs> value) {
+            SoulseekClientEventListener<DistributedChildEvent> value) {
         add(Event.DISTRIBUTED_CHILD_DISCONNECTED, value);
     }
 
     public final void removeDistributedChildDisconnectedListener(
-            SoulseekClientEventListener<DistributedChildEventArgs> value) {
+            SoulseekClientEventListener<DistributedChildEvent> value) {
         remove(Event.DISTRIBUTED_CHILD_DISCONNECTED, value);
     }
 
@@ -533,39 +530,38 @@ final class DefaultSoulseekClient
         remove(Event.DISTRIBUTED_NETWORK_STATE_CHANGED, value);
     }
 
-    public final void addDistributedParentAdoptedListener(
-            SoulseekClientEventListener<DistributedParentEventArgs> value) {
+    public final void addDistributedParentAdoptedListener(SoulseekClientEventListener<DistributedParentEvent> value) {
         add(Event.DISTRIBUTED_PARENT_ADOPTED, value);
     }
 
     public final void removeDistributedParentAdoptedListener(
-            SoulseekClientEventListener<DistributedParentEventArgs> value) {
+            SoulseekClientEventListener<DistributedParentEvent> value) {
         remove(Event.DISTRIBUTED_PARENT_ADOPTED, value);
     }
 
     public final void addDistributedParentDisconnectedListener(
-            SoulseekClientEventListener<DistributedParentEventArgs> value) {
+            SoulseekClientEventListener<DistributedParentEvent> value) {
         add(Event.DISTRIBUTED_PARENT_DISCONNECTED, value);
     }
 
     public final void removeDistributedParentDisconnectedListener(
-            SoulseekClientEventListener<DistributedParentEventArgs> value) {
+            SoulseekClientEventListener<DistributedParentEvent> value) {
         remove(Event.DISTRIBUTED_PARENT_DISCONNECTED, value);
     }
 
-    public final void addDownloadDeniedListener(SoulseekClientEventListener<DownloadDeniedEventArgs> value) {
+    public final void addDownloadDeniedListener(SoulseekClientEventListener<DownloadDeniedEvent> value) {
         add(Event.DOWNLOAD_DENIED, value);
     }
 
-    public final void removeDownloadDeniedListener(SoulseekClientEventListener<DownloadDeniedEventArgs> value) {
+    public final void removeDownloadDeniedListener(SoulseekClientEventListener<DownloadDeniedEvent> value) {
         remove(Event.DOWNLOAD_DENIED, value);
     }
 
-    public final void addDownloadFailedListener(SoulseekClientEventListener<DownloadFailedEventArgs> value) {
+    public final void addDownloadFailedListener(SoulseekClientEventListener<DownloadFailedEvent> value) {
         add(Event.DOWNLOAD_FAILED, value);
     }
 
-    public final void removeDownloadFailedListener(SoulseekClientEventListener<DownloadFailedEventArgs> value) {
+    public final void removeDownloadFailedListener(SoulseekClientEventListener<DownloadFailedEvent> value) {
         remove(Event.DOWNLOAD_FAILED, value);
     }
 
@@ -602,12 +598,12 @@ final class DefaultSoulseekClient
     }
 
     public final void addPrivateMessageReceivedListener(
-            SoulseekClientEventListener<PrivateMessageReceivedEventArgs> value) {
+            SoulseekClientEventListener<PrivateMessageReceivedEvent> value) {
         add(Event.PRIVATE_MESSAGE_RECEIVED, value);
     }
 
     public final void removePrivateMessageReceivedListener(
-            SoulseekClientEventListener<PrivateMessageReceivedEventArgs> value) {
+            SoulseekClientEventListener<PrivateMessageReceivedEvent> value) {
         remove(Event.PRIVATE_MESSAGE_RECEIVED, value);
     }
 
@@ -668,12 +664,12 @@ final class DefaultSoulseekClient
     }
 
     public final void addPrivilegeNotificationReceivedListener(
-            SoulseekClientEventListener<PrivilegeNotificationReceivedEventArgs> value) {
+            SoulseekClientEventListener<PrivilegeNotificationReceivedEvent> value) {
         add(Event.PRIVILEGE_NOTIFICATION_RECEIVED, value);
     }
 
     public final void removePrivilegeNotificationReceivedListener(
-            SoulseekClientEventListener<PrivilegeNotificationReceivedEventArgs> value) {
+            SoulseekClientEventListener<PrivilegeNotificationReceivedEvent> value) {
         remove(Event.PRIVILEGE_NOTIFICATION_RECEIVED, value);
     }
 
@@ -686,28 +682,28 @@ final class DefaultSoulseekClient
     }
 
     public final void addPublicChatMessageReceivedListener(
-            SoulseekClientEventListener<PublicChatMessageReceivedEventArgs> value) {
+            SoulseekClientEventListener<PublicChatMessageReceivedEvent> value) {
         add(Event.PUBLIC_CHAT_MESSAGE_RECEIVED, value);
     }
 
     public final void removePublicChatMessageReceivedListener(
-            SoulseekClientEventListener<PublicChatMessageReceivedEventArgs> value) {
+            SoulseekClientEventListener<PublicChatMessageReceivedEvent> value) {
         remove(Event.PUBLIC_CHAT_MESSAGE_RECEIVED, value);
     }
 
-    public final void addRoomJoinedListener(SoulseekClientEventListener<RoomJoinedEventArgs> value) {
+    public final void addRoomJoinedListener(SoulseekClientEventListener<RoomJoinedEvent> value) {
         add(Event.ROOM_JOINED, value);
     }
 
-    public final void removeRoomJoinedListener(SoulseekClientEventListener<RoomJoinedEventArgs> value) {
+    public final void removeRoomJoinedListener(SoulseekClientEventListener<RoomJoinedEvent> value) {
         remove(Event.ROOM_JOINED, value);
     }
 
-    public final void addRoomLeftListener(SoulseekClientEventListener<RoomLeftEventArgs> value) {
+    public final void addRoomLeftListener(SoulseekClientEventListener<RoomLeftEvent> value) {
         add(Event.ROOM_LEFT, value);
     }
 
-    public final void removeRoomLeftListener(SoulseekClientEventListener<RoomLeftEventArgs> value) {
+    public final void removeRoomLeftListener(SoulseekClientEventListener<RoomLeftEvent> value) {
         remove(Event.ROOM_LEFT, value);
     }
 
@@ -719,84 +715,83 @@ final class DefaultSoulseekClient
         remove(Event.ROOM_LIST_RECEIVED, value);
     }
 
-    public final void addRoomMessageReceivedListener(SoulseekClientEventListener<RoomMessageReceivedEventArgs> value) {
+    public final void addRoomMessageReceivedListener(SoulseekClientEventListener<RoomMessageReceivedEvent> value) {
         add(Event.ROOM_MESSAGE_RECEIVED, value);
     }
 
-    public final void removeRoomMessageReceivedListener(
-            SoulseekClientEventListener<RoomMessageReceivedEventArgs> value) {
+    public final void removeRoomMessageReceivedListener(SoulseekClientEventListener<RoomMessageReceivedEvent> value) {
         remove(Event.ROOM_MESSAGE_RECEIVED, value);
     }
 
-    public final void addRoomTickerAddedListener(SoulseekClientEventListener<RoomTickerAddedEventArgs> value) {
+    public final void addRoomTickerAddedListener(SoulseekClientEventListener<RoomTickerAddedEvent> value) {
         add(Event.ROOM_TICKER_ADDED, value);
     }
 
-    public final void removeRoomTickerAddedListener(SoulseekClientEventListener<RoomTickerAddedEventArgs> value) {
+    public final void removeRoomTickerAddedListener(SoulseekClientEventListener<RoomTickerAddedEvent> value) {
         remove(Event.ROOM_TICKER_ADDED, value);
     }
 
     public final void addRoomTickerListReceivedListener(
-            SoulseekClientEventListener<RoomTickerListReceivedEventArgs> value) {
+            SoulseekClientEventListener<RoomTickerListReceivedEvent> value) {
         add(Event.ROOM_TICKER_LIST_RECEIVED, value);
     }
 
     public final void removeRoomTickerListReceivedListener(
-            SoulseekClientEventListener<RoomTickerListReceivedEventArgs> value) {
+            SoulseekClientEventListener<RoomTickerListReceivedEvent> value) {
         remove(Event.ROOM_TICKER_LIST_RECEIVED, value);
     }
 
-    public final void addRoomTickerRemovedListener(SoulseekClientEventListener<RoomTickerRemovedEventArgs> value) {
+    public final void addRoomTickerRemovedListener(SoulseekClientEventListener<RoomTickerRemovedEvent> value) {
         add(Event.ROOM_TICKER_REMOVED, value);
     }
 
-    public final void removeRoomTickerRemovedListener(SoulseekClientEventListener<RoomTickerRemovedEventArgs> value) {
+    public final void removeRoomTickerRemovedListener(SoulseekClientEventListener<RoomTickerRemovedEvent> value) {
         remove(Event.ROOM_TICKER_REMOVED, value);
     }
 
-    public final void addSearchRequestReceivedListener(SoulseekClientEventListener<SearchRequestEventArgs> value) {
+    public final void addSearchRequestReceivedListener(SoulseekClientEventListener<SearchRequestEvent> value) {
         add(Event.SEARCH_REQUEST_RECEIVED, value);
     }
 
-    public final void removeSearchRequestReceivedListener(SoulseekClientEventListener<SearchRequestEventArgs> value) {
+    public final void removeSearchRequestReceivedListener(SoulseekClientEventListener<SearchRequestEvent> value) {
         remove(Event.SEARCH_REQUEST_RECEIVED, value);
     }
 
     public final void addSearchResponseDeliveredListener(
-            SoulseekClientEventListener<SearchRequestResponseEventArgs> value) {
+            SoulseekClientEventListener<SearchRequestResponseEvent> value) {
         add(Event.SEARCH_RESPONSE_DELIVERED, value);
     }
 
     public final void removeSearchResponseDeliveredListener(
-            SoulseekClientEventListener<SearchRequestResponseEventArgs> value) {
+            SoulseekClientEventListener<SearchRequestResponseEvent> value) {
         remove(Event.SEARCH_RESPONSE_DELIVERED, value);
     }
 
     public final void addSearchResponseDeliveryFailedListener(
-            SoulseekClientEventListener<SearchRequestResponseEventArgs> value) {
+            SoulseekClientEventListener<SearchRequestResponseEvent> value) {
         add(Event.SEARCH_RESPONSE_DELIVERY_FAILED, value);
     }
 
     public final void removeSearchResponseDeliveryFailedListener(
-            SoulseekClientEventListener<SearchRequestResponseEventArgs> value) {
+            SoulseekClientEventListener<SearchRequestResponseEvent> value) {
         remove(Event.SEARCH_RESPONSE_DELIVERY_FAILED, value);
     }
 
     public final void addSearchResponseReceivedListener(
-            SoulseekClientEventListener<SearchResponseReceivedEventArgs> value) {
+            SoulseekClientEventListener<SearchResponseReceivedEvent> value) {
         add(Event.SEARCH_RESPONSE_RECEIVED, value);
     }
 
     public final void removeSearchResponseReceivedListener(
-            SoulseekClientEventListener<SearchResponseReceivedEventArgs> value) {
+            SoulseekClientEventListener<SearchResponseReceivedEvent> value) {
         remove(Event.SEARCH_RESPONSE_RECEIVED, value);
     }
 
-    public final void addSearchStateChangedListener(SoulseekClientEventListener<SearchStateChangedEventArgs> value) {
+    public final void addSearchStateChangedListener(SoulseekClientEventListener<SearchStateChangedEvent> value) {
         add(Event.SEARCH_STATE_CHANGED, value);
     }
 
-    public final void removeSearchStateChangedListener(SoulseekClientEventListener<SearchStateChangedEventArgs> value) {
+    public final void removeSearchStateChangedListener(SoulseekClientEventListener<SearchStateChangedEvent> value) {
         remove(Event.SEARCH_STATE_CHANGED, value);
     }
 
@@ -808,40 +803,37 @@ final class DefaultSoulseekClient
         remove(Event.SERVER_INFO_RECEIVED, value);
     }
 
-    public final void addStateChangedListener(SoulseekClientEventListener<SoulseekClientStateChangedEventArgs> value) {
+    public final void addStateChangedListener(SoulseekClientEventListener<SoulseekClientStateChangedEvent> value) {
         add(Event.STATE_CHANGED, value);
     }
 
-    public final void removeStateChangedListener(
-            SoulseekClientEventListener<SoulseekClientStateChangedEventArgs> value) {
+    public final void removeStateChangedListener(SoulseekClientEventListener<SoulseekClientStateChangedEvent> value) {
         remove(Event.STATE_CHANGED, value);
     }
 
     public final void addTransferProgressUpdatedListener(
-            SoulseekClientEventListener<TransferProgressUpdatedEventArgs> value) {
+            SoulseekClientEventListener<TransferProgressUpdatedEvent> value) {
         add(Event.TRANSFER_PROGRESS_UPDATED, value);
     }
 
     public final void removeTransferProgressUpdatedListener(
-            SoulseekClientEventListener<TransferProgressUpdatedEventArgs> value) {
+            SoulseekClientEventListener<TransferProgressUpdatedEvent> value) {
         remove(Event.TRANSFER_PROGRESS_UPDATED, value);
     }
 
-    public final void addTransferStateChangedListener(
-            SoulseekClientEventListener<TransferStateChangedEventArgs> value) {
+    public final void addTransferStateChangedListener(SoulseekClientEventListener<TransferStateChangedEvent> value) {
         add(Event.TRANSFER_STATE_CHANGED, value);
     }
 
-    public final void removeTransferStateChangedListener(
-            SoulseekClientEventListener<TransferStateChangedEventArgs> value) {
+    public final void removeTransferStateChangedListener(SoulseekClientEventListener<TransferStateChangedEvent> value) {
         remove(Event.TRANSFER_STATE_CHANGED, value);
     }
 
-    public final void addUserCannotConnectListener(SoulseekClientEventListener<UserCannotConnectEventArgs> value) {
+    public final void addUserCannotConnectListener(SoulseekClientEventListener<UserCannotConnectEvent> value) {
         add(Event.USER_CANNOT_CONNECT, value);
     }
 
-    public final void removeUserCannotConnectListener(SoulseekClientEventListener<UserCannotConnectEventArgs> value) {
+    public final void removeUserCannotConnectListener(SoulseekClientEventListener<UserCannotConnectEvent> value) {
         remove(Event.USER_CANNOT_CONNECT, value);
     }
 
@@ -2838,13 +2830,13 @@ final class DefaultSoulseekClient
         diagnostic.debug("Client state changed from " + previousState + " to "
                 + newState
                 + (message == null ? "" : "; message: " + message));
-        raise(Event.STATE_CHANGED, new SoulseekClientStateChangedEventArgs(previousState, state, message, exception));
+        raise(Event.STATE_CHANGED, new SoulseekClientStateChangedEvent(previousState, state, message, exception));
         if (state.equals(SoulseekClientStates.CONNECTED)) {
             raise(Event.CONNECTED, null);
         } else if (state.equals(SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN))) {
             raise(Event.LOGGED_IN, null);
         } else if (state.equals(SoulseekClientStates.DISCONNECTED)) {
-            raise(Event.DISCONNECTED, new SoulseekClientDisconnectedEventArgs(message, exception));
+            raise(Event.DISCONNECTED, new SoulseekClientDisconnectedEvent(message, exception));
         }
     }
 
@@ -2935,7 +2927,7 @@ final class DefaultSoulseekClient
         serverMessageHandler.<T>addListener(source, (sender, eventArgs) -> raise(target, eventArgs));
     }
 
-    private void downloadDenied(DownloadDeniedEventArgs eventArgs) {
+    private void downloadDenied(DownloadDeniedEvent eventArgs) {
         try {
             List<TransferInternal> matching = downloads.values().stream()
                     .filter(download -> Objects.equals(download.getUsername(), eventArgs.getUsername())
@@ -2956,7 +2948,7 @@ final class DefaultSoulseekClient
         }
     }
 
-    private void downloadFailed(DownloadFailedEventArgs eventArgs) {
+    private void downloadFailed(DownloadFailedEvent eventArgs) {
         try {
             List<TransferInternal> matching = downloads.values().stream()
                     .filter(download -> Objects.equals(download.getUsername(), eventArgs.getUsername())
@@ -3026,8 +3018,8 @@ final class DefaultSoulseekClient
             long bytesTransferred,
             long size,
             AtomicBoolean completionEventFired) {
-        BrowseProgressUpdatedEventArgs eventArgs =
-                new BrowseProgressUpdatedEventArgs(requestedUsername, bytesTransferred, size);
+        BrowseProgressUpdatedEvent eventArgs =
+                new BrowseProgressUpdatedEvent(requestedUsername, bytesTransferred, size);
         if (Double.compare(eventArgs.getPercentComplete(), 100.0) == 0) {
             completionEventFired.set(true);
         }
@@ -3352,7 +3344,7 @@ final class DefaultSoulseekClient
         Consumer<SearchStates> updateState = newState -> {
             search.setState(newState);
             Search snapshot = search.toSearch();
-            SearchStateChangedEventArgs eventArgs = new SearchStateChangedEventArgs(previousState[0], snapshot);
+            SearchStateChangedEvent eventArgs = new SearchStateChangedEvent(previousState[0], snapshot);
             previousState[0] = newState;
             if (invocation.options().getStateChanged() != null) {
                 invocation
@@ -3380,8 +3372,8 @@ final class DefaultSoulseekClient
                     byte[] message = buildSearchMessage(invocation.scope(), search);
                     search.setResponseReceived(response -> {
                         responseHandler.accept(response);
-                        SearchResponseReceivedEventArgs eventArgs =
-                                new SearchResponseReceivedEventArgs(response, search.toSearch());
+                        SearchResponseReceivedEvent eventArgs =
+                                new SearchResponseReceivedEvent(response, search.toSearch());
                         if (invocation.options().getResponseReceived() != null) {
                             invocation
                                     .options()
@@ -3905,7 +3897,7 @@ final class DefaultSoulseekClient
         private void updateState(TransferStates state) {
             download.setState(state);
             Transfer transfer = download.toTransfer();
-            TransferStateChangedEventArgs eventArgs = new TransferStateChangedEventArgs(lastState, transfer);
+            TransferStateChangedEvent eventArgs = new TransferStateChangedEvent(lastState, transfer);
             TransferStates previous = lastState;
             lastState = state;
             if (transferOptions.getStateChanged() != null) {
@@ -3921,7 +3913,7 @@ final class DefaultSoulseekClient
             if (transferOptions.getProgressUpdated() != null) {
                 transferOptions.getProgressUpdated().onProgressUpdated(new TransferProgressUpdate(previous, transfer));
             }
-            raise(Event.TRANSFER_PROGRESS_UPDATED, new TransferProgressUpdatedEventArgs(previous, transfer));
+            raise(Event.TRANSFER_PROGRESS_UPDATED, new TransferProgressUpdatedEvent(previous, transfer));
         }
 
         private long currentOutputPosition() {
@@ -4370,7 +4362,7 @@ final class DefaultSoulseekClient
         private void updateState(TransferStates state) {
             upload.setState(state);
             Transfer transfer = upload.toTransfer();
-            TransferStateChangedEventArgs eventArgs = new TransferStateChangedEventArgs(lastState, transfer);
+            TransferStateChangedEvent eventArgs = new TransferStateChangedEvent(lastState, transfer);
             TransferStates previous = lastState;
             lastState = state;
             if (transferOptions.getStateChanged() != null) {
@@ -4386,7 +4378,7 @@ final class DefaultSoulseekClient
             if (transferOptions.getProgressUpdated() != null) {
                 transferOptions.getProgressUpdated().onProgressUpdated(new TransferProgressUpdate(previous, transfer));
             }
-            raise(Event.TRANSFER_PROGRESS_UPDATED, new TransferProgressUpdatedEventArgs(previous, transfer));
+            raise(Event.TRANSFER_PROGRESS_UPDATED, new TransferProgressUpdatedEvent(previous, transfer));
         }
 
         private long currentStreamPosition() {

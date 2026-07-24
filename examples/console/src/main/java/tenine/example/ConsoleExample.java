@@ -10,7 +10,7 @@ import dev.slsk.SearchResponse;
 import dev.slsk.SearchResult;
 import dev.slsk.SoulseekClient;
 import dev.slsk.Transfer;
-import dev.slsk.eventargs.TransferProgressUpdatedEventArgs;
+import dev.slsk.events.TransferProgressUpdatedEvent;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
@@ -106,7 +106,7 @@ public final class ConsoleExample {
         client.addTransferProgressUpdatedListener((sender, event) -> printTransferProgress(event));
     }
 
-    private static void printTransferProgress(TransferProgressUpdatedEventArgs event) {
+    private static void printTransferProgress(TransferProgressUpdatedEvent event) {
         Transfer transfer = event.getTransfer();
         System.out.printf(
                 "Transfer progress for %s: %d/%d bytes (%.1f%%)%n",

@@ -27,16 +27,16 @@ import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
 import dev.slsk.common.Waiter;
 import dev.slsk.diagnostics.DiagnosticSink;
-import dev.slsk.eventargs.PrivateMessageReceivedEventArgs;
-import dev.slsk.eventargs.PrivilegeNotificationReceivedEventArgs;
-import dev.slsk.eventargs.PublicChatMessageReceivedEventArgs;
-import dev.slsk.eventargs.RoomJoinedEventArgs;
-import dev.slsk.eventargs.RoomLeftEventArgs;
-import dev.slsk.eventargs.RoomMessageReceivedEventArgs;
-import dev.slsk.eventargs.RoomTickerAddedEventArgs;
-import dev.slsk.eventargs.RoomTickerListReceivedEventArgs;
-import dev.slsk.eventargs.RoomTickerRemovedEventArgs;
-import dev.slsk.eventargs.UserCannotConnectEventArgs;
+import dev.slsk.events.PrivateMessageReceivedEvent;
+import dev.slsk.events.PrivilegeNotificationReceivedEvent;
+import dev.slsk.events.PublicChatMessageReceivedEvent;
+import dev.slsk.events.RoomJoinedEvent;
+import dev.slsk.events.RoomLeftEvent;
+import dev.slsk.events.RoomMessageReceivedEvent;
+import dev.slsk.events.RoomTickerAddedEvent;
+import dev.slsk.events.RoomTickerListReceivedEvent;
+import dev.slsk.events.RoomTickerRemovedEvent;
+import dev.slsk.events.UserCannotConnectEvent;
 import dev.slsk.exceptions.RoomJoinForbiddenException;
 import dev.slsk.messaging.MessageBuilder;
 import dev.slsk.messaging.MessageCode;
@@ -209,9 +209,8 @@ class ServerMessageHandlerTest {
     @Test
     void roomJoinLeaveAndRejectionPreserveCorrelationAndEvents() {
         Fixture fixture = new Fixture(options(false, false));
-        AtomicReference<RoomLeftEventArgs> left = new AtomicReference<>();
-        fixture.handler.<RoomLeftEventArgs>addListener(
-                ServerMessageEvent.ROOM_LEFT, (sender, value) -> left.set(value));
+        AtomicReference<RoomLeftEvent> left = new AtomicReference<>();
+        fixture.handler.<RoomLeftEvent>addListener(ServerMessageEvent.ROOM_LEFT, (sender, value) -> left.set(value));
 
         fixture.handle(new MessageBuilder()
                 .writeCode(MessageCode.Server.JOIN_ROOM)
@@ -256,17 +255,16 @@ class ServerMessageHandlerTest {
     @Test
     void chatRoomAndTickerNotificationsRaiseTypedPayloads() {
         Fixture fixture = new Fixture(options(false, false));
-        AtomicReference<RoomMessageReceivedEventArgs> roomMessage =
+        AtomicReference<RoomMessageReceivedEvent> roomMessage =
                 listen(fixture, ServerMessageEvent.ROOM_MESSAGE_RECEIVED);
-        AtomicReference<PublicChatMessageReceivedEventArgs> publicMessage =
+        AtomicReference<PublicChatMessageReceivedEvent> publicMessage =
                 listen(fixture, ServerMessageEvent.PUBLIC_CHAT_MESSAGE_RECEIVED);
-        AtomicReference<RoomJoinedEventArgs> joined = listen(fixture, ServerMessageEvent.ROOM_JOINED);
-        AtomicReference<RoomLeftEventArgs> left = listen(fixture, ServerMessageEvent.ROOM_LEFT);
-        AtomicReference<RoomTickerListReceivedEventArgs> tickers =
+        AtomicReference<RoomJoinedEvent> joined = listen(fixture, ServerMessageEvent.ROOM_JOINED);
+        AtomicReference<RoomLeftEvent> left = listen(fixture, ServerMessageEvent.ROOM_LEFT);
+        AtomicReference<RoomTickerListReceivedEvent> tickers =
                 listen(fixture, ServerMessageEvent.ROOM_TICKER_LIST_RECEIVED);
-        AtomicReference<RoomTickerAddedEventArgs> tickerAdded = listen(fixture, ServerMessageEvent.ROOM_TICKER_ADDED);
-        AtomicReference<RoomTickerRemovedEventArgs> tickerRemoved =
-                listen(fixture, ServerMessageEvent.ROOM_TICKER_REMOVED);
+        AtomicReference<RoomTickerAddedEvent> tickerAdded = listen(fixture, ServerMessageEvent.ROOM_TICKER_ADDED);
+        AtomicReference<RoomTickerRemovedEvent> tickerRemoved = listen(fixture, ServerMessageEvent.ROOM_TICKER_REMOVED);
 
         fixture.handle(chat(MessageCode.Server.SAY_IN_CHAT_ROOM, ROOM, USERNAME, "hello"));
         fixture.handle(chat(MessageCode.Server.PUBLIC_CHAT, ROOM, USERNAME, "public"));
@@ -307,10 +305,10 @@ class ServerMessageHandlerTest {
     @Test
     void privateAndPrivilegeNotificationsHonorAcknowledgementOptions() {
         Fixture fixture = new Fixture(options(true, true));
-        AtomicReference<PrivateMessageReceivedEventArgs> privateMessage =
+        AtomicReference<PrivateMessageReceivedEvent> privateMessage =
                 listen(fixture, ServerMessageEvent.PRIVATE_MESSAGE_RECEIVED);
-        List<PrivilegeNotificationReceivedEventArgs> privileges = new ArrayList<>();
-        fixture.handler.<PrivilegeNotificationReceivedEventArgs>addListener(
+        List<PrivilegeNotificationReceivedEvent> privileges = new ArrayList<>();
+        fixture.handler.<PrivilegeNotificationReceivedEvent>addListener(
                 ServerMessageEvent.PRIVILEGE_NOTIFICATION_RECEIVED, (sender, value) -> privileges.add(value));
 
         fixture.handle(new MessageBuilder()
@@ -440,8 +438,8 @@ class ServerMessageHandlerTest {
     @Test
     void cannotConnectDiscardsAndRaisesOnlyWhenUsernameExists() {
         Fixture fixture = new Fixture(options(false, false));
-        List<UserCannotConnectEventArgs> events = new ArrayList<>();
-        fixture.handler.<UserCannotConnectEventArgs>addListener(
+        List<UserCannotConnectEvent> events = new ArrayList<>();
+        fixture.handler.<UserCannotConnectEvent>addListener(
                 ServerMessageEvent.USER_CANNOT_CONNECT, (sender, value) -> events.add(value));
 
         fixture.handle(new MessageBuilder()

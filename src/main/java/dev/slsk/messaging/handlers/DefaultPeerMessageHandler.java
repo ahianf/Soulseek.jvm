@@ -18,8 +18,8 @@ import dev.slsk.diagnostics.DiagnosticEventArgs;
 import dev.slsk.diagnostics.DiagnosticEventListener;
 import dev.slsk.diagnostics.DiagnosticSink;
 import dev.slsk.diagnostics.FilteringDiagnosticSink;
-import dev.slsk.eventargs.DownloadDeniedEventArgs;
-import dev.slsk.eventargs.DownloadFailedEventArgs;
+import dev.slsk.events.DownloadDeniedEvent;
+import dev.slsk.events.DownloadFailedEvent;
 import dev.slsk.exceptions.DownloadEnqueueException;
 import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.exceptions.TransferRejectedException;
@@ -57,10 +57,10 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     private final PeerMessageHandlerClient client;
     private final DiagnosticSink diagnostic;
     private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<PeerMessageHandlerEventListener<DownloadDeniedEventArgs>>
-            downloadDeniedListeners = new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<PeerMessageHandlerEventListener<DownloadFailedEventArgs>>
-            downloadFailedListeners = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<PeerMessageHandlerEventListener<DownloadDeniedEvent>> downloadDeniedListeners =
+            new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<PeerMessageHandlerEventListener<DownloadFailedEvent>> downloadFailedListeners =
+            new CopyOnWriteArrayList<>();
 
     /** Creates a handler with its default diagnostic factory. */
     public DefaultPeerMessageHandler(PeerMessageHandlerClient client) {
@@ -86,22 +86,22 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     @Override
-    public void addDownloadDeniedListener(PeerMessageHandlerEventListener<DownloadDeniedEventArgs> listener) {
+    public void addDownloadDeniedListener(PeerMessageHandlerEventListener<DownloadDeniedEvent> listener) {
         downloadDeniedListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override
-    public void removeDownloadDeniedListener(PeerMessageHandlerEventListener<DownloadDeniedEventArgs> listener) {
+    public void removeDownloadDeniedListener(PeerMessageHandlerEventListener<DownloadDeniedEvent> listener) {
         downloadDeniedListeners.remove(listener);
     }
 
     @Override
-    public void addDownloadFailedListener(PeerMessageHandlerEventListener<DownloadFailedEventArgs> listener) {
+    public void addDownloadFailedListener(PeerMessageHandlerEventListener<DownloadFailedEvent> listener) {
         downloadFailedListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override
-    public void removeDownloadFailedListener(PeerMessageHandlerEventListener<DownloadFailedEventArgs> listener) {
+    public void removeDownloadFailedListener(PeerMessageHandlerEventListener<DownloadFailedEvent> listener) {
         downloadFailedListeners.remove(listener);
     }
 
@@ -440,8 +440,8 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 .fail(
                         new WaitKey(MessageCode.Peer.TRANSFER_REQUEST, connection.getUsername(), denied.getFilename()),
                         new TransferRejectedException(denied.getMessage()));
-        DownloadDeniedEventArgs eventArgs =
-                new DownloadDeniedEventArgs(connection.getUsername(), denied.getFilename(), denied.getMessage());
+        DownloadDeniedEvent eventArgs =
+                new DownloadDeniedEvent(connection.getUsername(), denied.getFilename(), denied.getMessage());
         downloadDeniedListeners.forEach(listener -> listener.handle(this, eventArgs));
     }
 
@@ -452,7 +452,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 .fail(
                         new WaitKey(MessageCode.Peer.TRANSFER_REQUEST, connection.getUsername(), failed.getFilename()),
                         new TransferReportedFailedException("Download reported as failed by remote client"));
-        DownloadFailedEventArgs eventArgs = new DownloadFailedEventArgs(connection.getUsername(), failed.getFilename());
+        DownloadFailedEvent eventArgs = new DownloadFailedEvent(connection.getUsername(), failed.getFilename());
         downloadFailedListeners.forEach(listener -> listener.handle(this, eventArgs));
     }
 

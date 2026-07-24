@@ -5,23 +5,23 @@
 package dev.slsk.search;
 
 import dev.slsk.diagnostics.DiagnosticSource;
-import dev.slsk.eventargs.SearchRequestEventArgs;
-import dev.slsk.eventargs.SearchRequestResponseEventArgs;
+import dev.slsk.events.SearchRequestEvent;
+import dev.slsk.events.SearchRequestResponseEvent;
 import java.util.concurrent.CompletableFuture;
 
 /** Responds to incoming search requests. */
 public interface SearchResponder extends DiagnosticSource {
-    void addRequestReceivedListener(SearchResponderEventListener<SearchRequestEventArgs> listener);
+    void addRequestReceivedListener(SearchResponderEventListener<SearchRequestEvent> listener);
 
-    void removeRequestReceivedListener(SearchResponderEventListener<SearchRequestEventArgs> listener);
+    void removeRequestReceivedListener(SearchResponderEventListener<SearchRequestEvent> listener);
 
-    void addResponseDeliveredListener(SearchResponderEventListener<SearchRequestResponseEventArgs> listener);
+    void addResponseDeliveredListener(SearchResponderEventListener<SearchRequestResponseEvent> listener);
 
-    void removeResponseDeliveredListener(SearchResponderEventListener<SearchRequestResponseEventArgs> listener);
+    void removeResponseDeliveredListener(SearchResponderEventListener<SearchRequestResponseEvent> listener);
 
-    void addResponseDeliveryFailedListener(SearchResponderEventListener<SearchRequestResponseEventArgs> listener);
+    void addResponseDeliveryFailedListener(SearchResponderEventListener<SearchRequestResponseEvent> listener);
 
-    void removeResponseDeliveryFailedListener(SearchResponderEventListener<SearchRequestResponseEventArgs> listener);
+    void removeResponseDeliveryFailedListener(SearchResponderEventListener<SearchRequestResponseEvent> listener);
 
     boolean tryDiscard(int responseToken);
 

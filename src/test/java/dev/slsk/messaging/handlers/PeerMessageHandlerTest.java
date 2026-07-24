@@ -27,8 +27,8 @@ import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
 import dev.slsk.common.Waiter;
 import dev.slsk.diagnostics.DiagnosticSink;
-import dev.slsk.eventargs.DownloadDeniedEventArgs;
-import dev.slsk.eventargs.DownloadFailedEventArgs;
+import dev.slsk.events.DownloadDeniedEvent;
+import dev.slsk.events.DownloadFailedEvent;
 import dev.slsk.exceptions.DownloadEnqueueException;
 import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.exceptions.TransferRejectedException;
@@ -482,8 +482,8 @@ class PeerMessageHandlerTest {
     @Test
     void deniedAndFailedMessagesFailWaitsAndRaiseEvents() {
         Fixture fixture = new Fixture(new SoulseekClientOptions());
-        List<DownloadDeniedEventArgs> deniedEvents = new ArrayList<>();
-        List<DownloadFailedEventArgs> failedEvents = new ArrayList<>();
+        List<DownloadDeniedEvent> deniedEvents = new ArrayList<>();
+        List<DownloadFailedEvent> failedEvents = new ArrayList<>();
         fixture.handler.addDownloadDeniedListener((sender, eventArgs) -> deniedEvents.add(eventArgs));
         fixture.handler.addDownloadFailedListener((sender, eventArgs) -> failedEvents.add(eventArgs));
 

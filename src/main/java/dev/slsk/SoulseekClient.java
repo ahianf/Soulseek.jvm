@@ -5,29 +5,29 @@
 package dev.slsk;
 
 import dev.slsk.diagnostics.DiagnosticSource;
-import dev.slsk.eventargs.BrowseProgressUpdatedEventArgs;
-import dev.slsk.eventargs.DistributedChildEventArgs;
-import dev.slsk.eventargs.DistributedParentEventArgs;
-import dev.slsk.eventargs.DownloadDeniedEventArgs;
-import dev.slsk.eventargs.DownloadFailedEventArgs;
-import dev.slsk.eventargs.PrivateMessageReceivedEventArgs;
-import dev.slsk.eventargs.PrivilegeNotificationReceivedEventArgs;
-import dev.slsk.eventargs.PublicChatMessageReceivedEventArgs;
-import dev.slsk.eventargs.RoomJoinedEventArgs;
-import dev.slsk.eventargs.RoomLeftEventArgs;
-import dev.slsk.eventargs.RoomMessageReceivedEventArgs;
-import dev.slsk.eventargs.RoomTickerAddedEventArgs;
-import dev.slsk.eventargs.RoomTickerListReceivedEventArgs;
-import dev.slsk.eventargs.RoomTickerRemovedEventArgs;
-import dev.slsk.eventargs.SearchRequestEventArgs;
-import dev.slsk.eventargs.SearchRequestResponseEventArgs;
-import dev.slsk.eventargs.SearchResponseReceivedEventArgs;
-import dev.slsk.eventargs.SearchStateChangedEventArgs;
-import dev.slsk.eventargs.SoulseekClientDisconnectedEventArgs;
-import dev.slsk.eventargs.SoulseekClientStateChangedEventArgs;
-import dev.slsk.eventargs.TransferProgressUpdatedEventArgs;
-import dev.slsk.eventargs.TransferStateChangedEventArgs;
-import dev.slsk.eventargs.UserCannotConnectEventArgs;
+import dev.slsk.events.BrowseProgressUpdatedEvent;
+import dev.slsk.events.DistributedChildEvent;
+import dev.slsk.events.DistributedParentEvent;
+import dev.slsk.events.DownloadDeniedEvent;
+import dev.slsk.events.DownloadFailedEvent;
+import dev.slsk.events.PrivateMessageReceivedEvent;
+import dev.slsk.events.PrivilegeNotificationReceivedEvent;
+import dev.slsk.events.PublicChatMessageReceivedEvent;
+import dev.slsk.events.RoomJoinedEvent;
+import dev.slsk.events.RoomLeftEvent;
+import dev.slsk.events.RoomMessageReceivedEvent;
+import dev.slsk.events.RoomTickerAddedEvent;
+import dev.slsk.events.RoomTickerListReceivedEvent;
+import dev.slsk.events.RoomTickerRemovedEvent;
+import dev.slsk.events.SearchRequestEvent;
+import dev.slsk.events.SearchRequestResponseEvent;
+import dev.slsk.events.SearchResponseReceivedEvent;
+import dev.slsk.events.SearchStateChangedEvent;
+import dev.slsk.events.SoulseekClientDisconnectedEvent;
+import dev.slsk.events.SoulseekClientStateChangedEvent;
+import dev.slsk.events.TransferProgressUpdatedEvent;
+import dev.slsk.events.TransferStateChangedEvent;
+import dev.slsk.events.UserCannotConnectEvent;
 import dev.slsk.options.BrowseOptions;
 import dev.slsk.options.DownloadStreamFactory;
 import dev.slsk.options.SearchOptions;
@@ -117,9 +117,9 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
 
     String getUsername();
 
-    void addBrowseProgressUpdatedListener(SoulseekClientEventListener<BrowseProgressUpdatedEventArgs> listener);
+    void addBrowseProgressUpdatedListener(SoulseekClientEventListener<BrowseProgressUpdatedEvent> listener);
 
-    void removeBrowseProgressUpdatedListener(SoulseekClientEventListener<BrowseProgressUpdatedEventArgs> listener);
+    void removeBrowseProgressUpdatedListener(SoulseekClientEventListener<BrowseProgressUpdatedEvent> listener);
 
     void addConnectedListener(SoulseekClientEventListener<Void> listener);
 
@@ -129,17 +129,17 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
 
     void removeDemotedFromDistributedBranchRootListener(SoulseekClientEventListener<Void> listener);
 
-    void addDisconnectedListener(SoulseekClientEventListener<SoulseekClientDisconnectedEventArgs> listener);
+    void addDisconnectedListener(SoulseekClientEventListener<SoulseekClientDisconnectedEvent> listener);
 
-    void removeDisconnectedListener(SoulseekClientEventListener<SoulseekClientDisconnectedEventArgs> listener);
+    void removeDisconnectedListener(SoulseekClientEventListener<SoulseekClientDisconnectedEvent> listener);
 
-    void addDistributedChildAddedListener(SoulseekClientEventListener<DistributedChildEventArgs> listener);
+    void addDistributedChildAddedListener(SoulseekClientEventListener<DistributedChildEvent> listener);
 
-    void removeDistributedChildAddedListener(SoulseekClientEventListener<DistributedChildEventArgs> listener);
+    void removeDistributedChildAddedListener(SoulseekClientEventListener<DistributedChildEvent> listener);
 
-    void addDistributedChildDisconnectedListener(SoulseekClientEventListener<DistributedChildEventArgs> listener);
+    void addDistributedChildDisconnectedListener(SoulseekClientEventListener<DistributedChildEvent> listener);
 
-    void removeDistributedChildDisconnectedListener(SoulseekClientEventListener<DistributedChildEventArgs> listener);
+    void removeDistributedChildDisconnectedListener(SoulseekClientEventListener<DistributedChildEvent> listener);
 
     void addDistributedNetworkResetListener(SoulseekClientEventListener<Void> listener);
 
@@ -149,21 +149,21 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
 
     void removeDistributedNetworkStateChangedListener(SoulseekClientEventListener<DistributedNetworkInfo> listener);
 
-    void addDistributedParentAdoptedListener(SoulseekClientEventListener<DistributedParentEventArgs> listener);
+    void addDistributedParentAdoptedListener(SoulseekClientEventListener<DistributedParentEvent> listener);
 
-    void removeDistributedParentAdoptedListener(SoulseekClientEventListener<DistributedParentEventArgs> listener);
+    void removeDistributedParentAdoptedListener(SoulseekClientEventListener<DistributedParentEvent> listener);
 
-    void addDistributedParentDisconnectedListener(SoulseekClientEventListener<DistributedParentEventArgs> listener);
+    void addDistributedParentDisconnectedListener(SoulseekClientEventListener<DistributedParentEvent> listener);
 
-    void removeDistributedParentDisconnectedListener(SoulseekClientEventListener<DistributedParentEventArgs> listener);
+    void removeDistributedParentDisconnectedListener(SoulseekClientEventListener<DistributedParentEvent> listener);
 
-    void addDownloadDeniedListener(SoulseekClientEventListener<DownloadDeniedEventArgs> listener);
+    void addDownloadDeniedListener(SoulseekClientEventListener<DownloadDeniedEvent> listener);
 
-    void removeDownloadDeniedListener(SoulseekClientEventListener<DownloadDeniedEventArgs> listener);
+    void removeDownloadDeniedListener(SoulseekClientEventListener<DownloadDeniedEvent> listener);
 
-    void addDownloadFailedListener(SoulseekClientEventListener<DownloadFailedEventArgs> listener);
+    void addDownloadFailedListener(SoulseekClientEventListener<DownloadFailedEvent> listener);
 
-    void removeDownloadFailedListener(SoulseekClientEventListener<DownloadFailedEventArgs> listener);
+    void removeDownloadFailedListener(SoulseekClientEventListener<DownloadFailedEvent> listener);
 
     void addExcludedSearchPhrasesReceivedListener(SoulseekClientEventListener<List<String>> listener);
 
@@ -181,9 +181,9 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
 
     void removeLoggedInListener(SoulseekClientEventListener<Void> listener);
 
-    void addPrivateMessageReceivedListener(SoulseekClientEventListener<PrivateMessageReceivedEventArgs> listener);
+    void addPrivateMessageReceivedListener(SoulseekClientEventListener<PrivateMessageReceivedEvent> listener);
 
-    void removePrivateMessageReceivedListener(SoulseekClientEventListener<PrivateMessageReceivedEventArgs> listener);
+    void removePrivateMessageReceivedListener(SoulseekClientEventListener<PrivateMessageReceivedEvent> listener);
 
     void addPrivateRoomMembershipAddedListener(SoulseekClientEventListener<String> listener);
 
@@ -214,88 +214,86 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
     void removePrivilegedUserListReceivedListener(SoulseekClientEventListener<List<String>> listener);
 
     void addPrivilegeNotificationReceivedListener(
-            SoulseekClientEventListener<PrivilegeNotificationReceivedEventArgs> listener);
+            SoulseekClientEventListener<PrivilegeNotificationReceivedEvent> listener);
 
     void removePrivilegeNotificationReceivedListener(
-            SoulseekClientEventListener<PrivilegeNotificationReceivedEventArgs> listener);
+            SoulseekClientEventListener<PrivilegeNotificationReceivedEvent> listener);
 
     void addPromotedToDistributedBranchRootListener(SoulseekClientEventListener<Void> listener);
 
     void removePromotedToDistributedBranchRootListener(SoulseekClientEventListener<Void> listener);
 
-    void addPublicChatMessageReceivedListener(SoulseekClientEventListener<PublicChatMessageReceivedEventArgs> listener);
+    void addPublicChatMessageReceivedListener(SoulseekClientEventListener<PublicChatMessageReceivedEvent> listener);
 
-    void removePublicChatMessageReceivedListener(
-            SoulseekClientEventListener<PublicChatMessageReceivedEventArgs> listener);
+    void removePublicChatMessageReceivedListener(SoulseekClientEventListener<PublicChatMessageReceivedEvent> listener);
 
-    void addRoomJoinedListener(SoulseekClientEventListener<RoomJoinedEventArgs> listener);
+    void addRoomJoinedListener(SoulseekClientEventListener<RoomJoinedEvent> listener);
 
-    void removeRoomJoinedListener(SoulseekClientEventListener<RoomJoinedEventArgs> listener);
+    void removeRoomJoinedListener(SoulseekClientEventListener<RoomJoinedEvent> listener);
 
-    void addRoomLeftListener(SoulseekClientEventListener<RoomLeftEventArgs> listener);
+    void addRoomLeftListener(SoulseekClientEventListener<RoomLeftEvent> listener);
 
-    void removeRoomLeftListener(SoulseekClientEventListener<RoomLeftEventArgs> listener);
+    void removeRoomLeftListener(SoulseekClientEventListener<RoomLeftEvent> listener);
 
     void addRoomListReceivedListener(SoulseekClientEventListener<RoomList> listener);
 
     void removeRoomListReceivedListener(SoulseekClientEventListener<RoomList> listener);
 
-    void addRoomMessageReceivedListener(SoulseekClientEventListener<RoomMessageReceivedEventArgs> listener);
+    void addRoomMessageReceivedListener(SoulseekClientEventListener<RoomMessageReceivedEvent> listener);
 
-    void removeRoomMessageReceivedListener(SoulseekClientEventListener<RoomMessageReceivedEventArgs> listener);
+    void removeRoomMessageReceivedListener(SoulseekClientEventListener<RoomMessageReceivedEvent> listener);
 
-    void addRoomTickerAddedListener(SoulseekClientEventListener<RoomTickerAddedEventArgs> listener);
+    void addRoomTickerAddedListener(SoulseekClientEventListener<RoomTickerAddedEvent> listener);
 
-    void removeRoomTickerAddedListener(SoulseekClientEventListener<RoomTickerAddedEventArgs> listener);
+    void removeRoomTickerAddedListener(SoulseekClientEventListener<RoomTickerAddedEvent> listener);
 
-    void addRoomTickerListReceivedListener(SoulseekClientEventListener<RoomTickerListReceivedEventArgs> listener);
+    void addRoomTickerListReceivedListener(SoulseekClientEventListener<RoomTickerListReceivedEvent> listener);
 
-    void removeRoomTickerListReceivedListener(SoulseekClientEventListener<RoomTickerListReceivedEventArgs> listener);
+    void removeRoomTickerListReceivedListener(SoulseekClientEventListener<RoomTickerListReceivedEvent> listener);
 
-    void addRoomTickerRemovedListener(SoulseekClientEventListener<RoomTickerRemovedEventArgs> listener);
+    void addRoomTickerRemovedListener(SoulseekClientEventListener<RoomTickerRemovedEvent> listener);
 
-    void removeRoomTickerRemovedListener(SoulseekClientEventListener<RoomTickerRemovedEventArgs> listener);
+    void removeRoomTickerRemovedListener(SoulseekClientEventListener<RoomTickerRemovedEvent> listener);
 
-    void addSearchRequestReceivedListener(SoulseekClientEventListener<SearchRequestEventArgs> listener);
+    void addSearchRequestReceivedListener(SoulseekClientEventListener<SearchRequestEvent> listener);
 
-    void removeSearchRequestReceivedListener(SoulseekClientEventListener<SearchRequestEventArgs> listener);
+    void removeSearchRequestReceivedListener(SoulseekClientEventListener<SearchRequestEvent> listener);
 
-    void addSearchResponseDeliveredListener(SoulseekClientEventListener<SearchRequestResponseEventArgs> listener);
+    void addSearchResponseDeliveredListener(SoulseekClientEventListener<SearchRequestResponseEvent> listener);
 
-    void removeSearchResponseDeliveredListener(SoulseekClientEventListener<SearchRequestResponseEventArgs> listener);
+    void removeSearchResponseDeliveredListener(SoulseekClientEventListener<SearchRequestResponseEvent> listener);
 
-    void addSearchResponseDeliveryFailedListener(SoulseekClientEventListener<SearchRequestResponseEventArgs> listener);
+    void addSearchResponseDeliveryFailedListener(SoulseekClientEventListener<SearchRequestResponseEvent> listener);
 
-    void removeSearchResponseDeliveryFailedListener(
-            SoulseekClientEventListener<SearchRequestResponseEventArgs> listener);
+    void removeSearchResponseDeliveryFailedListener(SoulseekClientEventListener<SearchRequestResponseEvent> listener);
 
-    void addSearchResponseReceivedListener(SoulseekClientEventListener<SearchResponseReceivedEventArgs> listener);
+    void addSearchResponseReceivedListener(SoulseekClientEventListener<SearchResponseReceivedEvent> listener);
 
-    void removeSearchResponseReceivedListener(SoulseekClientEventListener<SearchResponseReceivedEventArgs> listener);
+    void removeSearchResponseReceivedListener(SoulseekClientEventListener<SearchResponseReceivedEvent> listener);
 
-    void addSearchStateChangedListener(SoulseekClientEventListener<SearchStateChangedEventArgs> listener);
+    void addSearchStateChangedListener(SoulseekClientEventListener<SearchStateChangedEvent> listener);
 
-    void removeSearchStateChangedListener(SoulseekClientEventListener<SearchStateChangedEventArgs> listener);
+    void removeSearchStateChangedListener(SoulseekClientEventListener<SearchStateChangedEvent> listener);
 
     void addServerInfoReceivedListener(SoulseekClientEventListener<ServerInfo> listener);
 
     void removeServerInfoReceivedListener(SoulseekClientEventListener<ServerInfo> listener);
 
-    void addStateChangedListener(SoulseekClientEventListener<SoulseekClientStateChangedEventArgs> listener);
+    void addStateChangedListener(SoulseekClientEventListener<SoulseekClientStateChangedEvent> listener);
 
-    void removeStateChangedListener(SoulseekClientEventListener<SoulseekClientStateChangedEventArgs> listener);
+    void removeStateChangedListener(SoulseekClientEventListener<SoulseekClientStateChangedEvent> listener);
 
-    void addTransferProgressUpdatedListener(SoulseekClientEventListener<TransferProgressUpdatedEventArgs> listener);
+    void addTransferProgressUpdatedListener(SoulseekClientEventListener<TransferProgressUpdatedEvent> listener);
 
-    void removeTransferProgressUpdatedListener(SoulseekClientEventListener<TransferProgressUpdatedEventArgs> listener);
+    void removeTransferProgressUpdatedListener(SoulseekClientEventListener<TransferProgressUpdatedEvent> listener);
 
-    void addTransferStateChangedListener(SoulseekClientEventListener<TransferStateChangedEventArgs> listener);
+    void addTransferStateChangedListener(SoulseekClientEventListener<TransferStateChangedEvent> listener);
 
-    void removeTransferStateChangedListener(SoulseekClientEventListener<TransferStateChangedEventArgs> listener);
+    void removeTransferStateChangedListener(SoulseekClientEventListener<TransferStateChangedEvent> listener);
 
-    void addUserCannotConnectListener(SoulseekClientEventListener<UserCannotConnectEventArgs> listener);
+    void addUserCannotConnectListener(SoulseekClientEventListener<UserCannotConnectEvent> listener);
 
-    void removeUserCannotConnectListener(SoulseekClientEventListener<UserCannotConnectEventArgs> listener);
+    void removeUserCannotConnectListener(SoulseekClientEventListener<UserCannotConnectEvent> listener);
 
     void addUserStatisticsChangedListener(SoulseekClientEventListener<UserStatistics> listener);
 

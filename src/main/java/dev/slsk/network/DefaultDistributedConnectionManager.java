@@ -16,8 +16,8 @@ import dev.slsk.diagnostics.DiagnosticEventArgs;
 import dev.slsk.diagnostics.DiagnosticEventListener;
 import dev.slsk.diagnostics.DiagnosticSink;
 import dev.slsk.diagnostics.FilteringDiagnosticSink;
-import dev.slsk.eventargs.DistributedChildEventArgs;
-import dev.slsk.eventargs.DistributedParentEventArgs;
+import dev.slsk.events.DistributedChildEvent;
+import dev.slsk.events.DistributedParentEvent;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
@@ -81,15 +81,15 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     private final ConcurrentHashMap<String, CancellationTokenSource> pendingInboundIndirectConnections =
             new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Integer, String> pendingSolicitations = new ConcurrentHashMap<>();
-    private final CopyOnWriteArrayList<DistributedManagerEventListener<DistributedChildEventArgs>> childAddedListeners =
+    private final CopyOnWriteArrayList<DistributedManagerEventListener<DistributedChildEvent>> childAddedListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<DistributedManagerEventListener<DistributedChildEventArgs>>
+    private final CopyOnWriteArrayList<DistributedManagerEventListener<DistributedChildEvent>>
             childDisconnectedListeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<DistributedManagerEventListener<Void>> demotedListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<DistributedManagerEventListener<DistributedParentEventArgs>>
-            parentAdoptedListeners = new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<DistributedManagerEventListener<DistributedParentEventArgs>>
+    private final CopyOnWriteArrayList<DistributedManagerEventListener<DistributedParentEvent>> parentAdoptedListeners =
+            new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<DistributedManagerEventListener<DistributedParentEvent>>
             parentDisconnectedListeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<DistributedManagerEventListener<Void>> promotedListeners =
             new CopyOnWriteArrayList<>();
@@ -139,22 +139,22 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     }
 
     @Override
-    public void addChildAddedListener(DistributedManagerEventListener<DistributedChildEventArgs> listener) {
+    public void addChildAddedListener(DistributedManagerEventListener<DistributedChildEvent> listener) {
         childAddedListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override
-    public void removeChildAddedListener(DistributedManagerEventListener<DistributedChildEventArgs> listener) {
+    public void removeChildAddedListener(DistributedManagerEventListener<DistributedChildEvent> listener) {
         childAddedListeners.remove(listener);
     }
 
     @Override
-    public void addChildDisconnectedListener(DistributedManagerEventListener<DistributedChildEventArgs> listener) {
+    public void addChildDisconnectedListener(DistributedManagerEventListener<DistributedChildEvent> listener) {
         childDisconnectedListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override
-    public void removeChildDisconnectedListener(DistributedManagerEventListener<DistributedChildEventArgs> listener) {
+    public void removeChildDisconnectedListener(DistributedManagerEventListener<DistributedChildEvent> listener) {
         childDisconnectedListeners.remove(listener);
     }
 
@@ -179,22 +179,22 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     }
 
     @Override
-    public void addParentAdoptedListener(DistributedManagerEventListener<DistributedParentEventArgs> listener) {
+    public void addParentAdoptedListener(DistributedManagerEventListener<DistributedParentEvent> listener) {
         parentAdoptedListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override
-    public void removeParentAdoptedListener(DistributedManagerEventListener<DistributedParentEventArgs> listener) {
+    public void removeParentAdoptedListener(DistributedManagerEventListener<DistributedParentEvent> listener) {
         parentAdoptedListeners.remove(listener);
     }
 
     @Override
-    public void addParentDisconnectedListener(DistributedManagerEventListener<DistributedParentEventArgs> listener) {
+    public void addParentDisconnectedListener(DistributedManagerEventListener<DistributedParentEvent> listener) {
         parentDisconnectedListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override
-    public void removeParentDisconnectedListener(DistributedManagerEventListener<DistributedParentEventArgs> listener) {
+    public void removeParentDisconnectedListener(DistributedManagerEventListener<DistributedParentEvent> listener) {
         parentDisconnectedListeners.remove(listener);
     }
 
@@ -386,7 +386,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                             + parentConnection.getUsername() + " ("
                             + parentConnection.getIpEndpoint() + ")");
                     demoteFromBranchRoot();
-                    DistributedParentEventArgs eventArgs = new DistributedParentEventArgs(
+                    DistributedParentEvent eventArgs = new DistributedParentEvent(
                             parentConnection.getUsername(),
                             parentConnection.getIpEndpoint(),
                             parentBranchLevel,
@@ -1025,8 +1025,8 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         diagnostic.info("Child connection to " + connection.getUsername() + " ("
                 + connection.getIpEndpoint() + ") disconnected"
                 + (eventArgs.getMessage() == null ? "." : ": " + eventArgs.getMessage()));
-        DistributedChildEventArgs childEvent =
-                new DistributedChildEventArgs(connection.getUsername(), connection.getIpEndpoint());
+        DistributedChildEvent childEvent =
+                new DistributedChildEvent(connection.getUsername(), connection.getIpEndpoint());
         childDisconnectedListeners.forEach(listener -> listener.handle(this, childEvent));
         raiseStateChanged();
         connection.close();
@@ -1053,7 +1053,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         diagnostic.info("Parent connection to " + connection.getUsername() + " ("
                 + connection.getIpEndpoint() + ") disconnected"
                 + (eventArgs.getMessage() == null ? "." : ": " + eventArgs.getMessage()) + ".");
-        DistributedParentEventArgs parentEvent = new DistributedParentEventArgs(
+        DistributedParentEvent parentEvent = new DistributedParentEvent(
                 connection.getUsername(), connection.getIpEndpoint(), parentBranchLevel, parentBranchRoot);
         parentDisconnectedListeners.forEach(listener -> listener.handle(this, parentEvent));
         parentConnection = null;
@@ -1096,8 +1096,8 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     }
 
     private void raiseChildAdded(MessageConnection connection) {
-        DistributedChildEventArgs eventArgs =
-                new DistributedChildEventArgs(connection.getUsername(), connection.getIpEndpoint());
+        DistributedChildEvent eventArgs =
+                new DistributedChildEvent(connection.getUsername(), connection.getIpEndpoint());
         childAddedListeners.forEach(listener -> listener.handle(this, eventArgs));
     }
 

@@ -4,10 +4,10 @@
 
 package dev.slsk.search;
 
-import dev.slsk.eventargs.SoulseekClientEventArgs;
+import dev.slsk.events.SoulseekClientEvent;
 
 /** Handles a search-responder event. */
 @FunctionalInterface
-public interface SearchResponderEventListener<T extends SoulseekClientEventArgs> {
+public interface SearchResponderEventListener<T extends SoulseekClientEvent> {
     void handle(SearchResponder sender, T eventArgs);
 }

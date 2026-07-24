@@ -7,7 +7,7 @@
 module dev.slsk.soulseek {
     exports dev.slsk;
     exports dev.slsk.diagnostics;
-    exports dev.slsk.eventargs;
+    exports dev.slsk.events;
     exports dev.slsk.exceptions;
     exports dev.slsk.options;
 }
