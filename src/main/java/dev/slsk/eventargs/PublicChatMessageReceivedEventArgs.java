@@ -4,6 +4,8 @@
 
 package dev.slsk.eventargs;
 
+import dev.slsk.messaging.messages.PublicChatMessageNotification;
+
 /**
  * Event arguments raised when a public chat message is received.
  */
@@ -23,6 +25,15 @@ public class PublicChatMessageReceivedEventArgs extends SoulseekClientEventArgs 
         this.roomName = roomName;
         this.username = username;
         this.message = message;
+    }
+
+    /**
+     * Creates event arguments from an internal protocol notification.
+     *
+     * @param notification the notification that raised the event
+     */
+    public PublicChatMessageReceivedEventArgs(PublicChatMessageNotification notification) {
+        this(notification.getRoomName(), notification.getUsername(), notification.getMessage());
     }
 
     /**

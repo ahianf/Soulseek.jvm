@@ -4,6 +4,8 @@
 
 package dev.slsk.eventargs;
 
+import dev.slsk.messaging.messages.RoomMessageNotification;
+
 /**
  * Event arguments raised when a chat-room message is received.
  */
@@ -20,6 +22,15 @@ public class RoomMessageReceivedEventArgs extends RoomEventArgs {
     public RoomMessageReceivedEventArgs(String roomName, String username, String message) {
         super(roomName, username);
         this.message = message;
+    }
+
+    /**
+     * Creates event arguments from an internal protocol notification.
+     *
+     * @param notification the notification that raised the event
+     */
+    public RoomMessageReceivedEventArgs(RoomMessageNotification notification) {
+        this(notification.getRoomName(), notification.getUsername(), notification.getMessage());
     }
 
     /**

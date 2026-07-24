@@ -5,6 +5,7 @@
 package dev.slsk.eventargs;
 
 import dev.slsk.RoomTicker;
+import dev.slsk.messaging.messages.RoomTickerListNotification;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,6 +32,15 @@ public class RoomTickerListReceivedEventArgs extends RoomTickerEventArgs {
         ArrayList<RoomTicker> copy = new ArrayList<>();
         tickers.forEach(copy::add);
         this.tickers = java.util.Collections.unmodifiableList(copy);
+    }
+
+    /**
+     * Creates event arguments from an internal protocol notification.
+     *
+     * @param notification the notification that raised the event
+     */
+    public RoomTickerListReceivedEventArgs(RoomTickerListNotification notification) {
+        this(notification.getRoomName(), notification.getTickers());
     }
 
     /**

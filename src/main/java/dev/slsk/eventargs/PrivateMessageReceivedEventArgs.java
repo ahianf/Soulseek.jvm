@@ -4,6 +4,7 @@
 
 package dev.slsk.eventargs;
 
+import dev.slsk.messaging.messages.PrivateMessageNotification;
 import java.time.Instant;
 
 /**
@@ -32,6 +33,20 @@ public class PrivateMessageReceivedEventArgs extends SoulseekClientEventArgs {
         this.username = username;
         this.message = message;
         this.replayed = replayed;
+    }
+
+    /**
+     * Creates event arguments from an internal protocol notification.
+     *
+     * @param notification the notification that raised the event
+     */
+    public PrivateMessageReceivedEventArgs(PrivateMessageNotification notification) {
+        this(
+                notification.getId(),
+                notification.getTimestamp(),
+                notification.getUsername(),
+                notification.getMessage(),
+                notification.isReplayed());
     }
 
     /**
