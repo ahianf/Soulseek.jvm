@@ -15,6 +15,11 @@ final class ServerMessageParser {
     private ServerMessageParser() {}
 
     static MessageReader<MessageCode.Server> reader(byte[] bytes, MessageCode.Server expected, String messageName) {
+        return reader(bytes, expected, messageName, true);
+    }
+
+    static MessageReader<MessageCode.Server> reader(
+            byte[] bytes, MessageCode.Server expected, String messageName, boolean closeParenthesis) {
         MessageReader<MessageCode.Server> reader = new MessageReader<>(bytes, MessageCode.Server.class);
         int received = ByteBuffer.wrap(bytes, 4, Integer.BYTES)
                 .order(ByteOrder.LITTLE_ENDIAN)
@@ -22,7 +27,8 @@ final class ServerMessageParser {
         if (received != expected.getValue()) {
             throw new MessageException("Message Code mismatch creating " + messageName
                     + " (expected: " + expected.getValue()
-                    + ", received: " + received + ")");
+                    + ", received: " + received
+                    + (closeParenthesis ? ")" : ""));
         }
         return reader;
     }
