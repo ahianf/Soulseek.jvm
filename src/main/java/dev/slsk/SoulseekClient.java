@@ -39,6 +39,7 @@ import dev.slsk.eventargs.TransferProgressUpdatedEventArgs;
 import dev.slsk.eventargs.TransferStateChangedEventArgs;
 import dev.slsk.eventargs.UserCannotConnectEventArgs;
 import dev.slsk.exceptions.ConnectionException;
+import dev.slsk.exceptions.DuplicateTokenException;
 import dev.slsk.exceptions.KickedFromServerException;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.RoomJoinForbiddenException;
@@ -83,6 +84,8 @@ import dev.slsk.messaging.messages.PrivateRoomRemoveOperator;
 import dev.slsk.messaging.messages.PrivateRoomRemoveUser;
 import dev.slsk.messaging.messages.RoomListRequest;
 import dev.slsk.messaging.messages.RoomMessageCommand;
+import dev.slsk.messaging.messages.RoomSearchRequest;
+import dev.slsk.messaging.messages.SearchRequest;
 import dev.slsk.messaging.messages.SendUploadSpeedCommand;
 import dev.slsk.messaging.messages.ServerPing;
 import dev.slsk.messaging.messages.SetOnlineStatusCommand;
@@ -95,10 +98,12 @@ import dev.slsk.messaging.messages.UserAddressRequest;
 import dev.slsk.messaging.messages.UserAddressResponse;
 import dev.slsk.messaging.messages.UserInfoRequest;
 import dev.slsk.messaging.messages.UserPrivilegesRequest;
+import dev.slsk.messaging.messages.UserSearchRequest;
 import dev.slsk.messaging.messages.UserStatisticsRequest;
 import dev.slsk.messaging.messages.UserStatusRequest;
 import dev.slsk.messaging.messages.WatchUserRequest;
 import dev.slsk.messaging.messages.WatchUserResponse;
+import dev.slsk.messaging.messages.WishlistSearchRequest;
 import dev.slsk.network.ConnectionFactory;
 import dev.slsk.network.DistributedConnectionManager;
 import dev.slsk.network.DistributedConnectionManagerClient;
@@ -115,12 +120,16 @@ import dev.slsk.network.PeerEndpoint;
 import dev.slsk.network.tcp.IListener;
 import dev.slsk.options.BrowseOptions;
 import dev.slsk.options.BrowseProgress;
+import dev.slsk.options.SearchOptions;
+import dev.slsk.options.SearchResponseReceived;
+import dev.slsk.options.SearchStateChange;
 import dev.slsk.options.SoulseekClientOptions;
 import dev.slsk.search.ISearchResponder;
 import dev.slsk.search.SearchInternal;
 import dev.slsk.search.SearchResponder;
 import dev.slsk.search.SearchResponderClient;
 import dev.slsk.transfer.TransferInternal;
+import java.io.ByteArrayOutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -136,9 +145,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 /**
  * A client for the Soulseek file-sharing network.
@@ -160,6 +171,7 @@ public class SoulseekClient
     private final int minorVersion;
     private final IWaiter waiter;
     private final TokenFactory tokenFactory;
+    private final Semaphore searchSemaphore;
     private final IOAdapter ioAdapter;
     private final TokenBucket uploadTokenBucket;
     private final TokenBucket downloadTokenBucket;
@@ -247,6 +259,7 @@ public class SoulseekClient
         this.listener = listener;
         this.waiter = waiter == null ? new Waiter(this.options.getMessageTimeout()) : waiter;
         this.tokenFactory = tokenFactory == null ? new TokenFactory(this.options.getStartingToken()) : tokenFactory;
+        this.searchSemaphore = new Semaphore(this.options.getMaximumConcurrentSearches());
         this.ioAdapter = ioAdapter == null ? new IOAdapter() : ioAdapter;
         this.uploadTokenBucket = uploadTokenBucket == null
                 ? new TokenBucket((this.options.getMaximumUploadSpeed() * 1024L) / 10, 100)
@@ -1552,6 +1565,185 @@ public class SoulseekClient
         return request;
     }
 
+    /**
+     * Searches the network and collects accepted responses.
+     *
+     * @param query the search query
+     * @return the completed search and collected responses
+     */
+    public CompletableFuture<SearchResult> searchAsync(SearchQuery query) {
+        return searchAsync(query, null, null, null, CancellationToken.none());
+    }
+
+    /**
+     * Searches the network and collects accepted responses.
+     *
+     * @param query the search query
+     * @param cancellationToken the cancellation token
+     * @return the completed search and collected responses
+     */
+    public CompletableFuture<SearchResult> searchAsync(SearchQuery query, CancellationToken cancellationToken) {
+        return searchAsync(query, null, null, null, cancellationToken);
+    }
+
+    /**
+     * Searches the selected scope and collects accepted responses.
+     *
+     * @param query the search query
+     * @param scope the search scope
+     * @return the completed search and collected responses
+     */
+    public CompletableFuture<SearchResult> searchAsync(SearchQuery query, SearchScope scope) {
+        return searchAsync(query, scope, null, null, CancellationToken.none());
+    }
+
+    /**
+     * Searches the selected scope with a specific token.
+     *
+     * @param query the search query
+     * @param scope the search scope
+     * @param token the unique token
+     * @return the completed search and collected responses
+     */
+    public CompletableFuture<SearchResult> searchAsync(SearchQuery query, SearchScope scope, Integer token) {
+        return searchAsync(query, scope, token, null, CancellationToken.none());
+    }
+
+    /**
+     * Searches the selected scope using the supplied options.
+     *
+     * @param query the search query
+     * @param scope the search scope
+     * @param token the unique token
+     * @param searchOptions the search options
+     * @return the completed search and collected responses
+     */
+    public CompletableFuture<SearchResult> searchAsync(
+            SearchQuery query, SearchScope scope, Integer token, SearchOptions searchOptions) {
+        return searchAsync(query, scope, token, searchOptions, CancellationToken.none());
+    }
+
+    /**
+     * Searches the selected scope and collects accepted responses.
+     *
+     * @param query the search query
+     * @param scope the search scope, or {@code null} for the network
+     * @param token the unique token, or {@code null} to generate one
+     * @param searchOptions the search options, or {@code null} for defaults
+     * @param cancellationToken the cancellation token
+     * @return the completed search and collected responses
+     */
+    public CompletableFuture<SearchResult> searchAsync(
+            SearchQuery query,
+            SearchScope scope,
+            Integer token,
+            SearchOptions searchOptions,
+            CancellationToken cancellationToken) {
+        SearchInvocation invocation = validateSearch(query, scope, token, searchOptions);
+        List<SearchResponse> responses = Collections.synchronizedList(new ArrayList<>());
+        return searchToCallbackAsync(invocation, responses::add, defaultToken(cancellationToken))
+                .thenApply(search -> {
+                    synchronized (responses) {
+                        return new SearchResult(search, responses);
+                    }
+                });
+    }
+
+    /**
+     * Searches the network and invokes a handler for each accepted response.
+     *
+     * @param query the search query
+     * @param responseHandler the response handler
+     * @return the completed search
+     */
+    public CompletableFuture<Search> searchAsync(SearchQuery query, Consumer<SearchResponse> responseHandler) {
+        return searchAsync(query, responseHandler, null, null, null, CancellationToken.none());
+    }
+
+    /**
+     * Searches the network and invokes a handler for each accepted response.
+     *
+     * @param query the search query
+     * @param responseHandler the response handler
+     * @param cancellationToken the cancellation token
+     * @return the completed search
+     */
+    public CompletableFuture<Search> searchAsync(
+            SearchQuery query, Consumer<SearchResponse> responseHandler, CancellationToken cancellationToken) {
+        return searchAsync(query, responseHandler, null, null, null, cancellationToken);
+    }
+
+    /**
+     * Searches the selected scope and invokes a response handler.
+     *
+     * @param query the search query
+     * @param responseHandler the response handler
+     * @param scope the search scope
+     * @return the completed search
+     */
+    public CompletableFuture<Search> searchAsync(
+            SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope) {
+        return searchAsync(query, responseHandler, scope, null, null, CancellationToken.none());
+    }
+
+    /**
+     * Searches the selected scope with a specific token.
+     *
+     * @param query the search query
+     * @param responseHandler the response handler
+     * @param scope the search scope
+     * @param token the unique token
+     * @return the completed search
+     */
+    public CompletableFuture<Search> searchAsync(
+            SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope, Integer token) {
+        return searchAsync(query, responseHandler, scope, token, null, CancellationToken.none());
+    }
+
+    /**
+     * Searches the selected scope using the supplied options.
+     *
+     * @param query the search query
+     * @param responseHandler the response handler
+     * @param scope the search scope
+     * @param token the unique token
+     * @param searchOptions the search options
+     * @return the completed search
+     */
+    public CompletableFuture<Search> searchAsync(
+            SearchQuery query,
+            Consumer<SearchResponse> responseHandler,
+            SearchScope scope,
+            Integer token,
+            SearchOptions searchOptions) {
+        return searchAsync(query, responseHandler, scope, token, searchOptions, CancellationToken.none());
+    }
+
+    /**
+     * Searches the selected scope and invokes a handler for each accepted
+     * response.
+     *
+     * @param query the search query
+     * @param responseHandler the response handler
+     * @param scope the search scope, or {@code null} for the network
+     * @param token the unique token, or {@code null} to generate one
+     * @param searchOptions the search options, or {@code null} for defaults
+     * @param cancellationToken the cancellation token
+     * @return the completed search
+     */
+    public CompletableFuture<Search> searchAsync(
+            SearchQuery query,
+            Consumer<SearchResponse> responseHandler,
+            SearchScope scope,
+            Integer token,
+            SearchOptions searchOptions,
+            CancellationToken cancellationToken) {
+        SearchQuery validatedQuery = validateSearchQuery(query);
+        Objects.requireNonNull(responseHandler, "responseHandler");
+        SearchInvocation invocation = validateSearch(validatedQuery, scope, token, searchOptions);
+        return searchToCallbackAsync(invocation, responseHandler, defaultToken(cancellationToken));
+    }
+
     /** Disconnects with the default reason. */
     public void disconnect() {
         disconnect(null, null);
@@ -1926,6 +2118,196 @@ public class SoulseekClient
         raise(Event.BROWSE_PROGRESS_UPDATED, eventArgs);
     }
 
+    private SearchInvocation validateSearch(
+            SearchQuery initialQuery, SearchScope initialScope, Integer initialToken, SearchOptions initialOptions) {
+        SearchQuery query = validateSearchQuery(initialQuery);
+        requireLoggedIn("perform a search");
+
+        int token = initialToken == null ? tokenFactory.nextToken() : initialToken;
+        if (searches.containsKey(token)) {
+            throw new DuplicateTokenException("An active search with token " + token + " is already in progress");
+        }
+
+        SearchScope scope = initialScope == null ? SearchScope.getNetwork() : initialScope;
+        SearchOptions searchOptions = initialOptions == null ? new SearchOptions() : initialOptions;
+        if (searchOptions.isRemoveSingleCharacterSearchTerms()) {
+            query = new SearchQuery(
+                    query.getTerms().stream().filter(term -> term.length() > 1).toList(), query.getExclusions());
+        }
+        if (query.getTerms().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Search query must contain at least one non-exclusion " + "term with length greater than 1");
+        }
+        return new SearchInvocation(query, scope, token, searchOptions);
+    }
+
+    private static SearchQuery validateSearchQuery(SearchQuery initialQuery) {
+        SearchQuery query = Objects.requireNonNull(initialQuery, "query");
+        if (query.getSearchText() == null || query.getSearchText().trim().isEmpty()) {
+            throw new IllegalArgumentException("Search text must not be null, empty, or whitespace");
+        }
+        if (query.getTerms().isEmpty()) {
+            throw new IllegalArgumentException("Search query must contain at least one " + "non-exclusion term");
+        }
+        return query;
+    }
+
+    private CompletableFuture<Search> searchToCallbackAsync(
+            SearchInvocation invocation,
+            Consumer<SearchResponse> responseHandler,
+            CancellationToken cancellationToken) {
+        SearchInternal search =
+                new SearchInternal(invocation.query(), invocation.scope(), invocation.token(), invocation.options());
+        SearchStates[] previousState = {SearchStates.NONE};
+        Consumer<SearchStates> updateState = newState -> {
+            search.setState(newState);
+            Search snapshot = search.toSearch();
+            SearchStateChangedEventArgs eventArgs = new SearchStateChangedEventArgs(previousState[0], snapshot);
+            previousState[0] = newState;
+            if (invocation.options().getStateChanged() != null) {
+                invocation
+                        .options()
+                        .getStateChanged()
+                        .onStateChanged(new SearchStateChange(eventArgs.getPreviousState(), eventArgs.getSearch()));
+            }
+            raise(Event.SEARCH_STATE_CHANGED, eventArgs);
+        };
+
+        CompletableFuture<Search> operation;
+        try {
+            searches.putIfAbsent(search.getToken(), search);
+            updateState.accept(SearchStates.REQUESTED);
+            diagnostic.debug("Attempting to acquire search semaphore for search '"
+                    + invocation.query().getSearchText() + "' ("
+                    + searchSemaphore.availablePermits()
+                    + " available)");
+            updateState.accept(SearchStates.QUEUED);
+            operation = acquireSearchPermit(cancellationToken).thenCompose(ignored -> {
+                diagnostic.debug("Acquired search semaphore for search '"
+                        + invocation.query().getSearchText() + "'");
+                CompletableFuture<Search> activeSearch;
+                try {
+                    byte[] message = buildSearchMessage(invocation.scope(), search);
+                    search.setResponseReceived(response -> {
+                        responseHandler.accept(response);
+                        SearchResponseReceivedEventArgs eventArgs =
+                                new SearchResponseReceivedEventArgs(response, search.toSearch());
+                        if (invocation.options().getResponseReceived() != null) {
+                            invocation
+                                    .options()
+                                    .getResponseReceived()
+                                    .onResponseReceived(
+                                            new SearchResponseReceived(eventArgs.getSearch(), eventArgs.getResponse()));
+                        }
+                        raise(Event.SEARCH_RESPONSE_RECEIVED, eventArgs);
+                    });
+                    activeSearch = invokeServerByteWrite(message, cancellationToken)
+                            .thenRun(() -> updateState.accept(SearchStates.IN_PROGRESS))
+                            .thenCompose(ignoredWrite -> search.waitForCompletion(cancellationToken))
+                            .thenApply(ignoredCompletion -> {
+                                updateState.accept(SearchStates.COMPLETED.or(search.getState()));
+                                diagnostic.debug("Search for '"
+                                        + invocation.query().getSearchText()
+                                        + "' completed: "
+                                        + search.getState());
+                                return search.toSearch();
+                            });
+                } catch (Throwable failure) {
+                    activeSearch = CompletableFuture.failedFuture(failure);
+                }
+                return activeSearch.whenComplete((result, failure) -> {
+                    searchSemaphore.release();
+                    diagnostic.debug("Released search semaphore for search '"
+                            + invocation.query().getSearchText()
+                            + "' ("
+                            + searchSemaphore.availablePermits()
+                            + " available)");
+                });
+            });
+        } catch (Throwable failure) {
+            operation = CompletableFuture.failedFuture(failure);
+        }
+
+        return operation
+                .handle((result, failure) -> {
+                    if (failure == null) {
+                        return result;
+                    }
+                    Throwable cause = unwrap(failure);
+                    if (cause instanceof CancellationException) {
+                        search.complete(SearchStates.CANCELLED);
+                        updateState.accept(SearchStates.COMPLETED.or(SearchStates.CANCELLED));
+                        throw new CompletionException(cause);
+                    }
+                    search.complete(SearchStates.ERRORED);
+                    updateState.accept(SearchStates.COMPLETED.or(SearchStates.ERRORED));
+                    if (cause instanceof TimeoutException) {
+                        throw new CompletionException(cause);
+                    }
+                    throw new CompletionException(new SoulseekClientException(
+                            "Failed to search for "
+                                    + invocation.query().getSearchText()
+                                    + " (" + invocation.token() + "): "
+                                    + failureMessage(cause),
+                            cause));
+                })
+                .whenComplete((result, failure) -> {
+                    searches.remove(search.getToken(), search);
+                    search.close();
+                });
+    }
+
+    private CompletableFuture<Void> acquireSearchPermit(CancellationToken cancellationToken) {
+        CompletableFuture<Void> result = new CompletableFuture<>();
+        CancellationRegistration registration = cancellationToken.register(
+                () -> result.completeExceptionally(new CancellationException("The operation was cancelled")));
+        CompletableFuture.runAsync(() -> {
+            try {
+                while (!result.isDone()) {
+                    cancellationToken.throwIfCancellationRequested();
+                    if (searchSemaphore.tryAcquire(50, TimeUnit.MILLISECONDS)) {
+                        if (!result.complete(null)) {
+                            searchSemaphore.release();
+                        }
+                        return;
+                    }
+                }
+            } catch (InterruptedException failure) {
+                Thread.currentThread().interrupt();
+                result.completeExceptionally(new CancellationException("The operation was interrupted"));
+            } catch (Throwable failure) {
+                result.completeExceptionally(failure);
+            }
+        });
+        result.whenComplete((ignored, failure) -> registration.close());
+        return result;
+    }
+
+    private static byte[] buildSearchMessage(SearchScope scope, SearchInternal search) {
+        String text = search.getQuery().getSearchText();
+        return switch (scope.getType()) {
+            case ROOM ->
+                new RoomSearchRequest(scope.getSubjects().iterator().next(), text, search.getToken()).toByteArray();
+            case USER -> {
+                ByteArrayOutputStream messages = new ByteArrayOutputStream();
+                for (String subject : scope.getSubjects()) {
+                    messages.writeBytes(new UserSearchRequest(subject, text, search.getToken()).toByteArray());
+                }
+                yield messages.toByteArray();
+            }
+            case WISHLIST -> new WishlistSearchRequest(text, search.getToken()).toByteArray();
+            case NETWORK -> new SearchRequest(text, search.getToken()).toByteArray();
+        };
+    }
+
+    private CompletableFuture<Void> invokeServerByteWrite(byte[] message, CancellationToken cancellationToken) {
+        try {
+            return serverConnection.writeAsync(message, defaultToken(cancellationToken));
+        } catch (Throwable failure) {
+            return CompletableFuture.failedFuture(failure);
+        }
+    }
+
     private CompletableFuture<Void> writeServerAsync(
             IOutgoingMessage message, CancellationToken cancellationToken, String failurePrefix) {
         return mapClientFailure(invokeServerWrite(message, cancellationToken), failurePrefix);
@@ -2073,6 +2455,8 @@ public class SoulseekClient
         }
         return current;
     }
+
+    private record SearchInvocation(SearchQuery query, SearchScope scope, int token, SearchOptions options) {}
 
     private enum Event {
         BROWSE_PROGRESS_UPDATED,

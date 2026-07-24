@@ -14,7 +14,17 @@ import java.util.Objects;
 public class SearchStateChangedEventArgs extends SearchEventArgs {
     private final SearchStates previousState;
 
-    SearchStateChangedEventArgs(SearchStates previousState, Search search) {
+    /**
+     * Creates search-state event arguments.
+     *
+     * <p>The C# constructor is assembly-internal. Java has no equivalent
+     * visibility spanning the client and event-argument packages, so the
+     * direct port exposes this constructor.</p>
+     *
+     * @param previousState the state before the change
+     * @param search the search after the change
+     */
+    public SearchStateChangedEventArgs(SearchStates previousState, Search search) {
         super(search);
         this.previousState = Objects.requireNonNull(previousState, "previousState");
     }
