@@ -13,13 +13,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.common.IWaiter;
 import dev.slsk.common.WaitKey;
+import dev.slsk.exceptions.NoResponseException;
+import dev.slsk.exceptions.RoomJoinForbiddenException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.UserNotFoundException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.messages.CheckPrivilegesRequest;
 import dev.slsk.messaging.messages.GivePrivilegesCommand;
+import dev.slsk.messaging.messages.JoinRoomRequest;
+import dev.slsk.messaging.messages.LeaveRoomRequest;
 import dev.slsk.messaging.messages.NewPassword;
+import dev.slsk.messaging.messages.RoomListRequest;
 import dev.slsk.messaging.messages.ServerPing;
 import dev.slsk.messaging.messages.UserPrivilegesRequest;
 import dev.slsk.messaging.messages.UserStatisticsRequest;
@@ -188,6 +193,87 @@ class SoulseekClientServerRequestTest {
     }
 
     @Test
+    void roomListAndMembershipUseExpectedCorrelations() {
+        WaiterProbe waiter = new WaiterProbe();
+        ConnectionProbe connection = new ConnectionProbe();
+        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+            CancellationTokenSource source = new CancellationTokenSource();
+            CancellationToken token = source.getToken();
+
+            RoomList roomList = new RoomList(List.of(), List.of(), List.of(), List.of());
+            waiter.result = CompletableFuture.completedFuture(roomList);
+            assertSame(roomList, client.getRoomListAsync(token).join());
+            assertEquals(new WaitKey(MessageCode.Server.ROOM_LIST), waiter.key);
+            assertSame(RoomList.class, waiter.resultType);
+            assertInstanceOf(RoomListRequest.class, connection.message);
+
+            RoomData roomData = new RoomData("room", List.of(), true);
+            waiter.result = CompletableFuture.completedFuture(roomData);
+            assertSame(roomData, client.joinRoomAsync("room", true, token).join());
+            assertEquals(new WaitKey(MessageCode.Server.JOIN_ROOM, "room"), waiter.key);
+            assertSame(RoomData.class, waiter.resultType);
+            JoinRoomRequest join = assertInstanceOf(JoinRoomRequest.class, connection.message);
+            assertEquals("room", join.getRoomName());
+            assertTrue(join.isPrivate());
+
+            waiter.result = CompletableFuture.completedFuture(null);
+            client.leaveRoomAsync("room", token).join();
+            assertEquals(new WaitKey(MessageCode.Server.LEAVE_ROOM, "room"), waiter.key);
+            assertEquals(3, waiter.argumentCount);
+            assertEquals(
+                    "room",
+                    assertInstanceOf(LeaveRoomRequest.class, connection.message).getRoomName());
+            assertSame(token, waiter.token);
+            assertSame(token, connection.token);
+        }
+    }
+
+    @Test
+    void roomWaitTimeoutsTranslateButWriteTimeoutsDoNot() {
+        WaiterProbe waiter = new WaiterProbe();
+        ConnectionProbe connection = new ConnectionProbe();
+        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+            waiter.result = CompletableFuture.failedFuture(new TimeoutException("no response"));
+            assertInstanceOf(NoResponseException.class, failureOf(client.joinRoomAsync("room")));
+            assertInstanceOf(NoResponseException.class, failureOf(client.leaveRoomAsync("room")));
+
+            waiter.result = new CompletableFuture<>();
+            TimeoutException writeTimeout = new TimeoutException("write timed out");
+            connection.result = CompletableFuture.failedFuture(writeTimeout);
+            assertSame(writeTimeout, failureOf(client.joinRoomAsync("room")));
+            assertSame(writeTimeout, failureOf(client.leaveRoomAsync("room")));
+        }
+    }
+
+    @Test
+    void joinPreservesServerRejectionAndRoomFailuresMapCorrectly() {
+        WaiterProbe waiter = new WaiterProbe();
+        ConnectionProbe connection = new ConnectionProbe();
+        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+            RoomJoinForbiddenException forbidden = new RoomJoinForbiddenException("forbidden");
+            waiter.result = CompletableFuture.failedFuture(forbidden);
+            assertSame(forbidden, failureOf(client.joinRoomAsync("room")));
+
+            RoomJoinForbiddenException synchronousForbidden = new RoomJoinForbiddenException("synchronous");
+            waiter.synchronousFailure = synchronousForbidden;
+            int writesBeforeFailure = connection.writeCount;
+            assertSame(synchronousForbidden, failureOf(client.joinRoomAsync("room")));
+            assertEquals(writesBeforeFailure, connection.writeCount);
+            waiter.synchronousFailure = null;
+
+            waiter.result = CompletableFuture.completedFuture(new RoomData("room", List.of()));
+            RuntimeException expected = new RuntimeException("write failed");
+            connection.synchronousFailure = expected;
+            SoulseekClientException joinFailure =
+                    assertInstanceOf(SoulseekClientException.class, failureOf(client.joinRoomAsync("room")));
+            assertSame(expected, joinFailure.getCause());
+            SoulseekClientException leaveFailure =
+                    assertInstanceOf(SoulseekClientException.class, failureOf(client.leaveRoomAsync("room")));
+            assertSame(expected, leaveFailure.getCause());
+        }
+    }
+
+    @Test
     void preservesUserSpecificFailuresRequiredBySource() {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
@@ -226,6 +312,10 @@ class SoulseekClientServerRequestTest {
                 assertThrows(IllegalArgumentException.class, () -> client.getUserStatusAsync(bad));
                 assertThrows(IllegalArgumentException.class, () -> client.watchUserAsync(bad));
             }
+            for (String bad : new String[] {null, "", " ", "\t"}) {
+                assertThrows(IllegalArgumentException.class, () -> client.joinRoomAsync(bad));
+                assertThrows(IllegalArgumentException.class, () -> client.leaveRoomAsync(bad));
+            }
 
             client.setStateForTest(SoulseekClientStates.DISCONNECTED);
             assertThrows(IllegalStateException.class, () -> client.changePasswordAsync("password"));
@@ -236,6 +326,9 @@ class SoulseekClientServerRequestTest {
             assertThrows(IllegalStateException.class, () -> client.getUserStatisticsAsync("user"));
             assertThrows(IllegalStateException.class, () -> client.getUserStatusAsync("user"));
             assertThrows(IllegalStateException.class, () -> client.watchUserAsync("user"));
+            assertThrows(IllegalStateException.class, client::getRoomListAsync);
+            assertThrows(IllegalStateException.class, () -> client.joinRoomAsync("room"));
+            assertThrows(IllegalStateException.class, () -> client.leaveRoomAsync("room"));
             assertThrows(IllegalArgumentException.class, () -> client.changePasswordAsync(null));
             assertThrows(IllegalArgumentException.class, () -> client.grantUserPrivilegesAsync(null, 0));
         }
@@ -254,7 +347,10 @@ class SoulseekClientServerRequestTest {
                     () -> client.getUserPrivilegedAsync("user"),
                     () -> client.getUserStatisticsAsync("user"),
                     () -> client.getUserStatusAsync("user"),
-                    () -> client.watchUserAsync("user"));
+                    () -> client.watchUserAsync("user"),
+                    client::getRoomListAsync,
+                    () -> client.joinRoomAsync("room"),
+                    () -> client.leaveRoomAsync("room"));
             for (Operation operation : operations) {
                 RuntimeException expected = new RuntimeException("write failed");
                 connection.synchronousFailure = expected;
@@ -287,7 +383,8 @@ class SoulseekClientServerRequestTest {
                     () -> client.getUserPrivilegedAsync("user"),
                     () -> client.getUserStatisticsAsync("user"),
                     () -> client.getUserStatusAsync("user"),
-                    () -> client.watchUserAsync("user"));
+                    () -> client.watchUserAsync("user"),
+                    client::getRoomListAsync);
             for (Operation operation : operations) {
                 RuntimeException expected = new RuntimeException("wait failed");
                 waiter.result = CompletableFuture.failedFuture(expected);

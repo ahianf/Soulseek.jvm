@@ -38,6 +38,8 @@ import dev.slsk.eventargs.TransferProgressUpdatedEventArgs;
 import dev.slsk.eventargs.TransferStateChangedEventArgs;
 import dev.slsk.eventargs.UserCannotConnectEventArgs;
 import dev.slsk.exceptions.KickedFromServerException;
+import dev.slsk.exceptions.NoResponseException;
+import dev.slsk.exceptions.RoomJoinForbiddenException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
@@ -61,6 +63,8 @@ import dev.slsk.messaging.messages.AcknowledgePrivilegeNotificationCommand;
 import dev.slsk.messaging.messages.CheckPrivilegesRequest;
 import dev.slsk.messaging.messages.GivePrivilegesCommand;
 import dev.slsk.messaging.messages.IOutgoingMessage;
+import dev.slsk.messaging.messages.JoinRoomRequest;
+import dev.slsk.messaging.messages.LeaveRoomRequest;
 import dev.slsk.messaging.messages.NewPassword;
 import dev.slsk.messaging.messages.PrivateMessageCommand;
 import dev.slsk.messaging.messages.PrivateRoomAddOperator;
@@ -69,6 +73,7 @@ import dev.slsk.messaging.messages.PrivateRoomDropMembershipCommand;
 import dev.slsk.messaging.messages.PrivateRoomDropOwnershipCommand;
 import dev.slsk.messaging.messages.PrivateRoomRemoveOperator;
 import dev.slsk.messaging.messages.PrivateRoomRemoveUser;
+import dev.slsk.messaging.messages.RoomListRequest;
 import dev.slsk.messaging.messages.RoomMessageCommand;
 import dev.slsk.messaging.messages.SendUploadSpeedCommand;
 import dev.slsk.messaging.messages.ServerPing;
@@ -847,6 +852,104 @@ public class SoulseekClient
                 Integer.class,
                 cancellationToken,
                 "Failed to get privileges: ");
+    }
+
+    public CompletableFuture<RoomList> getRoomListAsync() {
+        return getRoomListAsync(CancellationToken.none());
+    }
+
+    public CompletableFuture<RoomList> getRoomListAsync(CancellationToken cancellationToken) {
+        requireLoggedIn("fetch the list of chat rooms");
+        return executeCorrelatedServerRequest(
+                new RoomListRequest(),
+                new WaitKey(MessageCode.Server.ROOM_LIST),
+                RoomList.class,
+                cancellationToken,
+                "Failed to fetch the list of chat rooms from the server: ");
+    }
+
+    public CompletableFuture<RoomData> joinRoomAsync(String roomName) {
+        return joinRoomAsync(roomName, false, CancellationToken.none());
+    }
+
+    public CompletableFuture<RoomData> joinRoomAsync(String roomName, boolean isPrivate) {
+        return joinRoomAsync(roomName, isPrivate, CancellationToken.none());
+    }
+
+    public CompletableFuture<RoomData> joinRoomAsync(String roomName, CancellationToken cancellationToken) {
+        return joinRoomAsync(roomName, false, cancellationToken);
+    }
+
+    public CompletableFuture<RoomData> joinRoomAsync(
+            String roomName, boolean isPrivate, CancellationToken cancellationToken) {
+        requireText(roomName, "roomName");
+        requireLoggedIn("join a chat room");
+        CancellationToken token = defaultToken(cancellationToken);
+        CompletableFuture<RoomData> wait;
+        try {
+            wait = waiter.waitAsync(new WaitKey(MessageCode.Server.JOIN_ROOM, roomName), RoomData.class, null, token);
+        } catch (Throwable failure) {
+            return mapClientFailure(
+                    CompletableFuture.failedFuture(failure),
+                    "Failed to join chat room " + roomName + ": ",
+                    RoomJoinForbiddenException.class,
+                    NoResponseException.class);
+        }
+        CompletableFuture<RoomData> translatedWait = wait.handle((response, failure) -> {
+            if (failure == null) {
+                return response;
+            }
+            Throwable cause = unwrap(failure);
+            if (cause instanceof TimeoutException) {
+                throw new CompletionException(new NoResponseException("The server didn't respond to the request "
+                        + "to join chat room " + roomName
+                        + ". This probably indicates that the "
+                        + "room is already joined."));
+            }
+            throw new CompletionException(cause);
+        });
+        CompletableFuture<RoomData> operation = invokeServerWrite(new JoinRoomRequest(roomName, isPrivate), token)
+                .thenCompose(ignored -> translatedWait);
+        return mapClientFailure(
+                operation,
+                "Failed to join chat room " + roomName + ": ",
+                RoomJoinForbiddenException.class,
+                NoResponseException.class);
+    }
+
+    public CompletableFuture<Void> leaveRoomAsync(String roomName) {
+        return leaveRoomAsync(roomName, CancellationToken.none());
+    }
+
+    public CompletableFuture<Void> leaveRoomAsync(String roomName, CancellationToken cancellationToken) {
+        requireText(roomName, "roomName");
+        requireLoggedIn("leave a chat room");
+        CancellationToken token = defaultToken(cancellationToken);
+        CompletableFuture<Void> wait;
+        try {
+            wait = waiter.waitAsync(new WaitKey(MessageCode.Server.LEAVE_ROOM, roomName), null, token);
+        } catch (Throwable failure) {
+            return mapClientFailure(
+                    CompletableFuture.failedFuture(failure),
+                    "Failed to leave chat room " + roomName + ": ",
+                    NoResponseException.class);
+        }
+        CompletableFuture<Void> translatedWait = wait.handle((ignored, failure) -> {
+            if (failure == null) {
+                return null;
+            }
+            Throwable cause = unwrap(failure);
+            if (cause instanceof TimeoutException) {
+                throw new CompletionException(new NoResponseException("The server didn't respond to the request "
+                        + "to leave chat room " + roomName
+                        + ".  This probably indicates that the "
+                        + "room is not joined."));
+            }
+            throw new CompletionException(cause);
+        });
+        CompletableFuture<Void> operation =
+                invokeServerWrite(new LeaveRoomRequest(roomName), token).thenCompose(ignored -> translatedWait);
+        return mapClientFailure(operation, "Failed to leave chat room " + roomName + ": ", NoResponseException.class);
     }
 
     public CompletableFuture<Boolean> getUserPrivilegedAsync(String requestedUsername) {
