@@ -20,7 +20,7 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.messaging.messages.UserAddressRequest;
 import dev.slsk.messaging.messages.UserAddressResponse;
-import dev.slsk.network.IMessageConnection;
+import dev.slsk.network.MessageConnection;
 import dev.slsk.options.SoulseekClientOptions;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -265,8 +265,8 @@ class SoulseekClientEndpointTest {
         private OutgoingMessage message;
         private CancellationToken token;
         private int writes;
-        private final IMessageConnection proxy = (IMessageConnection) Proxy.newProxyInstance(
-                IMessageConnection.class.getClassLoader(), new Class<?>[] {IMessageConnection.class}, this::invoke);
+        private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
+                MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("writeAsync")

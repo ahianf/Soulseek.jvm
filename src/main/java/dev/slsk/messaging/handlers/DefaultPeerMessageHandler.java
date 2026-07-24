@@ -39,7 +39,7 @@ import dev.slsk.messaging.messages.TransferResponse;
 import dev.slsk.messaging.messages.UploadDenied;
 import dev.slsk.messaging.messages.UploadFailed;
 import dev.slsk.messaging.messages.UserInfoResponseFactory;
-import dev.slsk.network.IMessageConnection;
+import dev.slsk.network.MessageConnection;
 import dev.slsk.network.MessageEventArgs;
 import dev.slsk.network.MessageReceivedEventArgs;
 import dev.slsk.options.SoulseekClientOptions;
@@ -106,16 +106,16 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     @Override
-    public void handleMessageRead(IMessageConnection sender, MessageEventArgs eventArgs) {
+    public void handleMessageRead(MessageConnection sender, MessageEventArgs eventArgs) {
         handleMessageRead(sender, eventArgs.getMessage());
     }
 
     @Override
-    public void handleMessageRead(IMessageConnection sender, byte[] message) {
+    public void handleMessageRead(MessageConnection sender, byte[] message) {
         handleMessageReadAsync(sender, message);
     }
 
-    CompletableFuture<Void> handleMessageReadAsync(IMessageConnection connection, byte[] message) {
+    CompletableFuture<Void> handleMessageReadAsync(MessageConnection connection, byte[] message) {
         MessageCode.Peer code = new MessageReader<>(message, MessageCode.Peer.class).readCode();
         diagnostic.debug("Peer message received: " + code + " from "
                 + connection.getUsername() + " ("
@@ -210,7 +210,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     @Override
-    public void handleMessageReceived(IMessageConnection connection, MessageReceivedEventArgs eventArgs) {
+    public void handleMessageReceived(MessageConnection connection, MessageReceivedEventArgs eventArgs) {
         MessageCode.Peer code = MessageCode.Peer.fromValue(ByteBuffer.wrap(eventArgs.getCode())
                 .order(ByteOrder.LITTLE_ENDIAN)
                 .getInt());
@@ -232,7 +232,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     @Override
-    public void handleMessageWritten(IMessageConnection connection, MessageEventArgs eventArgs) {
+    public void handleMessageWritten(MessageConnection connection, MessageEventArgs eventArgs) {
         MessageCode.Peer code = new MessageReader<>(eventArgs.getMessage(), MessageCode.Peer.class).readCode();
         diagnostic.debug("Peer message sent: " + code + " ("
                 + connection.getIpEndPoint() + ") (id: "
@@ -248,7 +248,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         return completed();
     }
 
-    private CompletableFuture<Void> handleBrowseResponse(IMessageConnection connection, byte[] message) {
+    private CompletableFuture<Void> handleBrowseResponse(MessageConnection connection, byte[] message) {
         WaitKey key = new WaitKey(MessageCode.Peer.BROWSE_RESPONSE, connection.getUsername());
         try {
             client.getWaiter().complete(key, BrowseResponseFactory.fromByteArray(message));
@@ -260,7 +260,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         return completed();
     }
 
-    private CompletableFuture<Void> handleInfoRequest(IMessageConnection connection) {
+    private CompletableFuture<Void> handleInfoRequest(MessageConnection connection) {
         CompletableFuture<UserInfo> resolved;
         try {
             resolved = client.getOptions()
@@ -284,7 +284,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 .thenRun(() -> diagnostic.info("User info sent to " + connection.getUsername()));
     }
 
-    private CompletableFuture<Void> handleSearchRequest(IMessageConnection connection, byte[] message) {
+    private CompletableFuture<Void> handleSearchRequest(MessageConnection connection, byte[] message) {
         PeerSearchRequest request = PeerSearchRequest.fromByteArray(message);
         if (client.getOptions().getSearchResponseResolver() == null) {
             return completed();
@@ -320,7 +320,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 });
     }
 
-    private CompletableFuture<Void> handleBrowseRequest(IMessageConnection connection) {
+    private CompletableFuture<Void> handleBrowseRequest(MessageConnection connection) {
         CompletableFuture<BrowseResponse> resolved;
         try {
             resolved = client.getOptions()
@@ -351,7 +351,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 .thenRun(() -> diagnostic.info("Share contents sent to " + connection.getUsername()));
     }
 
-    private CompletableFuture<Void> handleFolderContentsRequest(IMessageConnection connection, byte[] message) {
+    private CompletableFuture<Void> handleFolderContentsRequest(MessageConnection connection, byte[] message) {
         FolderContentsRequest request = FolderContentsRequest.fromByteArray(message);
         CompletableFuture<? extends Iterable<Directory>> resolved;
         try {
@@ -386,7 +386,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 });
     }
 
-    private CompletableFuture<Void> handleQueueDownload(IMessageConnection connection, byte[] message) {
+    private CompletableFuture<Void> handleQueueDownload(MessageConnection connection, byte[] message) {
         QueueDownloadRequest request = QueueDownloadRequest.fromByteArray(message);
         return tryEnqueueDownloadAsync(connection.getUsername(), connection.getIpEndPoint(), request.getFilename())
                 .thenCompose(result -> result.rejected()
@@ -394,7 +394,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                         : trySendPlaceInQueueAsync(connection, request.getFilename()));
     }
 
-    private CompletableFuture<Void> handleTransferRequest(IMessageConnection connection, byte[] message) {
+    private CompletableFuture<Void> handleTransferRequest(MessageConnection connection, byte[] message) {
         TransferRequest request = TransferRequest.fromByteArray(message);
         if (request.getDirection() == TransferDirection.UPLOAD) {
             boolean tracked = !client.getDownloadDictionary().isEmpty()
@@ -431,7 +431,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 });
     }
 
-    private void handleUploadDenied(IMessageConnection connection, byte[] message) {
+    private void handleUploadDenied(MessageConnection connection, byte[] message) {
         UploadDenied denied = UploadDenied.fromByteArray(message);
         diagnostic.debug("Download of " + denied.getFilename() + " from "
                 + connection.getUsername() + " was denied: "
@@ -445,7 +445,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         downloadDeniedListeners.forEach(listener -> listener.handle(this, eventArgs));
     }
 
-    private void handleUploadFailed(IMessageConnection connection, byte[] message) {
+    private void handleUploadFailed(MessageConnection connection, byte[] message) {
         UploadFailed failed = UploadFailed.fromByteArray(message);
         diagnostic.debug("Download of " + failed.getFilename() + " reported as failed by " + connection.getUsername());
         client.getWaiter()
@@ -477,7 +477,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         });
     }
 
-    private CompletableFuture<Void> trySendPlaceInQueueAsync(IMessageConnection connection, String filename) {
+    private CompletableFuture<Void> trySendPlaceInQueueAsync(MessageConnection connection, String filename) {
         CompletableFuture<Integer> resolved;
         try {
             resolved = client.getOptions()

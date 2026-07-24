@@ -46,10 +46,10 @@ import dev.slsk.messaging.messages.NewPassword;
 import dev.slsk.messaging.messages.PrivateRoomToggle;
 import dev.slsk.messaging.messages.UserAddressResponse;
 import dev.slsk.messaging.messages.WatchUserResponse;
-import dev.slsk.network.IDistributedConnectionManager;
-import dev.slsk.network.IMessageConnection;
-import dev.slsk.network.IPeerConnectionManager;
+import dev.slsk.network.DistributedConnectionManager;
+import dev.slsk.network.MessageConnection;
 import dev.slsk.network.MessageEventArgs;
+import dev.slsk.network.PeerConnectionManager;
 import dev.slsk.network.PeerEndpoint;
 import dev.slsk.network.TransferConnectionResult;
 import dev.slsk.network.tcp.Connection;
@@ -744,8 +744,8 @@ class ServerMessageHandlerTest {
     private static final class FakeClient implements ServerMessageHandlerClient {
         private final SoulseekClientOptions options;
         private final IWaiter waiter;
-        private final IPeerConnectionManager peer;
-        private final IDistributedConnectionManager distributed;
+        private final PeerConnectionManager peer;
+        private final DistributedConnectionManager distributed;
         private final ISearchResponder responder;
         private final Map<Integer, SearchInternal> searches = new HashMap<>();
         private final Map<Integer, TransferInternal> downloads = new HashMap<>();
@@ -756,8 +756,8 @@ class ServerMessageHandlerTest {
         private FakeClient(
                 SoulseekClientOptions options,
                 IWaiter waiter,
-                IPeerConnectionManager peer,
-                IDistributedConnectionManager distributed,
+                PeerConnectionManager peer,
+                DistributedConnectionManager distributed,
                 ISearchResponder responder) {
             this.options = options;
             this.waiter = waiter;
@@ -792,12 +792,12 @@ class ServerMessageHandlerTest {
         }
 
         @Override
-        public IPeerConnectionManager getPeerConnectionManager() {
+        public PeerConnectionManager getPeerConnectionManager() {
             return peer;
         }
 
         @Override
-        public IDistributedConnectionManager getDistributedConnectionManager() {
+        public DistributedConnectionManager getDistributedConnectionManager() {
             return distributed;
         }
 
@@ -816,22 +816,22 @@ class ServerMessageHandlerTest {
                 public void removeDiagnosticGeneratedListener(dev.slsk.diagnostics.DiagnosticEventListener listener) {}
 
                 @Override
-                public void handleMessageRead(IMessageConnection sender, MessageEventArgs eventArgs) {}
+                public void handleMessageRead(MessageConnection sender, MessageEventArgs eventArgs) {}
 
                 @Override
-                public void handleMessageRead(IMessageConnection sender, byte[] message) {}
+                public void handleMessageRead(MessageConnection sender, byte[] message) {}
 
                 @Override
-                public void handleMessageWritten(IMessageConnection sender, MessageEventArgs eventArgs) {}
+                public void handleMessageWritten(MessageConnection sender, MessageEventArgs eventArgs) {}
 
                 @Override
-                public void handleChildMessageRead(IMessageConnection sender, MessageEventArgs eventArgs) {}
+                public void handleChildMessageRead(MessageConnection sender, MessageEventArgs eventArgs) {}
 
                 @Override
-                public void handleChildMessageRead(IMessageConnection sender, byte[] message) {}
+                public void handleChildMessageRead(MessageConnection sender, byte[] message) {}
 
                 @Override
-                public void handleChildMessageWritten(IMessageConnection sender, MessageEventArgs eventArgs) {}
+                public void handleChildMessageWritten(MessageConnection sender, MessageEventArgs eventArgs) {}
             };
         }
 
@@ -951,9 +951,9 @@ class ServerMessageHandlerTest {
     private static final class PeerManagerProbe {
         private final List<ConnectToPeerResponse> messageRequests = new ArrayList<>();
         private TransferConnectionResult transferResult;
-        private final IPeerConnectionManager proxy = (IPeerConnectionManager) Proxy.newProxyInstance(
-                IPeerConnectionManager.class.getClassLoader(),
-                new Class<?>[] {IPeerConnectionManager.class},
+        private final PeerConnectionManager proxy = (PeerConnectionManager) Proxy.newProxyInstance(
+                PeerConnectionManager.class.getClassLoader(),
+                new Class<?>[] {PeerConnectionManager.class},
                 this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
@@ -977,9 +977,9 @@ class ServerMessageHandlerTest {
         private CompletableFuture<Void> addParent = CompletableFuture.completedFuture(null);
         private int removed;
         private int resets;
-        private final IDistributedConnectionManager proxy = (IDistributedConnectionManager) Proxy.newProxyInstance(
-                IDistributedConnectionManager.class.getClassLoader(),
-                new Class<?>[] {IDistributedConnectionManager.class},
+        private final DistributedConnectionManager proxy = (DistributedConnectionManager) Proxy.newProxyInstance(
+                DistributedConnectionManager.class.getClassLoader(),
+                new Class<?>[] {DistributedConnectionManager.class},
                 this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {

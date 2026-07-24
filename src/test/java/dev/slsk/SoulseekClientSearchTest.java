@@ -18,7 +18,7 @@ import dev.slsk.messaging.messages.RoomSearchRequest;
 import dev.slsk.messaging.messages.SearchRequest;
 import dev.slsk.messaging.messages.UserSearchRequest;
 import dev.slsk.messaging.messages.WishlistSearchRequest;
-import dev.slsk.network.IMessageConnection;
+import dev.slsk.network.MessageConnection;
 import dev.slsk.options.SearchOptions;
 import dev.slsk.search.SearchInternal;
 import java.io.ByteArrayOutputStream;
@@ -377,8 +377,8 @@ class SoulseekClientSearchTest {
     private static final class ConnectionProbe {
         private final List<byte[]> messages = java.util.Collections.synchronizedList(new ArrayList<>());
         private volatile CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
-        private final IMessageConnection proxy = (IMessageConnection) Proxy.newProxyInstance(
-                IMessageConnection.class.getClassLoader(), new Class<?>[] {IMessageConnection.class}, this::invoke);
+        private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
+                MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("writeAsync")

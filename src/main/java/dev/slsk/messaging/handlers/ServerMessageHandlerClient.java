@@ -6,8 +6,8 @@ package dev.slsk.messaging.handlers;
 
 import dev.slsk.CancellationToken;
 import dev.slsk.common.IWaiter;
-import dev.slsk.network.IDistributedConnectionManager;
-import dev.slsk.network.IPeerConnectionManager;
+import dev.slsk.network.DistributedConnectionManager;
+import dev.slsk.network.PeerConnectionManager;
 import dev.slsk.options.SoulseekClientOptions;
 import dev.slsk.search.ISearchResponder;
 import dev.slsk.search.SearchInternal;
@@ -27,9 +27,9 @@ public interface ServerMessageHandlerClient {
 
     Map<Integer, TransferInternal> getDownloadDictionary();
 
-    IPeerConnectionManager getPeerConnectionManager();
+    PeerConnectionManager getPeerConnectionManager();
 
-    IDistributedConnectionManager getDistributedConnectionManager();
+    DistributedConnectionManager getDistributedConnectionManager();
 
     DistributedMessageHandler getDistributedMessageHandler();
 

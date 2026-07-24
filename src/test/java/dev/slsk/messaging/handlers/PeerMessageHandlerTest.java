@@ -46,7 +46,7 @@ import dev.slsk.messaging.messages.TransferRequest;
 import dev.slsk.messaging.messages.TransferResponse;
 import dev.slsk.messaging.messages.UploadDenied;
 import dev.slsk.messaging.messages.UploadFailed;
-import dev.slsk.network.IMessageConnection;
+import dev.slsk.network.MessageConnection;
 import dev.slsk.network.MessageEventArgs;
 import dev.slsk.network.MessageReceivedEventArgs;
 import dev.slsk.options.BrowseResponseResolver;
@@ -728,8 +728,8 @@ class PeerMessageHandlerTest {
         private final List<OutgoingMessage> outgoing = new ArrayList<>();
         private long rawLength = -1;
         private InputStream rawStream;
-        private final IMessageConnection proxy = (IMessageConnection) Proxy.newProxyInstance(
-                IMessageConnection.class.getClassLoader(), new Class<?>[] {IMessageConnection.class}, this::invoke);
+        private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
+                MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             return switch (method.getName()) {

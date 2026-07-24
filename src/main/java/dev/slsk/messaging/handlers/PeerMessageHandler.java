@@ -6,7 +6,7 @@ package dev.slsk.messaging.handlers;
 
 import dev.slsk.eventargs.DownloadDeniedEventArgs;
 import dev.slsk.eventargs.DownloadFailedEventArgs;
-import dev.slsk.network.IMessageConnection;
+import dev.slsk.network.MessageConnection;
 import dev.slsk.network.MessageReceivedEventArgs;
 
 /** Handles messages received from peer connections. */
@@ -19,5 +19,5 @@ public interface PeerMessageHandler extends MessageHandler {
 
     void removeDownloadFailedListener(PeerMessageHandlerEventListener<DownloadFailedEventArgs> listener);
 
-    void handleMessageReceived(IMessageConnection sender, MessageReceivedEventArgs eventArgs);
+    void handleMessageReceived(MessageConnection sender, MessageReceivedEventArgs eventArgs);
 }

@@ -18,7 +18,7 @@ public interface PeerConnectionManagerClient {
 
     IWaiter getWaiter();
 
-    IMessageConnection getServerConnection();
+    MessageConnection getServerConnection();
 
     PeerMessageHandler getPeerMessageHandler();
 }

@@ -5,7 +5,7 @@
 package dev.slsk.search;
 
 import dev.slsk.CancellationToken;
-import dev.slsk.network.IPeerConnectionManager;
+import dev.slsk.network.PeerConnectionManager;
 import dev.slsk.options.SoulseekClientOptions;
 import java.net.InetSocketAddress;
 import java.util.concurrent.CompletableFuture;
@@ -16,7 +16,7 @@ import java.util.concurrent.CompletableFuture;
 public interface SearchResponderClient {
     SoulseekClientOptions getOptions();
 
-    IPeerConnectionManager getPeerConnectionManager();
+    PeerConnectionManager getPeerConnectionManager();
 
     int getNextToken();
 

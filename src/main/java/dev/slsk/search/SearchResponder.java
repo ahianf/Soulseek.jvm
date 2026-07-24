@@ -17,7 +17,7 @@ import dev.slsk.diagnostics.DiagnosticFactory;
 import dev.slsk.diagnostics.IDiagnosticFactory;
 import dev.slsk.eventargs.SearchRequestEventArgs;
 import dev.slsk.eventargs.SearchRequestResponseEventArgs;
-import dev.slsk.network.IMessageConnection;
+import dev.slsk.network.MessageConnection;
 import dev.slsk.options.SearchResponseResolver;
 import java.net.InetSocketAddress;
 import java.util.Objects;
@@ -174,7 +174,7 @@ public final class SearchResponder implements ISearchResponder {
         }
 
         SearchResponseCacheRecord record = lookup.value();
-        CompletableFuture<IMessageConnection> connectionFuture;
+        CompletableFuture<MessageConnection> connectionFuture;
         try {
             connectionFuture = client.getPeerConnectionManager().getCachedMessageConnectionAsync(record.username());
         } catch (Throwable failure) {
@@ -229,7 +229,7 @@ public final class SearchResponder implements ISearchResponder {
         return endpointFuture
                 .thenCompose(endpoint -> {
                     int responseToken = client.getNextToken();
-                    CompletableFuture<IMessageConnection> connectionFuture;
+                    CompletableFuture<MessageConnection> connectionFuture;
                     try {
                         connectionFuture = client.getPeerConnectionManager()
                                 .getOrAddMessageConnectionAsync(
@@ -269,7 +269,7 @@ public final class SearchResponder implements ISearchResponder {
                 });
     }
 
-    private CompletableFuture<Void> writeResponse(IMessageConnection connection, SearchResponse response) {
+    private CompletableFuture<Void> writeResponse(MessageConnection connection, SearchResponse response) {
         if (response instanceof RawSearchResponse raw) {
             return connection.writeAsync(raw.getLength(), raw.getStream()).thenRun(() -> {
                 try {

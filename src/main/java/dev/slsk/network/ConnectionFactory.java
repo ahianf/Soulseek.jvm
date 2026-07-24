@@ -7,58 +7,85 @@ package dev.slsk.network;
 import dev.slsk.network.tcp.Connection;
 import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
 import dev.slsk.network.tcp.ConnectionEventListener;
-import dev.slsk.network.tcp.SocketConnection;
 import dev.slsk.network.tcp.TcpClient;
 import dev.slsk.options.ConnectionOptions;
 import java.net.InetSocketAddress;
 
 /** Creates protocol and transfer connections. */
-public final class ConnectionFactory implements IConnectionFactory {
-    @Override
-    public IMessageConnection getDistributedConnection(
-            String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
-        return new MessageConnection(username, ipEndPoint, defaultOptions(options), 1, tcpClient);
+public interface ConnectionFactory {
+    MessageConnection getDistributedConnection(
+            String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient);
+
+    default MessageConnection getDistributedConnection(String username, InetSocketAddress ipEndPoint) {
+        return getDistributedConnection(username, ipEndPoint, null, null);
     }
 
-    @Override
-    public IMessageConnection getMessageConnection(
-            String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
-        return new MessageConnection(username, ipEndPoint, defaultOptions(options), 4, tcpClient);
+    default MessageConnection getDistributedConnection(
+            String username, InetSocketAddress ipEndPoint, ConnectionOptions options) {
+        return getDistributedConnection(username, ipEndPoint, options, null);
     }
 
-    @Override
-    public IMessageConnection getServerConnection(
+    MessageConnection getMessageConnection(
+            String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient);
+
+    default MessageConnection getMessageConnection(String username, InetSocketAddress ipEndPoint) {
+        return getMessageConnection(username, ipEndPoint, null, null);
+    }
+
+    default MessageConnection getMessageConnection(
+            String username, InetSocketAddress ipEndPoint, ConnectionOptions options) {
+        return getMessageConnection(username, ipEndPoint, options, null);
+    }
+
+    MessageConnection getServerConnection(
             InetSocketAddress ipEndPoint,
             ConnectionEventListener<Void> connectedEventHandler,
             ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
             MessageConnectionEventListener<MessageEventArgs> messageReadEventHandler,
             MessageConnectionEventListener<MessageEventArgs> messageWrittenEventHandler,
             ConnectionOptions options,
-            TcpClient tcpClient) {
-        MessageConnection connection =
-                new MessageConnection(ipEndPoint, defaultOptions(options).withoutInactivityTimeout(), 4, tcpClient);
-        if (connectedEventHandler != null) {
-            connection.addConnectedListener(connectedEventHandler);
-        }
-        if (disconnectedEventHandler != null) {
-            connection.addDisconnectedListener(disconnectedEventHandler);
-        }
-        if (messageReadEventHandler != null) {
-            connection.addMessageReadListener(messageReadEventHandler);
-        }
-        if (messageWrittenEventHandler != null) {
-            connection.addMessageWrittenListener(messageWrittenEventHandler);
-        }
-        return connection;
+            TcpClient tcpClient);
+
+    default MessageConnection getServerConnection(
+            InetSocketAddress ipEndPoint,
+            ConnectionEventListener<Void> connectedEventHandler,
+            ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
+            MessageConnectionEventListener<MessageEventArgs> messageReadEventHandler,
+            MessageConnectionEventListener<MessageEventArgs> messageWrittenEventHandler) {
+        return getServerConnection(
+                ipEndPoint,
+                connectedEventHandler,
+                disconnectedEventHandler,
+                messageReadEventHandler,
+                messageWrittenEventHandler,
+                null,
+                null);
     }
 
-    @Override
-    public Connection getTransferConnection(
-            InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
-        return new SocketConnection(ipEndPoint, defaultOptions(options), tcpClient);
+    default MessageConnection getServerConnection(
+            InetSocketAddress ipEndPoint,
+            ConnectionEventListener<Void> connectedEventHandler,
+            ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
+            MessageConnectionEventListener<MessageEventArgs> messageReadEventHandler,
+            MessageConnectionEventListener<MessageEventArgs> messageWrittenEventHandler,
+            ConnectionOptions options) {
+        return getServerConnection(
+                ipEndPoint,
+                connectedEventHandler,
+                disconnectedEventHandler,
+                messageReadEventHandler,
+                messageWrittenEventHandler,
+                options,
+                null);
     }
 
-    private static ConnectionOptions defaultOptions(ConnectionOptions options) {
-        return options == null ? new ConnectionOptions() : options;
+    Connection getTransferConnection(InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient);
+
+    default Connection getTransferConnection(InetSocketAddress ipEndPoint) {
+        return getTransferConnection(ipEndPoint, null, null);
+    }
+
+    default Connection getTransferConnection(InetSocketAddress ipEndPoint, ConnectionOptions options) {
+        return getTransferConnection(ipEndPoint, options, null);
     }
 }

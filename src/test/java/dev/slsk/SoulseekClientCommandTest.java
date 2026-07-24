@@ -22,7 +22,7 @@ import dev.slsk.messaging.messages.SetSharedCountsCommand;
 import dev.slsk.messaging.messages.StartPublicChatCommand;
 import dev.slsk.messaging.messages.StopPublicChatCommand;
 import dev.slsk.messaging.messages.UnwatchUserCommand;
-import dev.slsk.network.IMessageConnection;
+import dev.slsk.network.MessageConnection;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
@@ -242,8 +242,8 @@ class SoulseekClientCommandTest {
         private final List<CancellationToken> tokens = new ArrayList<>();
         private CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
         private RuntimeException synchronousFailure;
-        private final IMessageConnection proxy = (IMessageConnection) Proxy.newProxyInstance(
-                IMessageConnection.class.getClassLoader(), new Class<?>[] {IMessageConnection.class}, this::invoke);
+        private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
+                MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("writeAsync")

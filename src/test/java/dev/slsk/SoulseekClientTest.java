@@ -29,11 +29,11 @@ import dev.slsk.messaging.handlers.PeerMessageHandlerEventListener;
 import dev.slsk.messaging.handlers.ServerMessageEvent;
 import dev.slsk.messaging.handlers.ServerMessageHandler;
 import dev.slsk.messaging.handlers.ServerMessageHandlerEventListener;
-import dev.slsk.network.IConnectionFactory;
-import dev.slsk.network.IDistributedConnectionManager;
-import dev.slsk.network.IListenerHandler;
-import dev.slsk.network.IMessageConnection;
-import dev.slsk.network.IPeerConnectionManager;
+import dev.slsk.network.ConnectionFactory;
+import dev.slsk.network.DistributedConnectionManager;
+import dev.slsk.network.ListenerHandler;
+import dev.slsk.network.MessageConnection;
+import dev.slsk.network.PeerConnectionManager;
 import dev.slsk.network.PeerEndpoint;
 import dev.slsk.options.SoulseekClientOptions;
 import dev.slsk.search.ISearchResponder;
@@ -363,9 +363,9 @@ class SoulseekClientTest {
         private final ServerHandlerProbe server = new ServerHandlerProbe();
         private final SearchResponderProbe search = new SearchResponderProbe();
         private final DistributedManagerProbe distributed = new DistributedManagerProbe();
-        private final IListenerHandler listenerHandler = diagnosticProxy(IListenerHandler.class);
+        private final ListenerHandler listenerHandler = diagnosticProxy(ListenerHandler.class);
         private final DistributedMessageHandler distributedHandler = diagnosticProxy(DistributedMessageHandler.class);
-        private final IPeerConnectionManager peerManager = diagnosticProxy(IPeerConnectionManager.class);
+        private final PeerConnectionManager peerManager = diagnosticProxy(PeerConnectionManager.class);
         private final SoulseekClient client;
 
         private Fixture() {
@@ -373,7 +373,7 @@ class SoulseekClientTest {
                     9999,
                     new SoulseekClientOptions(),
                     connection.proxy,
-                    diagnosticProxy(IConnectionFactory.class),
+                    diagnosticProxy(ConnectionFactory.class),
                     peerManager,
                     distributed.proxy,
                     server.proxy,
@@ -407,8 +407,8 @@ class SoulseekClientTest {
     private static final class ConnectionProbe {
         private String disconnectMessage;
         private int disconnects;
-        private final IMessageConnection proxy = (IMessageConnection) Proxy.newProxyInstance(
-                IMessageConnection.class.getClassLoader(), new Class<?>[] {IMessageConnection.class}, this::invoke);
+        private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
+                MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("disconnect")) {
@@ -495,9 +495,9 @@ class SoulseekClientTest {
         private Double averageLatency;
         private int removed;
         private int resets;
-        private final IDistributedConnectionManager proxy = (IDistributedConnectionManager) Proxy.newProxyInstance(
-                IDistributedConnectionManager.class.getClassLoader(),
-                new Class<?>[] {IDistributedConnectionManager.class},
+        private final DistributedConnectionManager proxy = (DistributedConnectionManager) Proxy.newProxyInstance(
+                DistributedConnectionManager.class.getClassLoader(),
+                new Class<?>[] {DistributedConnectionManager.class},
                 this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {

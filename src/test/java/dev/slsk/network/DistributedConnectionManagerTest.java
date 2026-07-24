@@ -68,18 +68,18 @@ class DistributedConnectionManagerTest {
     private static final InetSocketAddress ENDPOINT = endpoint(42001);
     private static final int TOKEN = 0x13572468;
 
-    private final List<DistributedConnectionManager> managers = new ArrayList<>();
+    private final List<DefaultDistributedConnectionManager> managers = new ArrayList<>();
 
     @AfterEach
     void closeManagers() {
-        managers.forEach(DistributedConnectionManager::close);
+        managers.forEach(DefaultDistributedConnectionManager::close);
     }
 
     @Test
     void constructionAndInitialPropertiesMatchSource() {
-        assertThrows(NullPointerException.class, () -> new DistributedConnectionManager(null));
+        assertThrows(NullPointerException.class, () -> new DefaultDistributedConnectionManager(null));
         Fixture fixture = fixture();
-        DistributedConnectionManager manager = fixture.manager;
+        DefaultDistributedConnectionManager manager = fixture.manager;
 
         assertNull(manager.getAverageBroadcastLatency());
         assertEquals(0, manager.getBranchLevel());
@@ -623,13 +623,13 @@ class DistributedConnectionManagerTest {
         private final ConnectionProbe server = ConnectionProbe.message("", endpoint(2242));
         private final FakeFactory factory = new FakeFactory();
         private final FakeClient client = new FakeClient(waiter, server.messageConnection());
-        private final DistributedConnectionManager manager =
-                new DistributedConnectionManager(client, factory, diagnostic);
+        private final DefaultDistributedConnectionManager manager =
+                new DefaultDistributedConnectionManager(client, factory, diagnostic);
     }
 
     private static final class FakeClient implements DistributedConnectionManagerClient {
         private final FakeWaiter waiter;
-        private final IMessageConnection server;
+        private final MessageConnection server;
         private final AtomicInteger token = new AtomicInteger(TOKEN);
         private final DistributedMessageHandler handler = (DistributedMessageHandler) Proxy.newProxyInstance(
                 DistributedMessageHandler.class.getClassLoader(),
@@ -637,7 +637,7 @@ class DistributedConnectionManagerTest {
                 (proxy, method, arguments) -> defaultValue(method.getReturnType()));
         private SoulseekClientStates state = SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN);
 
-        private FakeClient(FakeWaiter waiter, IMessageConnection server) {
+        private FakeClient(FakeWaiter waiter, MessageConnection server) {
             this.waiter = waiter;
             this.server = server;
         }
@@ -668,7 +668,7 @@ class DistributedConnectionManagerTest {
         }
 
         @Override
-        public IMessageConnection getServerConnection() {
+        public MessageConnection getServerConnection() {
             return server;
         }
 
@@ -678,12 +678,12 @@ class DistributedConnectionManagerTest {
         }
     }
 
-    private static final class FakeFactory implements IConnectionFactory {
+    private static final class FakeFactory implements ConnectionFactory {
         private final Map<InetSocketAddress, ConnectionProbe> distributedDirect = new HashMap<>();
         private ConnectionProbe distributedHandoff;
 
         @Override
-        public IMessageConnection getDistributedConnection(
+        public MessageConnection getDistributedConnection(
                 String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
             if (tcpClient != null) {
                 assertNotNull(distributedHandoff);
@@ -695,13 +695,13 @@ class DistributedConnectionManagerTest {
         }
 
         @Override
-        public IMessageConnection getMessageConnection(
+        public MessageConnection getMessageConnection(
                 String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
             throw new AssertionError("unexpected peer connection");
         }
 
         @Override
-        public IMessageConnection getServerConnection(
+        public MessageConnection getServerConnection(
                 InetSocketAddress ipEndPoint,
                 ConnectionEventListener<Void> connectedEventHandler,
                 ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
@@ -921,7 +921,7 @@ class DistributedConnectionManagerTest {
             this.endpoint = endpoint;
             proxy = (Connection) Proxy.newProxyInstance(
                     Connection.class.getClassLoader(),
-                    message ? new Class<?>[] {IMessageConnection.class} : new Class<?>[] {Connection.class},
+                    message ? new Class<?>[] {MessageConnection.class} : new Class<?>[] {Connection.class},
                     this);
         }
 
@@ -937,8 +937,8 @@ class DistributedConnectionManagerTest {
             return proxy;
         }
 
-        private IMessageConnection messageConnection() {
-            return (IMessageConnection) proxy;
+        private MessageConnection messageConnection() {
+            return (MessageConnection) proxy;
         }
 
         private void fireDisconnected(String text, Exception exception) {

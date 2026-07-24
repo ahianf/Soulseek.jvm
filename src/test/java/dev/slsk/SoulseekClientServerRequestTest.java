@@ -31,7 +31,7 @@ import dev.slsk.messaging.messages.UserStatisticsRequest;
 import dev.slsk.messaging.messages.UserStatusRequest;
 import dev.slsk.messaging.messages.WatchUserRequest;
 import dev.slsk.messaging.messages.WatchUserResponse;
-import dev.slsk.network.IMessageConnection;
+import dev.slsk.network.MessageConnection;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.List;
@@ -494,8 +494,8 @@ class SoulseekClientServerRequestTest {
         private int writeCount;
         private CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
         private RuntimeException synchronousFailure;
-        private final IMessageConnection proxy = (IMessageConnection) Proxy.newProxyInstance(
-                IMessageConnection.class.getClassLoader(), new Class<?>[] {IMessageConnection.class}, this::invoke);
+        private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
+                MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("writeAsync")

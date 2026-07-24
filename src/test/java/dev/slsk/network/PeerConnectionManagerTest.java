@@ -65,10 +65,10 @@ class PeerConnectionManagerTest {
 
     @Test
     void constructionDiagnosticsAndClosePreserveSourceLifecycle() {
-        assertThrows(NullPointerException.class, () -> new PeerConnectionManager(null));
+        assertThrows(NullPointerException.class, () -> new DefaultPeerConnectionManager(null));
 
         Fixture fixture = new Fixture();
-        PeerConnectionManager manager = fixture.manager();
+        DefaultPeerConnectionManager manager = fixture.manager();
         AtomicInteger events = new AtomicInteger();
         DiagnosticEventListener listener = (sender, args) -> events.incrementAndGet();
         manager.addDiagnosticGeneratedListener(listener);
@@ -81,7 +81,7 @@ class PeerConnectionManagerTest {
         assertDoesNotThrow(manager::close);
         assertDoesNotThrow(manager::close);
 
-        PeerConnectionManager defaultDiagnostic = new PeerConnectionManager(fixture.client);
+        DefaultPeerConnectionManager defaultDiagnostic = new DefaultPeerConnectionManager(fixture.client);
         defaultDiagnostic.addDiagnosticGeneratedListener(listener);
         // The default factory is covered through a debug-producing failure.
         defaultDiagnostic.getCachedMessageConnectionAsync("missing").join();
@@ -315,9 +315,9 @@ class PeerConnectionManagerTest {
         ConnectToPeerResponse response =
                 new ConnectToPeerResponse(USERNAME, Constants.ConnectionType.PEER, INDIRECT_ENDPOINT, TOKEN, false);
 
-        IMessageConnection result =
+        MessageConnection result =
                 fixture.manager().getOrAddMessageConnectionAsync(response).join();
-        IMessageConnection cached =
+        MessageConnection cached =
                 fixture.manager().getOrAddMessageConnectionAsync(response).join();
 
         assertSame(message.messageConnection(), result);
@@ -355,7 +355,7 @@ class PeerConnectionManagerTest {
         fixture.factory.messageDirect = direct;
         fixture.waiter.defaultFuture = CompletableFuture.failedFuture(new RuntimeException("indirect"));
 
-        IMessageConnection result = fixture.manager()
+        MessageConnection result = fixture.manager()
                 .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationToken.none())
                 .join();
 
@@ -378,7 +378,7 @@ class PeerConnectionManagerTest {
         fixture.factory.messageHandoff = indirect;
         fixture.waiter.defaultFuture = CompletableFuture.completedFuture(accepted.connection());
 
-        IMessageConnection result = fixture.manager()
+        MessageConnection result = fixture.manager()
                 .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationToken.none())
                 .join();
 
@@ -441,9 +441,9 @@ class PeerConnectionManagerTest {
         fixture.factory.messageDirect = direct;
         fixture.waiter.defaultFuture = CompletableFuture.failedFuture(new RuntimeException("indirect"));
 
-        CompletableFuture<IMessageConnection> first = fixture.manager()
+        CompletableFuture<MessageConnection> first = fixture.manager()
                 .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationToken.none());
-        CompletableFuture<IMessageConnection> second = fixture.manager()
+        CompletableFuture<MessageConnection> second = fixture.manager()
                 .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN + 1, CancellationToken.none());
         connect.complete(null);
 
@@ -560,23 +560,24 @@ class PeerConnectionManagerTest {
         private final ConnectionProbe server = ConnectionProbe.message("", endpoint(2242));
         private final FakeFactory factory = new FakeFactory();
         private final FakeClient client = new FakeClient(waiter, server.messageConnection());
-        private final PeerConnectionManager manager = new PeerConnectionManager(client, factory, diagnostic);
+        private final DefaultPeerConnectionManager manager =
+                new DefaultPeerConnectionManager(client, factory, diagnostic);
 
-        private PeerConnectionManager manager() {
+        private DefaultPeerConnectionManager manager() {
             return manager;
         }
     }
 
     private static final class FakeClient implements PeerConnectionManagerClient {
         private final FakeWaiter waiter;
-        private final IMessageConnection server;
+        private final MessageConnection server;
         private final AtomicInteger token = new AtomicInteger(TOKEN);
         private final PeerMessageHandler handler = (PeerMessageHandler) Proxy.newProxyInstance(
                 PeerMessageHandler.class.getClassLoader(),
                 new Class<?>[] {PeerMessageHandler.class},
                 (proxy, method, arguments) -> defaultValue(method.getReturnType()));
 
-        private FakeClient(FakeWaiter waiter, IMessageConnection server) {
+        private FakeClient(FakeWaiter waiter, MessageConnection server) {
             this.waiter = waiter;
             this.server = server;
         }
@@ -602,7 +603,7 @@ class PeerConnectionManagerTest {
         }
 
         @Override
-        public IMessageConnection getServerConnection() {
+        public MessageConnection getServerConnection() {
             return server;
         }
 
@@ -612,7 +613,7 @@ class PeerConnectionManagerTest {
         }
     }
 
-    private static final class FakeFactory implements IConnectionFactory {
+    private static final class FakeFactory implements ConnectionFactory {
         private ConnectionProbe messageDirect;
         private ConnectionProbe messageHandoff;
         private ConnectionProbe transferDirect;
@@ -620,13 +621,13 @@ class PeerConnectionManagerTest {
         private int messageDirectCount;
 
         @Override
-        public IMessageConnection getDistributedConnection(
+        public MessageConnection getDistributedConnection(
                 String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
             throw new AssertionError("unexpected distributed connection");
         }
 
         @Override
-        public IMessageConnection getMessageConnection(
+        public MessageConnection getMessageConnection(
                 String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
             if (tcpClient != null) {
                 assertNotNull(messageHandoff);
@@ -638,7 +639,7 @@ class PeerConnectionManagerTest {
         }
 
         @Override
-        public IMessageConnection getServerConnection(
+        public MessageConnection getServerConnection(
                 InetSocketAddress ipEndPoint,
                 ConnectionEventListener<Void> connectedEventHandler,
                 ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
@@ -856,7 +857,7 @@ class PeerConnectionManagerTest {
             this.username = username;
             this.endpoint = endpoint;
             Class<?>[] interfaces =
-                    message ? new Class<?>[] {IMessageConnection.class} : new Class<?>[] {Connection.class};
+                    message ? new Class<?>[] {MessageConnection.class} : new Class<?>[] {Connection.class};
             proxy = (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(), interfaces, this);
         }
 
@@ -872,11 +873,11 @@ class PeerConnectionManagerTest {
             return proxy;
         }
 
-        private IMessageConnection messageConnection() {
+        private MessageConnection messageConnection() {
             if (!message) {
                 throw new IllegalStateException("Not a message connection");
             }
-            return (IMessageConnection) proxy;
+            return (MessageConnection) proxy;
         }
 
         private void fireDisconnected(String message, Exception exception) {

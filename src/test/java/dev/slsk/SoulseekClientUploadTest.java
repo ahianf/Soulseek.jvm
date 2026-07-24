@@ -27,8 +27,8 @@ import dev.slsk.messaging.messages.TransferResponse;
 import dev.slsk.messaging.messages.UploadDenied;
 import dev.slsk.messaging.messages.UploadFailed;
 import dev.slsk.messaging.messages.UserAddressResponse;
-import dev.slsk.network.IMessageConnection;
-import dev.slsk.network.IPeerConnectionManager;
+import dev.slsk.network.MessageConnection;
+import dev.slsk.network.PeerConnectionManager;
 import dev.slsk.network.tcp.Connection;
 import dev.slsk.network.tcp.ConnectionDataEventArgs;
 import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
@@ -761,15 +761,15 @@ class SoulseekClientUploadTest {
     }
 
     private static final class PeerManagerProbe {
-        private final IMessageConnection messageConnection;
+        private final MessageConnection messageConnection;
         private final Connection transferConnection;
         private CancellationToken transferToken;
-        private final IPeerConnectionManager proxy = (IPeerConnectionManager) Proxy.newProxyInstance(
-                IPeerConnectionManager.class.getClassLoader(),
-                new Class<?>[] {IPeerConnectionManager.class},
+        private final PeerConnectionManager proxy = (PeerConnectionManager) Proxy.newProxyInstance(
+                PeerConnectionManager.class.getClassLoader(),
+                new Class<?>[] {PeerConnectionManager.class},
                 this::invoke);
 
-        private PeerManagerProbe(IMessageConnection messageConnection, Connection transferConnection) {
+        private PeerManagerProbe(MessageConnection messageConnection, Connection transferConnection) {
             this.messageConnection = messageConnection;
             this.transferConnection = transferConnection;
         }
@@ -795,8 +795,8 @@ class SoulseekClientUploadTest {
     private static final class MessageConnectionProbe {
         private final List<OutgoingMessage> messages = new ArrayList<>();
         private CancellationToken lastToken;
-        private final IMessageConnection proxy = (IMessageConnection) Proxy.newProxyInstance(
-                IMessageConnection.class.getClassLoader(), new Class<?>[] {IMessageConnection.class}, this::invoke);
+        private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
+                MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("writeAsync")

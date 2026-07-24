@@ -18,7 +18,7 @@ import dev.slsk.messaging.messages.DistributedChildDepth;
 import dev.slsk.messaging.messages.DistributedPingResponse;
 import dev.slsk.messaging.messages.DistributedSearchRequest;
 import dev.slsk.messaging.messages.EmbeddedMessage;
-import dev.slsk.network.IMessageConnection;
+import dev.slsk.network.MessageConnection;
 import dev.slsk.network.MessageEventArgs;
 import dev.slsk.network.PeerEndpoint;
 import java.util.Base64;
@@ -59,16 +59,16 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     }
 
     @Override
-    public void handleChildMessageRead(IMessageConnection sender, MessageEventArgs eventArgs) {
+    public void handleChildMessageRead(MessageConnection sender, MessageEventArgs eventArgs) {
         handleChildMessageRead(sender, eventArgs.getMessage());
     }
 
     @Override
-    public void handleChildMessageRead(IMessageConnection sender, byte[] message) {
+    public void handleChildMessageRead(MessageConnection sender, byte[] message) {
         handleChildMessageReadAsync(sender, message);
     }
 
-    CompletableFuture<Void> handleChildMessageReadAsync(IMessageConnection connection, byte[] message) {
+    CompletableFuture<Void> handleChildMessageReadAsync(MessageConnection connection, byte[] message) {
         MessageCode.Distributed code = new MessageReader<>(message, MessageCode.Distributed.class).readCode();
         if (code != MessageCode.Distributed.PING) {
             diagnostic.debug("Distributed child message received: " + code + " from "
@@ -108,7 +108,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     }
 
     @Override
-    public void handleChildMessageWritten(IMessageConnection connection, MessageEventArgs eventArgs) {
+    public void handleChildMessageWritten(MessageConnection connection, MessageEventArgs eventArgs) {
         MessageCode.Distributed code =
                 new MessageReader<>(eventArgs.getMessage(), MessageCode.Distributed.class).readCode();
         if (code != MessageCode.Distributed.PING) {
@@ -120,16 +120,16 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     }
 
     @Override
-    public void handleMessageRead(IMessageConnection sender, MessageEventArgs eventArgs) {
+    public void handleMessageRead(MessageConnection sender, MessageEventArgs eventArgs) {
         handleMessageRead(sender, eventArgs.getMessage());
     }
 
     @Override
-    public void handleMessageRead(IMessageConnection sender, byte[] message) {
+    public void handleMessageRead(MessageConnection sender, byte[] message) {
         handleMessageReadAsync(sender, message);
     }
 
-    CompletableFuture<Void> handleMessageReadAsync(IMessageConnection connection, byte[] message) {
+    CompletableFuture<Void> handleMessageReadAsync(MessageConnection connection, byte[] message) {
         MessageCode.Distributed code = new MessageReader<>(message, MessageCode.Distributed.class).readCode();
         if (code != MessageCode.Distributed.SEARCH_REQUEST
                 && code != MessageCode.Distributed.EMBEDDED_MESSAGE
@@ -205,7 +205,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     }
 
     @Override
-    public void handleMessageWritten(IMessageConnection sender, MessageEventArgs eventArgs) {
+    public void handleMessageWritten(MessageConnection sender, MessageEventArgs eventArgs) {
         MessageCode.Distributed code =
                 new MessageReader<>(eventArgs.getMessage(), MessageCode.Distributed.class).readCode();
         diagnostic.debug("Distributed message sent: " + code);
@@ -246,7 +246,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
         });
     }
 
-    private CompletableFuture<Void> handleParentEmbeddedMessage(IMessageConnection connection, byte[] message) {
+    private CompletableFuture<Void> handleParentEmbeddedMessage(MessageConnection connection, byte[] message) {
         EmbeddedMessage embedded = EmbeddedMessage.fromByteArray(message);
         if (embedded.getDistributedCode() != MessageCode.Distributed.SEARCH_REQUEST) {
             diagnostic.debug("Unhandled embedded message: "
@@ -277,7 +277,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                 .thenApply(ignored -> null);
     }
 
-    private boolean isParent(IMessageConnection connection) {
+    private boolean isParent(MessageConnection connection) {
         return Objects.equals(
                 new PeerEndpoint(connection.getUsername(), connection.getIpEndPoint()),
                 client.getDistributedConnectionManager().getParent());

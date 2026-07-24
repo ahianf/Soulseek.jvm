@@ -26,9 +26,9 @@ import dev.slsk.messaging.messages.LoginResponse;
 import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.messaging.messages.PrivateRoomToggle;
 import dev.slsk.messaging.messages.SetListenPortCommand;
-import dev.slsk.network.IConnectionFactory;
-import dev.slsk.network.IDistributedConnectionManager;
-import dev.slsk.network.IMessageConnection;
+import dev.slsk.network.ConnectionFactory;
+import dev.slsk.network.DistributedConnectionManager;
+import dev.slsk.network.MessageConnection;
 import dev.slsk.network.MessageConnectionEventListener;
 import dev.slsk.network.MessageEventArgs;
 import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
@@ -343,8 +343,8 @@ class SoulseekClientConnectTest {
         private int connectCount;
         private int disconnectCount;
         private boolean fireConnected;
-        private final IMessageConnection proxy = (IMessageConnection) Proxy.newProxyInstance(
-                IMessageConnection.class.getClassLoader(), new Class<?>[] {IMessageConnection.class}, this::invoke);
+        private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
+                MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
         private ConnectionProbe(List<String> sequence) {
             this.sequence = sequence;
@@ -387,15 +387,15 @@ class SoulseekClientConnectTest {
     }
 
     private static final class ConnectionFactoryProbe {
-        private final IMessageConnection connection;
+        private final MessageConnection connection;
         private InetSocketAddress endpoint;
         private dev.slsk.options.ConnectionOptions options;
         private ConnectionEventListener<Void> connected;
         private ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnected;
         private MessageConnectionEventListener<MessageEventArgs> messageRead;
         private MessageConnectionEventListener<MessageEventArgs> messageWritten;
-        private final IConnectionFactory proxy = (IConnectionFactory) Proxy.newProxyInstance(
-                IConnectionFactory.class.getClassLoader(), new Class<?>[] {IConnectionFactory.class}, this::invoke);
+        private final ConnectionFactory proxy = (ConnectionFactory) Proxy.newProxyInstance(
+                ConnectionFactory.class.getClassLoader(), new Class<?>[] {ConnectionFactory.class}, this::invoke);
 
         private ConnectionFactoryProbe(ConnectionProbe connectionProbe) {
             connection = connectionProbe.proxy;
@@ -445,9 +445,9 @@ class SoulseekClientConnectTest {
         private final List<String> sequence;
         private int updateCount;
         private CancellationToken updateToken;
-        private final IDistributedConnectionManager proxy = (IDistributedConnectionManager) Proxy.newProxyInstance(
-                IDistributedConnectionManager.class.getClassLoader(),
-                new Class<?>[] {IDistributedConnectionManager.class},
+        private final DistributedConnectionManager proxy = (DistributedConnectionManager) Proxy.newProxyInstance(
+                DistributedConnectionManager.class.getClassLoader(),
+                new Class<?>[] {DistributedConnectionManager.class},
                 this::invoke);
 
         private DistributedProbe(List<String> sequence) {

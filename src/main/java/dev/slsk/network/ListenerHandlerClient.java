@@ -15,9 +15,9 @@ public interface ListenerHandlerClient {
 
     Listener getListener();
 
-    IPeerConnectionManager getPeerConnectionManager();
+    PeerConnectionManager getPeerConnectionManager();
 
-    IDistributedConnectionManager getDistributedConnectionManager();
+    DistributedConnectionManager getDistributedConnectionManager();
 
     IWaiter getWaiter();
 

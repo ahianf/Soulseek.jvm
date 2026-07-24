@@ -21,7 +21,7 @@ public interface DistributedConnectionManagerClient {
 
     IWaiter getWaiter();
 
-    IMessageConnection getServerConnection();
+    MessageConnection getServerConnection();
 
     DistributedMessageHandler getDistributedMessageHandler();
 }

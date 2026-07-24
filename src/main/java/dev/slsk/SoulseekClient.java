@@ -122,15 +122,15 @@ import dev.slsk.messaging.messages.WatchUserRequest;
 import dev.slsk.messaging.messages.WatchUserResponse;
 import dev.slsk.messaging.messages.WishlistSearchRequest;
 import dev.slsk.network.ConnectionFactory;
+import dev.slsk.network.DefaultConnectionFactory;
+import dev.slsk.network.DefaultDistributedConnectionManager;
+import dev.slsk.network.DefaultListenerHandler;
+import dev.slsk.network.DefaultPeerConnectionManager;
 import dev.slsk.network.DistributedConnectionManager;
 import dev.slsk.network.DistributedConnectionManagerClient;
-import dev.slsk.network.IConnectionFactory;
-import dev.slsk.network.IDistributedConnectionManager;
-import dev.slsk.network.IListenerHandler;
-import dev.slsk.network.IMessageConnection;
-import dev.slsk.network.IPeerConnectionManager;
 import dev.slsk.network.ListenerHandler;
 import dev.slsk.network.ListenerHandlerClient;
+import dev.slsk.network.MessageConnection;
 import dev.slsk.network.PeerConnectionManager;
 import dev.slsk.network.PeerConnectionManagerClient;
 import dev.slsk.network.PeerEndpoint;
@@ -226,13 +226,13 @@ public class SoulseekClient
     private final IOAdapter ioAdapter;
     private final TokenBucket uploadTokenBucket;
     private final TokenBucket downloadTokenBucket;
-    private final IConnectionFactory connectionFactory;
-    private final IListenerHandler listenerHandler;
+    private final ConnectionFactory connectionFactory;
+    private final ListenerHandler listenerHandler;
     private final ISearchResponder searchResponder;
     private final PeerMessageHandler peerMessageHandler;
     private final DistributedMessageHandler distributedMessageHandler;
-    private final IPeerConnectionManager peerConnectionManager;
-    private final IDistributedConnectionManager distributedConnectionManager;
+    private final PeerConnectionManager peerConnectionManager;
+    private final DistributedConnectionManager distributedConnectionManager;
     private final ServerMessageHandler serverMessageHandler;
     private final IDiagnosticFactory diagnostic;
     private volatile ClientListenerFactory clientListenerFactory = SocketListener::new;
@@ -241,7 +241,7 @@ public class SoulseekClient
     private final Map<Event, CopyOnWriteArrayList<SoulseekClientEventListener<?>>> listeners =
             new EnumMap<>(Event.class);
 
-    private volatile IMessageConnection serverConnection;
+    private volatile MessageConnection serverConnection;
     private volatile Listener listener;
     private volatile String address;
     private volatile InetSocketAddress ipEndPoint;
@@ -286,15 +286,15 @@ public class SoulseekClient
     SoulseekClient(
             int minorVersion,
             SoulseekClientOptions options,
-            IMessageConnection serverConnection,
-            IConnectionFactory connectionFactory,
-            IPeerConnectionManager peerConnectionManager,
-            IDistributedConnectionManager distributedConnectionManager,
+            MessageConnection serverConnection,
+            ConnectionFactory connectionFactory,
+            PeerConnectionManager peerConnectionManager,
+            DistributedConnectionManager distributedConnectionManager,
             ServerMessageHandler serverMessageHandler,
             PeerMessageHandler peerMessageHandler,
             DistributedMessageHandler distributedMessageHandler,
             Listener listener,
-            IListenerHandler listenerHandler,
+            ListenerHandler listenerHandler,
             ISearchResponder searchResponder,
             IWaiter waiter,
             TokenFactory tokenFactory,
@@ -322,7 +322,7 @@ public class SoulseekClient
         this.downloadTokenBucket = downloadTokenBucket == null
                 ? new TokenBucket((this.options.getMaximumDownloadSpeed() * 1024L) / 10, 100)
                 : downloadTokenBucket;
-        this.connectionFactory = connectionFactory == null ? new ConnectionFactory() : connectionFactory;
+        this.connectionFactory = connectionFactory == null ? new DefaultConnectionFactory() : connectionFactory;
         for (Event event : Event.values()) {
             listeners.put(event, new CopyOnWriteArrayList<>());
         }
@@ -334,16 +334,16 @@ public class SoulseekClient
                 : diagnosticFactory;
         GlobalDiagnostic.init(diagnostic);
 
-        this.listenerHandler = listenerHandler == null ? new ListenerHandler(this) : listenerHandler;
+        this.listenerHandler = listenerHandler == null ? new DefaultListenerHandler(this) : listenerHandler;
         this.searchResponder = searchResponder == null ? new SearchResponder(this) : searchResponder;
         this.peerMessageHandler = peerMessageHandler == null ? new DefaultPeerMessageHandler(this) : peerMessageHandler;
         this.distributedMessageHandler = distributedMessageHandler == null
                 ? new DefaultDistributedMessageHandler(this)
                 : distributedMessageHandler;
         this.peerConnectionManager =
-                peerConnectionManager == null ? new PeerConnectionManager(this) : peerConnectionManager;
+                peerConnectionManager == null ? new DefaultPeerConnectionManager(this) : peerConnectionManager;
         this.distributedConnectionManager = distributedConnectionManager == null
-                ? new DistributedConnectionManager(this)
+                ? new DefaultDistributedConnectionManager(this)
                 : distributedConnectionManager;
         this.serverMessageHandler =
                 serverMessageHandler == null ? new DefaultServerMessageHandler(this) : serverMessageHandler;
@@ -1073,7 +1073,7 @@ public class SoulseekClient
                     throw new CompletionException(cause);
                 })
                 .thenCompose(responseConnection -> {
-                    IMessageConnection connection = responseConnection.connection();
+                    MessageConnection connection = responseConnection.connection();
                     long responseLength = responseConnection.eventArgs().getLength() - 4;
                     AtomicBoolean completionEventFired = new AtomicBoolean();
                     dev.slsk.network.MessageConnectionEventListener<dev.slsk.network.MessageDataEventArgs>
@@ -2726,12 +2726,12 @@ public class SoulseekClient
     }
 
     @Override
-    public final IPeerConnectionManager getPeerConnectionManager() {
+    public final PeerConnectionManager getPeerConnectionManager() {
         return peerConnectionManager;
     }
 
     @Override
-    public final IDistributedConnectionManager getDistributedConnectionManager() {
+    public final DistributedConnectionManager getDistributedConnectionManager() {
         return distributedConnectionManager;
     }
 
@@ -2746,7 +2746,7 @@ public class SoulseekClient
     }
 
     @Override
-    public final IMessageConnection getServerConnection() {
+    public final MessageConnection getServerConnection() {
         return serverConnection;
     }
 
@@ -2764,11 +2764,11 @@ public class SoulseekClient
         return serverMessageHandler;
     }
 
-    final IListenerHandler getListenerHandler() {
+    final ListenerHandler getListenerHandler() {
         return listenerHandler;
     }
 
-    final IConnectionFactory getConnectionFactory() {
+    final ConnectionFactory getConnectionFactory() {
         return connectionFactory;
     }
 
@@ -2804,7 +2804,7 @@ public class SoulseekClient
         state = value;
     }
 
-    void setServerConnectionForTest(IMessageConnection value) {
+    void setServerConnectionForTest(MessageConnection value) {
         serverConnection = value;
     }
 
@@ -3577,7 +3577,7 @@ public class SoulseekClient
                 globalPermit.set(true);
 
                 endpoint = await(getUserEndPointAsync(download.getUsername(), cancellationToken));
-                IMessageConnection peerConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
+                MessageConnection peerConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
                         download.getUsername(), endpoint, cancellationToken));
 
                 CompletableFuture<TransferResponse> transferRequestAcknowledged = waiter.waitAsync(
@@ -3627,8 +3627,8 @@ public class SoulseekClient
             }
         }
 
-        private IMessageConnection beginImmediateDownload(
-                TransferResponse acknowledgement, IMessageConnection peerConnection) {
+        private MessageConnection beginImmediateDownload(
+                TransferResponse acknowledgement, MessageConnection peerConnection) {
             validateRemoteSize(acknowledgement.getFileSize());
             updateState(TransferStates.QUEUED.or(TransferStates.REMOTELY));
             if (download.getSize() == null) {
@@ -3641,8 +3641,8 @@ public class SoulseekClient
             return peerConnection;
         }
 
-        private IMessageConnection beginQueuedDownload(
-                CompletableFuture<TransferRequest> transferStartRequested, IMessageConnection peerConnection) {
+        private MessageConnection beginQueuedDownload(
+                CompletableFuture<TransferRequest> transferStartRequested, MessageConnection peerConnection) {
             updateState(TransferStates.QUEUED.or(TransferStates.REMOTELY));
             TransferRequest request = await(transferStartRequested);
             validateRemoteSize(request.getFileSize());
@@ -3652,7 +3652,7 @@ public class SoulseekClient
             download.setRemoteToken(request.getToken());
             updateState(TransferStates.INITIALIZING);
 
-            IMessageConnection refreshed = await(peerConnectionManager.getOrAddMessageConnectionAsync(
+            MessageConnection refreshed = await(peerConnectionManager.getOrAddMessageConnectionAsync(
                     download.getUsername(), endpoint, cancellationToken));
             CompletableFuture<Connection> connectionTask = peerConnectionManager.awaitTransferConnectionAsync(
                     download.getUsername(), download.getFilename(), download.getRemoteToken(), cancellationToken);
@@ -4077,7 +4077,7 @@ public class SoulseekClient
                 globalPermit.set(true);
 
                 endpoint = await(getUserEndPointAsync(upload.getUsername(), cancellationToken));
-                IMessageConnection messageConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
+                MessageConnection messageConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
                         upload.getUsername(), endpoint, cancellationToken));
 
                 CompletableFuture<TransferResponse> transferRequestAcknowledged = waiter.waitAsync(
@@ -4337,7 +4337,7 @@ public class SoulseekClient
             try {
                 InetSocketAddress currentEndpoint =
                         await(getUserEndPointAsync(upload.getUsername(), CancellationToken.none()));
-                IMessageConnection messageConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
+                MessageConnection messageConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
                         upload.getUsername(), currentEndpoint, CancellationToken.none()));
                 OutgoingMessage message = upload.getState().hasFlag(TransferStates.CANCELLED)
                         ? new UploadDenied(upload.getFilename(), "Cancelled")
@@ -4673,7 +4673,7 @@ public class SoulseekClient
     }
 
     private static CompletableFuture<Void> invokeMessageWrite(
-            IMessageConnection connection, OutgoingMessage message, CancellationToken cancellationToken) {
+            MessageConnection connection, OutgoingMessage message, CancellationToken cancellationToken) {
         CompletableFuture<Void> operation;
         try {
             operation = connection.writeAsync(message, defaultToken(cancellationToken));

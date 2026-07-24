@@ -7,5 +7,5 @@ package dev.slsk.network;
 /** Handles a distributed connection-manager event. */
 @FunctionalInterface
 public interface DistributedManagerEventListener<T> {
-    void handle(IDistributedConnectionManager sender, T eventArgs);
+    void handle(DistributedConnectionManager sender, T eventArgs);
 }

@@ -38,13 +38,13 @@ class ConnectionFactoryTest {
     @DisplayName("Factory creates transfer connection with supplied options")
     void createsTransferConnection() {
         ConnectionOptions options = new ConnectionOptions(1, 2, 3, 4, -1);
-        try (Connection connection = new ConnectionFactory().getTransferConnection(ENDPOINT, options, null)) {
+        try (Connection connection = new DefaultConnectionFactory().getTransferConnection(ENDPOINT, options, null)) {
             assertTrue(connection instanceof SocketConnection);
             assertSame(ENDPOINT, connection.getIpEndPoint());
             assertSame(options, connection.getOptions());
         }
 
-        try (Connection defaults = new ConnectionFactory().getTransferConnection(ENDPOINT)) {
+        try (Connection defaults = new DefaultConnectionFactory().getTransferConnection(ENDPOINT)) {
             assertNotNull(defaults.getOptions());
         }
     }
@@ -53,16 +53,16 @@ class ConnectionFactoryTest {
     @DisplayName("Factory creates peer and distributed message variants")
     void createsPeerVariants() {
         ConnectionOptions options = new ConnectionOptions(1, 2, 3, 4, -1);
-        ConnectionFactory factory = new ConnectionFactory();
-        try (IMessageConnection peer = factory.getMessageConnection("alice", ENDPOINT, options, null);
-                IMessageConnection distributed = factory.getDistributedConnection("alice", ENDPOINT, options, null)) {
+        DefaultConnectionFactory factory = new DefaultConnectionFactory();
+        try (MessageConnection peer = factory.getMessageConnection("alice", ENDPOINT, options, null);
+                MessageConnection distributed = factory.getDistributedConnection("alice", ENDPOINT, options, null)) {
             assertSame(options, peer.getOptions());
             assertEquals(4, peer.getCodeLength());
             assertSame(options, distributed.getOptions());
             assertEquals(1, distributed.getCodeLength());
         }
-        try (IMessageConnection peer = factory.getMessageConnection("alice", ENDPOINT);
-                IMessageConnection distributed = factory.getDistributedConnection("alice", ENDPOINT)) {
+        try (MessageConnection peer = factory.getMessageConnection("alice", ENDPOINT);
+                MessageConnection distributed = factory.getDistributedConnection("alice", ENDPOINT)) {
             assertNotNull(peer.getOptions());
             assertNotNull(distributed.getOptions());
         }
@@ -85,7 +85,7 @@ class ConnectionFactoryTest {
         CountDownLatch readEvent = new CountDownLatch(1);
         ConnectionOptions options = new ConnectionOptions(8, 8, 3, 100, 50);
 
-        IMessageConnection connection = new ConnectionFactory()
+        MessageConnection connection = new DefaultConnectionFactory()
                 .getServerConnection(
                         ENDPOINT,
                         (sender, args) -> connected.incrementAndGet(),
@@ -117,8 +117,8 @@ class ConnectionFactoryTest {
     @Test
     @DisplayName("Server factory accepts null handlers and default options")
     void serverDefaults() {
-        try (IMessageConnection connection =
-                new ConnectionFactory().getServerConnection(ENDPOINT, null, null, null, null)) {
+        try (MessageConnection connection =
+                new DefaultConnectionFactory().getServerConnection(ENDPOINT, null, null, null, null)) {
             assertNotNull(connection.getOptions());
             assertEquals(-1, connection.getOptions().getInactivityTimeout());
         }

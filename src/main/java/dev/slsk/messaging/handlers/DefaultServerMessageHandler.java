@@ -70,7 +70,7 @@ import dev.slsk.messaging.messages.UserPrivilegeResponse;
 import dev.slsk.messaging.messages.UserStatisticsResponseFactory;
 import dev.slsk.messaging.messages.UserStatusResponseFactory;
 import dev.slsk.messaging.messages.WatchUserResponse;
-import dev.slsk.network.IMessageConnection;
+import dev.slsk.network.MessageConnection;
 import dev.slsk.network.MessageEventArgs;
 import dev.slsk.network.PeerEndpoint;
 import dev.slsk.network.TransferConnectionResult;
@@ -132,16 +132,16 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     }
 
     @Override
-    public void handleMessageRead(IMessageConnection sender, MessageEventArgs eventArgs) {
+    public void handleMessageRead(MessageConnection sender, MessageEventArgs eventArgs) {
         handleMessageRead(sender, eventArgs.getMessage());
     }
 
     @Override
-    public void handleMessageRead(IMessageConnection sender, byte[] message) {
+    public void handleMessageRead(MessageConnection sender, byte[] message) {
         handleMessageReadAsync(sender, message);
     }
 
-    CompletableFuture<Void> handleMessageReadAsync(IMessageConnection sender, byte[] message) {
+    CompletableFuture<Void> handleMessageReadAsync(MessageConnection sender, byte[] message) {
         MessageCode.Server code = new MessageReader<>(message, MessageCode.Server.class).readCode();
         if (code != MessageCode.Server.EMBEDDED_MESSAGE) {
             diagnostic.debug("Server message received: " + code);
@@ -404,7 +404,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     }
 
     @Override
-    public void handleMessageWritten(IMessageConnection sender, MessageEventArgs eventArgs) {
+    public void handleMessageWritten(MessageConnection sender, MessageEventArgs eventArgs) {
         MessageCode.Server code = new MessageReader<>(eventArgs.getMessage(), MessageCode.Server.class).readCode();
         diagnostic.debug("Server message sent: " + code);
     }

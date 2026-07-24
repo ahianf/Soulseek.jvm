@@ -24,8 +24,8 @@ import dev.slsk.diagnostics.IDiagnosticFactory;
 import dev.slsk.eventargs.SearchRequestEventArgs;
 import dev.slsk.eventargs.SearchRequestResponseEventArgs;
 import dev.slsk.messaging.messages.ConnectToPeerResponse;
-import dev.slsk.network.IMessageConnection;
-import dev.slsk.network.IPeerConnectionManager;
+import dev.slsk.network.MessageConnection;
+import dev.slsk.network.PeerConnectionManager;
 import dev.slsk.network.PeerEndpoint;
 import dev.slsk.network.TransferConnectionResult;
 import dev.slsk.network.tcp.Connection;
@@ -259,11 +259,11 @@ class SearchResponderTest {
                 false);
     }
 
-    private static IMessageConnection messageConnection(
+    private static MessageConnection messageConnection(
             AtomicReference<byte[]> written, CompletableFuture<Void> writeResult) {
-        return (IMessageConnection) Proxy.newProxyInstance(
+        return (MessageConnection) Proxy.newProxyInstance(
                 SearchResponderTest.class.getClassLoader(),
-                new Class<?>[] {IMessageConnection.class},
+                new Class<?>[] {MessageConnection.class},
                 (proxy, method, arguments) -> {
                     if (method.getName().equals("writeAsync") && arguments[0] instanceof byte[] bytes) {
                         written.set(bytes);
@@ -313,7 +313,7 @@ class SearchResponderTest {
         }
 
         @Override
-        public IPeerConnectionManager getPeerConnectionManager() {
+        public PeerConnectionManager getPeerConnectionManager() {
             return manager;
         }
 
@@ -401,8 +401,8 @@ class SearchResponderTest {
         }
     }
 
-    private static final class TestPeerManager implements IPeerConnectionManager {
-        private IMessageConnection connection;
+    private static final class TestPeerManager implements PeerConnectionManager {
+        private MessageConnection connection;
         private RuntimeException connectionFailure;
         private String lastUsername;
         private int lastSolicitationToken;
@@ -430,7 +430,7 @@ class SearchResponderTest {
         }
 
         @Override
-        public CompletableFuture<IMessageConnection> getCachedMessageConnectionAsync(String username) {
+        public CompletableFuture<MessageConnection> getCachedMessageConnectionAsync(String username) {
             if (connectionFailure != null) {
                 return CompletableFuture.failedFuture(connectionFailure);
             }
@@ -438,18 +438,18 @@ class SearchResponderTest {
         }
 
         @Override
-        public CompletableFuture<IMessageConnection> getOrAddMessageConnectionAsync(ConnectToPeerResponse response) {
+        public CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(ConnectToPeerResponse response) {
             return unsupported();
         }
 
         @Override
-        public CompletableFuture<IMessageConnection> getOrAddMessageConnectionAsync(
+        public CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
                 String username, InetSocketAddress ipEndPoint, CancellationToken cancellationToken) {
             return getOrAddMessageConnectionAsync(username, ipEndPoint, 0, cancellationToken);
         }
 
         @Override
-        public CompletableFuture<IMessageConnection> getOrAddMessageConnectionAsync(
+        public CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
                 String username,
                 InetSocketAddress ipEndPoint,
                 int solicitationToken,

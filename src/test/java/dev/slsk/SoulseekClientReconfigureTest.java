@@ -19,8 +19,8 @@ import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.messaging.messages.PrivateRoomToggle;
 import dev.slsk.messaging.messages.SetListenPortCommand;
-import dev.slsk.network.IDistributedConnectionManager;
-import dev.slsk.network.IMessageConnection;
+import dev.slsk.network.DistributedConnectionManager;
+import dev.slsk.network.MessageConnection;
 import dev.slsk.network.tcp.Listener;
 import dev.slsk.options.ConnectionOptions;
 import dev.slsk.options.SoulseekClientOptions;
@@ -432,8 +432,8 @@ class SoulseekClientReconfigureTest {
         private final List<OutgoingMessage> messages = new ArrayList<>();
         private final List<CancellationToken> tokens = new ArrayList<>();
         private Throwable failure;
-        private final IMessageConnection proxy = (IMessageConnection) Proxy.newProxyInstance(
-                IMessageConnection.class.getClassLoader(), new Class<?>[] {IMessageConnection.class}, this::invoke);
+        private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
+                MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("writeAsync")
@@ -456,9 +456,9 @@ class SoulseekClientReconfigureTest {
     private static final class DistributedProbe {
         private int updateCount;
         private CancellationToken token;
-        private final IDistributedConnectionManager proxy = (IDistributedConnectionManager) Proxy.newProxyInstance(
-                IDistributedConnectionManager.class.getClassLoader(),
-                new Class<?>[] {IDistributedConnectionManager.class},
+        private final DistributedConnectionManager proxy = (DistributedConnectionManager) Proxy.newProxyInstance(
+                DistributedConnectionManager.class.getClassLoader(),
+                new Class<?>[] {DistributedConnectionManager.class},
                 this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {

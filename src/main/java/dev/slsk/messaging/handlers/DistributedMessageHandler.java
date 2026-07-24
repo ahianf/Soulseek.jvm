@@ -4,16 +4,16 @@
 
 package dev.slsk.messaging.handlers;
 
-import dev.slsk.network.IMessageConnection;
+import dev.slsk.network.MessageConnection;
 import dev.slsk.network.MessageEventArgs;
 
 /** Handles messages on distributed parent and child connections. */
 public interface DistributedMessageHandler extends MessageHandler {
-    void handleChildMessageRead(IMessageConnection sender, MessageEventArgs eventArgs);
+    void handleChildMessageRead(MessageConnection sender, MessageEventArgs eventArgs);
 
-    void handleChildMessageRead(IMessageConnection sender, byte[] message);
+    void handleChildMessageRead(MessageConnection sender, byte[] message);
 
-    void handleChildMessageWritten(IMessageConnection sender, MessageEventArgs eventArgs);
+    void handleChildMessageWritten(MessageConnection sender, MessageEventArgs eventArgs);
 
     void handleEmbeddedMessage(byte[] message);
 }

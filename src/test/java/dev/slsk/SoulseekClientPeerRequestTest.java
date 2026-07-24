@@ -28,11 +28,11 @@ import dev.slsk.messaging.messages.PlaceInQueueResponse;
 import dev.slsk.messaging.messages.UserAddressRequest;
 import dev.slsk.messaging.messages.UserAddressResponse;
 import dev.slsk.messaging.messages.UserInfoRequest;
-import dev.slsk.network.IMessageConnection;
-import dev.slsk.network.IPeerConnectionManager;
+import dev.slsk.network.MessageConnection;
 import dev.slsk.network.MessageConnectionEventListener;
 import dev.slsk.network.MessageDataEventArgs;
 import dev.slsk.network.MessageReceivedEventArgs;
+import dev.slsk.network.PeerConnectionManager;
 import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
 import dev.slsk.network.tcp.ConnectionEventListener;
 import dev.slsk.options.BrowseOptions;
@@ -527,8 +527,8 @@ class SoulseekClientPeerRequestTest {
         private RuntimeException synchronousFailure;
         private ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedListener;
         private MessageConnectionEventListener<MessageDataEventArgs> messageDataListener;
-        private final IMessageConnection proxy = (IMessageConnection) Proxy.newProxyInstance(
-                IMessageConnection.class.getClassLoader(), new Class<?>[] {IMessageConnection.class}, this::invoke);
+        private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
+                MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("writeAsync")
@@ -607,19 +607,19 @@ class SoulseekClientPeerRequestTest {
     }
 
     private static final class PeerManagerProbe {
-        private final IMessageConnection connection;
+        private final MessageConnection connection;
         private String username;
         private InetSocketAddress endpoint;
         private CancellationToken token;
         private int invalidations;
         private boolean invalidationResult;
         private RuntimeException synchronousFailure;
-        private final IPeerConnectionManager proxy = (IPeerConnectionManager) Proxy.newProxyInstance(
-                IPeerConnectionManager.class.getClassLoader(),
-                new Class<?>[] {IPeerConnectionManager.class},
+        private final PeerConnectionManager proxy = (PeerConnectionManager) Proxy.newProxyInstance(
+                PeerConnectionManager.class.getClassLoader(),
+                new Class<?>[] {PeerConnectionManager.class},
                 this::invoke);
 
-        private PeerManagerProbe(IMessageConnection connection) {
+        private PeerManagerProbe(MessageConnection connection) {
             this.connection = connection;
         }
 

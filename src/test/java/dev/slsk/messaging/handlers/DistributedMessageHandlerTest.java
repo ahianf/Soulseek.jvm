@@ -25,8 +25,8 @@ import dev.slsk.messaging.messages.DistributedPingResponse;
 import dev.slsk.messaging.messages.DistributedSearchRequest;
 import dev.slsk.messaging.messages.EmbeddedMessage;
 import dev.slsk.messaging.messages.OutgoingMessage;
-import dev.slsk.network.IDistributedConnectionManager;
-import dev.slsk.network.IMessageConnection;
+import dev.slsk.network.DistributedConnectionManager;
+import dev.slsk.network.MessageConnection;
 import dev.slsk.network.MessageEventArgs;
 import dev.slsk.network.PeerEndpoint;
 import dev.slsk.network.tcp.ConnectionKey;
@@ -258,14 +258,14 @@ class DistributedMessageHandlerTest {
     private static final class FakeClient implements DistributedMessageHandlerClient {
         private final SoulseekClientOptions options;
         private final IWaiter waiter;
-        private final IDistributedConnectionManager manager;
+        private final DistributedConnectionManager manager;
         private final ISearchResponder responder;
         private final AtomicInteger token = new AtomicInteger(TOKEN);
 
         private FakeClient(
                 SoulseekClientOptions options,
                 IWaiter waiter,
-                IDistributedConnectionManager manager,
+                DistributedConnectionManager manager,
                 ISearchResponder responder) {
             this.options = options;
             this.waiter = waiter;
@@ -294,7 +294,7 @@ class DistributedMessageHandlerTest {
         }
 
         @Override
-        public IDistributedConnectionManager getDistributedConnectionManager() {
+        public DistributedConnectionManager getDistributedConnectionManager() {
             return manager;
         }
 
@@ -305,9 +305,9 @@ class DistributedMessageHandlerTest {
     }
 
     private static final class ManagerProbe implements InvocationHandler {
-        private final IDistributedConnectionManager proxy = (IDistributedConnectionManager) Proxy.newProxyInstance(
-                IDistributedConnectionManager.class.getClassLoader(),
-                new Class<?>[] {IDistributedConnectionManager.class},
+        private final DistributedConnectionManager proxy = (DistributedConnectionManager) Proxy.newProxyInstance(
+                DistributedConnectionManager.class.getClassLoader(),
+                new Class<?>[] {DistributedConnectionManager.class},
                 this);
         private final List<byte[]> broadcasts = new ArrayList<>();
         private PeerEndpoint parent = new PeerEndpoint("", null);
@@ -475,7 +475,7 @@ class DistributedMessageHandlerTest {
         private final InetSocketAddress endpoint;
         private final UUID id = UUID.randomUUID();
         private final ConnectionKey key;
-        private final IMessageConnection proxy;
+        private final MessageConnection proxy;
         private final List<OutgoingMessage> outgoing = new ArrayList<>();
         private CompletableFuture<Void> writeFuture = CompletableFuture.completedFuture(null);
 
@@ -483,8 +483,8 @@ class DistributedMessageHandlerTest {
             this.username = username;
             this.endpoint = endpoint;
             key = new ConnectionKey(username, endpoint);
-            proxy = (IMessageConnection) Proxy.newProxyInstance(
-                    IMessageConnection.class.getClassLoader(), new Class<?>[] {IMessageConnection.class}, this);
+            proxy = (MessageConnection) Proxy.newProxyInstance(
+                    MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this);
         }
 
         @Override

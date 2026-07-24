@@ -22,7 +22,7 @@ import dev.slsk.messaging.messages.PrivateRoomDropMembershipCommand;
 import dev.slsk.messaging.messages.PrivateRoomDropOwnershipCommand;
 import dev.slsk.messaging.messages.PrivateRoomRemoveOperator;
 import dev.slsk.messaging.messages.PrivateRoomRemoveUser;
-import dev.slsk.network.IMessageConnection;
+import dev.slsk.network.MessageConnection;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
@@ -257,8 +257,8 @@ class SoulseekClientPrivateRoomTest {
         private int writeCount;
         private CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
         private RuntimeException synchronousFailure;
-        private final IMessageConnection proxy = (IMessageConnection) Proxy.newProxyInstance(
-                IMessageConnection.class.getClassLoader(), new Class<?>[] {IMessageConnection.class}, this::invoke);
+        private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
+                MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
         private ConnectionProbe(List<String> sequence) {
             this.sequence = sequence;

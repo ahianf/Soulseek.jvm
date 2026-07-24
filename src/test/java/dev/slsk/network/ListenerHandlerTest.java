@@ -45,9 +45,9 @@ import org.junit.jupiter.api.Test;
 class ListenerHandlerTest {
     @Test
     void constructorValidatesClientAndDefaultDiagnosticRaisesEvents() throws Exception {
-        assertThrows(NullPointerException.class, () -> new ListenerHandler(null));
+        assertThrows(NullPointerException.class, () -> new DefaultListenerHandler(null));
         try (Fixture fixture = fixture(null)) {
-            ListenerHandler handler = new ListenerHandler(fixture.client);
+            DefaultListenerHandler handler = new DefaultListenerHandler(fixture.client);
             AtomicReference<DiagnosticEventArgs> event = new AtomicReference<>();
             handler.addDiagnosticGeneratedListener((sender, args) -> event.set(args));
             handler.getDiagnostic().info("test");
@@ -196,7 +196,7 @@ class ListenerHandlerTest {
         TestClient client = new TestClient(options, listener, peer.proxy, distributed.proxy, waiter, search.proxy);
         RecordingDiagnostic diagnostic = new RecordingDiagnostic();
         return new Fixture(
-                client, peer, distributed, search, waiter, diagnostic, new ListenerHandler(client, diagnostic));
+                client, peer, distributed, search, waiter, diagnostic, new DefaultListenerHandler(client, diagnostic));
     }
 
     private static SoulseekClientOptions options(ISearchResponseCache cache) {
@@ -242,7 +242,7 @@ class ListenerHandlerTest {
             SearchResponderProbe searchResponder,
             Waiter waiter,
             RecordingDiagnostic diagnostic,
-            ListenerHandler handler)
+            DefaultListenerHandler handler)
             implements AutoCloseable {
         @Override
         public void close() {
@@ -253,8 +253,8 @@ class ListenerHandlerTest {
     private record TestClient(
             SoulseekClientOptions options,
             Listener listener,
-            IPeerConnectionManager peerConnectionManager,
-            IDistributedConnectionManager distributedConnectionManager,
+            PeerConnectionManager peerConnectionManager,
+            DistributedConnectionManager distributedConnectionManager,
             Waiter waiter,
             ISearchResponder searchResponder)
             implements ListenerHandlerClient {
@@ -269,12 +269,12 @@ class ListenerHandlerTest {
         }
 
         @Override
-        public IPeerConnectionManager getPeerConnectionManager() {
+        public PeerConnectionManager getPeerConnectionManager() {
             return peerConnectionManager;
         }
 
         @Override
-        public IDistributedConnectionManager getDistributedConnectionManager() {
+        public DistributedConnectionManager getDistributedConnectionManager() {
             return distributedConnectionManager;
         }
 
@@ -390,9 +390,9 @@ class ListenerHandlerTest {
         private int transferToken;
         private Connection transferIncoming;
         private TransferConnectionResult transferResult;
-        private final IPeerConnectionManager proxy = (IPeerConnectionManager) Proxy.newProxyInstance(
+        private final PeerConnectionManager proxy = (PeerConnectionManager) Proxy.newProxyInstance(
                 getClass().getClassLoader(),
-                new Class<?>[] {IPeerConnectionManager.class},
+                new Class<?>[] {PeerConnectionManager.class},
                 (ignored, method, arguments) -> {
                     return switch (method.getName()) {
                         case "getPendingSolicitations" -> pending;
@@ -416,9 +416,9 @@ class ListenerHandlerTest {
         private Map<Integer, String> pending = Map.of();
         private String addedUsername;
         private Connection addedConnection;
-        private final IDistributedConnectionManager proxy = (IDistributedConnectionManager) Proxy.newProxyInstance(
+        private final DistributedConnectionManager proxy = (DistributedConnectionManager) Proxy.newProxyInstance(
                 getClass().getClassLoader(),
-                new Class<?>[] {IDistributedConnectionManager.class},
+                new Class<?>[] {DistributedConnectionManager.class},
                 (ignored, method, arguments) -> {
                     return switch (method.getName()) {
                         case "getPendingSolicitations" -> pending;
