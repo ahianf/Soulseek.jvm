@@ -1,0 +1,156 @@
+// SPDX-FileCopyrightText: JP Dillingham
+// SPDX-FileCopyrightText: 2026 Ahian Fernandez
+// SPDX-License-Identifier: GPL-3.0-only
+
+package dev.slsk.messaging.messages;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import dev.slsk.UserInfo;
+import dev.slsk.exceptions.MessageException;
+import dev.slsk.exceptions.MessageReadException;
+import dev.slsk.messaging.MessageBuilder;
+import dev.slsk.messaging.MessageCode;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+class UserInfoResponseFactoryTest {
+    @Test
+    @DisplayName("UserInfo with a picture preserves its exact wire format")
+    void responseWithPicturePreservesWireFormat() {
+        byte[] picture = {1, 2, (byte) 0xff};
+        UserInfo outgoing = new UserInfo("d", 2, 3, true, picture);
+        byte[] bytes = outgoing.toByteArray();
+
+        assertArrayEquals(
+                new byte[] {
+                    26,
+                    0,
+                    0,
+                    0,
+                    16,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
+                    0,
+                    0,
+                    'd',
+                    1,
+                    3,
+                    0,
+                    0,
+                    0,
+                    1,
+                    2,
+                    (byte) 0xff,
+                    2,
+                    0,
+                    0,
+                    0,
+                    3,
+                    0,
+                    0,
+                    0,
+                    1
+                },
+                bytes);
+
+        UserInfo parsed = UserInfoResponseFactory.fromByteArray(bytes);
+        assertEquals("d", parsed.getDescription());
+        assertTrue(parsed.isHasPicture());
+        assertArrayEquals(picture, parsed.getPicture());
+        assertEquals(2, parsed.getUploadSlots());
+        assertEquals(3, parsed.getQueueLength());
+        assertTrue(parsed.isHasFreeUploadSlot());
+        assertSame(picture, outgoing.getPicture());
+    }
+
+    @Test
+    @DisplayName("UserInfo without a picture preserves its exact wire format")
+    void responseWithoutPicturePreservesWireFormat() {
+        UserInfo outgoing = new UserInfo("d", -2, -3, false);
+        byte[] bytes = outgoing.toByteArray();
+
+        assertArrayEquals(
+                new byte[] {
+                    19,
+                    0,
+                    0,
+                    0,
+                    16,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
+                    0,
+                    0,
+                    'd',
+                    0,
+                    (byte) 0xfe,
+                    (byte) 0xff,
+                    (byte) 0xff,
+                    (byte) 0xff,
+                    (byte) 0xfd,
+                    (byte) 0xff,
+                    (byte) 0xff,
+                    (byte) 0xff,
+                    0
+                },
+                bytes);
+
+        UserInfo parsed = UserInfoResponseFactory.fromByteArray(bytes);
+        assertEquals("d", parsed.getDescription());
+        assertFalse(parsed.isHasPicture());
+        assertNull(parsed.getPicture());
+        assertEquals(-2, parsed.getUploadSlots());
+        assertEquals(-3, parsed.getQueueLength());
+        assertFalse(parsed.isHasFreeUploadSlot());
+    }
+
+    @Test
+    @DisplayName("Parser treats any positive flag byte as true")
+    void parserTreatsPositiveFlagBytesAsTrue() {
+        byte[] bytes = new MessageBuilder()
+                .writeCode(MessageCode.Peer.INFO_RESPONSE)
+                .writeString("d")
+                .writeByte(2)
+                .writeInteger(0)
+                .writeInteger(1)
+                .writeInteger(2)
+                .writeByte(255)
+                .build();
+
+        UserInfo parsed = UserInfoResponseFactory.fromByteArray(bytes);
+
+        assertTrue(parsed.isHasPicture());
+        assertEquals(0, parsed.getPicture().length);
+        assertTrue(parsed.isHasFreeUploadSlot());
+    }
+
+    @Test
+    @DisplayName("Parser rejects code mismatch and missing data")
+    void parserRejectsInvalidData() {
+        assertThrows(
+                MessageException.class, () -> UserInfoResponseFactory.fromByteArray(new BrowseRequest().toByteArray()));
+        byte[] missing = new MessageBuilder()
+                .writeCode(MessageCode.Peer.INFO_RESPONSE)
+                .writeString("d")
+                .build();
+        assertThrows(MessageReadException.class, () -> UserInfoResponseFactory.fromByteArray(missing));
+    }
+
+    @Test
+    @DisplayName("Factory rejects null response serialization")
+    void factoryRejectsNullSerialization() {
+        assertThrows(NullPointerException.class, () -> UserInfoResponseFactory.toByteArray(null));
+    }
+}

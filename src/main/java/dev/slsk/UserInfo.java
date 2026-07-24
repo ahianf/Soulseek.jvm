@@ -4,6 +4,8 @@
 
 package dev.slsk;
 
+import dev.slsk.messaging.messages.UserInfoResponseFactory;
+
 /**
  * The response to a user-info request.
  */
@@ -100,5 +102,14 @@ public class UserInfo {
      */
     public final int getUploadSlots() {
         return uploadSlots;
+    }
+
+    /**
+     * Serializes this user-info response to its peer protocol message.
+     *
+     * @return the framed response bytes
+     */
+    public byte[] toByteArray() {
+        return UserInfoResponseFactory.toByteArray(this);
     }
 }
