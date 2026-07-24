@@ -61,6 +61,11 @@ class PublicApiDispositionTest {
 
     private static void verifyJavaPublicApiDocumentation() throws IOException, ClassNotFoundException {
         String documentation = Files.readString(Path.of("docs", "public-api.md"));
+        int catalogStart = documentation.indexOf("## Public type catalog");
+        int catalogEnd = documentation.indexOf("## Related documents", catalogStart);
+        assertTrue(catalogStart >= 0);
+        assertTrue(catalogEnd > catalogStart);
+        String catalog = documentation.substring(catalogStart, catalogEnd);
         int publicTypes = 0;
 
         for (String packageName : List.of(
@@ -80,14 +85,25 @@ class PublicApiDispositionTest {
                         continue;
                     }
                     assertTrue(
-                            documentation.contains("`" + simpleName + "`"),
-                            () -> "Missing public Java type " + type.getName() + " from docs/public-api.md");
+                            countOccurrences(catalog, "`" + simpleName + "`") == 1,
+                            () -> "Missing public Java type " + type.getName()
+                                    + " exactly once from the public type catalog");
                     publicTypes++;
                 }
             }
         }
 
         assertEquals(140, publicTypes);
+    }
+
+    private static int countOccurrences(String text, String value) {
+        int count = 0;
+        int offset = 0;
+        while ((offset = text.indexOf(value, offset)) >= 0) {
+            count++;
+            offset += value.length();
+        }
+        return count;
     }
 
     private static void verifyMember(Class<?> type, String typeName, String mapping, String row) {
