@@ -74,7 +74,7 @@ import dev.slsk.network.IMessageConnection;
 import dev.slsk.network.MessageEventArgs;
 import dev.slsk.network.PeerEndpoint;
 import dev.slsk.network.TransferConnectionResult;
-import dev.slsk.network.tcp.IConnection;
+import dev.slsk.network.tcp.Connection;
 import dev.slsk.search.SearchInternal;
 import dev.slsk.transfer.TransferInternal;
 import java.net.InetSocketAddress;
@@ -536,7 +536,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
             result.connection().disconnect("Unknown transfer");
             return;
         }
-        IConnection connection = result.connection();
+        Connection connection = result.connection();
         diagnostic.debug("Solicited inbound transfer connection to "
                 + download.getUsername() + " ("
                 + connection.getIpEndPoint() + ") for token "

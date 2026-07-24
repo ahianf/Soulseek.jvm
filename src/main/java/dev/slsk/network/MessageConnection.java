@@ -9,11 +9,11 @@ import dev.slsk.common.CommonUtils;
 import dev.slsk.common.EventDispatch;
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.messaging.messages.OutgoingMessage;
-import dev.slsk.network.tcp.Connection;
 import dev.slsk.network.tcp.ConnectionDataEventArgs;
 import dev.slsk.network.tcp.ConnectionEventListener;
 import dev.slsk.network.tcp.ConnectionKey;
-import dev.slsk.network.tcp.ITcpClient;
+import dev.slsk.network.tcp.SocketConnection;
+import dev.slsk.network.tcp.TcpClient;
 import dev.slsk.options.ConnectionOptions;
 import java.io.ByteArrayOutputStream;
 import java.net.InetSocketAddress;
@@ -24,7 +24,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /** Provides framed client connections to the Soulseek network. */
-public final class MessageConnection extends Connection implements IMessageConnection {
+public final class MessageConnection extends SocketConnection implements IMessageConnection {
 
     private final CopyOnWriteArrayList<MessageConnectionEventListener<MessageDataEventArgs>> messageDataReadListeners =
             new CopyOnWriteArrayList<>();
@@ -46,7 +46,7 @@ public final class MessageConnection extends Connection implements IMessageConne
 
     /** Creates a server connection. */
     public MessageConnection(
-            InetSocketAddress ipEndPoint, ConnectionOptions options, int codeLength, ITcpClient tcpClient) {
+            InetSocketAddress ipEndPoint, ConnectionOptions options, int codeLength, TcpClient tcpClient) {
         super(ipEndPoint, options, tcpClient);
         this.codeLength = codeLength;
         username = "";
@@ -64,7 +64,7 @@ public final class MessageConnection extends Connection implements IMessageConne
             InetSocketAddress ipEndPoint,
             ConnectionOptions options,
             int codeLength,
-            ITcpClient tcpClient) {
+            TcpClient tcpClient) {
         super(ipEndPoint, options, tcpClient);
         this.codeLength = codeLength;
         if (isNullOrWhiteSpace(username)) {

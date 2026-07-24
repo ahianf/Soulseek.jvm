@@ -5,7 +5,7 @@
 package dev.slsk.network;
 
 import dev.slsk.common.IWaiter;
-import dev.slsk.network.tcp.IListener;
+import dev.slsk.network.tcp.Listener;
 import dev.slsk.options.SoulseekClientOptions;
 import dev.slsk.search.ISearchResponder;
 
@@ -13,7 +13,7 @@ import dev.slsk.search.ISearchResponder;
 public interface ListenerHandlerClient {
     SoulseekClientOptions getOptions();
 
-    IListener getListener();
+    Listener getListener();
 
     IPeerConnectionManager getPeerConnectionManager();
 

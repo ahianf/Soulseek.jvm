@@ -15,9 +15,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
 /**
- * Pass-through implementation of {@link INetworkStream} over a socket.
+ * Pass-through implementation of {@link NetworkStream} over a socket.
  */
-final class NetworkStreamAdapter implements INetworkStream {
+final class NetworkStreamAdapter implements NetworkStream {
     private final Socket socket;
     private final InputStream inputStream;
     private final OutputStream outputStream;

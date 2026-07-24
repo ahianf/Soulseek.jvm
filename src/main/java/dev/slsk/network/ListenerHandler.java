@@ -15,8 +15,8 @@ import dev.slsk.diagnostics.IDiagnosticFactory;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.messaging.messages.PeerInit;
 import dev.slsk.messaging.messages.PierceFirewall;
-import dev.slsk.network.tcp.IConnection;
-import dev.slsk.network.tcp.IListener;
+import dev.slsk.network.tcp.Connection;
+import dev.slsk.network.tcp.Listener;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
@@ -56,11 +56,11 @@ public final class ListenerHandler implements IListenerHandler {
     }
 
     @Override
-    public void handleConnection(IListener sender, IConnection connection) {
+    public void handleConnection(Listener sender, Connection connection) {
         handleConnectionAsync(connection);
     }
 
-    CompletableFuture<Void> handleConnectionAsync(IConnection connection) {
+    CompletableFuture<Void> handleConnectionAsync(Connection connection) {
         diagnostic.debug("Accepted incoming connection from "
                 + connection.getIpEndPoint().getAddress().getHostAddress()
                 + " on " + client.getListener().getIpAddress()
@@ -104,7 +104,7 @@ public final class ListenerHandler implements IListenerHandler {
         return diagnostic;
     }
 
-    private CompletableFuture<Void> routeInitialization(IConnection connection, byte[] message) {
+    private CompletableFuture<Void> routeInitialization(Connection connection, byte[] message) {
         Optional<PeerInit> peerInit = PeerInit.tryFromByteArray(message);
         if (peerInit.isPresent()) {
             return handlePeerInit(connection, peerInit.get());
@@ -120,7 +120,7 @@ public final class ListenerHandler implements IListenerHandler {
                 + " bytes, id: " + connection.getId() + ")"));
     }
 
-    private CompletableFuture<Void> handlePeerInit(IConnection connection, PeerInit peerInit) {
+    private CompletableFuture<Void> handlePeerInit(Connection connection, PeerInit peerInit) {
         diagnostic.debug("PeerInit for connection type " + peerInit.getConnectionType()
                 + " received from " + peerInit.getUsername() + " ("
                 + connection.getIpEndPoint().getAddress().getHostAddress()
@@ -157,7 +157,7 @@ public final class ListenerHandler implements IListenerHandler {
         return CompletableFuture.completedFuture(null);
     }
 
-    private CompletableFuture<Void> handlePierceFirewall(IConnection connection, PierceFirewall pierce) {
+    private CompletableFuture<Void> handlePierceFirewall(Connection connection, PierceFirewall pierce) {
         int token = pierce.getToken();
         String username =
                 client.getPeerConnectionManager().getPendingSolicitations().get(token);

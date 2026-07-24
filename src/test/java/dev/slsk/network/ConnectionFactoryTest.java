@@ -11,9 +11,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationToken;
 import dev.slsk.network.tcp.Connection;
-import dev.slsk.network.tcp.IConnection;
-import dev.slsk.network.tcp.INetworkStream;
-import dev.slsk.network.tcp.ITcpClient;
+import dev.slsk.network.tcp.NetworkStream;
+import dev.slsk.network.tcp.SocketConnection;
+import dev.slsk.network.tcp.TcpClient;
 import dev.slsk.options.ConnectionOptions;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -38,13 +38,13 @@ class ConnectionFactoryTest {
     @DisplayName("Factory creates transfer connection with supplied options")
     void createsTransferConnection() {
         ConnectionOptions options = new ConnectionOptions(1, 2, 3, 4, -1);
-        try (IConnection connection = new ConnectionFactory().getTransferConnection(ENDPOINT, options, null)) {
-            assertTrue(connection instanceof Connection);
+        try (Connection connection = new ConnectionFactory().getTransferConnection(ENDPOINT, options, null)) {
+            assertTrue(connection instanceof SocketConnection);
             assertSame(ENDPOINT, connection.getIpEndPoint());
             assertSame(options, connection.getOptions());
         }
 
-        try (IConnection defaults = new ConnectionFactory().getTransferConnection(ENDPOINT)) {
+        try (Connection defaults = new ConnectionFactory().getTransferConnection(ENDPOINT)) {
             assertNotNull(defaults.getOptions());
         }
     }
@@ -124,7 +124,7 @@ class ConnectionFactoryTest {
         }
     }
 
-    private static final class FakeTcpClient implements ITcpClient {
+    private static final class FakeTcpClient implements TcpClient {
         private final Socket socket = new Socket();
         private final FakeStream stream;
         private boolean connected;
@@ -170,7 +170,7 @@ class ConnectionFactoryTest {
         }
 
         @Override
-        public INetworkStream getStream() {
+        public NetworkStream getStream() {
             return stream;
         }
 
@@ -182,7 +182,7 @@ class ConnectionFactoryTest {
         }
     }
 
-    private static final class FakeStream implements INetworkStream {
+    private static final class FakeStream implements NetworkStream {
         private final byte[] input;
         private final List<Byte> written = new ArrayList<>();
         private int position;

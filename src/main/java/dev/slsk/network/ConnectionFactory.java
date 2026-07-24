@@ -7,8 +7,8 @@ package dev.slsk.network;
 import dev.slsk.network.tcp.Connection;
 import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
 import dev.slsk.network.tcp.ConnectionEventListener;
-import dev.slsk.network.tcp.IConnection;
-import dev.slsk.network.tcp.ITcpClient;
+import dev.slsk.network.tcp.SocketConnection;
+import dev.slsk.network.tcp.TcpClient;
 import dev.slsk.options.ConnectionOptions;
 import java.net.InetSocketAddress;
 
@@ -16,13 +16,13 @@ import java.net.InetSocketAddress;
 public final class ConnectionFactory implements IConnectionFactory {
     @Override
     public IMessageConnection getDistributedConnection(
-            String username, InetSocketAddress ipEndPoint, ConnectionOptions options, ITcpClient tcpClient) {
+            String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
         return new MessageConnection(username, ipEndPoint, defaultOptions(options), 1, tcpClient);
     }
 
     @Override
     public IMessageConnection getMessageConnection(
-            String username, InetSocketAddress ipEndPoint, ConnectionOptions options, ITcpClient tcpClient) {
+            String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
         return new MessageConnection(username, ipEndPoint, defaultOptions(options), 4, tcpClient);
     }
 
@@ -34,7 +34,7 @@ public final class ConnectionFactory implements IConnectionFactory {
             MessageConnectionEventListener<MessageEventArgs> messageReadEventHandler,
             MessageConnectionEventListener<MessageEventArgs> messageWrittenEventHandler,
             ConnectionOptions options,
-            ITcpClient tcpClient) {
+            TcpClient tcpClient) {
         MessageConnection connection =
                 new MessageConnection(ipEndPoint, defaultOptions(options).withoutInactivityTimeout(), 4, tcpClient);
         if (connectedEventHandler != null) {
@@ -53,9 +53,9 @@ public final class ConnectionFactory implements IConnectionFactory {
     }
 
     @Override
-    public IConnection getTransferConnection(
-            InetSocketAddress ipEndPoint, ConnectionOptions options, ITcpClient tcpClient) {
-        return new Connection(ipEndPoint, defaultOptions(options), tcpClient);
+    public Connection getTransferConnection(
+            InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
+        return new SocketConnection(ipEndPoint, defaultOptions(options), tcpClient);
     }
 
     private static ConnectionOptions defaultOptions(ConnectionOptions options) {

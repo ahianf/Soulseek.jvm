@@ -12,7 +12,7 @@ import java.net.Socket;
 import java.util.concurrent.CompletableFuture;
 
 /** Provides client connections for TCP network services. */
-public interface ITcpClient extends AutoCloseable {
+public interface TcpClient extends AutoCloseable {
     /** Address and port reported by a SOCKS proxy after connection. */
     record ProxyEndpoint(String proxyAddress, int proxyPort) {}
 
@@ -39,7 +39,7 @@ public interface ITcpClient extends AutoCloseable {
             CancellationToken cancellationToken);
 
     /** Returns the network stream used to exchange data. */
-    INetworkStream getStream() throws IOException;
+    NetworkStream getStream() throws IOException;
 
     /** Closes the socket. */
     @Override

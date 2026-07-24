@@ -21,7 +21,7 @@ import dev.slsk.messaging.messages.PrivateRoomToggle;
 import dev.slsk.messaging.messages.SetListenPortCommand;
 import dev.slsk.network.IDistributedConnectionManager;
 import dev.slsk.network.IMessageConnection;
-import dev.slsk.network.tcp.IListener;
+import dev.slsk.network.tcp.Listener;
 import dev.slsk.options.ConnectionOptions;
 import dev.slsk.options.SoulseekClientOptions;
 import dev.slsk.options.SoulseekClientOptionsPatch;
@@ -476,7 +476,7 @@ class SoulseekClientReconfigureTest {
         private List<ListenerProbe> sequence = new ArrayList<>();
         private ListenerProbe next;
 
-        private IListener create(InetAddress ipAddress, int port, ConnectionOptions options) {
+        private Listener create(InetAddress ipAddress, int port, ConnectionOptions options) {
             ListenerProbe result;
             if (!sequence.isEmpty()) {
                 result = sequence.remove(0);
@@ -502,8 +502,8 @@ class SoulseekClientReconfigureTest {
         private int startCount;
         private int stopCount;
         private RuntimeException startFailure;
-        private final IListener proxy = (IListener) Proxy.newProxyInstance(
-                IListener.class.getClassLoader(), new Class<?>[] {IListener.class}, this::invoke);
+        private final Listener proxy = (Listener)
+                Proxy.newProxyInstance(Listener.class.getClassLoader(), new Class<?>[] {Listener.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             return switch (method.getName()) {

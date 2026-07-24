@@ -10,7 +10,7 @@ import dev.slsk.diagnostics.IDiagnosticGenerator;
 import dev.slsk.eventargs.DistributedChildEventArgs;
 import dev.slsk.eventargs.DistributedParentEventArgs;
 import dev.slsk.messaging.messages.ConnectToPeerResponse;
-import dev.slsk.network.tcp.IConnection;
+import dev.slsk.network.tcp.Connection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -65,7 +65,7 @@ public interface IDistributedConnectionManager extends AutoCloseable, IDiagnosti
 
     Map<Integer, String> getPendingSolicitations();
 
-    CompletableFuture<Void> addOrUpdateChildConnectionAsync(String username, IConnection incomingConnection);
+    CompletableFuture<Void> addOrUpdateChildConnectionAsync(String username, Connection incomingConnection);
 
     CompletableFuture<Void> addParentConnectionAsync(Iterable<PeerEndpoint> parentCandidates);
 

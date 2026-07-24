@@ -19,10 +19,10 @@ import dev.slsk.messaging.messages.ConnectToPeerRequest;
 import dev.slsk.messaging.messages.ConnectToPeerResponse;
 import dev.slsk.messaging.messages.PeerInit;
 import dev.slsk.messaging.messages.PierceFirewall;
+import dev.slsk.network.tcp.Connection;
 import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
 import dev.slsk.network.tcp.ConnectionEventListener;
 import dev.slsk.network.tcp.ConnectionTypes;
-import dev.slsk.network.tcp.IConnection;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -99,7 +99,7 @@ public final class PeerConnectionManager implements IPeerConnectionManager {
     }
 
     @Override
-    public CompletableFuture<Void> addOrUpdateMessageConnectionAsync(String username, IConnection incomingConnection) {
+    public CompletableFuture<Void> addOrUpdateMessageConnectionAsync(String username, Connection incomingConnection) {
         Objects.requireNonNull(incomingConnection, "incomingConnection");
         AtomicReference<CompletableFuture<IMessageConnection>> cached = new AtomicReference<>();
         CompletableFuture<IMessageConnection> replacement = messageConnections.compute(username, (key, old) -> {
@@ -127,7 +127,7 @@ public final class PeerConnectionManager implements IPeerConnectionManager {
     }
 
     @Override
-    public CompletableFuture<IConnection> awaitTransferConnectionAsync(
+    public CompletableFuture<Connection> awaitTransferConnectionAsync(
             String username, String filename, int remoteToken, CancellationToken cancellationToken) {
         LinkedCancellation directCancellation = new LinkedCancellation(cancellationToken);
         LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationToken);
@@ -135,16 +135,16 @@ public final class PeerConnectionManager implements IPeerConnectionManager {
                 + username + " with remote token " + remoteToken + " for "
                 + filename);
 
-        CompletableFuture<IConnection> indirect = client.getWaiter()
+        CompletableFuture<Connection> indirect = client.getWaiter()
                 .waitAsync(
                         new WaitKey(Constants.WaitKey.INDIRECT_TRANSFER, username, filename, remoteToken),
-                        IConnection.class,
+                        Connection.class,
                         client.getOptions().getTransferConnectionOptions().getConnectTimeout(),
                         indirectCancellation.token());
-        CompletableFuture<IConnection> direct = client.getWaiter()
+        CompletableFuture<Connection> direct = client.getWaiter()
                 .waitAsync(
                         new WaitKey(Constants.WaitKey.DIRECT_TRANSFER, username, remoteToken),
-                        IConnection.class,
+                        Connection.class,
                         client.getOptions().getTransferConnectionOptions().getConnectTimeout(),
                         directCancellation.token());
 
@@ -281,12 +281,12 @@ public final class PeerConnectionManager implements IPeerConnectionManager {
 
     @Override
     public CompletableFuture<TransferConnectionResult> getTransferConnectionAsync(
-            String username, int token, IConnection incomingConnection) {
+            String username, int token, Connection incomingConnection) {
         diagnostic.debug("Inbound transfer connection to " + username + " ("
                 + incomingConnection.getIpEndPoint() + ") for token " + token
                 + " accepted. (type: " + incomingConnection.getType()
                 + ", id: " + incomingConnection.getId());
-        IConnection connection = connectionFactory.getTransferConnection(
+        Connection connection = connectionFactory.getTransferConnection(
                 incomingConnection.getIpEndPoint(),
                 client.getOptions().getTransferConnectionOptions(),
                 incomingConnection.handoffTcpClient());
@@ -328,7 +328,7 @@ public final class PeerConnectionManager implements IPeerConnectionManager {
         diagnostic.debug("Attempting inbound indirect transfer connection to "
                 + response.getUsername() + " (" + response.getIpEndPoint()
                 + ") for token " + response.getToken());
-        IConnection connection = connectionFactory.getTransferConnection(
+        Connection connection = connectionFactory.getTransferConnection(
                 response.getIpEndPoint(), client.getOptions().getTransferConnectionOptions());
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.INDIRECT));
         connection.addDisconnectedListener(
@@ -365,15 +365,15 @@ public final class PeerConnectionManager implements IPeerConnectionManager {
     }
 
     @Override
-    public CompletableFuture<IConnection> getTransferConnectionAsync(
+    public CompletableFuture<Connection> getTransferConnectionAsync(
             String username, InetSocketAddress ipEndPoint, int token, CancellationToken cancellationToken) {
         LinkedCancellation directCancellation = new LinkedCancellation(cancellationToken);
         LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationToken);
         diagnostic.debug("Attempting simultaneous direct and indirect transfer " + "connections to " + username + " ("
                 + ipEndPoint + ")");
-        CompletableFuture<IConnection> direct =
+        CompletableFuture<Connection> direct =
                 getTransferConnectionOutboundDirectAsync(ipEndPoint, token, directCancellation.token());
-        CompletableFuture<IConnection> indirect =
+        CompletableFuture<Connection> indirect =
                 getTransferConnectionOutboundIndirectAsync(username, token, indirectCancellation.token());
 
         return firstSuccessful(direct, indirect)
@@ -462,7 +462,7 @@ public final class PeerConnectionManager implements IPeerConnectionManager {
     }
 
     private CompletableFuture<IMessageConnection> establishIncomingMessageConnection(
-            String username, IConnection incomingConnection, CompletableFuture<IMessageConnection> cached) {
+            String username, Connection incomingConnection, CompletableFuture<IMessageConnection> cached) {
         diagnostic.debug("Inbound message connection to " + username + " ("
                 + incomingConnection.getIpEndPoint()
                 + ") accepted. (type: " + incomingConnection.getType()
@@ -654,14 +654,14 @@ public final class PeerConnectionManager implements IPeerConnectionManager {
             String username, int solicitationToken, CancellationToken cancellationToken) {
         diagnostic.debug("Soliciting indirect message connection to " + username + " with token " + solicitationToken);
         pendingSolicitations.putIfAbsent(solicitationToken, username);
-        CompletableFuture<IConnection> incoming = client.getServerConnection()
+        CompletableFuture<Connection> incoming = client.getServerConnection()
                 .writeAsync(
                         new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.PEER),
                         cancellationToken)
                 .thenCompose(ignored -> client.getWaiter()
                         .waitAsync(
                                 new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),
-                                IConnection.class,
+                                Connection.class,
                                 client.getOptions().getPeerConnectionOptions().getConnectTimeout(),
                                 cancellationToken));
 
@@ -700,10 +700,10 @@ public final class PeerConnectionManager implements IPeerConnectionManager {
                 });
     }
 
-    private CompletableFuture<IConnection> getTransferConnectionOutboundDirectAsync(
+    private CompletableFuture<Connection> getTransferConnectionOutboundDirectAsync(
             InetSocketAddress ipEndPoint, int token, CancellationToken cancellationToken) {
         diagnostic.debug("Attempting direct transfer connection for token " + token + " to " + ipEndPoint);
-        IConnection connection = connectionFactory.getTransferConnection(
+        Connection connection = connectionFactory.getTransferConnection(
                 ipEndPoint, client.getOptions().getTransferConnectionOptions());
         connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT));
         connection.addDisconnectedListener(
@@ -728,7 +728,7 @@ public final class PeerConnectionManager implements IPeerConnectionManager {
         });
     }
 
-    private CompletableFuture<IConnection> getTransferConnectionOutboundIndirectAsync(
+    private CompletableFuture<Connection> getTransferConnectionOutboundIndirectAsync(
             String username, int token, CancellationToken cancellationToken) {
         diagnostic.debug("Soliciting indirect transfer connection to " + username + " with token " + token);
         int solicitationToken = client.getNextToken();
@@ -740,14 +740,14 @@ public final class PeerConnectionManager implements IPeerConnectionManager {
                 .thenCompose(ignored -> client.getWaiter()
                         .waitAsync(
                                 new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),
-                                IConnection.class,
+                                Connection.class,
                                 client.getOptions()
                                         .getTransferConnectionOptions()
                                         .getConnectTimeout(),
                                 cancellationToken))
                 .thenApply(accepted -> {
                     try {
-                        IConnection connection = connectionFactory.getTransferConnection(
+                        Connection connection = connectionFactory.getTransferConnection(
                                 accepted.getIpEndPoint(),
                                 client.getOptions().getTransferConnectionOptions(),
                                 accepted.handoffTcpClient());
@@ -792,7 +792,7 @@ public final class PeerConnectionManager implements IPeerConnectionManager {
         connection.addMessageWrittenListener(handler::handleMessageWritten);
     }
 
-    private void messageConnectionDisconnected(IConnection sender, ConnectionDisconnectedEventArgs eventArgs) {
+    private void messageConnectionDisconnected(Connection sender, ConnectionDisconnectedEventArgs eventArgs) {
         IMessageConnection connection = (IMessageConnection) sender;
         diagnostic.debug("Message connection to " + connection.getUsername() + " ("
                 + connection.getIpEndPoint() + ") disconnected. (type: "
@@ -821,7 +821,7 @@ public final class PeerConnectionManager implements IPeerConnectionManager {
     }
 
     private void messageConnectionProvisionalDisconnected(
-            IConnection sender, ConnectionDisconnectedEventArgs eventArgs) {
+            Connection sender, ConnectionDisconnectedEventArgs eventArgs) {
         sender.close();
     }
 

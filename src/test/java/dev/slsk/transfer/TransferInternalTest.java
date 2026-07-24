@@ -14,7 +14,7 @@ import dev.slsk.TransferDirection;
 import dev.slsk.TransferStates;
 import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
-import dev.slsk.network.tcp.Connection;
+import dev.slsk.network.tcp.SocketConnection;
 import dev.slsk.options.ConnectionOptions;
 import dev.slsk.options.TransferOptions;
 import java.net.InetSocketAddress;
@@ -58,7 +58,7 @@ class TransferInternalTest {
     @Test
     void endpointDelegatesToConnection() {
         InetSocketAddress endpoint = new InetSocketAddress("127.0.0.1", 1234);
-        Connection connection = new Connection(endpoint, new ConnectionOptions());
+        SocketConnection connection = new SocketConnection(endpoint, new ConnectionOptions());
         TransferInternal transfer = transfer(fixed(EPOCH), 1000);
 
         transfer.setConnection(connection);

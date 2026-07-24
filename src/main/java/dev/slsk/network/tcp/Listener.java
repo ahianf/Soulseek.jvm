@@ -4,93 +4,32 @@
 
 package dev.slsk.network.tcp;
 
-import dev.slsk.common.CommonUtils;
 import dev.slsk.options.ConnectionOptions;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 /** Listens for client connections for TCP network services. */
-public final class Listener implements IListener {
-    private final CopyOnWriteArrayList<ListenerAcceptedEventListener> acceptedListeners = new CopyOnWriteArrayList<>();
-    private final InetAddress ipAddress;
-    private final int port;
-    private final ConnectionOptions connectionOptions;
-    private final ITcpListener tcpListener;
-    private volatile boolean listening;
+public interface Listener {
+    /** Adds an accepted-connection listener. */
+    void addAcceptedListener(ListenerAcceptedEventListener listener);
 
-    /** Creates a listener with a socket adapter. */
-    public Listener(InetAddress ipAddress, int port, ConnectionOptions connectionOptions) {
-        this(ipAddress, port, connectionOptions, null);
-    }
+    /** Removes an accepted-connection listener. */
+    void removeAcceptedListener(ListenerAcceptedEventListener listener);
 
-    /** Creates a listener over an optional listener adapter. */
-    public Listener(InetAddress ipAddress, int port, ConnectionOptions connectionOptions, ITcpListener tcpListener) {
-        this.ipAddress = ipAddress;
-        this.port = port;
-        this.connectionOptions = connectionOptions == null ? new ConnectionOptions() : connectionOptions;
-        this.tcpListener =
-                tcpListener == null ? new TcpListenerAdapter(new InetSocketAddress(ipAddress, port)) : tcpListener;
-    }
+    /** Returns options used for accepted connections. */
+    ConnectionOptions getConnectionOptions();
 
-    @Override
-    public void addAcceptedListener(ListenerAcceptedEventListener listener) {
-        acceptedListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
+    /** Returns the bound IP address. */
+    InetAddress getIpAddress();
 
-    @Override
-    public void removeAcceptedListener(ListenerAcceptedEventListener listener) {
-        acceptedListeners.remove(listener);
-    }
+    /** Returns whether the listener is active. */
+    boolean isListening();
 
-    @Override
-    public ConnectionOptions getConnectionOptions() {
-        return connectionOptions;
-    }
+    /** Returns the configured port. */
+    int getPort();
 
-    @Override
-    public InetAddress getIpAddress() {
-        return ipAddress;
-    }
+    /** Starts listening. */
+    void start();
 
-    @Override
-    public boolean isListening() {
-        return listening;
-    }
-
-    @Override
-    public int getPort() {
-        return port;
-    }
-
-    @Override
-    public void start() {
-        tcpListener.start();
-        listening = true;
-        CommonUtils.forget(CompletableFuture.runAsync(this::listenContinuously));
-    }
-
-    @Override
-    public void stop() {
-        tcpListener.stop();
-        listening = false;
-    }
-
-    private void listenContinuously() {
-        while (listening) {
-            Socket client = tcpListener.acceptTcpClientAsync().join();
-            CommonUtils.forget(CompletableFuture.runAsync(() -> raiseAccepted(client)));
-        }
-    }
-
-    private void raiseAccepted(Socket client) {
-        InetSocketAddress endpoint = (InetSocketAddress) client.getRemoteSocketAddress();
-        IConnection connection = new Connection(endpoint, connectionOptions, new TcpClientAdapter(client));
-        for (ListenerAcceptedEventListener listener : acceptedListeners) {
-            listener.handle(this, connection);
-        }
-    }
+    /** Stops listening. */
+    void stop();
 }

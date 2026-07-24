@@ -36,7 +36,7 @@ class TcpAdapterTest {
                 TcpClientAdapter client = new TcpClientAdapter()) {
             CompletableFuture<Void> server = CompletableFuture.runAsync(() -> serveAnonymousProxy(proxy));
 
-            ITcpClient.ProxyEndpoint endpoint = client.connectThroughProxyAsync(
+            TcpClient.ProxyEndpoint endpoint = client.connectThroughProxyAsync(
                             LOOPBACK,
                             proxy.getLocalPort(),
                             InetAddress.getByName("10.20.30.40"),
@@ -59,7 +59,7 @@ class TcpAdapterTest {
                 TcpClientAdapter client = new TcpClientAdapter()) {
             CompletableFuture<Void> server = CompletableFuture.runAsync(() -> serveCredentialedProxy(proxy));
 
-            ITcpClient.ProxyEndpoint endpoint = client.connectThroughProxyAsync(
+            TcpClient.ProxyEndpoint endpoint = client.connectThroughProxyAsync(
                             LOOPBACK,
                             proxy.getLocalPort(),
                             InetAddress.getByName("192.0.2.1"),
@@ -147,7 +147,7 @@ class TcpAdapterTest {
             assertTrue(client.isConnected());
             assertEquals(server.getLocalPort(), client.getRemoteEndPoint().getPort());
 
-            try (INetworkStream stream = client.getStream()) {
+            try (NetworkStream stream = client.getStream()) {
                 assertEquals(-1, stream.getReadTimeout());
                 assertEquals(-1, stream.getWriteTimeout());
                 stream.setReadTimeout(1_000);

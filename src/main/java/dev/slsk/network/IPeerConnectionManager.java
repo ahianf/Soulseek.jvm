@@ -7,7 +7,7 @@ package dev.slsk.network;
 import dev.slsk.CancellationToken;
 import dev.slsk.diagnostics.IDiagnosticGenerator;
 import dev.slsk.messaging.messages.ConnectToPeerResponse;
-import dev.slsk.network.tcp.IConnection;
+import dev.slsk.network.tcp.Connection;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
@@ -21,9 +21,9 @@ public interface IPeerConnectionManager extends AutoCloseable, IDiagnosticGenera
     /** Returns a snapshot of pending connection solicitations. */
     Map<Integer, String> getPendingSolicitations();
 
-    CompletableFuture<Void> addOrUpdateMessageConnectionAsync(String username, IConnection incomingConnection);
+    CompletableFuture<Void> addOrUpdateMessageConnectionAsync(String username, Connection incomingConnection);
 
-    CompletableFuture<IConnection> awaitTransferConnectionAsync(
+    CompletableFuture<Connection> awaitTransferConnectionAsync(
             String username, String filename, int remoteToken, CancellationToken cancellationToken);
 
     CompletableFuture<IMessageConnection> getCachedMessageConnectionAsync(String username);
@@ -37,11 +37,11 @@ public interface IPeerConnectionManager extends AutoCloseable, IDiagnosticGenera
             String username, InetSocketAddress ipEndPoint, int solicitationToken, CancellationToken cancellationToken);
 
     CompletableFuture<TransferConnectionResult> getTransferConnectionAsync(
-            String username, int token, IConnection incomingConnection);
+            String username, int token, Connection incomingConnection);
 
     CompletableFuture<TransferConnectionResult> getTransferConnectionAsync(ConnectToPeerResponse connectToPeerResponse);
 
-    CompletableFuture<IConnection> getTransferConnectionAsync(
+    CompletableFuture<Connection> getTransferConnectionAsync(
             String username, InetSocketAddress ipEndPoint, int token, CancellationToken cancellationToken);
 
     void removeAndDisposeAll();

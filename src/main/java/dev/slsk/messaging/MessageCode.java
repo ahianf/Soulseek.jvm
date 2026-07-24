@@ -44,7 +44,7 @@ public final class MessageCode {
         }
     }
 
-    /** Connection initialization codes. */
+    /** SocketConnection initialization codes. */
     public enum Initialization implements ProtocolCode {
         PIERCE_FIREWALL(0),
         PEER_INIT(1);

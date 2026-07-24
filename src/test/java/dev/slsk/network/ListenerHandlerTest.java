@@ -24,8 +24,8 @@ import dev.slsk.diagnostics.DiagnosticLevel;
 import dev.slsk.diagnostics.IDiagnosticFactory;
 import dev.slsk.messaging.messages.PeerInit;
 import dev.slsk.messaging.messages.PierceFirewall;
-import dev.slsk.network.tcp.IConnection;
-import dev.slsk.network.tcp.IListener;
+import dev.slsk.network.tcp.Connection;
+import dev.slsk.network.tcp.Listener;
 import dev.slsk.network.tcp.ListenerAcceptedEventListener;
 import dev.slsk.options.ConnectionOptions;
 import dev.slsk.options.SoulseekClientOptions;
@@ -91,10 +91,10 @@ class ListenerHandlerTest {
     @Test
     void expectedTransferCompletesDirectWait() throws Exception {
         try (Fixture fixture = fixture(null)) {
-            IConnection transferConnection = ConnectionProbe.message(new byte[] {1}).proxy;
+            Connection transferConnection = ConnectionProbe.message(new byte[] {1}).proxy;
             fixture.peer.transferResult = new TransferConnectionResult(transferConnection, 24);
             WaitKey key = new WaitKey(Constants.WaitKey.DIRECT_TRANSFER, "alice", 24);
-            CompletableFuture<IConnection> wait = fixture.waiter.waitAsync(key, IConnection.class, -1, null);
+            CompletableFuture<Connection> wait = fixture.waiter.waitAsync(key, Connection.class, -1, null);
             ConnectionProbe incoming =
                     ConnectionProbe.message(new PeerInit("alice", Constants.ConnectionType.TRANSFER, 7).toByteArray());
 
@@ -125,7 +125,7 @@ class ListenerHandlerTest {
         try (Fixture fixture = fixture(null)) {
             fixture.peer.pending = Map.of(8, "alice");
             WaitKey peerKey = new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, "alice", 8);
-            CompletableFuture<IConnection> peerWait = fixture.waiter.waitAsync(peerKey, IConnection.class, -1, null);
+            CompletableFuture<Connection> peerWait = fixture.waiter.waitAsync(peerKey, Connection.class, -1, null);
             ConnectionProbe peer = ConnectionProbe.message(new PierceFirewall(8).toByteArray());
             fixture.handler.handleConnectionAsync(peer.proxy).join();
             assertSame(peer.proxy, peerWait.join());
@@ -133,8 +133,8 @@ class ListenerHandlerTest {
             fixture.peer.pending = Map.of();
             fixture.distributed.pending = Map.of(9, "bob");
             WaitKey distributedKey = new WaitKey(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION, "bob", 9);
-            CompletableFuture<IConnection> distributedWait =
-                    fixture.waiter.waitAsync(distributedKey, IConnection.class, -1, null);
+            CompletableFuture<Connection> distributedWait =
+                    fixture.waiter.waitAsync(distributedKey, Connection.class, -1, null);
             ConnectionProbe distributed = ConnectionProbe.message(new PierceFirewall(9).toByteArray());
             fixture.handler.handleConnectionAsync(distributed.proxy).join();
             assertSame(distributed.proxy, distributedWait.join());
@@ -252,7 +252,7 @@ class ListenerHandlerTest {
 
     private record TestClient(
             SoulseekClientOptions options,
-            IListener listener,
+            Listener listener,
             IPeerConnectionManager peerConnectionManager,
             IDistributedConnectionManager distributedConnectionManager,
             Waiter waiter,
@@ -264,7 +264,7 @@ class ListenerHandlerTest {
         }
 
         @Override
-        public IListener getListener() {
+        public Listener getListener() {
             return listener;
         }
 
@@ -289,7 +289,7 @@ class ListenerHandlerTest {
         }
     }
 
-    private static final class TestListener implements IListener {
+    private static final class TestListener implements Listener {
         @Override
         public void addAcceptedListener(ListenerAcceptedEventListener listener) {}
 
@@ -324,7 +324,7 @@ class ListenerHandlerTest {
     }
 
     private static final class ConnectionProbe {
-        private final IConnection proxy;
+        private final Connection proxy;
         private final ArrayDeque<CompletableFuture<byte[]>> reads = new ArrayDeque<>();
         private String disconnectMessage;
         private Exception disconnectedException;
@@ -333,8 +333,8 @@ class ListenerHandlerTest {
         private ConnectionProbe() {
             InetSocketAddress endpoint = new InetSocketAddress("127.0.0.1", 1234);
             UUID id = UUID.randomUUID();
-            proxy = (IConnection) Proxy.newProxyInstance(
-                    getClass().getClassLoader(), new Class<?>[] {IConnection.class}, (ignored, method, arguments) -> {
+            proxy = (Connection) Proxy.newProxyInstance(
+                    getClass().getClassLoader(), new Class<?>[] {Connection.class}, (ignored, method, arguments) -> {
                         return switch (method.getName()) {
                             case "getIpEndPoint" -> endpoint;
                             case "getId" -> id;
@@ -386,9 +386,9 @@ class ListenerHandlerTest {
     private static final class PeerProbe {
         private Map<Integer, String> pending = Map.of();
         private String addedUsername;
-        private IConnection addedConnection;
+        private Connection addedConnection;
         private int transferToken;
-        private IConnection transferIncoming;
+        private Connection transferIncoming;
         private TransferConnectionResult transferResult;
         private final IPeerConnectionManager proxy = (IPeerConnectionManager) Proxy.newProxyInstance(
                 getClass().getClassLoader(),
@@ -398,12 +398,12 @@ class ListenerHandlerTest {
                         case "getPendingSolicitations" -> pending;
                         case "addOrUpdateMessageConnectionAsync" -> {
                             addedUsername = (String) arguments[0];
-                            addedConnection = (IConnection) arguments[1];
+                            addedConnection = (Connection) arguments[1];
                             yield CompletableFuture.completedFuture(null);
                         }
                         case "getTransferConnectionAsync" -> {
                             transferToken = (Integer) arguments[1];
-                            transferIncoming = (IConnection) arguments[2];
+                            transferIncoming = (Connection) arguments[2];
                             yield CompletableFuture.completedFuture(transferResult);
                         }
                         case "toString" -> "peerManager";
@@ -415,7 +415,7 @@ class ListenerHandlerTest {
     private static final class DistributedProbe {
         private Map<Integer, String> pending = Map.of();
         private String addedUsername;
-        private IConnection addedConnection;
+        private Connection addedConnection;
         private final IDistributedConnectionManager proxy = (IDistributedConnectionManager) Proxy.newProxyInstance(
                 getClass().getClassLoader(),
                 new Class<?>[] {IDistributedConnectionManager.class},
@@ -424,7 +424,7 @@ class ListenerHandlerTest {
                         case "getPendingSolicitations" -> pending;
                         case "addOrUpdateChildConnectionAsync" -> {
                             addedUsername = (String) arguments[0];
-                            addedConnection = (IConnection) arguments[1];
+                            addedConnection = (Connection) arguments[1];
                             yield CompletableFuture.completedFuture(null);
                         }
                         case "toString" -> "distributedManager";

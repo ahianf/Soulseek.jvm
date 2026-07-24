@@ -33,11 +33,11 @@ import dev.slsk.messaging.messages.EmbeddedMessage;
 import dev.slsk.messaging.messages.HaveNoParentsCommand;
 import dev.slsk.messaging.messages.PeerInit;
 import dev.slsk.messaging.messages.PierceFirewall;
+import dev.slsk.network.tcp.Connection;
 import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
 import dev.slsk.network.tcp.ConnectionEventListener;
 import dev.slsk.network.tcp.ConnectionState;
 import dev.slsk.network.tcp.ConnectionTypes;
-import dev.slsk.network.tcp.IConnection;
 import java.io.ByteArrayOutputStream;
 import java.net.InetSocketAddress;
 import java.time.Instant;
@@ -279,7 +279,7 @@ public final class DistributedConnectionManager implements IDistributedConnectio
     }
 
     @Override
-    public CompletableFuture<Void> addOrUpdateChildConnectionAsync(String username, IConnection incomingConnection) {
+    public CompletableFuture<Void> addOrUpdateChildConnectionAsync(String username, Connection incomingConnection) {
         Objects.requireNonNull(incomingConnection, "incomingConnection");
         if (!canAcceptChildren()) {
             diagnostic.debug(rejectionMessage(username, incomingConnection.getIpEndPoint()));
@@ -678,7 +678,7 @@ public final class DistributedConnectionManager implements IDistributedConnectio
     }
 
     private CompletableFuture<IMessageConnection> establishDirectChild(
-            String username, IConnection incomingConnection, CompletableFuture<IMessageConnection> cached) {
+            String username, Connection incomingConnection, CompletableFuture<IMessageConnection> cached) {
         diagnostic.debug("Inbound child connection to " + username + " ("
                 + incomingConnection.getIpEndPoint()
                 + ") accepted. (type: " + incomingConnection.getType()
@@ -919,7 +919,7 @@ public final class DistributedConnectionManager implements IDistributedConnectio
                                         Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION,
                                         username,
                                         solicitationToken),
-                                IConnection.class,
+                                Connection.class,
                                 client.getOptions()
                                         .getDistributedConnectionOptions()
                                         .getConnectTimeout(),
@@ -1013,7 +1013,7 @@ public final class DistributedConnectionManager implements IDistributedConnectio
         connection.addMessageWrittenListener(handler::handleChildMessageWritten);
     }
 
-    private void childDisconnected(IConnection sender, ConnectionDisconnectedEventArgs eventArgs) {
+    private void childDisconnected(Connection sender, ConnectionDisconnectedEventArgs eventArgs) {
         IMessageConnection connection = (IMessageConnection) sender;
         childConnections.remove(connection.getUsername());
         children.remove(connection.getUsername());
@@ -1033,7 +1033,7 @@ public final class DistributedConnectionManager implements IDistributedConnectio
         updateStatusEventuallyAsync();
     }
 
-    private void parentCandidateDisconnected(IConnection sender, ConnectionDisconnectedEventArgs eventArgs) {
+    private void parentCandidateDisconnected(Connection sender, ConnectionDisconnectedEventArgs eventArgs) {
         IMessageConnection connection = (IMessageConnection) sender;
         diagnostic.debug("Parent candidate connection to " + connection.getUsername()
                 + " (" + connection.getIpEndPoint() + ") disconnected: "
@@ -1043,7 +1043,7 @@ public final class DistributedConnectionManager implements IDistributedConnectio
         connection.close();
     }
 
-    private void parentDisconnected(IConnection sender, ConnectionDisconnectedEventArgs eventArgs) {
+    private void parentDisconnected(Connection sender, ConnectionDisconnectedEventArgs eventArgs) {
         IMessageConnection connection = (IMessageConnection) sender;
         diagnostic.debug("Parent connection to " + connection.getUsername() + " ("
                 + connection.getIpEndPoint() + ") disconnected: "

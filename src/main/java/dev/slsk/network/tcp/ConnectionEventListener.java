@@ -8,5 +8,5 @@ package dev.slsk.network.tcp;
 @FunctionalInterface
 public interface ConnectionEventListener<T> {
     /** Handles an event raised by a connection. */
-    void handle(IConnection sender, T eventArgs);
+    void handle(Connection sender, T eventArgs);
 }

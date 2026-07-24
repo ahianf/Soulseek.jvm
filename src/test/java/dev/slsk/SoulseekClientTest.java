@@ -304,8 +304,8 @@ class SoulseekClientTest {
             "UserStatusChanged"
         };
         for (String name : names) {
-            assertTrue(hasMethod("add" + name + "Listener"));
-            assertTrue(hasMethod("remove" + name + "Listener"));
+            assertTrue(hasMethod("add" + name + "SocketListener"));
+            assertTrue(hasMethod("remove" + name + "SocketListener"));
         }
     }
 
@@ -501,7 +501,7 @@ class SoulseekClientTest {
                 this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().startsWith("add") && method.getName().endsWith("Listener")) {
+            if (method.getName().startsWith("add") && method.getName().endsWith("SocketListener")) {
                 eventListeners.put(method.getName(), arguments[0]);
                 return null;
             }

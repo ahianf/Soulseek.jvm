@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 
 class ConnectionValueTypesTest {
     @Test
-    @DisplayName("Connection state preserves every numeric value")
+    @DisplayName("SocketConnection state preserves every numeric value")
     void stateValuesMatchSource() {
         assertEquals(0, ConnectionState.PENDING.getValue());
         assertEquals(1, ConnectionState.CONNECTING.getValue());
@@ -28,7 +28,7 @@ class ConnectionValueTypesTest {
     }
 
     @Test
-    @DisplayName("Connection type flags combine and test bits")
+    @DisplayName("SocketConnection type flags combine and test bits")
     void connectionTypesPreserveFlags() {
         ConnectionTypes combined = ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT);
 
@@ -41,7 +41,7 @@ class ConnectionValueTypesTest {
     }
 
     @Test
-    @DisplayName("Connection key retains endpoint-only data")
+    @DisplayName("SocketConnection key retains endpoint-only data")
     void endpointKeyRetainsData() throws Exception {
         InetSocketAddress endpoint = new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 2234);
         ConnectionKey key = new ConnectionKey(endpoint);
@@ -51,7 +51,7 @@ class ConnectionValueTypesTest {
     }
 
     @Test
-    @DisplayName("Connection key retains username and endpoint")
+    @DisplayName("SocketConnection key retains username and endpoint")
     void fullKeyRetainsData() throws Exception {
         InetSocketAddress endpoint = new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 2234);
         ConnectionKey key = new ConnectionKey("alice", endpoint);
@@ -61,7 +61,7 @@ class ConnectionValueTypesTest {
     }
 
     @Test
-    @DisplayName("Connection key equality follows source hash equality")
+    @DisplayName("SocketConnection key equality follows source hash equality")
     void keyEqualityCoversNullableComponents() throws Exception {
         InetSocketAddress endpoint = new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 2234);
         ConnectionKey first = new ConnectionKey("alice", endpoint);
@@ -82,7 +82,7 @@ class ConnectionValueTypesTest {
     }
 
     @Test
-    @DisplayName("Connection data event computes percentage")
+    @DisplayName("SocketConnection data event computes percentage")
     void dataEventComputesPercentage() {
         ConnectionDataEventArgs args = new ConnectionDataEventArgs(3, 20);
 

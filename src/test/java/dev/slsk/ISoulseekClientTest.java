@@ -29,11 +29,11 @@ class ISoulseekClientTest {
     void interfaceAccountsForEverySourceEventContract() {
         long addMethods = Arrays.stream(ISoulseekClient.class.getMethods())
                 .map(Method::getName)
-                .filter(name -> name.startsWith("add") && name.endsWith("Listener"))
+                .filter(name -> name.startsWith("add") && name.endsWith("SocketListener"))
                 .count();
         long removeMethods = Arrays.stream(ISoulseekClient.class.getMethods())
                 .map(Method::getName)
-                .filter(name -> name.startsWith("remove") && name.endsWith("Listener"))
+                .filter(name -> name.startsWith("remove") && name.endsWith("SocketListener"))
                 .count();
 
         assertEquals(47, addMethods, "46 client events plus DiagnosticGenerated");

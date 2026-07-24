@@ -16,8 +16,8 @@ import dev.slsk.exceptions.ConnectionWriteException;
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.network.tcp.ConnectionKey;
-import dev.slsk.network.tcp.INetworkStream;
-import dev.slsk.network.tcp.ITcpClient;
+import dev.slsk.network.tcp.NetworkStream;
+import dev.slsk.network.tcp.TcpClient;
 import dev.slsk.options.ConnectionOptions;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -208,7 +208,7 @@ class MessageConnectionTest {
     }
 
     @Test
-    @DisplayName("Message write maps stream failure through Connection")
+    @DisplayName("Message write maps stream failure through SocketConnection")
     void writeFailureMaps() throws Exception {
         FakeStream stream = new FakeStream();
         IOException cause = new IOException("broken");
@@ -263,7 +263,7 @@ class MessageConnectionTest {
         boolean get() throws Exception;
     }
 
-    private static final class FakeTcpClient implements ITcpClient {
+    private static final class FakeTcpClient implements TcpClient {
         private final Socket socket = new Socket();
         private final FakeStream stream;
         private boolean connected;
@@ -313,7 +313,7 @@ class MessageConnectionTest {
         }
 
         @Override
-        public INetworkStream getStream() {
+        public NetworkStream getStream() {
             return stream;
         }
 
@@ -325,7 +325,7 @@ class MessageConnectionTest {
         }
     }
 
-    private static final class FakeStream implements INetworkStream {
+    private static final class FakeStream implements NetworkStream {
         private final List<Byte> written = new ArrayList<>();
         private byte[] input;
         private int position;

@@ -28,7 +28,7 @@ import dev.slsk.network.IMessageConnection;
 import dev.slsk.network.IPeerConnectionManager;
 import dev.slsk.network.PeerEndpoint;
 import dev.slsk.network.TransferConnectionResult;
-import dev.slsk.network.tcp.IConnection;
+import dev.slsk.network.tcp.Connection;
 import dev.slsk.options.ConnectionOptions;
 import dev.slsk.options.SearchResponseResolver;
 import dev.slsk.options.SoulseekClientOptions;
@@ -419,12 +419,12 @@ class SearchResponderTest {
 
         @Override
         public CompletableFuture<Void> addOrUpdateMessageConnectionAsync(
-                String username, IConnection incomingConnection) {
+                String username, Connection incomingConnection) {
             return CompletableFuture.completedFuture(null);
         }
 
         @Override
-        public CompletableFuture<IConnection> awaitTransferConnectionAsync(
+        public CompletableFuture<Connection> awaitTransferConnectionAsync(
                 String username, String filename, int remoteToken, CancellationToken cancellationToken) {
             return unsupported();
         }
@@ -464,7 +464,7 @@ class SearchResponderTest {
 
         @Override
         public CompletableFuture<TransferConnectionResult> getTransferConnectionAsync(
-                String username, int token, IConnection incomingConnection) {
+                String username, int token, Connection incomingConnection) {
             return unsupported();
         }
 
@@ -474,7 +474,7 @@ class SearchResponderTest {
         }
 
         @Override
-        public CompletableFuture<IConnection> getTransferConnectionAsync(
+        public CompletableFuture<Connection> getTransferConnectionAsync(
                 String username, InetSocketAddress ipEndPoint, int token, CancellationToken cancellationToken) {
             return unsupported();
         }

@@ -134,12 +134,12 @@ import dev.slsk.network.ListenerHandlerClient;
 import dev.slsk.network.PeerConnectionManager;
 import dev.slsk.network.PeerConnectionManagerClient;
 import dev.slsk.network.PeerEndpoint;
+import dev.slsk.network.tcp.Connection;
 import dev.slsk.network.tcp.ConnectionDataEventArgs;
 import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
 import dev.slsk.network.tcp.ConnectionEventListener;
-import dev.slsk.network.tcp.IConnection;
-import dev.slsk.network.tcp.IListener;
 import dev.slsk.network.tcp.Listener;
+import dev.slsk.network.tcp.SocketListener;
 import dev.slsk.options.BrowseOptions;
 import dev.slsk.options.BrowseProgress;
 import dev.slsk.options.ConnectionOptions;
@@ -235,14 +235,14 @@ public class SoulseekClient
     private final IDistributedConnectionManager distributedConnectionManager;
     private final ServerMessageHandler serverMessageHandler;
     private final IDiagnosticFactory diagnostic;
-    private volatile ClientListenerFactory clientListenerFactory = Listener::new;
+    private volatile ClientListenerFactory clientListenerFactory = SocketListener::new;
     private final AtomicBoolean closed = new AtomicBoolean();
     private final ScheduledExecutorService cleanupScheduler;
     private final Map<Event, CopyOnWriteArrayList<SoulseekClientEventListener<?>>> listeners =
             new EnumMap<>(Event.class);
 
     private volatile IMessageConnection serverConnection;
-    private volatile IListener listener;
+    private volatile Listener listener;
     private volatile String address;
     private volatile InetSocketAddress ipEndPoint;
     private volatile String username;
@@ -293,7 +293,7 @@ public class SoulseekClient
             ServerMessageHandler serverMessageHandler,
             PeerMessageHandler peerMessageHandler,
             DistributedMessageHandler distributedMessageHandler,
-            IListener listener,
+            Listener listener,
             IListenerHandler listenerHandler,
             ISearchResponder searchResponder,
             IWaiter waiter,
@@ -997,7 +997,7 @@ public class SoulseekClient
         }
 
         if (options.isEnableListener()) {
-            IListener probe = null;
+            Listener probe = null;
             try {
                 probe = clientListenerFactory.create(
                         options.getListenIPAddress(), options.getListenPort(), options.getIncomingConnectionOptions());
@@ -1512,7 +1512,7 @@ public class SoulseekClient
             InetAddress newAddress =
                     patch.getListenIPAddress() == null ? options.getListenIPAddress() : patch.getListenIPAddress();
             int newPort = patch.getListenPort() == null ? options.getListenPort() : patch.getListenPort();
-            IListener probe = null;
+            Listener probe = null;
             try {
                 probe = clientListenerFactory.create(newAddress, newPort, options.getIncomingConnectionOptions());
                 probe.start();
@@ -2756,7 +2756,7 @@ public class SoulseekClient
     }
 
     @Override
-    public final IListener getListener() {
+    public final Listener getListener() {
         return listener;
     }
 
@@ -2808,7 +2808,7 @@ public class SoulseekClient
         serverConnection = value;
     }
 
-    void setListenerForTest(IListener value) {
+    void setListenerForTest(Listener value) {
         listener = value;
     }
 
@@ -3549,7 +3549,7 @@ public class SoulseekClient
         private final WaitKey transferStartRequestedWaitKey;
         private TransferStates lastState = TransferStates.NONE;
         private InetSocketAddress endpoint;
-        private IConnection connection;
+        private Connection connection;
         private OutputStream outputStream;
         private PositionTrackingOutputStream trackingStream;
         private ConnectionEventListener<ConnectionDataEventArgs> dataReadListener;
@@ -3654,7 +3654,7 @@ public class SoulseekClient
 
             IMessageConnection refreshed = await(peerConnectionManager.getOrAddMessageConnectionAsync(
                     download.getUsername(), endpoint, cancellationToken));
-            CompletableFuture<IConnection> connectionTask = peerConnectionManager.awaitTransferConnectionAsync(
+            CompletableFuture<Connection> connectionTask = peerConnectionManager.awaitTransferConnectionAsync(
                     download.getUsername(), download.getFilename(), download.getRemoteToken(), cancellationToken);
             await(invokeMessageWrite(
                     refreshed,
@@ -4017,7 +4017,7 @@ public class SoulseekClient
         private TransferStates lastState = TransferStates.NONE;
         private Semaphore perUserSemaphore;
         private InetSocketAddress endpoint;
-        private IConnection connection;
+        private Connection connection;
         private InputStream inputStream;
         private PositionTrackingInputStream trackingStream;
         private ConnectionEventListener<ConnectionDataEventArgs> dataWrittenListener;
@@ -4783,7 +4783,7 @@ public class SoulseekClient
 
     @FunctionalInterface
     interface ClientListenerFactory {
-        IListener create(InetAddress ipAddress, int port, ConnectionOptions connectionOptions);
+        Listener create(InetAddress ipAddress, int port, ConnectionOptions connectionOptions);
     }
 
     private enum Event {

@@ -52,7 +52,7 @@ import dev.slsk.network.IPeerConnectionManager;
 import dev.slsk.network.MessageEventArgs;
 import dev.slsk.network.PeerEndpoint;
 import dev.slsk.network.TransferConnectionResult;
-import dev.slsk.network.tcp.IConnection;
+import dev.slsk.network.tcp.Connection;
 import dev.slsk.options.SoulseekClientOptions;
 import dev.slsk.options.SoulseekClientOptionsPatch;
 import dev.slsk.search.ISearchResponder;
@@ -1038,8 +1038,8 @@ class ServerMessageHandlerTest {
 
     private static final class ConnectionProbe {
         private String disconnectMessage;
-        private final IConnection proxy = (IConnection) Proxy.newProxyInstance(
-                IConnection.class.getClassLoader(), new Class<?>[] {IConnection.class}, this::invoke);
+        private final Connection proxy = (Connection) Proxy.newProxyInstance(
+                Connection.class.getClassLoader(), new Class<?>[] {Connection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             return switch (method.getName()) {

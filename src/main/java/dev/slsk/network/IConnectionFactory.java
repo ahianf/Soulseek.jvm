@@ -4,17 +4,17 @@
 
 package dev.slsk.network;
 
+import dev.slsk.network.tcp.Connection;
 import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
 import dev.slsk.network.tcp.ConnectionEventListener;
-import dev.slsk.network.tcp.IConnection;
-import dev.slsk.network.tcp.ITcpClient;
+import dev.slsk.network.tcp.TcpClient;
 import dev.slsk.options.ConnectionOptions;
 import java.net.InetSocketAddress;
 
 /** Creates protocol and transfer connections. */
 public interface IConnectionFactory {
     IMessageConnection getDistributedConnection(
-            String username, InetSocketAddress ipEndPoint, ConnectionOptions options, ITcpClient tcpClient);
+            String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient);
 
     default IMessageConnection getDistributedConnection(String username, InetSocketAddress ipEndPoint) {
         return getDistributedConnection(username, ipEndPoint, null, null);
@@ -26,7 +26,7 @@ public interface IConnectionFactory {
     }
 
     IMessageConnection getMessageConnection(
-            String username, InetSocketAddress ipEndPoint, ConnectionOptions options, ITcpClient tcpClient);
+            String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient);
 
     default IMessageConnection getMessageConnection(String username, InetSocketAddress ipEndPoint) {
         return getMessageConnection(username, ipEndPoint, null, null);
@@ -44,7 +44,7 @@ public interface IConnectionFactory {
             MessageConnectionEventListener<MessageEventArgs> messageReadEventHandler,
             MessageConnectionEventListener<MessageEventArgs> messageWrittenEventHandler,
             ConnectionOptions options,
-            ITcpClient tcpClient);
+            TcpClient tcpClient);
 
     default IMessageConnection getServerConnection(
             InetSocketAddress ipEndPoint,
@@ -79,13 +79,13 @@ public interface IConnectionFactory {
                 null);
     }
 
-    IConnection getTransferConnection(InetSocketAddress ipEndPoint, ConnectionOptions options, ITcpClient tcpClient);
+    Connection getTransferConnection(InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient);
 
-    default IConnection getTransferConnection(InetSocketAddress ipEndPoint) {
+    default Connection getTransferConnection(InetSocketAddress ipEndPoint) {
         return getTransferConnection(ipEndPoint, null, null);
     }
 
-    default IConnection getTransferConnection(InetSocketAddress ipEndPoint, ConnectionOptions options) {
+    default Connection getTransferConnection(InetSocketAddress ipEndPoint, ConnectionOptions options) {
         return getTransferConnection(ipEndPoint, options, null);
     }
 }

@@ -16,7 +16,7 @@ public final class Constants {
 
     private Constants() {}
 
-    /** Connection-establishment method names. */
+    /** SocketConnection-establishment method names. */
     public static final class ConnectionMethod {
         /** Direct establishment. */
         public static final String DIRECT = "Direct";

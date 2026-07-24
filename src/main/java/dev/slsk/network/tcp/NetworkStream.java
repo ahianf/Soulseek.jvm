@@ -9,7 +9,7 @@ import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 
 /** Provides the underlying stream of data for network access. */
-public interface INetworkStream extends AutoCloseable {
+public interface NetworkStream extends AutoCloseable {
     /** Returns the read timeout in milliseconds. */
     int getReadTimeout() throws IOException;
 

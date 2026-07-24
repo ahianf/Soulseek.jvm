@@ -149,7 +149,7 @@ class ConnectionServerResponseTest {
     }
 
     @Test
-    @DisplayName("Connection responses reject mismatches and missing data")
+    @DisplayName("SocketConnection responses reject mismatches and missing data")
     void responsesRejectInvalidFrames() {
         byte[] mismatch =
                 new MessageBuilder().writeCode(MessageCode.Peer.BROWSE_REQUEST).build();

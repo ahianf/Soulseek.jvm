@@ -18,9 +18,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
 /**
- * Pass-through implementation of {@link ITcpClient} over a socket.
+ * Pass-through implementation of {@link TcpClient} over a socket.
  */
-final class TcpClientAdapter implements ITcpClient {
+final class TcpClientAdapter implements TcpClient {
     private static final byte SOCKS_5 = 0x05;
     private static final byte AUTH_ANONYMOUS = 0x00;
     private static final byte AUTH_USERNAME = 0x02;
@@ -99,7 +99,7 @@ final class TcpClientAdapter implements ITcpClient {
     }
 
     @Override
-    public INetworkStream getStream() throws IOException {
+    public NetworkStream getStream() throws IOException {
         if (!isConnected()) {
             throw new IllegalStateException("The operation is not allowed on non-connected sockets");
         }
@@ -129,7 +129,7 @@ final class TcpClientAdapter implements ITcpClient {
 
         try {
             await(connectAsync(proxyAddress, proxyPort));
-            INetworkStream stream = getStream();
+            NetworkStream stream = getStream();
 
             byte[] auth = usingCredentials
                     ? new byte[] {SOCKS_5, 0x02, AUTH_ANONYMOUS, AUTH_USERNAME}
@@ -247,14 +247,14 @@ final class TcpClientAdapter implements ITcpClient {
         }
     }
 
-    private static byte[] read(INetworkStream stream, byte[] buffer, int length, CancellationToken cancellationToken) {
+    private static byte[] read(NetworkStream stream, byte[] buffer, int length, CancellationToken cancellationToken) {
         int bytesRead = await(stream.readAsync(buffer, 0, length, cancellationToken));
         byte[] result = new byte[bytesRead];
         System.arraycopy(buffer, 0, result, 0, bytesRead);
         return result;
     }
 
-    private static void write(INetworkStream stream, byte[] data, CancellationToken cancellationToken) {
+    private static void write(NetworkStream stream, byte[] data, CancellationToken cancellationToken) {
         await(stream.writeAsync(data, 0, data.length, cancellationToken));
     }
 
@@ -279,10 +279,10 @@ final class TcpClientAdapter implements ITcpClient {
     private static String connectionFailure(byte code) {
         return switch (unsigned(code)) {
             case 0x01 -> "General SOCKS server failure";
-            case 0x02 -> "Connection not allowed by ruleset";
+            case 0x02 -> "SocketConnection not allowed by ruleset";
             case 0x03 -> "Network unreachable";
             case 0x04 -> "Host unreachable";
-            case 0x05 -> "Connection refused";
+            case 0x05 -> "SocketConnection refused";
             case 0x06 -> "TTL expired";
             case 0x07 -> "Command not supported";
             case 0x08 -> "Address type not supported";

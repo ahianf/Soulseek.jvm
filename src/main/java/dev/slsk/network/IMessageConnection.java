@@ -6,11 +6,11 @@ package dev.slsk.network;
 
 import dev.slsk.CancellationToken;
 import dev.slsk.messaging.messages.OutgoingMessage;
-import dev.slsk.network.tcp.IConnection;
+import dev.slsk.network.tcp.Connection;
 import java.util.concurrent.CompletableFuture;
 
 /** Provides framed client connections to the Soulseek network. */
-public interface IMessageConnection extends IConnection {
+public interface IMessageConnection extends Connection {
     void addMessageDataReadListener(MessageConnectionEventListener<MessageDataEventArgs> listener);
 
     void removeMessageDataReadListener(MessageConnectionEventListener<MessageDataEventArgs> listener);

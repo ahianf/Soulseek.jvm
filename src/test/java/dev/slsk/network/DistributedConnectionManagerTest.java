@@ -35,13 +35,13 @@ import dev.slsk.messaging.messages.HaveNoParentsCommand;
 import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.messaging.messages.PeerInit;
 import dev.slsk.messaging.messages.PierceFirewall;
+import dev.slsk.network.tcp.Connection;
 import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
 import dev.slsk.network.tcp.ConnectionEventListener;
 import dev.slsk.network.tcp.ConnectionKey;
 import dev.slsk.network.tcp.ConnectionState;
 import dev.slsk.network.tcp.ConnectionTypes;
-import dev.slsk.network.tcp.IConnection;
-import dev.slsk.network.tcp.ITcpClient;
+import dev.slsk.network.tcp.TcpClient;
 import dev.slsk.options.ConnectionOptions;
 import dev.slsk.options.SoulseekClientOptions;
 import java.lang.reflect.InvocationHandler;
@@ -684,7 +684,7 @@ class DistributedConnectionManagerTest {
 
         @Override
         public IMessageConnection getDistributedConnection(
-                String username, InetSocketAddress ipEndPoint, ConnectionOptions options, ITcpClient tcpClient) {
+                String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
             if (tcpClient != null) {
                 assertNotNull(distributedHandoff);
                 return distributedHandoff.messageConnection();
@@ -696,7 +696,7 @@ class DistributedConnectionManagerTest {
 
         @Override
         public IMessageConnection getMessageConnection(
-                String username, InetSocketAddress ipEndPoint, ConnectionOptions options, ITcpClient tcpClient) {
+                String username, InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
             throw new AssertionError("unexpected peer connection");
         }
 
@@ -708,13 +708,13 @@ class DistributedConnectionManagerTest {
                 MessageConnectionEventListener<MessageEventArgs> messageReadEventHandler,
                 MessageConnectionEventListener<MessageEventArgs> messageWrittenEventHandler,
                 ConnectionOptions options,
-                ITcpClient tcpClient) {
+                TcpClient tcpClient) {
             throw new AssertionError("unexpected server connection");
         }
 
         @Override
-        public IConnection getTransferConnection(
-                InetSocketAddress ipEndPoint, ConnectionOptions options, ITcpClient tcpClient) {
+        public Connection getTransferConnection(
+                InetSocketAddress ipEndPoint, ConnectionOptions options, TcpClient tcpClient) {
             throw new AssertionError("unexpected transfer connection");
         }
     }
@@ -892,11 +892,11 @@ class DistributedConnectionManagerTest {
         private final String username;
         private final InetSocketAddress endpoint;
         private final UUID id = UUID.randomUUID();
-        private final ITcpClient tcpClient = (ITcpClient) Proxy.newProxyInstance(
-                ITcpClient.class.getClassLoader(),
-                new Class<?>[] {ITcpClient.class},
+        private final TcpClient tcpClient = (TcpClient) Proxy.newProxyInstance(
+                TcpClient.class.getClassLoader(),
+                new Class<?>[] {TcpClient.class},
                 (proxy, method, arguments) -> defaultValue(method.getReturnType()));
-        private final IConnection proxy;
+        private final Connection proxy;
         private final List<ConnectionEventListener<ConnectionDisconnectedEventArgs>> disconnectedListeners =
                 new ArrayList<>();
         private final List<MessageConnectionEventListener<MessageEventArgs>> messageReadListeners = new ArrayList<>();
@@ -919,9 +919,9 @@ class DistributedConnectionManagerTest {
             this.message = message;
             this.username = username;
             this.endpoint = endpoint;
-            proxy = (IConnection) Proxy.newProxyInstance(
-                    IConnection.class.getClassLoader(),
-                    message ? new Class<?>[] {IMessageConnection.class} : new Class<?>[] {IConnection.class},
+            proxy = (Connection) Proxy.newProxyInstance(
+                    Connection.class.getClassLoader(),
+                    message ? new Class<?>[] {IMessageConnection.class} : new Class<?>[] {Connection.class},
                     this);
         }
 
@@ -933,7 +933,7 @@ class DistributedConnectionManagerTest {
             return new ConnectionProbe(true, username, endpoint);
         }
 
-        private IConnection connection() {
+        private Connection connection() {
             return proxy;
         }
 

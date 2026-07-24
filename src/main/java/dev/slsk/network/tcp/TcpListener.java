@@ -8,7 +8,7 @@ import java.net.Socket;
 import java.util.concurrent.CompletableFuture;
 
 /** Listens for connections from TCP network clients. */
-public interface ITcpListener {
+public interface TcpListener {
     /** Accepts a pending connection request asynchronously. */
     CompletableFuture<Socket> acceptTcpClientAsync();
 

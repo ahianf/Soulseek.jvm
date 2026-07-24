@@ -15,9 +15,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
 /**
- * Pass-through implementation of {@link ITcpListener} over a server socket.
+ * Pass-through implementation of {@link TcpListener} over a server socket.
  */
-final class TcpListenerAdapter implements ITcpListener {
+final class TcpListenerAdapter implements TcpListener {
     private ServerSocket serverSocket;
     private final InetSocketAddress localEndpoint;
     private Socket pendingSocket;

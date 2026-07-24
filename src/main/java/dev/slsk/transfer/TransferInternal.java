@@ -9,7 +9,7 @@ import dev.slsk.TransferDirection;
 import dev.slsk.TransferStates;
 import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
-import dev.slsk.network.tcp.IConnection;
+import dev.slsk.network.tcp.Connection;
 import dev.slsk.options.TransferOptions;
 import java.net.InetSocketAddress;
 import java.time.Clock;
@@ -25,7 +25,7 @@ public final class TransferInternal {
     private double averageSpeed;
     private long bytesTransferred;
     private final Clock clock;
-    private IConnection connection;
+    private Connection connection;
     private final TransferDirection direction;
     private Instant endTime;
     private Throwable exception;
@@ -90,12 +90,12 @@ public final class TransferInternal {
     }
 
     /** Returns the transfer connection, or {@code null}. */
-    public synchronized IConnection getConnection() {
+    public synchronized Connection getConnection() {
         return connection;
     }
 
     /** Sets the transfer connection. */
-    public synchronized void setConnection(IConnection value) {
+    public synchronized void setConnection(Connection value) {
         connection = value;
     }
 
