@@ -56,6 +56,16 @@ import dev.slsk.messaging.handlers.ServerMessageHandler;
 import dev.slsk.messaging.handlers.ServerMessageHandlerClient;
 import dev.slsk.messaging.messages.AcknowledgePrivateMessageCommand;
 import dev.slsk.messaging.messages.AcknowledgePrivilegeNotificationCommand;
+import dev.slsk.messaging.messages.IOutgoingMessage;
+import dev.slsk.messaging.messages.PrivateMessageCommand;
+import dev.slsk.messaging.messages.RoomMessageCommand;
+import dev.slsk.messaging.messages.SendUploadSpeedCommand;
+import dev.slsk.messaging.messages.SetOnlineStatusCommand;
+import dev.slsk.messaging.messages.SetRoomTickerCommand;
+import dev.slsk.messaging.messages.SetSharedCountsCommand;
+import dev.slsk.messaging.messages.StartPublicChatCommand;
+import dev.slsk.messaging.messages.StopPublicChatCommand;
+import dev.slsk.messaging.messages.UnwatchUserCommand;
 import dev.slsk.messaging.messages.UserAddressRequest;
 import dev.slsk.messaging.messages.UserAddressResponse;
 import dev.slsk.network.ConnectionFactory;
@@ -754,6 +764,123 @@ public class SoulseekClient
         return tokenFactory.nextToken();
     }
 
+    public CompletableFuture<Void> sendPrivateMessageAsync(String requestedUsername, String message) {
+        return sendPrivateMessageAsync(requestedUsername, message, CancellationToken.none());
+    }
+
+    public CompletableFuture<Void> sendPrivateMessageAsync(
+            String requestedUsername, String message, CancellationToken cancellationToken) {
+        requireText(requestedUsername, "username");
+        requireNonEmpty(message, "message");
+        requireLoggedIn("send a private message");
+        return writeServerAsync(
+                new PrivateMessageCommand(requestedUsername, message),
+                cancellationToken,
+                "Failed to send private message to user " + requestedUsername + ": ");
+    }
+
+    public CompletableFuture<Void> sendRoomMessageAsync(String roomName, String message) {
+        return sendRoomMessageAsync(roomName, message, CancellationToken.none());
+    }
+
+    public CompletableFuture<Void> sendRoomMessageAsync(
+            String roomName, String message, CancellationToken cancellationToken) {
+        requireText(roomName, "roomName");
+        requireNonEmpty(message, "message");
+        requireLoggedIn("send a chat room message");
+        return writeServerAsync(
+                new RoomMessageCommand(roomName, message),
+                cancellationToken,
+                "Failed to send message to room " + roomName + ": ");
+    }
+
+    public CompletableFuture<Void> sendUploadSpeedAsync(int speed) {
+        return sendUploadSpeedAsync(speed, CancellationToken.none());
+    }
+
+    public CompletableFuture<Void> sendUploadSpeedAsync(int speed, CancellationToken cancellationToken) {
+        requireLoggedIn("set upload speed");
+        if (speed <= 0) {
+            throw new IllegalArgumentException("The upload speed must be greater than zero");
+        }
+        return writeServerAsync(new SendUploadSpeedCommand(speed), cancellationToken, "Failed to set upload speed: ");
+    }
+
+    public CompletableFuture<Void> setRoomTickerAsync(String roomName, String message) {
+        return setRoomTickerAsync(roomName, message, CancellationToken.none());
+    }
+
+    public CompletableFuture<Void> setRoomTickerAsync(
+            String roomName, String message, CancellationToken cancellationToken) {
+        requireText(roomName, "roomName");
+        requireNonEmpty(message, "message");
+        requireLoggedIn("set chat room tickers");
+        return writeServerAsync(
+                new SetRoomTickerCommand(roomName, message),
+                cancellationToken,
+                "Failed to set chat room ticker in room " + roomName + ": ");
+    }
+
+    public CompletableFuture<Void> setSharedCountsAsync(int directories, int files) {
+        return setSharedCountsAsync(directories, files, CancellationToken.none());
+    }
+
+    public CompletableFuture<Void> setSharedCountsAsync(
+            int directories, int files, CancellationToken cancellationToken) {
+        if (directories < 0) {
+            throw new IllegalArgumentException("The directory count must be equal to or greater than zero");
+        }
+        if (files < 0) {
+            throw new IllegalArgumentException("The file count must be equal to or greater than zero");
+        }
+        requireLoggedIn("set shared counts");
+        return writeServerAsync(
+                new SetSharedCountsCommand(directories, files),
+                cancellationToken,
+                "Failed to set shared counts to " + directories + " directories and " + files + " files: ");
+    }
+
+    public CompletableFuture<Void> setStatusAsync(UserPresence status) {
+        return setStatusAsync(status, CancellationToken.none());
+    }
+
+    public CompletableFuture<Void> setStatusAsync(UserPresence status, CancellationToken cancellationToken) {
+        requireLoggedIn("set online status");
+        return writeServerAsync(
+                new SetOnlineStatusCommand(status), cancellationToken, "Failed to set user status to " + status + ": ");
+    }
+
+    public CompletableFuture<Void> startPublicChatAsync() {
+        return startPublicChatAsync(CancellationToken.none());
+    }
+
+    public CompletableFuture<Void> startPublicChatAsync(CancellationToken cancellationToken) {
+        requireLoggedIn("start public chat");
+        return writeServerAsync(new StartPublicChatCommand(), cancellationToken, "Failed to start public chat: ");
+    }
+
+    public CompletableFuture<Void> stopPublicChatAsync() {
+        return stopPublicChatAsync(CancellationToken.none());
+    }
+
+    public CompletableFuture<Void> stopPublicChatAsync(CancellationToken cancellationToken) {
+        requireLoggedIn("stop public chat");
+        return writeServerAsync(new StopPublicChatCommand(), cancellationToken, "Failed to stop public chat: ");
+    }
+
+    public CompletableFuture<Void> unwatchUserAsync(String requestedUsername) {
+        return unwatchUserAsync(requestedUsername, CancellationToken.none());
+    }
+
+    public CompletableFuture<Void> unwatchUserAsync(String requestedUsername, CancellationToken cancellationToken) {
+        requireText(requestedUsername, "username");
+        requireLoggedIn("add users");
+        return writeServerAsync(
+                new UnwatchUserCommand(requestedUsername),
+                cancellationToken,
+                "Failed to unwatch user " + requestedUsername + ": ");
+    }
+
     public CompletableFuture<Void> acknowledgePrivateMessageAsync(int privateMessageId) {
         return acknowledgePrivateMessageAsync(privateMessageId, CancellationToken.none());
     }
@@ -765,11 +892,11 @@ public class SoulseekClient
             throw new IllegalArgumentException("The private message ID must be greater than zero");
         }
         requireLoggedIn("acknowledge private messages");
-        CompletableFuture<Void> write = serverConnection.writeAsync(
-                new AcknowledgePrivateMessageCommand(privateMessageId), defaultToken(cancellationToken));
-        return mapClientFailure(
-                write.thenRun(() -> diagnostic.debug("Acknowledged private message ID " + privateMessageId)),
+        CompletableFuture<Void> write = writeServerAsync(
+                new AcknowledgePrivateMessageCommand(privateMessageId),
+                cancellationToken,
                 "Failed to acknowledge private message with ID " + privateMessageId + ": ");
+        return write.thenRun(() -> diagnostic.debug("Acknowledged private message ID " + privateMessageId));
     }
 
     public CompletableFuture<Void> acknowledgePrivilegeNotificationAsync(int privilegeNotificationId) {
@@ -783,10 +910,10 @@ public class SoulseekClient
             throw new IllegalArgumentException("The privilege notification ID must be greater than zero");
         }
         requireLoggedIn("acknowledge privilege notifications");
-        CompletableFuture<Void> write = serverConnection.writeAsync(
-                new AcknowledgePrivilegeNotificationCommand(privilegeNotificationId), defaultToken(cancellationToken));
-        return mapClientFailure(
-                write, "Failed to acknowledge privilege notification with ID " + privilegeNotificationId + ": ");
+        return writeServerAsync(
+                new AcknowledgePrivilegeNotificationCommand(privilegeNotificationId),
+                cancellationToken,
+                "Failed to acknowledge privilege notification with ID " + privilegeNotificationId + ": ");
     }
 
     public CompletableFuture<InetSocketAddress> getUserEndPointAsync(String requestedUsername) {
@@ -1155,6 +1282,23 @@ public class SoulseekClient
         if (value == null || value.trim().isEmpty()) {
             throw new IllegalArgumentException(name + " must not be null, empty, or whitespace");
         }
+    }
+
+    private static void requireNonEmpty(String value, String name) {
+        if (value == null || value.isEmpty()) {
+            throw new IllegalArgumentException(name + " must not be null or empty");
+        }
+    }
+
+    private CompletableFuture<Void> writeServerAsync(
+            IOutgoingMessage message, CancellationToken cancellationToken, String failurePrefix) {
+        CompletableFuture<Void> operation;
+        try {
+            operation = serverConnection.writeAsync(message, defaultToken(cancellationToken));
+        } catch (Throwable failure) {
+            operation = CompletableFuture.failedFuture(failure);
+        }
+        return mapClientFailure(operation, failurePrefix);
     }
 
     private CompletableFuture<InetSocketAddress> retrieveUserEndPoint(
