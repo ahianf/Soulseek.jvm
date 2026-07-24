@@ -58,6 +58,9 @@ final class NetworkStreamAdapter implements INetworkStream {
         Objects.requireNonNull(buffer, "buffer");
         Objects.checkFromIndexSize(offset, size, buffer.length);
         CancellationToken token = Objects.requireNonNull(cancellationToken, "cancellationToken");
+        if (token.isCancellationRequested()) {
+            return cancelledFuture();
+        }
         return observeCancellation(
                 CompletableFuture.supplyAsync(() -> {
                     token.throwIfCancellationRequested();
@@ -78,6 +81,9 @@ final class NetworkStreamAdapter implements INetworkStream {
         Objects.requireNonNull(buffer, "buffer");
         Objects.checkFromIndexSize(offset, size, buffer.length);
         CancellationToken token = Objects.requireNonNull(cancellationToken, "cancellationToken");
+        if (token.isCancellationRequested()) {
+            return cancelledFuture();
+        }
         return observeCancellation(
                 CompletableFuture.runAsync(() -> {
                     token.throwIfCancellationRequested();
@@ -107,5 +113,11 @@ final class NetworkStreamAdapter implements INetworkStream {
         CancellationRegistration registration = token.register(() -> operation.cancel(false));
         operation.whenComplete((ignored, exception) -> registration.close());
         return operation;
+    }
+
+    private static <T> CompletableFuture<T> cancelledFuture() {
+        CompletableFuture<T> future = new CompletableFuture<>();
+        future.cancel(false);
+        return future;
     }
 }
