@@ -39,7 +39,7 @@ class SoulseekClientPrivateRoomTest {
         List<String> sequence = new ArrayList<>();
         WaiterProbe waiter = new WaiterProbe(sequence);
         ConnectionProbe connection = new ConnectionProbe(sequence);
-        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
             CancellationTokenSource source = new CancellationTokenSource();
             CancellationToken token = source.getToken();
             List<Case> cases = List.of(
@@ -90,7 +90,7 @@ class SoulseekClientPrivateRoomTest {
     void validatesArgumentsBeforeLoginState() {
         WaiterProbe waiter = new WaiterProbe(new ArrayList<>());
         ConnectionProbe connection = new ConnectionProbe(new ArrayList<>());
-        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
             for (String bad : new String[] {null, "", " ", "\t"}) {
                 assertThrows(IllegalArgumentException.class, () -> client.addPrivateRoomMemberAsync(bad, "user"));
                 assertThrows(IllegalArgumentException.class, () -> client.addPrivateRoomMemberAsync("room", bad));
@@ -116,7 +116,7 @@ class SoulseekClientPrivateRoomTest {
     void mapsWriteFailuresAndPreservesTimeoutAndCancellation() {
         WaiterProbe waiter = new WaiterProbe(new ArrayList<>());
         ConnectionProbe connection = new ConnectionProbe(new ArrayList<>());
-        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
             for (Operation operation : operations(client)) {
                 RuntimeException expected = new RuntimeException("write failed");
                 connection.synchronousFailure = expected;
@@ -141,7 +141,7 @@ class SoulseekClientPrivateRoomTest {
     void mapsWaitFailuresAndPreservesTimeoutAndCancellation() {
         WaiterProbe waiter = new WaiterProbe(new ArrayList<>());
         ConnectionProbe connection = new ConnectionProbe(new ArrayList<>());
-        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
             for (Operation operation : operations(client)) {
                 RuntimeException expected = new RuntimeException("wait failed");
                 waiter.result = CompletableFuture.failedFuture(expected);
@@ -164,7 +164,7 @@ class SoulseekClientPrivateRoomTest {
     void synchronousWaitRegistrationFailurePreventsWrite() {
         WaiterProbe waiter = new WaiterProbe(new ArrayList<>());
         ConnectionProbe connection = new ConnectionProbe(new ArrayList<>());
-        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
             RuntimeException expected = new RuntimeException("registration failed");
             waiter.synchronousFailure = expected;
 
@@ -176,8 +176,8 @@ class SoulseekClientPrivateRoomTest {
         }
     }
 
-    private static SoulseekClient loggedInClient(ConnectionProbe connection, WaiterProbe waiter) {
-        SoulseekClient client = new SoulseekClient(
+    private static DefaultSoulseekClient loggedInClient(ConnectionProbe connection, WaiterProbe waiter) {
+        DefaultSoulseekClient client = new DefaultSoulseekClient(
                 9999,
                 null,
                 connection.proxy,
@@ -200,7 +200,7 @@ class SoulseekClientPrivateRoomTest {
         return client;
     }
 
-    private static List<Operation> operations(SoulseekClient client) {
+    private static List<Operation> operations(DefaultSoulseekClient client) {
         return List.of(
                 () -> client.addPrivateRoomMemberAsync("room", "user"),
                 () -> client.addPrivateRoomModeratorAsync("room", "user"),

@@ -79,7 +79,7 @@ class SoulseekClientCleanupTest {
 
     private static final class Fixture implements AutoCloseable {
         private final DiagnosticProbe diagnostic = new DiagnosticProbe();
-        private final SoulseekClient client = new SoulseekClient(
+        private final DefaultSoulseekClient client = new DefaultSoulseekClient(
                 9999,
                 null,
                 null,

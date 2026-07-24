@@ -345,7 +345,7 @@ class SoulseekClientSearchTest {
 
     private static final class Fixture {
         private final ConnectionProbe server = new ConnectionProbe();
-        private final SoulseekClient client = new SoulseekClient(
+        private final DefaultSoulseekClient client = new DefaultSoulseekClient(
                 9999,
                 null,
                 server.proxy,

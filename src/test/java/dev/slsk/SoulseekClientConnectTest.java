@@ -295,7 +295,7 @@ class SoulseekClientConnectTest {
         private final ConnectionFactoryProbe factory = new ConnectionFactoryProbe(connection);
         private final WaiterProbe waiter = new WaiterProbe(sequence);
         private final DistributedProbe distributed = new DistributedProbe(sequence);
-        private final SoulseekClient client;
+        private final DefaultSoulseekClient client;
 
         private Fixture() {
             this(new SoulseekClientOptions(false));
@@ -303,7 +303,7 @@ class SoulseekClientConnectTest {
 
         private Fixture(SoulseekClientOptions clientOptions) {
             options = clientOptions;
-            client = new SoulseekClient(
+            client = new DefaultSoulseekClient(
                     9999,
                     options,
                     null,

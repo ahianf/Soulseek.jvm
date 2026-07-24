@@ -230,10 +230,10 @@ class SoulseekClientEndpointTest {
     private static final class Fixture implements AutoCloseable {
         private final ConnectionProbe connection = new ConnectionProbe();
         private final WaiterProbe waiter = new WaiterProbe();
-        private final SoulseekClient client;
+        private final DefaultSoulseekClient client;
 
         private Fixture(UserEndpointCache cache) {
-            client = new SoulseekClient(
+            client = new DefaultSoulseekClient(
                     9999,
                     options(cache),
                     connection.proxy,

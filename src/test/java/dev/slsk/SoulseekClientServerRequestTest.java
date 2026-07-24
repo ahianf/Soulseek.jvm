@@ -46,7 +46,7 @@ class SoulseekClientServerRequestTest {
     void changePasswordUsesTypedCorrelationAndConfirmsResponse() {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
-        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
             CancellationTokenSource source = new CancellationTokenSource();
             CancellationToken token = source.getToken();
             waiter.result = new CompletableFuture<String>();
@@ -75,7 +75,7 @@ class SoulseekClientServerRequestTest {
     void getPrivilegesReturnsTypedCorrelatedResponse() {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
-        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
             CancellationTokenSource source = new CancellationTokenSource();
             CancellationToken token = source.getToken();
             waiter.result = CompletableFuture.completedFuture(42);
@@ -95,7 +95,7 @@ class SoulseekClientServerRequestTest {
     void pingTimesCorrelatedRoundTrip() {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
-        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
             CancellationTokenSource source = new CancellationTokenSource();
             CancellationToken token = source.getToken();
             waiter.result = new CompletableFuture<Void>();
@@ -117,7 +117,7 @@ class SoulseekClientServerRequestTest {
     void grantPrivilegesWritesWithoutWaitingForAResponse() {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
-        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
             CancellationTokenSource source = new CancellationTokenSource();
             CancellationToken token = source.getToken();
 
@@ -135,7 +135,7 @@ class SoulseekClientServerRequestTest {
     void userLookupsReturnTypedCorrelatedResponses() {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
-        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
             CancellationTokenSource source = new CancellationTokenSource();
             CancellationToken token = source.getToken();
 
@@ -176,7 +176,7 @@ class SoulseekClientServerRequestTest {
     void watchUserReturnsDataOrReportsMissingUser() {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
-        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
             UserData data = new UserData("alice", UserPresence.ONLINE, 10, 20, 30, 40, "CL");
             waiter.result = CompletableFuture.completedFuture(new WatchUserResponse("alice", true, data));
 
@@ -196,7 +196,7 @@ class SoulseekClientServerRequestTest {
     void roomListAndMembershipUseExpectedCorrelations() {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
-        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
             CancellationTokenSource source = new CancellationTokenSource();
             CancellationToken token = source.getToken();
 
@@ -232,7 +232,7 @@ class SoulseekClientServerRequestTest {
     void roomWaitTimeoutsTranslateButWriteTimeoutsDoNot() {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
-        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
             waiter.result = CompletableFuture.failedFuture(new TimeoutException("no response"));
             assertInstanceOf(NoResponseException.class, failureOf(client.joinRoomAsync("room")));
             assertInstanceOf(NoResponseException.class, failureOf(client.leaveRoomAsync("room")));
@@ -249,7 +249,7 @@ class SoulseekClientServerRequestTest {
     void joinPreservesServerRejectionAndRoomFailuresMapCorrectly() {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
-        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
             RoomJoinForbiddenException forbidden = new RoomJoinForbiddenException("forbidden");
             waiter.result = CompletableFuture.failedFuture(forbidden);
             assertSame(forbidden, failureOf(client.joinRoomAsync("room")));
@@ -277,7 +277,7 @@ class SoulseekClientServerRequestTest {
     void preservesUserSpecificFailuresRequiredBySource() {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
-        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
             UserOfflineException offline = new UserOfflineException("offline");
             waiter.result = CompletableFuture.failedFuture(offline);
             assertSame(offline, failureOf(client.getUserPrivilegedAsync("alice")));
@@ -299,7 +299,7 @@ class SoulseekClientServerRequestTest {
     void validatesArgumentsAndLoginStateInSourceOrder() {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
-        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
             for (String bad : new String[] {null, "", " ", "\t"}) {
                 assertThrows(IllegalArgumentException.class, () -> client.changePasswordAsync(bad));
                 assertThrows(IllegalArgumentException.class, () -> client.grantUserPrivilegesAsync(bad, 1));
@@ -338,7 +338,7 @@ class SoulseekClientServerRequestTest {
     void mapsOrdinaryFailuresAndPreservesTimeoutAndCancellation() {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
-        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
             List<Operation> operations = List.of(
                     () -> client.changePasswordAsync("password"),
                     client::getPrivilegesAsync,
@@ -375,7 +375,7 @@ class SoulseekClientServerRequestTest {
     void typedAndUntypedWaitFailuresUseSourceMapping() {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
-        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
             List<Operation> operations = List.of(
                     () -> client.changePasswordAsync("password"),
                     client::getPrivilegesAsync,
@@ -407,7 +407,7 @@ class SoulseekClientServerRequestTest {
     void synchronousWaitRegistrationFailurePreventsWrite() {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
-        try (SoulseekClient client = loggedInClient(connection, waiter)) {
+        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
             RuntimeException expected = new RuntimeException("registration failed");
             waiter.synchronousFailure = expected;
 
@@ -421,8 +421,8 @@ class SoulseekClientServerRequestTest {
         }
     }
 
-    private static SoulseekClient loggedInClient(ConnectionProbe connection, WaiterProbe waiter) {
-        SoulseekClient client = new SoulseekClient(
+    private static DefaultSoulseekClient loggedInClient(ConnectionProbe connection, WaiterProbe waiter) {
+        DefaultSoulseekClient client = new DefaultSoulseekClient(
                 9999,
                 null,
                 connection.proxy,

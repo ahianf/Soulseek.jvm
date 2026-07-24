@@ -5,7 +5,6 @@
 package tenine.example;
 
 import dev.slsk.BrowseResponse;
-import dev.slsk.ISoulseekClient;
 import dev.slsk.SearchQuery;
 import dev.slsk.SearchResponse;
 import dev.slsk.SearchResult;
@@ -43,7 +42,7 @@ public final class ConsoleExample {
         String password = requiredEnvironmentVariable(PASSWORD_VARIABLE);
         int minorVersion = uniqueMinorVersion();
 
-        try (ISoulseekClient client = new SoulseekClient(minorVersion)) {
+        try (SoulseekClient client = SoulseekClient.create(minorVersion)) {
             registerLifecycleOutput(client);
 
             client.connectAsync(username, password).join();
@@ -91,7 +90,7 @@ public final class ConsoleExample {
         }
     }
 
-    private static void registerLifecycleOutput(ISoulseekClient client) {
+    private static void registerLifecycleOutput(SoulseekClient client) {
         client.addStateChangedListener((sender, event) -> System.out.printf(
                 "Client state: %s -> %s%s%n",
                 event.getPreviousState(),

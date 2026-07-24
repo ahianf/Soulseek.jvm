@@ -391,7 +391,7 @@ class SoulseekClientReconfigureTest {
         private final ListenerFactoryProbe listenerFactory = new ListenerFactoryProbe();
         private final TokenBucket uploadBucket;
         private final TokenBucket downloadBucket;
-        private final SoulseekClient client;
+        private final DefaultSoulseekClient client;
 
         private Fixture() {
             this(new SoulseekClientOptions(false));
@@ -401,7 +401,7 @@ class SoulseekClientReconfigureTest {
             options = clientOptions;
             uploadBucket = new TokenBucket((options.getMaximumUploadSpeed() * 1024L) / 10, 100);
             downloadBucket = new TokenBucket((options.getMaximumDownloadSpeed() * 1024L) / 10, 100);
-            client = new SoulseekClient(
+            client = new DefaultSoulseekClient(
                     9999,
                     options,
                     server.proxy,

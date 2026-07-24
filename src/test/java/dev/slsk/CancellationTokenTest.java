@@ -96,7 +96,7 @@ class CancellationTokenTest {
     }
 
     @Test
-    @DisplayName("SocketListener failures do not prevent later listeners")
+    @DisplayName("Listener failures do not prevent later listeners")
     void listenerFailuresDoNotPreventLaterListeners() {
         try (CancellationTokenSource source = new CancellationTokenSource()) {
             List<Integer> calls = new ArrayList<>();

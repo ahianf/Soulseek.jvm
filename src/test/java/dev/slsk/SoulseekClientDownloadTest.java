@@ -654,14 +654,14 @@ class SoulseekClientDownloadTest {
         private final TransferConnectionProbe transfer = new TransferConnectionProbe();
         private final WaiterProbe waiter = new WaiterProbe();
         private final PeerManagerProbe peerManager = new PeerManagerProbe(message.proxy, transfer.proxy);
-        private final SoulseekClient client;
+        private final DefaultSoulseekClient client;
 
         private Fixture() {
             this(null);
         }
 
         private Fixture(DiagnosticSink diagnostic) {
-            client = new SoulseekClient(
+            client = new DefaultSoulseekClient(
                     9999,
                     null,
                     server.proxy,

@@ -87,7 +87,7 @@ class PublicApiDispositionTest {
             }
         }
 
-        assertEquals(141, publicTypes);
+        assertEquals(140, publicTypes);
     }
 
     private static void verifyMember(Class<?> type, String typeName, String mapping, String row) {

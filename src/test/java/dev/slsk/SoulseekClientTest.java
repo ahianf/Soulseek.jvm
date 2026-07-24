@@ -57,9 +57,9 @@ class SoulseekClientTest {
 
     @Test
     void constructorsPreserveVersionOptionsAndInitialState() {
-        assertThrows(IllegalArgumentException.class, () -> new SoulseekClient(100));
+        assertThrows(IllegalArgumentException.class, () -> new DefaultSoulseekClient(100));
         SoulseekClientOptions options = new SoulseekClientOptions();
-        try (SoulseekClient client = new SoulseekClient(9999, options)) {
+        try (DefaultSoulseekClient client = new DefaultSoulseekClient(9999, options)) {
             assertEquals(170, client.getMajorVersion());
             assertEquals(9999, client.getMinorVersion());
             assertSame(options, client.getOptions());
@@ -304,13 +304,13 @@ class SoulseekClientTest {
             "UserStatusChanged"
         };
         for (String name : names) {
-            assertTrue(hasMethod("add" + name + "SocketListener"));
-            assertTrue(hasMethod("remove" + name + "SocketListener"));
+            assertTrue(hasMethod("add" + name + "Listener"));
+            assertTrue(hasMethod("remove" + name + "Listener"));
         }
     }
 
     private static boolean hasMethod(String name) {
-        for (Method method : SoulseekClient.class.getMethods()) {
+        for (Method method : DefaultSoulseekClient.class.getMethods()) {
             if (method.getName().equals(name)) {
                 return true;
             }
@@ -366,10 +366,10 @@ class SoulseekClientTest {
         private final ListenerHandler listenerHandler = diagnosticProxy(ListenerHandler.class);
         private final DistributedMessageHandler distributedHandler = diagnosticProxy(DistributedMessageHandler.class);
         private final PeerConnectionManager peerManager = diagnosticProxy(PeerConnectionManager.class);
-        private final SoulseekClient client;
+        private final DefaultSoulseekClient client;
 
         private Fixture() {
-            client = new SoulseekClient(
+            client = new DefaultSoulseekClient(
                     9999,
                     new SoulseekClientOptions(),
                     connection.proxy,
@@ -501,7 +501,7 @@ class SoulseekClientTest {
                 this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().startsWith("add") && method.getName().endsWith("SocketListener")) {
+            if (method.getName().startsWith("add") && method.getName().endsWith("Listener")) {
                 eventListeners.put(method.getName(), arguments[0]);
                 return null;
             }

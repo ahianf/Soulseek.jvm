@@ -490,7 +490,7 @@ class SoulseekClientPeerRequestTest {
         private final WaiterProbe waiter = new WaiterProbe();
         private final PeerManagerProbe peerManager = new PeerManagerProbe(peer.proxy);
         private final DiagnosticProbe diagnostic = new DiagnosticProbe();
-        private final SoulseekClient client = new SoulseekClient(
+        private final DefaultSoulseekClient client = new DefaultSoulseekClient(
                 9999,
                 null,
                 server.proxy,
