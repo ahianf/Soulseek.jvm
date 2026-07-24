@@ -13,22 +13,27 @@
   <version>0.10.0.2</version>
   <name>Soulseek.jvm console example</name>
   <description>
-    Minimal external-consumer example for the Soulseek.jvm public API.
+    Minimal external-consumer example for the modified Soulseek.jvm public
+    API, based on Soulseek.NET 10.0.2.
   </description>
+  <url>https://github.com/jpdillingham/Soulseek.NET/tree/bc9f7ca</url>
 
   <licenses>
     <license>
       <name>GNU General Public License v3.0 only with Additional Terms</name>
-      <url>https://www.gnu.org/licenses/gpl-3.0.html</url>
+      <url>https://github.com/jpdillingham/Soulseek.NET/blob/bc9f7ca/LICENSE</url>
       <distribution>repo</distribution>
     </license>
   </licenses>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.build.outputTimestamp>2026-07-05T02:28:40Z</project.build.outputTimestamp>
     <maven.compiler.release>21</maven.compiler.release>
     <maven.compiler.version>3.15.0</maven.compiler.version>
     <maven.enforcer.version>3.5.0</maven.enforcer.version>
+    <maven.jar.version>3.5.0</maven.jar.version>
+    <maven.resources.version>3.4.0</maven.resources.version>
   </properties>
 
   <dependencies>
@@ -40,7 +45,31 @@
   </dependencies>
 
   <build>
+    <resources>
+      <resource>
+        <directory>${project.basedir}/../../..</directory>
+        <includes>
+          <include>LICENSE</include>
+          <include>NOTICE</include>
+        </includes>
+      </resource>
+      <resource>
+        <directory>${project.basedir}/../../..</directory>
+        <targetPath>META-INF</targetPath>
+        <includes>
+          <include>LICENSE</include>
+          <include>NOTICE</include>
+        </includes>
+      </resource>
+    </resources>
+
     <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>${maven.resources.version}</version>
+      </plugin>
+
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-enforcer-plugin</artifactId>
@@ -69,6 +98,23 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <version>${maven.compiler.version}</version>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>${maven.jar.version}</version>
+        <configuration>
+          <archive>
+            <manifestEntries>
+              <Implementation-Title>Soulseek.jvm console example</Implementation-Title>
+              <Implementation-Version>${project.version}</Implementation-Version>
+              <Implementation-Vendor>Ahian Fernandez</Implementation-Vendor>
+              <Bundle-License>GPL-3.0-only</Bundle-License>
+              <X-Modified-From>Soulseek.NET 10.0.2 (bc9f7ca)</X-Modified-From>
+            </manifestEntries>
+          </archive>
+        </configuration>
       </plugin>
     </plugins>
   </build>
