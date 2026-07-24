@@ -8,6 +8,7 @@ import dev.slsk.common.IOAdapter;
 import dev.slsk.common.IWaiter;
 import dev.slsk.common.TokenBucket;
 import dev.slsk.common.TokenFactory;
+import dev.slsk.common.WaitKey;
 import dev.slsk.common.Waiter;
 import dev.slsk.diagnostics.DiagnosticEventArgs;
 import dev.slsk.diagnostics.DiagnosticFactory;
@@ -58,6 +59,12 @@ import dev.slsk.messaging.messages.AcknowledgePrivateMessageCommand;
 import dev.slsk.messaging.messages.AcknowledgePrivilegeNotificationCommand;
 import dev.slsk.messaging.messages.IOutgoingMessage;
 import dev.slsk.messaging.messages.PrivateMessageCommand;
+import dev.slsk.messaging.messages.PrivateRoomAddOperator;
+import dev.slsk.messaging.messages.PrivateRoomAddUser;
+import dev.slsk.messaging.messages.PrivateRoomDropMembershipCommand;
+import dev.slsk.messaging.messages.PrivateRoomDropOwnershipCommand;
+import dev.slsk.messaging.messages.PrivateRoomRemoveOperator;
+import dev.slsk.messaging.messages.PrivateRoomRemoveUser;
 import dev.slsk.messaging.messages.RoomMessageCommand;
 import dev.slsk.messaging.messages.SendUploadSpeedCommand;
 import dev.slsk.messaging.messages.SetOnlineStatusCommand;
@@ -779,6 +786,99 @@ public class SoulseekClient
                 "Failed to send private message to user " + requestedUsername + ": ");
     }
 
+    public CompletableFuture<Void> addPrivateRoomMemberAsync(String roomName, String requestedUsername) {
+        return addPrivateRoomMemberAsync(roomName, requestedUsername, CancellationToken.none());
+    }
+
+    public CompletableFuture<Void> addPrivateRoomMemberAsync(
+            String roomName, String requestedUsername, CancellationToken cancellationToken) {
+        requireText(roomName, "roomName");
+        requireText(requestedUsername, "username");
+        requireLoggedIn("add members to private rooms");
+        return executeCorrelatedServerCommand(
+                new PrivateRoomAddUser(roomName, requestedUsername),
+                new WaitKey(MessageCode.Server.PRIVATE_ROOM_ADD_USER, roomName, requestedUsername),
+                cancellationToken,
+                "Failed to add user " + requestedUsername + " as member of private room " + roomName + ": ");
+    }
+
+    public CompletableFuture<Void> addPrivateRoomModeratorAsync(String roomName, String requestedUsername) {
+        return addPrivateRoomModeratorAsync(roomName, requestedUsername, CancellationToken.none());
+    }
+
+    public CompletableFuture<Void> addPrivateRoomModeratorAsync(
+            String roomName, String requestedUsername, CancellationToken cancellationToken) {
+        requireText(roomName, "roomName");
+        requireText(requestedUsername, "username");
+        requireLoggedIn("add moderators to private rooms");
+        return executeCorrelatedServerCommand(
+                new PrivateRoomAddOperator(roomName, requestedUsername),
+                new WaitKey(MessageCode.Server.PRIVATE_ROOM_ADD_OPERATOR, roomName, requestedUsername),
+                cancellationToken,
+                "Failed to add user " + requestedUsername + " as moderator of private room " + roomName + ": ");
+    }
+
+    public CompletableFuture<Void> removePrivateRoomMemberAsync(String roomName, String requestedUsername) {
+        return removePrivateRoomMemberAsync(roomName, requestedUsername, CancellationToken.none());
+    }
+
+    public CompletableFuture<Void> removePrivateRoomMemberAsync(
+            String roomName, String requestedUsername, CancellationToken cancellationToken) {
+        requireText(roomName, "roomName");
+        requireText(requestedUsername, "username");
+        requireLoggedIn("remove users from private rooms");
+        return executeCorrelatedServerCommand(
+                new PrivateRoomRemoveUser(roomName, requestedUsername),
+                new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVE_USER, roomName, requestedUsername),
+                cancellationToken,
+                "Failed to remove user " + requestedUsername + " as member of private room " + roomName + ": ");
+    }
+
+    public CompletableFuture<Void> removePrivateRoomModeratorAsync(String roomName, String requestedUsername) {
+        return removePrivateRoomModeratorAsync(roomName, requestedUsername, CancellationToken.none());
+    }
+
+    public CompletableFuture<Void> removePrivateRoomModeratorAsync(
+            String roomName, String requestedUsername, CancellationToken cancellationToken) {
+        requireText(roomName, "roomName");
+        requireText(requestedUsername, "username");
+        requireLoggedIn("remove moderators from private rooms");
+        return executeCorrelatedServerCommand(
+                new PrivateRoomRemoveOperator(roomName, requestedUsername),
+                new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVE_OPERATOR, roomName, requestedUsername),
+                cancellationToken,
+                "Failed to remove user " + requestedUsername + " as moderator of private room " + roomName + ": ");
+    }
+
+    public CompletableFuture<Void> dropPrivateRoomMembershipAsync(String roomName) {
+        return dropPrivateRoomMembershipAsync(roomName, CancellationToken.none());
+    }
+
+    public CompletableFuture<Void> dropPrivateRoomMembershipAsync(
+            String roomName, CancellationToken cancellationToken) {
+        requireText(roomName, "roomName");
+        requireLoggedIn("drop private room membership");
+        return executeCorrelatedServerCommand(
+                new PrivateRoomDropMembershipCommand(roomName),
+                new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVED, roomName),
+                cancellationToken,
+                "Failed to drop membership of private room " + roomName + ": ");
+    }
+
+    public CompletableFuture<Void> dropPrivateRoomOwnershipAsync(String roomName) {
+        return dropPrivateRoomOwnershipAsync(roomName, CancellationToken.none());
+    }
+
+    public CompletableFuture<Void> dropPrivateRoomOwnershipAsync(String roomName, CancellationToken cancellationToken) {
+        requireText(roomName, "roomName");
+        requireLoggedIn("drop private room ownership");
+        return executeCorrelatedServerCommand(
+                new PrivateRoomDropOwnershipCommand(roomName),
+                new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVED, roomName),
+                cancellationToken,
+                "Failed to drop ownership of private room " + roomName + ": ");
+    }
+
     public CompletableFuture<Void> sendRoomMessageAsync(String roomName, String message) {
         return sendRoomMessageAsync(roomName, message, CancellationToken.none());
     }
@@ -1292,13 +1392,31 @@ public class SoulseekClient
 
     private CompletableFuture<Void> writeServerAsync(
             IOutgoingMessage message, CancellationToken cancellationToken, String failurePrefix) {
+        return mapClientFailure(invokeServerWrite(message, cancellationToken), failurePrefix);
+    }
+
+    private CompletableFuture<Void> executeCorrelatedServerCommand(
+            IOutgoingMessage message, WaitKey waitKey, CancellationToken cancellationToken, String failurePrefix) {
+        CancellationToken token = defaultToken(cancellationToken);
+        CompletableFuture<Void> wait;
+        try {
+            wait = waiter.waitAsync(waitKey, null, token);
+        } catch (Throwable failure) {
+            return mapClientFailure(CompletableFuture.failedFuture(failure), failurePrefix);
+        }
+        CompletableFuture<Void> responseWait = wait;
+        CompletableFuture<Void> operation = invokeServerWrite(message, token).thenCompose(ignored -> responseWait);
+        return mapClientFailure(operation, failurePrefix);
+    }
+
+    private CompletableFuture<Void> invokeServerWrite(IOutgoingMessage message, CancellationToken cancellationToken) {
         CompletableFuture<Void> operation;
         try {
             operation = serverConnection.writeAsync(message, defaultToken(cancellationToken));
         } catch (Throwable failure) {
             operation = CompletableFuture.failedFuture(failure);
         }
-        return mapClientFailure(operation, failurePrefix);
+        return operation;
     }
 
     private CompletableFuture<InetSocketAddress> retrieveUserEndPoint(
