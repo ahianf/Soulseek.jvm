@@ -58,8 +58,8 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     }
 
     @Override
-    public void handleChildMessageRead(MessageConnection sender, MessageEvent eventArgs) {
-        handleChildMessageRead(sender, eventArgs.getMessage());
+    public void handleChildMessageRead(MessageConnection sender, MessageEvent eventData) {
+        handleChildMessageRead(sender, eventData.getMessage());
     }
 
     @Override
@@ -107,9 +107,9 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     }
 
     @Override
-    public void handleChildMessageWritten(MessageConnection connection, MessageEvent eventArgs) {
+    public void handleChildMessageWritten(MessageConnection connection, MessageEvent eventData) {
         MessageCode.Distributed code =
-                new MessageReader<>(eventArgs.getMessage(), MessageCode.Distributed.class).readCode();
+                new MessageReader<>(eventData.getMessage(), MessageCode.Distributed.class).readCode();
         if (code != MessageCode.Distributed.PING) {
             diagnostic.debug("Distributed child message sent: " + code + " to "
                     + connection.getUsername() + " ("
@@ -119,8 +119,8 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     }
 
     @Override
-    public void handleMessageRead(MessageConnection sender, MessageEvent eventArgs) {
-        handleMessageRead(sender, eventArgs.getMessage());
+    public void handleMessageRead(MessageConnection sender, MessageEvent eventData) {
+        handleMessageRead(sender, eventData.getMessage());
     }
 
     @Override
@@ -204,9 +204,9 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     }
 
     @Override
-    public void handleMessageWritten(MessageConnection sender, MessageEvent eventArgs) {
+    public void handleMessageWritten(MessageConnection sender, MessageEvent eventData) {
         MessageCode.Distributed code =
-                new MessageReader<>(eventArgs.getMessage(), MessageCode.Distributed.class).readCode();
+                new MessageReader<>(eventData.getMessage(), MessageCode.Distributed.class).readCode();
         diagnostic.debug("Distributed message sent: " + code);
     }
 
@@ -282,8 +282,8 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                 client.getDistributedConnectionManager().getParent());
     }
 
-    private void raiseDiagnostic(DiagnosticEvent eventArgs) {
-        diagnosticListeners.forEach(listener -> listener.handle(this, eventArgs));
+    private void raiseDiagnostic(DiagnosticEvent eventData) {
+        diagnosticListeners.forEach(listener -> listener.handle(this, eventData));
     }
 
     private static Throwable unwrap(Throwable failure) {

@@ -5,7 +5,7 @@
 package dev.slsk.network;
 
 import dev.slsk.network.tcp.Connection;
-import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
+import dev.slsk.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.network.tcp.ConnectionEventListener;
 import dev.slsk.network.tcp.TcpClient;
 import dev.slsk.options.ConnectionOptions;
@@ -40,7 +40,7 @@ public interface ConnectionFactory {
     MessageConnection getServerConnection(
             InetSocketAddress ipEndpoint,
             ConnectionEventListener<Void> connectedEventHandler,
-            ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
+            ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedEventHandler,
             MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
             MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler,
             ConnectionOptions options,
@@ -49,7 +49,7 @@ public interface ConnectionFactory {
     default MessageConnection getServerConnection(
             InetSocketAddress ipEndpoint,
             ConnectionEventListener<Void> connectedEventHandler,
-            ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
+            ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedEventHandler,
             MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
             MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler) {
         return getServerConnection(
@@ -65,7 +65,7 @@ public interface ConnectionFactory {
     default MessageConnection getServerConnection(
             InetSocketAddress ipEndpoint,
             ConnectionEventListener<Void> connectedEventHandler,
-            ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
+            ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedEventHandler,
             MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
             MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler,
             ConnectionOptions options) {

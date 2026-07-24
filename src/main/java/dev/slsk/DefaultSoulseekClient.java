@@ -135,8 +135,8 @@ import dev.slsk.network.PeerConnectionManager;
 import dev.slsk.network.PeerConnectionManagerClient;
 import dev.slsk.network.PeerEndpoint;
 import dev.slsk.network.tcp.Connection;
-import dev.slsk.network.tcp.ConnectionDataEventArgs;
-import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
+import dev.slsk.network.tcp.ConnectionDataEvent;
+import dev.slsk.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.network.tcp.ConnectionEventListener;
 import dev.slsk.network.tcp.Listener;
 import dev.slsk.network.tcp.SocketListener;
@@ -330,7 +330,7 @@ final class DefaultSoulseekClient
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(
                         this.options.getMinimumDiagnosticLevel(),
-                        eventArgs -> raise(Event.DIAGNOSTIC_GENERATED, eventArgs))
+                        eventData -> raise(Event.DIAGNOSTIC_GENERATED, eventData))
                 : diagnosticFactory;
         GlobalDiagnostic.init(diagnostic);
 
@@ -1066,20 +1066,20 @@ final class DefaultSoulseekClient
                 })
                 .thenCompose(responseConnection -> {
                     MessageConnection connection = responseConnection.connection();
-                    long responseLength = responseConnection.eventArgs().getLength() - 4;
+                    long responseLength = responseConnection.eventData().getLength() - 4;
                     AtomicBoolean completionEventFired = new AtomicBoolean();
                     dev.slsk.network.MessageConnectionEventListener<dev.slsk.network.MessageDataEvent>
-                            progressListener = (sender, eventArgs) -> updateBrowseProgress(
+                            progressListener = (sender, eventData) -> updateBrowseProgress(
                             requestedUsername,
                             operationOptions,
-                            eventArgs.getCurrentLength(),
-                            eventArgs.getTotalLength(),
+                            eventData.getCurrentLength(),
+                            eventData.getTotalLength(),
                             completionEventFired);
-                    connection.addDisconnectedListener((sender, eventArgs) -> waiter.fail(
+                    connection.addDisconnectedListener((sender, eventData) -> waiter.fail(
                             browseWaitKey,
                             new ConnectionException(
-                                    "Peer connection disconnected " + "unexpectedly: " + eventArgs.getMessage(),
-                                    eventArgs.getException())));
+                                    "Peer connection disconnected " + "unexpectedly: " + eventData.getMessage(),
+                                    eventData.getException())));
                     connection.addMessageDataReadListener(progressListener);
                     updateBrowseProgress(requestedUsername, operationOptions, 0, responseLength, completionEventFired);
                     return browseWait.thenApply(response -> {
@@ -2842,43 +2842,43 @@ final class DefaultSoulseekClient
 
     private void bindEvents() {
         listenerHandler.addDiagnosticGeneratedListener(
-                (sender, eventArgs) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventArgs));
+                (sender, eventData) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventData));
         searchResponder.addDiagnosticGeneratedListener(
-                (sender, eventArgs) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventArgs));
+                (sender, eventData) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventData));
         searchResponder.addRequestReceivedListener(
-                (sender, eventArgs) -> raise(Event.SEARCH_REQUEST_RECEIVED, eventArgs));
+                (sender, eventData) -> raise(Event.SEARCH_REQUEST_RECEIVED, eventData));
         searchResponder.addResponseDeliveredListener(
-                (sender, eventArgs) -> raise(Event.SEARCH_RESPONSE_DELIVERED, eventArgs));
+                (sender, eventData) -> raise(Event.SEARCH_RESPONSE_DELIVERED, eventData));
         searchResponder.addResponseDeliveryFailedListener(
-                (sender, eventArgs) -> raise(Event.SEARCH_RESPONSE_DELIVERY_FAILED, eventArgs));
+                (sender, eventData) -> raise(Event.SEARCH_RESPONSE_DELIVERY_FAILED, eventData));
 
         peerMessageHandler.addDiagnosticGeneratedListener(
-                (sender, eventArgs) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventArgs));
-        peerMessageHandler.addDownloadDeniedListener((sender, eventArgs) -> downloadDenied(eventArgs));
-        peerMessageHandler.addDownloadFailedListener((sender, eventArgs) -> downloadFailed(eventArgs));
+                (sender, eventData) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventData));
+        peerMessageHandler.addDownloadDeniedListener((sender, eventData) -> downloadDenied(eventData));
+        peerMessageHandler.addDownloadFailedListener((sender, eventData) -> downloadFailed(eventData));
         distributedMessageHandler.addDiagnosticGeneratedListener(
-                (sender, eventArgs) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventArgs));
+                (sender, eventData) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventData));
         peerConnectionManager.addDiagnosticGeneratedListener(
-                (sender, eventArgs) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventArgs));
+                (sender, eventData) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventData));
         distributedConnectionManager.addDiagnosticGeneratedListener(
-                (sender, eventArgs) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventArgs));
+                (sender, eventData) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventData));
         distributedConnectionManager.addPromotedToBranchRootListener(
-                (sender, eventArgs) -> raise(Event.PROMOTED_TO_DISTRIBUTED_BRANCH_ROOT, null));
+                (sender, eventData) -> raise(Event.PROMOTED_TO_DISTRIBUTED_BRANCH_ROOT, null));
         distributedConnectionManager.addDemotedFromBranchRootListener(
-                (sender, eventArgs) -> raise(Event.DEMOTED_FROM_DISTRIBUTED_BRANCH_ROOT, null));
+                (sender, eventData) -> raise(Event.DEMOTED_FROM_DISTRIBUTED_BRANCH_ROOT, null));
         distributedConnectionManager.addParentAdoptedListener(
-                (sender, eventArgs) -> raise(Event.DISTRIBUTED_PARENT_ADOPTED, eventArgs));
+                (sender, eventData) -> raise(Event.DISTRIBUTED_PARENT_ADOPTED, eventData));
         distributedConnectionManager.addParentDisconnectedListener(
-                (sender, eventArgs) -> raise(Event.DISTRIBUTED_PARENT_DISCONNECTED, eventArgs));
+                (sender, eventData) -> raise(Event.DISTRIBUTED_PARENT_DISCONNECTED, eventData));
         distributedConnectionManager.addChildAddedListener(
-                (sender, eventArgs) -> raise(Event.DISTRIBUTED_CHILD_ADDED, eventArgs));
+                (sender, eventData) -> raise(Event.DISTRIBUTED_CHILD_ADDED, eventData));
         distributedConnectionManager.addChildDisconnectedListener(
-                (sender, eventArgs) -> raise(Event.DISTRIBUTED_CHILD_DISCONNECTED, eventArgs));
+                (sender, eventData) -> raise(Event.DISTRIBUTED_CHILD_DISCONNECTED, eventData));
         distributedConnectionManager.addStateChangedListener(
-                (sender, eventArgs) -> raise(Event.DISTRIBUTED_NETWORK_STATE_CHANGED, eventArgs));
+                (sender, eventData) -> raise(Event.DISTRIBUTED_NETWORK_STATE_CHANGED, eventData));
 
         serverMessageHandler.addDiagnosticGeneratedListener(
-                (sender, eventArgs) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventArgs));
+                (sender, eventData) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventData));
         bindServerEvents();
     }
 
@@ -2908,15 +2908,15 @@ final class DefaultSoulseekClient
         forwardServer(ServerMessageEvent.GLOBAL_MESSAGE_RECEIVED, Event.GLOBAL_MESSAGE_RECEIVED);
         forwardServer(ServerMessageEvent.DISTRIBUTED_NETWORK_RESET, Event.DISTRIBUTED_NETWORK_RESET);
         forwardServer(ServerMessageEvent.EXCLUDED_SEARCH_PHRASES_RECEIVED, Event.EXCLUDED_SEARCH_PHRASES_RECEIVED);
-        serverMessageHandler.<ServerInfo>addListener(ServerMessageEvent.SERVER_INFO_RECEIVED, (sender, eventArgs) -> {
+        serverMessageHandler.<ServerInfo>addListener(ServerMessageEvent.SERVER_INFO_RECEIVED, (sender, eventData) -> {
             serverInfo = serverInfo.with(
-                    eventArgs.getParentMinSpeed(),
-                    eventArgs.getParentSpeedRatio(),
-                    eventArgs.getWishlistInterval(),
-                    eventArgs.isSupporter());
+                    eventData.getParentMinSpeed(),
+                    eventData.getParentSpeedRatio(),
+                    eventData.getWishlistInterval(),
+                    eventData.isSupporter());
             raise(Event.SERVER_INFO_RECEIVED, serverInfo);
         });
-        serverMessageHandler.<Void>addListener(ServerMessageEvent.KICKED_FROM_SERVER, (sender, eventArgs) -> {
+        serverMessageHandler.<Void>addListener(ServerMessageEvent.KICKED_FROM_SERVER, (sender, eventData) -> {
             diagnostic.info("Kicked from server.");
             raise(Event.KICKED_FROM_SERVER, null);
             disconnect("Kicked from server", new KickedFromServerException());
@@ -2924,18 +2924,18 @@ final class DefaultSoulseekClient
     }
 
     private <T> void forwardServer(ServerMessageEvent source, Event target) {
-        serverMessageHandler.<T>addListener(source, (sender, eventArgs) -> raise(target, eventArgs));
+        serverMessageHandler.<T>addListener(source, (sender, eventData) -> raise(target, eventData));
     }
 
-    private void downloadDenied(DownloadDeniedEvent eventArgs) {
+    private void downloadDenied(DownloadDeniedEvent eventData) {
         try {
             List<TransferInternal> matching = downloads.values().stream()
-                    .filter(download -> Objects.equals(download.getUsername(), eventArgs.getUsername())
-                            && Objects.equals(download.getFilename(), eventArgs.getFilename()))
+                    .filter(download -> Objects.equals(download.getUsername(), eventData.getUsername())
+                            && Objects.equals(download.getFilename(), eventData.getFilename()))
                     .toList();
             for (TransferInternal download : matching) {
                 download.getRemoteTaskCompletionSource()
-                        .completeExceptionally(new TransferRejectedException(eventArgs.getMessage()));
+                        .completeExceptionally(new TransferRejectedException(eventData.getMessage()));
                 diagnostic.debug("Download of " + download.getFilename() + " from "
                         + download.getUsername()
                         + " rejected by remote client (token: "
@@ -2944,15 +2944,15 @@ final class DefaultSoulseekClient
         } catch (Throwable failure) {
             diagnostic.warning("Failed to mark download(s) rejected: " + failureMessage(failure), failure);
         } finally {
-            raise(Event.DOWNLOAD_DENIED, eventArgs);
+            raise(Event.DOWNLOAD_DENIED, eventData);
         }
     }
 
-    private void downloadFailed(DownloadFailedEvent eventArgs) {
+    private void downloadFailed(DownloadFailedEvent eventData) {
         try {
             List<TransferInternal> matching = downloads.values().stream()
-                    .filter(download -> Objects.equals(download.getUsername(), eventArgs.getUsername())
-                            && Objects.equals(download.getFilename(), eventArgs.getFilename()))
+                    .filter(download -> Objects.equals(download.getUsername(), eventData.getUsername())
+                            && Objects.equals(download.getFilename(), eventData.getFilename()))
                     .toList();
             for (TransferInternal download : matching) {
                 download.getRemoteTaskCompletionSource()
@@ -2966,7 +2966,7 @@ final class DefaultSoulseekClient
         } catch (Throwable failure) {
             diagnostic.warning("Failed to mark download(s) failed: " + failureMessage(failure), failure);
         } finally {
-            raise(Event.DOWNLOAD_FAILED, eventArgs);
+            raise(Event.DOWNLOAD_FAILED, eventData);
         }
     }
 
@@ -2978,14 +2978,14 @@ final class DefaultSoulseekClient
         listeners.get(event).remove(listener);
     }
 
-    private <T> void raise(Event event, T eventArgs) {
-        raiseFrom(this, event, eventArgs);
+    private <T> void raise(Event event, T eventData) {
+        raiseFrom(this, event, eventData);
     }
 
     @SuppressWarnings("unchecked")
-    private <T> void raiseFrom(Object sender, Event event, T eventArgs) {
+    private <T> void raiseFrom(Object sender, Event event, T eventData) {
         for (SoulseekClientEventListener<?> listener : listeners.get(event)) {
-            ((SoulseekClientEventListener<T>) listener).handle(sender, eventArgs);
+            ((SoulseekClientEventListener<T>) listener).handle(sender, eventData);
         }
     }
 
@@ -3018,22 +3018,22 @@ final class DefaultSoulseekClient
             long bytesTransferred,
             long size,
             AtomicBoolean completionEventFired) {
-        BrowseProgressUpdatedEvent eventArgs =
+        BrowseProgressUpdatedEvent eventData =
                 new BrowseProgressUpdatedEvent(requestedUsername, bytesTransferred, size);
-        if (Double.compare(eventArgs.getPercentComplete(), 100.0) == 0) {
+        if (Double.compare(eventData.getPercentComplete(), 100.0) == 0) {
             completionEventFired.set(true);
         }
         if (operationOptions.getProgressUpdated() != null) {
             operationOptions
                     .getProgressUpdated()
                     .onProgressUpdated(new BrowseProgress(
-                            eventArgs.getUsername(),
-                            eventArgs.getBytesTransferred(),
-                            eventArgs.getBytesRemaining(),
-                            eventArgs.getPercentComplete(),
-                            eventArgs.getSize()));
+                            eventData.getUsername(),
+                            eventData.getBytesTransferred(),
+                            eventData.getBytesRemaining(),
+                            eventData.getPercentComplete(),
+                            eventData.getSize()));
         }
-        raise(Event.BROWSE_PROGRESS_UPDATED, eventArgs);
+        raise(Event.BROWSE_PROGRESS_UPDATED, eventData);
     }
 
     private CompletableFuture<Void> connectInternalAsync(
@@ -3091,9 +3091,9 @@ final class DefaultSoulseekClient
 
             serverConnection = connectionFactory.getServerConnection(
                     requestedEndpoint,
-                    (sender, eventArgs) ->
+                    (sender, eventData) ->
                             changeState(SoulseekClientStates.CONNECTED, "Connected to " + ipEndpoint, null),
-                    (sender, eventArgs) -> disconnect(eventArgs.getMessage(), eventArgs.getException()),
+                    (sender, eventData) -> disconnect(eventData.getMessage(), eventData.getException()),
                     serverMessageHandler::handleMessageRead,
                     serverMessageHandler::handleMessageWritten,
                     options.getServerConnectionOptions());
@@ -3344,15 +3344,15 @@ final class DefaultSoulseekClient
         Consumer<SearchStates> updateState = newState -> {
             search.setState(newState);
             Search snapshot = search.toSearch();
-            SearchStateChangedEvent eventArgs = new SearchStateChangedEvent(previousState[0], snapshot);
+            SearchStateChangedEvent eventData = new SearchStateChangedEvent(previousState[0], snapshot);
             previousState[0] = newState;
             if (invocation.options().getStateChanged() != null) {
                 invocation
                         .options()
                         .getStateChanged()
-                        .onStateChanged(new SearchStateChange(eventArgs.getPreviousState(), eventArgs.getSearch()));
+                        .onStateChanged(new SearchStateChange(eventData.getPreviousState(), eventData.getSearch()));
             }
-            raise(Event.SEARCH_STATE_CHANGED, eventArgs);
+            raise(Event.SEARCH_STATE_CHANGED, eventData);
         };
 
         CompletableFuture<Search> operation;
@@ -3372,16 +3372,16 @@ final class DefaultSoulseekClient
                     byte[] message = buildSearchMessage(invocation.scope(), search);
                     search.setResponseReceived(response -> {
                         responseHandler.accept(response);
-                        SearchResponseReceivedEvent eventArgs =
+                        SearchResponseReceivedEvent eventData =
                                 new SearchResponseReceivedEvent(response, search.toSearch());
                         if (invocation.options().getResponseReceived() != null) {
                             invocation
                                     .options()
                                     .getResponseReceived()
                                     .onResponseReceived(
-                                            new SearchResponseReceived(eventArgs.getSearch(), eventArgs.getResponse()));
+                                            new SearchResponseReceived(eventData.getSearch(), eventData.getResponse()));
                         }
-                        raise(Event.SEARCH_RESPONSE_RECEIVED, eventArgs);
+                        raise(Event.SEARCH_RESPONSE_RECEIVED, eventData);
                     });
                     activeSearch = invokeServerByteWrite(message, cancellationToken)
                             .thenRun(() -> updateState.accept(SearchStates.IN_PROGRESS))
@@ -3544,8 +3544,8 @@ final class DefaultSoulseekClient
         private Connection connection;
         private OutputStream outputStream;
         private PositionTrackingOutputStream trackingStream;
-        private ConnectionEventListener<ConnectionDataEventArgs> dataReadListener;
-        private ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedListener;
+        private ConnectionEventListener<ConnectionDataEvent> dataReadListener;
+        private ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedListener;
 
         private DownloadOperation(
                 TransferInternal download,
@@ -3681,14 +3681,14 @@ final class DefaultSoulseekClient
 
         private void bindConnectionEvents() {
             dataReadListener =
-                    (sender, eventArgs) -> updateProgress(download.getStartOffset() + eventArgs.getCurrentLength());
-            disconnectedListener = (sender, eventArgs) -> {
-                Throwable failure = eventArgs.getException();
+                    (sender, eventData) -> updateProgress(download.getStartOffset() + eventData.getCurrentLength());
+            disconnectedListener = (sender, eventData) -> {
+                Throwable failure = eventData.getException();
                 if (failure instanceof CancellationException || failure instanceof TimeoutException) {
                     disconnected.completeExceptionally(failure);
                 } else {
                     disconnected.completeExceptionally(
-                            new ConnectionException("Transfer failed: " + eventArgs.getMessage(), failure));
+                            new ConnectionException("Transfer failed: " + eventData.getMessage(), failure));
                 }
             };
             connection.addDataReadListener(dataReadListener);
@@ -3897,13 +3897,13 @@ final class DefaultSoulseekClient
         private void updateState(TransferStates state) {
             download.setState(state);
             Transfer transfer = download.toTransfer();
-            TransferStateChangedEvent eventArgs = new TransferStateChangedEvent(lastState, transfer);
+            TransferStateChangedEvent eventData = new TransferStateChangedEvent(lastState, transfer);
             TransferStates previous = lastState;
             lastState = state;
             if (transferOptions.getStateChanged() != null) {
                 transferOptions.getStateChanged().onStateChanged(new TransferStateChange(previous, transfer));
             }
-            raise(Event.TRANSFER_STATE_CHANGED, eventArgs);
+            raise(Event.TRANSFER_STATE_CHANGED, eventData);
         }
 
         private void updateProgress(long bytesDownloaded) {
@@ -4012,8 +4012,8 @@ final class DefaultSoulseekClient
         private Connection connection;
         private InputStream inputStream;
         private PositionTrackingInputStream trackingStream;
-        private ConnectionEventListener<ConnectionDataEventArgs> dataWrittenListener;
-        private ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedListener;
+        private ConnectionEventListener<ConnectionDataEvent> dataWrittenListener;
+        private ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedListener;
 
         private UploadOperation(
                 TransferInternal upload,
@@ -4128,14 +4128,14 @@ final class DefaultSoulseekClient
 
         private void bindConnectionEvents() {
             dataWrittenListener =
-                    (sender, eventArgs) -> updateProgress(upload.getStartOffset() + eventArgs.getCurrentLength());
-            disconnectedListener = (sender, eventArgs) -> {
-                Throwable failure = eventArgs.getException();
+                    (sender, eventData) -> updateProgress(upload.getStartOffset() + eventData.getCurrentLength());
+            disconnectedListener = (sender, eventData) -> {
+                Throwable failure = eventData.getException();
                 if (failure instanceof CancellationException || failure instanceof TimeoutException) {
                     disconnected.completeExceptionally(failure);
                 } else {
                     disconnected.completeExceptionally(
-                            new ConnectionException("Transfer failed: " + eventArgs.getMessage(), failure));
+                            new ConnectionException("Transfer failed: " + eventData.getMessage(), failure));
                 }
             };
             connection.addDataWrittenListener(dataWrittenListener);
@@ -4362,13 +4362,13 @@ final class DefaultSoulseekClient
         private void updateState(TransferStates state) {
             upload.setState(state);
             Transfer transfer = upload.toTransfer();
-            TransferStateChangedEvent eventArgs = new TransferStateChangedEvent(lastState, transfer);
+            TransferStateChangedEvent eventData = new TransferStateChangedEvent(lastState, transfer);
             TransferStates previous = lastState;
             lastState = state;
             if (transferOptions.getStateChanged() != null) {
                 transferOptions.getStateChanged().onStateChanged(new TransferStateChange(previous, transfer));
             }
-            raise(Event.TRANSFER_STATE_CHANGED, eventArgs);
+            raise(Event.TRANSFER_STATE_CHANGED, eventData);
         }
 
         private void updateProgress(long bytesUploaded) {

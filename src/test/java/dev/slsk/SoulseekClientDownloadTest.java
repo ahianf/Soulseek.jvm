@@ -29,8 +29,8 @@ import dev.slsk.messaging.messages.UserAddressResponse;
 import dev.slsk.network.MessageConnection;
 import dev.slsk.network.PeerConnectionManager;
 import dev.slsk.network.tcp.Connection;
-import dev.slsk.network.tcp.ConnectionDataEventArgs;
-import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
+import dev.slsk.network.tcp.ConnectionDataEvent;
+import dev.slsk.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.network.tcp.ConnectionEventListener;
 import dev.slsk.network.tcp.ConnectionGovernor;
 import dev.slsk.network.tcp.ConnectionReporter;
@@ -139,9 +139,9 @@ class SoulseekClientDownloadTest {
             List<TransferStates> states = new ArrayList<>();
             List<Long> progress = new ArrayList<>();
             fixture.client.addTransferStateChangedListener(
-                    (sender, eventArgs) -> states.add(eventArgs.getTransfer().getState()));
+                    (sender, eventData) -> states.add(eventData.getTransfer().getState()));
             fixture.client.addTransferProgressUpdatedListener(
-                    (sender, eventArgs) -> progress.add(eventArgs.getTransfer().getBytesTransferred()));
+                    (sender, eventData) -> progress.add(eventData.getTransfer().getBytesTransferred()));
 
             Transfer result = fixture.client
                     .downloadAsync(
@@ -184,9 +184,9 @@ class SoulseekClientDownloadTest {
         try (Fixture fixture = new Fixture()) {
             fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(12, 5));
             List<Transfer> terminal = new ArrayList<>();
-            fixture.client.addTransferStateChangedListener((sender, eventArgs) -> {
-                if (eventArgs.getTransfer().getState().hasFlag(TransferStates.COMPLETED)) {
-                    terminal.add(eventArgs.getTransfer());
+            fixture.client.addTransferStateChangedListener((sender, eventData) -> {
+                if (eventData.getTransfer().getState().hasFlag(TransferStates.COMPLETED)) {
+                    terminal.add(eventData.getTransfer());
                 }
             });
 
@@ -208,9 +208,9 @@ class SoulseekClientDownloadTest {
             fixture.waiter.startRequest =
                     CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 130, "file", 6));
             List<Transfer> terminal = new ArrayList<>();
-            fixture.client.addTransferStateChangedListener((sender, eventArgs) -> {
-                if (eventArgs.getTransfer().getState().hasFlag(TransferStates.COMPLETED)) {
-                    terminal.add(eventArgs.getTransfer());
+            fixture.client.addTransferStateChangedListener((sender, eventData) -> {
+                if (eventData.getTransfer().getState().hasFlag(TransferStates.COMPLETED)) {
+                    terminal.add(eventData.getTransfer());
                 }
             });
 
@@ -415,9 +415,9 @@ class SoulseekClientDownloadTest {
                     .completeExceptionally(new TransferReportedFailedException("remote failed"));
             fixture.transfer.blockRead = true;
             List<Transfer> terminal = new ArrayList<>();
-            fixture.client.addTransferStateChangedListener((sender, eventArgs) -> {
-                if (eventArgs.getTransfer().getState().hasFlag(TransferStates.COMPLETED)) {
-                    terminal.add(eventArgs.getTransfer());
+            fixture.client.addTransferStateChangedListener((sender, eventData) -> {
+                if (eventData.getTransfer().getState().hasFlag(TransferStates.COMPLETED)) {
+                    terminal.add(eventData.getTransfer());
                 }
             });
 
@@ -443,9 +443,9 @@ class SoulseekClientDownloadTest {
                     .completeExceptionally(rejection);
             fixture.transfer.blockRead = true;
             List<Transfer> terminal = new ArrayList<>();
-            fixture.client.addTransferStateChangedListener((sender, eventArgs) -> {
-                if (eventArgs.getTransfer().getState().hasFlag(TransferStates.COMPLETED)) {
-                    terminal.add(eventArgs.getTransfer());
+            fixture.client.addTransferStateChangedListener((sender, eventData) -> {
+                if (eventData.getTransfer().getState().hasFlag(TransferStates.COMPLETED)) {
+                    terminal.add(eventData.getTransfer());
                 }
             });
 
@@ -808,8 +808,8 @@ class SoulseekClientDownloadTest {
         private Runnable readHook;
         private Exception disconnectOnRead;
         private RuntimeException closeFailure;
-        private ConnectionEventListener<ConnectionDataEventArgs> dataReadListener;
-        private ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedListener;
+        private ConnectionEventListener<ConnectionDataEvent> dataReadListener;
+        private ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedListener;
         private final Connection proxy = (Connection) Proxy.newProxyInstance(
                 Connection.class.getClassLoader(), new Class<?>[] {Connection.class}, this::invoke);
 
@@ -831,7 +831,7 @@ class SoulseekClientDownloadTest {
                 }
                 if (disconnectOnRead != null) {
                     disconnectedListener.handle(
-                            proxy, new ConnectionDisconnectedEventArgs("connection lost", disconnectOnRead));
+                            proxy, new ConnectionDisconnectedEvent("connection lost", disconnectOnRead));
                     return new CompletableFuture<>();
                 }
                 if (blockRead) {
@@ -859,7 +859,7 @@ class SoulseekClientDownloadTest {
                         reporter.report(attempted, granted, actual);
                     }
                     if (dataReadListener != null) {
-                        dataReadListener.handle(proxy, new ConnectionDataEventArgs(transferred, length));
+                        dataReadListener.handle(proxy, new ConnectionDataEvent(transferred, length));
                     }
                 }
                 return CompletableFuture.completedFuture(null);

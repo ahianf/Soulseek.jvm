@@ -89,8 +89,8 @@ class ConnectionTest {
     void disconnectRaisesEvents() throws Exception {
         FakeTcpClient client = new FakeTcpClient(new FakeStream(), true);
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), client);
-        List<ConnectionStateChangedEventArgs> states = new ArrayList<>();
-        List<ConnectionDisconnectedEventArgs> disconnected = new ArrayList<>();
+        List<ConnectionStateChangedEvent> states = new ArrayList<>();
+        List<ConnectionDisconnectedEvent> disconnected = new ArrayList<>();
         connection.addStateChangedListener((sender, args) -> {
             assertSame(connection, sender);
             states.add(args);

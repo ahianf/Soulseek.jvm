@@ -33,7 +33,7 @@ import dev.slsk.network.MessageConnectionEventListener;
 import dev.slsk.network.MessageDataEvent;
 import dev.slsk.network.MessageReceivedEvent;
 import dev.slsk.network.PeerConnectionManager;
-import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
+import dev.slsk.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.network.tcp.ConnectionEventListener;
 import dev.slsk.options.BrowseOptions;
 import dev.slsk.transfer.TransferInternal;
@@ -352,7 +352,7 @@ class SoulseekClientPeerRequestTest {
                 CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));
         List<BrowseProgressUpdatedEvent> events = new ArrayList<>();
         List<dev.slsk.options.BrowseProgress> callbacks = new ArrayList<>();
-        fixture.client.addBrowseProgressUpdatedListener((sender, eventArgs) -> events.add(eventArgs));
+        fixture.client.addBrowseProgressUpdatedListener((sender, eventData) -> events.add(eventData));
         CancellationTokenSource source = new CancellationTokenSource();
         CancellationToken token = source.getToken();
 
@@ -525,7 +525,7 @@ class SoulseekClientPeerRequestTest {
         private CancellationToken token;
         private CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
         private RuntimeException synchronousFailure;
-        private ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedListener;
+        private ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedListener;
         private MessageConnectionEventListener<MessageDataEvent> messageDataListener;
         private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
@@ -559,7 +559,7 @@ class SoulseekClientPeerRequestTest {
         }
 
         private void raiseDisconnected(String message) {
-            disconnectedListener.handle(proxy, new ConnectionDisconnectedEventArgs(message));
+            disconnectedListener.handle(proxy, new ConnectionDisconnectedEvent(message));
         }
     }
 

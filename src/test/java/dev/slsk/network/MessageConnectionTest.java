@@ -230,7 +230,7 @@ class MessageConnectionTest {
 
     @Test
     @DisplayName("Message event data preserves source array identity and arithmetic")
-    void eventArgsPreserveData() {
+    void eventDataPreserveData() {
         byte[] code = new byte[] {1};
         byte[] message = new byte[] {2};
         MessageDataEvent progress = new MessageDataEvent(code, 0, 0);

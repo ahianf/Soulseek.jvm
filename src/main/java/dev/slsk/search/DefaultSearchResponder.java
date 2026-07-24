@@ -321,16 +321,16 @@ public final class DefaultSearchResponder implements SearchResponder {
     }
 
     private void raiseResponseDelivered(SearchResponseCacheRecord record) {
-        SearchRequestResponseEvent args = toEventArgs(record);
+        SearchRequestResponseEvent args = toEvent(record);
         responseDeliveredListeners.forEach(listener -> listener.handle(this, args));
     }
 
     private void raiseResponseFailed(SearchResponseCacheRecord record) {
-        SearchRequestResponseEvent args = toEventArgs(record);
+        SearchRequestResponseEvent args = toEvent(record);
         responseFailedListeners.forEach(listener -> listener.handle(this, args));
     }
 
-    private static SearchRequestResponseEvent toEventArgs(SearchResponseCacheRecord record) {
+    private static SearchRequestResponseEvent toEvent(SearchResponseCacheRecord record) {
         return new SearchRequestResponseEvent(
                 record.username(), record.token(), record.query(), record.searchResponse());
     }

@@ -102,11 +102,11 @@ class SoulseekClientTest {
     void stateChangesRaiseSourceEventsSynchronously() {
         Fixture fixture = new Fixture();
         List<String> order = new ArrayList<>();
-        fixture.client.addStateChangedListener((sender, eventArgs) -> order.add("state:" + eventArgs.getState()));
-        fixture.client.addConnectedListener((sender, eventArgs) -> order.add("connected"));
-        fixture.client.addLoggedInListener((sender, eventArgs) -> order.add("logged"));
+        fixture.client.addStateChangedListener((sender, eventData) -> order.add("state:" + eventData.getState()));
+        fixture.client.addConnectedListener((sender, eventData) -> order.add("connected"));
+        fixture.client.addLoggedInListener((sender, eventData) -> order.add("logged"));
         AtomicReference<SoulseekClientDisconnectedEvent> disconnected = new AtomicReference<>();
-        fixture.client.addDisconnectedListener((sender, eventArgs) -> disconnected.set(eventArgs));
+        fixture.client.addDisconnectedListener((sender, eventData) -> disconnected.set(eventData));
 
         fixture.client.changeState(SoulseekClientStates.CONNECTED, "connected", null);
         fixture.client.changeState(SoulseekClientStates.CONNECTED.or(SoulseekClientStates.LOGGED_IN), "logged", null);
@@ -157,8 +157,8 @@ class SoulseekClientTest {
                 2, second)));
         AtomicReference<DownloadDeniedEvent> denied = new AtomicReference<>();
         AtomicReference<DownloadFailedEvent> failed = new AtomicReference<>();
-        fixture.client.addDownloadDeniedListener((sender, eventArgs) -> denied.set(eventArgs));
-        fixture.client.addDownloadFailedListener((sender, eventArgs) -> failed.set(eventArgs));
+        fixture.client.addDownloadDeniedListener((sender, eventData) -> denied.set(eventData));
+        fixture.client.addDownloadFailedListener((sender, eventData) -> failed.set(eventData));
 
         fixture.peer.raiseDenied(new DownloadDeniedEvent("user", "file", "rejected"));
         assertInstanceOf(TransferRejectedException.class, failure(first.getRemoteTaskCompletionSource()));
@@ -439,12 +439,12 @@ class SoulseekClientTest {
             return defaultValue(method.getReturnType());
         }
 
-        private void raiseDenied(DownloadDeniedEvent eventArgs) {
-            denied.handle(proxy, eventArgs);
+        private void raiseDenied(DownloadDeniedEvent eventData) {
+            denied.handle(proxy, eventData);
         }
 
-        private void raiseFailed(DownloadFailedEvent eventArgs) {
-            failed.handle(proxy, eventArgs);
+        private void raiseFailed(DownloadFailedEvent eventData) {
+            failed.handle(proxy, eventData);
         }
     }
 
@@ -461,8 +461,8 @@ class SoulseekClientTest {
         }
 
         @SuppressWarnings("unchecked")
-        private <T> void raise(ServerMessageEvent event, T eventArgs) {
-            ((ServerMessageHandlerEventListener<T>) listeners.get(event)).handle(proxy, eventArgs);
+        private <T> void raise(ServerMessageEvent event, T eventData) {
+            ((ServerMessageHandlerEventListener<T>) listeners.get(event)).handle(proxy, eventData);
         }
     }
 
@@ -478,8 +478,8 @@ class SoulseekClientTest {
             return defaultValue(method.getReturnType());
         }
 
-        private void raiseDiagnostic(DiagnosticEvent eventArgs) {
-            diagnostic.handle(proxy, eventArgs);
+        private void raiseDiagnostic(DiagnosticEvent eventData) {
+            diagnostic.handle(proxy, eventData);
         }
     }
 
@@ -528,10 +528,10 @@ class SoulseekClientTest {
         }
 
         @SuppressWarnings("unchecked")
-        private <T> void raise(String registrationMethod, T eventArgs) {
+        private <T> void raise(String registrationMethod, T eventData) {
             dev.slsk.network.DistributedManagerEventListener<T> listener =
                     (dev.slsk.network.DistributedManagerEventListener<T>) eventListeners.get(registrationMethod);
-            listener.handle(proxy, eventArgs);
+            listener.handle(proxy, eventData);
         }
     }
 

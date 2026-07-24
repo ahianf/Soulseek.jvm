@@ -106,8 +106,8 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     @Override
-    public void handleMessageRead(MessageConnection sender, MessageEvent eventArgs) {
-        handleMessageRead(sender, eventArgs.getMessage());
+    public void handleMessageRead(MessageConnection sender, MessageEvent eventData) {
+        handleMessageRead(sender, eventData.getMessage());
     }
 
     @Override
@@ -210,8 +210,8 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     @Override
-    public void handleMessageReceived(MessageConnection connection, MessageReceivedEvent eventArgs) {
-        MessageCode.Peer code = MessageCode.Peer.fromValue(ByteBuffer.wrap(eventArgs.getCode())
+    public void handleMessageReceived(MessageConnection connection, MessageReceivedEvent eventData) {
+        MessageCode.Peer code = MessageCode.Peer.fromValue(ByteBuffer.wrap(eventData.getCode())
                 .order(ByteOrder.LITTLE_ENDIAN)
                 .getInt());
         try {
@@ -219,7 +219,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 client.getWaiter()
                         .complete(
                                 new WaitKey(Constants.WaitKey.BROWSE_RESPONSE_CONNECTION, connection.getUsername()),
-                                new BrowseResponseConnection(eventArgs, connection));
+                                new BrowseResponseConnection(eventData, connection));
             }
         } catch (Throwable failure) {
             diagnostic.warning(
@@ -232,8 +232,8 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     @Override
-    public void handleMessageWritten(MessageConnection connection, MessageEvent eventArgs) {
-        MessageCode.Peer code = new MessageReader<>(eventArgs.getMessage(), MessageCode.Peer.class).readCode();
+    public void handleMessageWritten(MessageConnection connection, MessageEvent eventData) {
+        MessageCode.Peer code = new MessageReader<>(eventData.getMessage(), MessageCode.Peer.class).readCode();
         diagnostic.debug("Peer message sent: " + code + " ("
                 + connection.getIpEndpoint() + ") (id: "
                 + connection.getId() + ")");
@@ -440,9 +440,9 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 .fail(
                         new WaitKey(MessageCode.Peer.TRANSFER_REQUEST, connection.getUsername(), denied.getFilename()),
                         new TransferRejectedException(denied.getMessage()));
-        DownloadDeniedEvent eventArgs =
+        DownloadDeniedEvent eventData =
                 new DownloadDeniedEvent(connection.getUsername(), denied.getFilename(), denied.getMessage());
-        downloadDeniedListeners.forEach(listener -> listener.handle(this, eventArgs));
+        downloadDeniedListeners.forEach(listener -> listener.handle(this, eventData));
     }
 
     private void handleUploadFailed(MessageConnection connection, byte[] message) {
@@ -452,8 +452,8 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 .fail(
                         new WaitKey(MessageCode.Peer.TRANSFER_REQUEST, connection.getUsername(), failed.getFilename()),
                         new TransferReportedFailedException("Download reported as failed by remote client"));
-        DownloadFailedEvent eventArgs = new DownloadFailedEvent(connection.getUsername(), failed.getFilename());
-        downloadFailedListeners.forEach(listener -> listener.handle(this, eventArgs));
+        DownloadFailedEvent eventData = new DownloadFailedEvent(connection.getUsername(), failed.getFilename());
+        downloadFailedListeners.forEach(listener -> listener.handle(this, eventData));
     }
 
     private CompletableFuture<EnqueueResult> tryEnqueueDownloadAsync(
@@ -502,8 +502,8 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                         place == null ? completed() : connection.writeAsync(new PlaceInQueueResponse(filename, place)));
     }
 
-    private void raiseDiagnostic(DiagnosticEvent eventArgs) {
-        diagnosticListeners.forEach(listener -> listener.handle(this, eventArgs));
+    private void raiseDiagnostic(DiagnosticEvent eventData) {
+        diagnosticListeners.forEach(listener -> listener.handle(this, eventData));
     }
 
     private static CompletableFuture<Void> completed() {

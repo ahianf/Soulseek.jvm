@@ -111,7 +111,7 @@ class ServerMessageHandlerTest {
 
         AtomicInteger generated = new AtomicInteger();
         DefaultServerMessageHandler defaultDiagnostic = new DefaultServerMessageHandler(fixture.client);
-        defaultDiagnostic.addDiagnosticGeneratedListener((sender, eventArgs) -> generated.incrementAndGet());
+        defaultDiagnostic.addDiagnosticGeneratedListener((sender, eventData) -> generated.incrementAndGet());
         defaultDiagnostic
                 .handleMessageReadAsync(
                         null,
@@ -814,22 +814,22 @@ class ServerMessageHandlerTest {
                 public void removeDiagnosticGeneratedListener(dev.slsk.diagnostics.DiagnosticEventListener listener) {}
 
                 @Override
-                public void handleMessageRead(MessageConnection sender, MessageEvent eventArgs) {}
+                public void handleMessageRead(MessageConnection sender, MessageEvent eventData) {}
 
                 @Override
                 public void handleMessageRead(MessageConnection sender, byte[] message) {}
 
                 @Override
-                public void handleMessageWritten(MessageConnection sender, MessageEvent eventArgs) {}
+                public void handleMessageWritten(MessageConnection sender, MessageEvent eventData) {}
 
                 @Override
-                public void handleChildMessageRead(MessageConnection sender, MessageEvent eventArgs) {}
+                public void handleChildMessageRead(MessageConnection sender, MessageEvent eventData) {}
 
                 @Override
                 public void handleChildMessageRead(MessageConnection sender, byte[] message) {}
 
                 @Override
-                public void handleChildMessageWritten(MessageConnection sender, MessageEvent eventArgs) {}
+                public void handleChildMessageWritten(MessageConnection sender, MessageEvent eventData) {}
             };
         }
 

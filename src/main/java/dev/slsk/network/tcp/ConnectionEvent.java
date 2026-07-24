@@ -5,4 +5,4 @@
 package dev.slsk.network.tcp;
 
 /** Base type for internal TCP connection events. */
-public abstract class ConnectionEventArgs {}
+public abstract class ConnectionEvent {}

@@ -9,7 +9,7 @@ import dev.slsk.common.CommonUtils;
 import dev.slsk.common.EventDispatch;
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.messaging.messages.OutgoingMessage;
-import dev.slsk.network.tcp.ConnectionDataEventArgs;
+import dev.slsk.network.tcp.ConnectionDataEvent;
 import dev.slsk.network.tcp.ConnectionEventListener;
 import dev.slsk.network.tcp.ConnectionKey;
 import dev.slsk.network.tcp.SocketConnection;
@@ -171,7 +171,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
         }
         return CompletableFuture.runAsync(() -> {
             byte[][] codeHolder = new byte[1][];
-            ConnectionEventListener<ConnectionDataEventArgs> payloadProgress = (sender, args) ->
+            ConnectionEventListener<ConnectionDataEvent> payloadProgress = (sender, args) ->
                     raiseMessageDataRead(codeHolder[0], args.getCurrentLength(), args.getTotalLength());
             try {
                 while (!isDisposed()) {
@@ -212,40 +212,40 @@ public final class DefaultMessageConnection extends SocketConnection implements 
     }
 
     private void raiseMessageDataRead(byte[] code, long currentLength, long totalLength) {
-        MessageDataEvent eventArgs = new MessageDataEvent(code, currentLength, totalLength);
+        MessageDataEvent eventData = new MessageDataEvent(code, currentLength, totalLength);
         dispatch(
                 () -> {
                     for (MessageConnectionEventListener<MessageDataEvent> listener : messageDataReadListeners) {
-                        listener.handle(this, eventArgs);
+                        listener.handle(this, eventData);
                     }
                 },
                 CancellationToken.none());
     }
 
     private void raiseMessageReceived(long length, byte[] code) {
-        MessageReceivedEvent eventArgs = new MessageReceivedEvent(length, code);
+        MessageReceivedEvent eventData = new MessageReceivedEvent(length, code);
         for (MessageConnectionEventListener<MessageReceivedEvent> listener : messageReceivedListeners) {
-            listener.handle(this, eventArgs);
+            listener.handle(this, eventData);
         }
     }
 
     private void raiseMessageRead(byte[] message) {
-        MessageEvent eventArgs = new MessageEvent(message);
+        MessageEvent eventData = new MessageEvent(message);
         dispatch(
                 () -> {
                     for (MessageConnectionEventListener<MessageEvent> listener : messageReadListeners) {
-                        listener.handle(this, eventArgs);
+                        listener.handle(this, eventData);
                     }
                 },
                 CancellationToken.none());
     }
 
     private void raiseMessageWritten(byte[] message, CancellationToken cancellationToken) {
-        MessageEvent eventArgs = new MessageEvent(message);
+        MessageEvent eventData = new MessageEvent(message);
         dispatch(
                 () -> {
                     for (MessageConnectionEventListener<MessageEvent> listener : messageWrittenListeners) {
-                        listener.handle(this, eventArgs);
+                        listener.handle(this, eventData);
                     }
                 },
                 cancellationToken);

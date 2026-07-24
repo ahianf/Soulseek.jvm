@@ -30,8 +30,8 @@ import dev.slsk.messaging.messages.UserAddressResponse;
 import dev.slsk.network.MessageConnection;
 import dev.slsk.network.PeerConnectionManager;
 import dev.slsk.network.tcp.Connection;
-import dev.slsk.network.tcp.ConnectionDataEventArgs;
-import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
+import dev.slsk.network.tcp.ConnectionDataEvent;
+import dev.slsk.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.network.tcp.ConnectionEventListener;
 import dev.slsk.network.tcp.ConnectionGovernor;
 import dev.slsk.network.tcp.ConnectionReporter;
@@ -217,10 +217,10 @@ class SoulseekClientUploadTest {
             List<TransferStates> optionStates = new ArrayList<>();
             List<TransferStates> eventStates = new ArrayList<>();
             List<Long> progress = new ArrayList<>();
-            fixture.client.addTransferStateChangedListener((sender, eventArgs) ->
-                    eventStates.add(eventArgs.getTransfer().getState()));
+            fixture.client.addTransferStateChangedListener((sender, eventData) ->
+                    eventStates.add(eventData.getTransfer().getState()));
             fixture.client.addTransferProgressUpdatedListener(
-                    (sender, eventArgs) -> progress.add(eventArgs.getTransfer().getBytesTransferred()));
+                    (sender, eventData) -> progress.add(eventData.getTransfer().getBytesTransferred()));
             TransferOptions options = options(
                     20,
                     null,
@@ -402,9 +402,9 @@ class SoulseekClientUploadTest {
         try (Fixture fixture = new Fixture()) {
             fixture.waiter.transferResponse = CompletableFuture.completedFuture(new TransferResponse(40, "not shared"));
             List<Transfer> terminal = new ArrayList<>();
-            fixture.client.addTransferStateChangedListener((sender, eventArgs) -> {
-                if (eventArgs.getTransfer().getState().hasFlag(TransferStates.COMPLETED)) {
-                    terminal.add(eventArgs.getTransfer());
+            fixture.client.addTransferStateChangedListener((sender, eventData) -> {
+                if (eventData.getTransfer().getState().hasFlag(TransferStates.COMPLETED)) {
+                    terminal.add(eventData.getTransfer());
                 }
             });
 
@@ -598,9 +598,9 @@ class SoulseekClientUploadTest {
             IOException socketFailure = new IOException("socket failed");
             fixture.transfer.disconnectOnWrite = socketFailure;
             List<Transfer> terminal = new ArrayList<>();
-            fixture.client.addTransferStateChangedListener((sender, eventArgs) -> {
-                if (eventArgs.getTransfer().getState().hasFlag(TransferStates.COMPLETED)) {
-                    terminal.add(eventArgs.getTransfer());
+            fixture.client.addTransferStateChangedListener((sender, eventData) -> {
+                if (eventData.getTransfer().getState().hasFlag(TransferStates.COMPLETED)) {
+                    terminal.add(eventData.getTransfer());
                 }
             });
 
@@ -830,8 +830,8 @@ class SoulseekClientUploadTest {
         private Throwable writeFailure;
         private Exception disconnectOnWrite;
         private final ByteArrayOutputStream written = new ByteArrayOutputStream();
-        private ConnectionEventListener<ConnectionDataEventArgs> dataWrittenListener;
-        private ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedListener;
+        private ConnectionEventListener<ConnectionDataEvent> dataWrittenListener;
+        private ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedListener;
         private final Connection proxy = (Connection) Proxy.newProxyInstance(
                 Connection.class.getClassLoader(), new Class<?>[] {Connection.class}, this::invoke);
 
@@ -859,7 +859,7 @@ class SoulseekClientUploadTest {
                 writeLength = length;
                 if (disconnectOnWrite != null) {
                     disconnectedListener.handle(
-                            proxy, new ConnectionDisconnectedEventArgs("connection lost", disconnectOnWrite));
+                            proxy, new ConnectionDisconnectedEvent("connection lost", disconnectOnWrite));
                     return new CompletableFuture<>();
                 }
                 if (writeFailure != null) {
@@ -886,7 +886,7 @@ class SoulseekClientUploadTest {
                         throw new IOException("stream ended early");
                     }
                     if (dataWrittenListener != null) {
-                        dataWrittenListener.handle(proxy, new ConnectionDataEventArgs(transferred, length));
+                        dataWrittenListener.handle(proxy, new ConnectionDataEvent(transferred, length));
                     }
                 }
                 size = transferred;

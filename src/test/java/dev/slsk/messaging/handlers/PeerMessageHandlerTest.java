@@ -484,8 +484,8 @@ class PeerMessageHandlerTest {
         Fixture fixture = new Fixture(new SoulseekClientOptions());
         List<DownloadDeniedEvent> deniedEvents = new ArrayList<>();
         List<DownloadFailedEvent> failedEvents = new ArrayList<>();
-        fixture.handler.addDownloadDeniedListener((sender, eventArgs) -> deniedEvents.add(eventArgs));
-        fixture.handler.addDownloadFailedListener((sender, eventArgs) -> failedEvents.add(eventArgs));
+        fixture.handler.addDownloadDeniedListener((sender, eventData) -> deniedEvents.add(eventData));
+        fixture.handler.addDownloadFailedListener((sender, eventData) -> failedEvents.add(eventData));
 
         fixture.handler
                 .handleMessageReadAsync(fixture.connection.proxy, new UploadDenied(FILENAME, "No slot").toByteArray())
@@ -520,7 +520,7 @@ class PeerMessageHandlerTest {
         Object result =
                 fixture.waiter.completed.get(new WaitKey(Constants.WaitKey.BROWSE_RESPONSE_CONNECTION, USERNAME));
         BrowseResponseConnection browse = assertInstanceOf(BrowseResponseConnection.class, result);
-        assertSame(received, browse.eventArgs());
+        assertSame(received, browse.eventData());
         assertSame(fixture.connection.proxy, browse.connection());
 
         fixture.handler.handleMessageReceived(

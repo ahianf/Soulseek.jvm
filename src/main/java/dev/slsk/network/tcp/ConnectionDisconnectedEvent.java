@@ -5,18 +5,18 @@
 package dev.slsk.network.tcp;
 
 /** Data describing a TCP disconnection. */
-public final class ConnectionDisconnectedEventArgs extends ConnectionEventArgs {
+public final class ConnectionDisconnectedEvent extends ConnectionEvent {
 
     private final Exception exception;
     private final String message;
 
     /** Creates a disconnection without an exception. */
-    public ConnectionDisconnectedEventArgs(String message) {
+    public ConnectionDisconnectedEvent(String message) {
         this(message, null);
     }
 
     /** Creates disconnection event data. */
-    public ConnectionDisconnectedEventArgs(String message, Exception exception) {
+    public ConnectionDisconnectedEvent(String message, Exception exception) {
         this.message = message;
         this.exception = exception;
     }

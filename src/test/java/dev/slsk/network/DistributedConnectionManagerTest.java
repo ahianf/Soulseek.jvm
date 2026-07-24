@@ -36,7 +36,7 @@ import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.messaging.messages.PeerInit;
 import dev.slsk.messaging.messages.PierceFirewall;
 import dev.slsk.network.tcp.Connection;
-import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
+import dev.slsk.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.network.tcp.ConnectionEventListener;
 import dev.slsk.network.tcp.ConnectionKey;
 import dev.slsk.network.tcp.ConnectionState;
@@ -704,7 +704,7 @@ class DistributedConnectionManagerTest {
         public MessageConnection getServerConnection(
                 InetSocketAddress ipEndpoint,
                 ConnectionEventListener<Void> connectedEventHandler,
-                ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
+                ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedEventHandler,
                 MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
                 MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler,
                 ConnectionOptions options,
@@ -897,7 +897,7 @@ class DistributedConnectionManagerTest {
                 new Class<?>[] {TcpClient.class},
                 (proxy, method, arguments) -> defaultValue(method.getReturnType()));
         private final Connection proxy;
-        private final List<ConnectionEventListener<ConnectionDisconnectedEventArgs>> disconnectedListeners =
+        private final List<ConnectionEventListener<ConnectionDisconnectedEvent>> disconnectedListeners =
                 new ArrayList<>();
         private final List<MessageConnectionEventListener<MessageEvent>> messageReadListeners = new ArrayList<>();
         private final List<byte[]> byteWrites = new ArrayList<>();
@@ -942,13 +942,13 @@ class DistributedConnectionManagerTest {
         }
 
         private void fireDisconnected(String text, Exception exception) {
-            ConnectionDisconnectedEventArgs eventArgs = new ConnectionDisconnectedEventArgs(text, exception);
-            List.copyOf(disconnectedListeners).forEach(listener -> listener.handle(proxy, eventArgs));
+            ConnectionDisconnectedEvent eventData = new ConnectionDisconnectedEvent(text, exception);
+            List.copyOf(disconnectedListeners).forEach(listener -> listener.handle(proxy, eventData));
         }
 
         private void fireMessageRead(byte[] bytes) {
-            MessageEvent eventArgs = new MessageEvent(bytes);
-            List.copyOf(messageReadListeners).forEach(listener -> listener.handle(messageConnection(), eventArgs));
+            MessageEvent eventData = new MessageEvent(bytes);
+            List.copyOf(messageReadListeners).forEach(listener -> listener.handle(messageConnection(), eventData));
         }
 
         @Override

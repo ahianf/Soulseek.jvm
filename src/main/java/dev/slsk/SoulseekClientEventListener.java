@@ -7,5 +7,5 @@ package dev.slsk;
 /** Handles an event raised by {@link SoulseekClient}. */
 @FunctionalInterface
 public interface SoulseekClientEventListener<T> {
-    void handle(Object sender, T eventArgs);
+    void handle(Object sender, T eventData);
 }

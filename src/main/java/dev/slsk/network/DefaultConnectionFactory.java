@@ -5,7 +5,7 @@
 package dev.slsk.network;
 
 import dev.slsk.network.tcp.Connection;
-import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
+import dev.slsk.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.network.tcp.ConnectionEventListener;
 import dev.slsk.network.tcp.SocketConnection;
 import dev.slsk.network.tcp.TcpClient;
@@ -30,7 +30,7 @@ public final class DefaultConnectionFactory implements ConnectionFactory {
     public MessageConnection getServerConnection(
             InetSocketAddress ipEndpoint,
             ConnectionEventListener<Void> connectedEventHandler,
-            ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedEventHandler,
+            ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedEventHandler,
             MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
             MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler,
             ConnectionOptions options,

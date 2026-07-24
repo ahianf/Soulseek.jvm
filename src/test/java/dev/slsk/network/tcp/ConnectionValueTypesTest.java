@@ -84,34 +84,34 @@ class ConnectionValueTypesTest {
     @Test
     @DisplayName("SocketConnection data event computes percentage")
     void dataEventComputesPercentage() {
-        ConnectionDataEventArgs args = new ConnectionDataEventArgs(3, 20);
+        ConnectionDataEvent args = new ConnectionDataEvent(3, 20);
 
         assertEquals(3, args.getCurrentLength());
         assertEquals(20, args.getTotalLength());
         assertEquals(15.0, args.getPercentComplete());
-        assertTrue(Double.isNaN(new ConnectionDataEventArgs(0, 0).getPercentComplete()));
-        assertEquals(Double.POSITIVE_INFINITY, new ConnectionDataEventArgs(1, 0).getPercentComplete());
+        assertTrue(Double.isNaN(new ConnectionDataEvent(0, 0).getPercentComplete()));
+        assertEquals(Double.POSITIVE_INFINITY, new ConnectionDataEvent(1, 0).getPercentComplete());
     }
 
     @Test
     @DisplayName("Disconnected event preserves message and exception")
     void disconnectedEventRetainsData() {
         IllegalStateException exception = new IllegalStateException("broken");
-        ConnectionDisconnectedEventArgs args = new ConnectionDisconnectedEventArgs("closed", exception);
+        ConnectionDisconnectedEvent args = new ConnectionDisconnectedEvent("closed", exception);
 
         assertEquals("closed", args.getMessage());
         assertSame(exception, args.getException());
-        assertNull(new ConnectionDisconnectedEventArgs("closed").getException());
+        assertNull(new ConnectionDisconnectedEvent("closed").getException());
     }
 
     @Test
     @DisplayName("State-changed event applies optional defaults")
     void stateChangedEventRetainsData() {
         IllegalStateException exception = new IllegalStateException("broken");
-        ConnectionStateChangedEventArgs complete = new ConnectionStateChangedEventArgs(
+        ConnectionStateChangedEvent complete = new ConnectionStateChangedEvent(
                 ConnectionState.CONNECTED, ConnectionState.DISCONNECTED, "closed", exception);
-        ConnectionStateChangedEventArgs minimal =
-                new ConnectionStateChangedEventArgs(ConnectionState.CONNECTED, ConnectionState.DISCONNECTED);
+        ConnectionStateChangedEvent minimal =
+                new ConnectionStateChangedEvent(ConnectionState.CONNECTED, ConnectionState.DISCONNECTED);
 
         assertEquals(ConnectionState.CONNECTED, complete.getPreviousState());
         assertEquals(ConnectionState.DISCONNECTED, complete.getCurrentState());

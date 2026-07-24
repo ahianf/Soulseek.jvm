@@ -7,5 +7,5 @@ package dev.slsk.messaging.handlers;
 /** Handles a peer-message-handler event. */
 @FunctionalInterface
 public interface PeerMessageHandlerEventListener<T> {
-    void handle(PeerMessageHandler sender, T eventArgs);
+    void handle(PeerMessageHandler sender, T eventData);
 }

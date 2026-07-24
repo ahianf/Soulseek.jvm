@@ -10,9 +10,9 @@ import dev.slsk.network.MessageEvent;
 
 /** Handles incoming and outgoing protocol messages. */
 public interface MessageHandler extends DiagnosticSource {
-    void handleMessageRead(MessageConnection sender, MessageEvent eventArgs);
+    void handleMessageRead(MessageConnection sender, MessageEvent eventData);
 
     void handleMessageRead(MessageConnection sender, byte[] message);
 
-    void handleMessageWritten(MessageConnection sender, MessageEvent eventArgs);
+    void handleMessageWritten(MessageConnection sender, MessageEvent eventData);
 }

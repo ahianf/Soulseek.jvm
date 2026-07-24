@@ -5,7 +5,7 @@
 package dev.slsk.network.tcp;
 
 /** Data describing a TCP connection state change. */
-public final class ConnectionStateChangedEventArgs extends ConnectionEventArgs {
+public final class ConnectionStateChangedEvent extends ConnectionEvent {
 
     private final ConnectionState currentState;
     private final Exception exception;
@@ -13,18 +13,17 @@ public final class ConnectionStateChangedEventArgs extends ConnectionEventArgs {
     private final ConnectionState previousState;
 
     /** Creates state-change data without optional details. */
-    public ConnectionStateChangedEventArgs(ConnectionState previousState, ConnectionState currentState) {
+    public ConnectionStateChangedEvent(ConnectionState previousState, ConnectionState currentState) {
         this(previousState, currentState, null, null);
     }
 
     /** Creates state-change data with a message. */
-    public ConnectionStateChangedEventArgs(
-            ConnectionState previousState, ConnectionState currentState, String message) {
+    public ConnectionStateChangedEvent(ConnectionState previousState, ConnectionState currentState, String message) {
         this(previousState, currentState, message, null);
     }
 
     /** Creates state-change data. */
-    public ConnectionStateChangedEventArgs(
+    public ConnectionStateChangedEvent(
             ConnectionState previousState, ConnectionState currentState, String message, Exception exception) {
         this.previousState = previousState;
         this.currentState = currentState;

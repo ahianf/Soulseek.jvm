@@ -11,5 +11,5 @@ import dev.slsk.SoulseekClientEventListener;
 public interface DiagnosticEventListener extends SoulseekClientEventListener<DiagnosticEvent> {
     /** Handles diagnostic event data. */
     @Override
-    void handle(Object sender, DiagnosticEvent eventArgs);
+    void handle(Object sender, DiagnosticEvent eventData);
 }

@@ -22,28 +22,28 @@ public interface Connection extends AutoCloseable {
     void removeConnectedListener(ConnectionEventListener<Void> listener);
 
     /** Adds a data-read listener. */
-    void addDataReadListener(ConnectionEventListener<ConnectionDataEventArgs> listener);
+    void addDataReadListener(ConnectionEventListener<ConnectionDataEvent> listener);
 
     /** Removes a data-read listener. */
-    void removeDataReadListener(ConnectionEventListener<ConnectionDataEventArgs> listener);
+    void removeDataReadListener(ConnectionEventListener<ConnectionDataEvent> listener);
 
     /** Adds a data-written listener. */
-    void addDataWrittenListener(ConnectionEventListener<ConnectionDataEventArgs> listener);
+    void addDataWrittenListener(ConnectionEventListener<ConnectionDataEvent> listener);
 
     /** Removes a data-written listener. */
-    void removeDataWrittenListener(ConnectionEventListener<ConnectionDataEventArgs> listener);
+    void removeDataWrittenListener(ConnectionEventListener<ConnectionDataEvent> listener);
 
     /** Adds a disconnected listener. */
-    void addDisconnectedListener(ConnectionEventListener<ConnectionDisconnectedEventArgs> listener);
+    void addDisconnectedListener(ConnectionEventListener<ConnectionDisconnectedEvent> listener);
 
     /** Removes a disconnected listener. */
-    void removeDisconnectedListener(ConnectionEventListener<ConnectionDisconnectedEventArgs> listener);
+    void removeDisconnectedListener(ConnectionEventListener<ConnectionDisconnectedEvent> listener);
 
     /** Adds a state-change listener. */
-    void addStateChangedListener(ConnectionEventListener<ConnectionStateChangedEventArgs> listener);
+    void addStateChangedListener(ConnectionEventListener<ConnectionStateChangedEvent> listener);
 
     /** Removes a state-change listener. */
-    void removeStateChangedListener(ConnectionEventListener<ConnectionStateChangedEventArgs> listener);
+    void removeStateChangedListener(ConnectionEventListener<ConnectionStateChangedEvent> listener);
 
     /** Returns the connection identifier. */
     UUID getId();

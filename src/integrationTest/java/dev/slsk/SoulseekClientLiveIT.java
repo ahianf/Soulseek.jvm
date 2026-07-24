@@ -72,7 +72,7 @@ class SoulseekClientLiveIT {
         AtomicReference<SoulseekClientStateChangedEvent> event = new AtomicReference<>();
         try (SoulseekClient client = SoulseekClient.create(credentials.minorVersion())) {
             client.connectAsync(credentials.username(), credentials.password()).join();
-            client.addStateChangedListener((sender, eventArgs) -> event.set(eventArgs));
+            client.addStateChangedListener((sender, eventData) -> event.set(eventData));
 
             assertDoesNotThrow(() -> client.disconnect());
 

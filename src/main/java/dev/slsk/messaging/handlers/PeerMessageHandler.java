@@ -19,5 +19,5 @@ public interface PeerMessageHandler extends MessageHandler {
 
     void removeDownloadFailedListener(PeerMessageHandlerEventListener<DownloadFailedEvent> listener);
 
-    void handleMessageReceived(MessageConnection sender, MessageReceivedEvent eventArgs);
+    void handleMessageReceived(MessageConnection sender, MessageReceivedEvent eventData);
 }

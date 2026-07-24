@@ -7,5 +7,5 @@ package dev.slsk.messaging.handlers;
 /** Handles a server-message-handler event. */
 @FunctionalInterface
 public interface ServerMessageHandlerEventListener<T> {
-    void handle(ServerMessageHandler sender, T eventArgs);
+    void handle(ServerMessageHandler sender, T eventData);
 }

@@ -132,8 +132,8 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     }
 
     @Override
-    public void handleMessageRead(MessageConnection sender, MessageEvent eventArgs) {
-        handleMessageRead(sender, eventArgs.getMessage());
+    public void handleMessageRead(MessageConnection sender, MessageEvent eventData) {
+        handleMessageRead(sender, eventData.getMessage());
     }
 
     @Override
@@ -402,8 +402,8 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     }
 
     @Override
-    public void handleMessageWritten(MessageConnection sender, MessageEvent eventArgs) {
-        MessageCode.Server code = new MessageReader<>(eventArgs.getMessage(), MessageCode.Server.class).readCode();
+    public void handleMessageWritten(MessageConnection sender, MessageEvent eventData) {
+        MessageCode.Server code = new MessageReader<>(eventData.getMessage(), MessageCode.Server.class).readCode();
         diagnostic.debug("Server message sent: " + code);
     }
 
@@ -578,15 +578,15 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     }
 
     @SuppressWarnings("unchecked")
-    private <T> void raise(ServerMessageEvent event, T eventArgs) {
+    private <T> void raise(ServerMessageEvent event, T eventData) {
         List<ServerMessageHandlerEventListener<?>> snapshot = new ArrayList<>(listeners.get(event));
         for (ServerMessageHandlerEventListener<?> listener : snapshot) {
-            ((ServerMessageHandlerEventListener<T>) listener).handle(this, eventArgs);
+            ((ServerMessageHandlerEventListener<T>) listener).handle(this, eventData);
         }
     }
 
-    private void raiseDiagnostic(DiagnosticEvent eventArgs) {
-        diagnosticListeners.forEach(listener -> listener.handle(this, eventArgs));
+    private void raiseDiagnostic(DiagnosticEvent eventData) {
+        diagnosticListeners.forEach(listener -> listener.handle(this, eventData));
     }
 
     private static int integer(byte[] message) {

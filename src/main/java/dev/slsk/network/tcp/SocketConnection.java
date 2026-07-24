@@ -46,13 +46,13 @@ public class SocketConnection implements Connection {
 
     private final UUID id = UUID.randomUUID();
     private final CopyOnWriteArrayList<ConnectionEventListener<Void>> connectedListeners = new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<ConnectionEventListener<ConnectionDataEventArgs>> dataReadListeners =
+    private final CopyOnWriteArrayList<ConnectionEventListener<ConnectionDataEvent>> dataReadListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<ConnectionEventListener<ConnectionDataEventArgs>> dataWrittenListeners =
+    private final CopyOnWriteArrayList<ConnectionEventListener<ConnectionDataEvent>> dataWrittenListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<ConnectionEventListener<ConnectionDisconnectedEventArgs>> disconnectedListeners =
+    private final CopyOnWriteArrayList<ConnectionEventListener<ConnectionDisconnectedEvent>> disconnectedListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<ConnectionEventListener<ConnectionStateChangedEventArgs>> stateChangedListeners =
+    private final CopyOnWriteArrayList<ConnectionEventListener<ConnectionStateChangedEvent>> stateChangedListeners =
             new CopyOnWriteArrayList<>();
     private final CompletableFuture<String> disconnectFuture = new CompletableFuture<>();
     private final Semaphore writeSemaphore = new Semaphore(1);
@@ -115,42 +115,42 @@ public class SocketConnection implements Connection {
     }
 
     @Override
-    public void addDataReadListener(ConnectionEventListener<ConnectionDataEventArgs> listener) {
+    public void addDataReadListener(ConnectionEventListener<ConnectionDataEvent> listener) {
         dataReadListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override
-    public void removeDataReadListener(ConnectionEventListener<ConnectionDataEventArgs> listener) {
+    public void removeDataReadListener(ConnectionEventListener<ConnectionDataEvent> listener) {
         dataReadListeners.remove(listener);
     }
 
     @Override
-    public void addDataWrittenListener(ConnectionEventListener<ConnectionDataEventArgs> listener) {
+    public void addDataWrittenListener(ConnectionEventListener<ConnectionDataEvent> listener) {
         dataWrittenListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override
-    public void removeDataWrittenListener(ConnectionEventListener<ConnectionDataEventArgs> listener) {
+    public void removeDataWrittenListener(ConnectionEventListener<ConnectionDataEvent> listener) {
         dataWrittenListeners.remove(listener);
     }
 
     @Override
-    public void addDisconnectedListener(ConnectionEventListener<ConnectionDisconnectedEventArgs> listener) {
+    public void addDisconnectedListener(ConnectionEventListener<ConnectionDisconnectedEvent> listener) {
         disconnectedListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override
-    public void removeDisconnectedListener(ConnectionEventListener<ConnectionDisconnectedEventArgs> listener) {
+    public void removeDisconnectedListener(ConnectionEventListener<ConnectionDisconnectedEvent> listener) {
         disconnectedListeners.remove(listener);
     }
 
     @Override
-    public void addStateChangedListener(ConnectionEventListener<ConnectionStateChangedEventArgs> listener) {
+    public void addStateChangedListener(ConnectionEventListener<ConnectionStateChangedEvent> listener) {
         stateChangedListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override
-    public void removeStateChangedListener(ConnectionEventListener<ConnectionStateChangedEventArgs> listener) {
+    public void removeStateChangedListener(ConnectionEventListener<ConnectionStateChangedEvent> listener) {
         stateChangedListeners.remove(listener);
     }
 
@@ -390,20 +390,20 @@ public class SocketConnection implements Connection {
     /** Changes state and raises the matching source events. */
     protected void changeState(ConnectionState newState, String message, Exception exception) {
         ConnectionState previousState = state;
-        ConnectionStateChangedEventArgs eventArgs =
-                new ConnectionStateChangedEventArgs(previousState, newState, message, exception);
+        ConnectionStateChangedEvent eventData =
+                new ConnectionStateChangedEvent(previousState, newState, message, exception);
         state = newState;
 
-        for (ConnectionEventListener<ConnectionStateChangedEventArgs> listener : stateChangedListeners) {
-            listener.handle(this, eventArgs);
+        for (ConnectionEventListener<ConnectionStateChangedEvent> listener : stateChangedListeners) {
+            listener.handle(this, eventData);
         }
         if (newState == ConnectionState.CONNECTED) {
             for (ConnectionEventListener<Void> listener : connectedListeners) {
                 listener.handle(this, null);
             }
         } else if (newState == ConnectionState.DISCONNECTED) {
-            ConnectionDisconnectedEventArgs disconnected = new ConnectionDisconnectedEventArgs(message, exception);
-            for (ConnectionEventListener<ConnectionDisconnectedEventArgs> listener : disconnectedListeners) {
+            ConnectionDisconnectedEvent disconnected = new ConnectionDisconnectedEvent(message, exception);
+            for (ConnectionEventListener<ConnectionDisconnectedEvent> listener : disconnectedListeners) {
                 listener.handle(this, disconnected);
             }
             if (exception == null) {
@@ -684,10 +684,10 @@ public class SocketConnection implements Connection {
             long totalLength,
             CancellationToken cancellationToken) {
         @SuppressWarnings("unchecked")
-        T eventArgs = (T) new ConnectionDataEventArgs(currentLength, totalLength);
+        T eventData = (T) new ConnectionDataEvent(currentLength, totalLength);
         Runnable dispatch = () -> {
             for (ConnectionEventListener<T> listener : listeners) {
-                listener.handle(this, eventArgs);
+                listener.handle(this, eventData);
             }
         };
         if (EventDispatch.isAsynchronous()) {

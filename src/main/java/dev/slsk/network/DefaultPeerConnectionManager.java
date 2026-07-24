@@ -20,7 +20,7 @@ import dev.slsk.messaging.messages.ConnectToPeerResponse;
 import dev.slsk.messaging.messages.PeerInit;
 import dev.slsk.messaging.messages.PierceFirewall;
 import dev.slsk.network.tcp.Connection;
-import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
+import dev.slsk.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.network.tcp.ConnectionEventListener;
 import dev.slsk.network.tcp.ConnectionTypes;
 import java.net.InetSocketAddress;
@@ -50,9 +50,9 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
     private final ConcurrentHashMap<String, CancellationTokenSource> pendingInboundIndirectConnections =
             new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Integer, String> pendingSolicitations = new ConcurrentHashMap<>();
-    private final ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnectedListener =
+    private final ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedListener =
             this::messageConnectionDisconnected;
-    private final ConnectionEventListener<ConnectionDisconnectedEventArgs> provisionalDisconnectedListener =
+    private final ConnectionEventListener<ConnectionDisconnectedEvent> provisionalDisconnectedListener =
             this::messageConnectionProvisionalDisconnected;
     private final AtomicBoolean disposed = new AtomicBoolean();
 
@@ -290,9 +290,9 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                 incomingConnection.handoffTcpClient());
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.DIRECT));
         connection.addDisconnectedListener(
-                (sender, eventArgs) -> diagnostic.debug("Transfer connection to " + username + " ("
+                (sender, eventData) -> diagnostic.debug("Transfer connection to " + username + " ("
                         + connection.getIpEndpoint() + ") for token " + token
-                        + " disconnected: " + disconnectMessage(eventArgs)
+                        + " disconnected: " + disconnectMessage(eventData)
                         + ". (type: " + connection.getType() + ", id: "
                         + connection.getId() + ")"));
         diagnostic.debug("Inbound transfer connection to " + username + " ("
@@ -330,10 +330,10 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                 response.getIpEndpoint(), client.getOptions().getTransferConnectionOptions());
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.INDIRECT));
         connection.addDisconnectedListener(
-                (sender, eventArgs) -> diagnostic.debug("Transfer connection to " + response.getUsername() + " ("
+                (sender, eventData) -> diagnostic.debug("Transfer connection to " + response.getUsername() + " ("
                         + response.getIpEndpoint() + ") for token "
                         + response.getToken() + " disconnected: "
-                        + disconnectMessage(eventArgs) + ". (type: "
+                        + disconnectMessage(eventData) + ". (type: "
                         + connection.getType() + ", id: "
                         + connection.getId() + ")"));
 
@@ -705,9 +705,9 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                 ipEndpoint, client.getOptions().getTransferConnectionOptions());
         connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT));
         connection.addDisconnectedListener(
-                (sender, eventArgs) -> diagnostic.debug("Transfer connection for token " + token + " to "
+                (sender, eventData) -> diagnostic.debug("Transfer connection for token " + token + " to "
                         + ipEndpoint + " disconnected: "
-                        + disconnectMessage(eventArgs) + ". (type: "
+                        + disconnectMessage(eventData) + ". (type: "
                         + connection.getType() + ", id: "
                         + connection.getId() + ")"));
         return connection.connectAsync(cancellationToken).handle((ignored, failure) -> {
@@ -755,10 +755,10 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                                 + ", new: " + connection.getId() + ")");
                         connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.INDIRECT));
                         connection.addDisconnectedListener(
-                                (sender, eventArgs) -> diagnostic.debug("Transfer connection for token " + token + " ("
+                                (sender, eventData) -> diagnostic.debug("Transfer connection for token " + token + " ("
                                         + accepted.getIpEndpoint()
                                         + ") disconnected: "
-                                        + disconnectMessage(eventArgs) + ". (type: "
+                                        + disconnectMessage(eventData) + ". (type: "
                                         + connection.getType() + ", id: "
                                         + connection.getId() + ")"));
                         diagnostic.debug("Indirect transfer connection for " + token + " ("
@@ -790,7 +790,7 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         connection.addMessageWrittenListener(handler::handleMessageWritten);
     }
 
-    private void messageConnectionDisconnected(Connection sender, ConnectionDisconnectedEventArgs eventArgs) {
+    private void messageConnectionDisconnected(Connection sender, ConnectionDisconnectedEvent eventData) {
         MessageConnection connection = (MessageConnection) sender;
         diagnostic.debug("Message connection to " + connection.getUsername() + " ("
                 + connection.getIpEndpoint() + ") disconnected. (type: "
@@ -818,13 +818,12 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         diagnostic.debug("Message connection cache now contains " + messageConnections.size() + " connections.");
     }
 
-    private void messageConnectionProvisionalDisconnected(
-            Connection sender, ConnectionDisconnectedEventArgs eventArgs) {
+    private void messageConnectionProvisionalDisconnected(Connection sender, ConnectionDisconnectedEvent eventData) {
         sender.close();
     }
 
-    private void raiseDiagnostic(DiagnosticEvent eventArgs) {
-        diagnosticListeners.forEach(listener -> listener.handle(this, eventArgs));
+    private void raiseDiagnostic(DiagnosticEvent eventData) {
+        diagnosticListeners.forEach(listener -> listener.handle(this, eventData));
     }
 
     private static <T> CompletableFuture<T> invoke(Supplier<CompletableFuture<T>> supplier) {
@@ -884,11 +883,11 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         return failure.getMessage() == null ? "" : failure.getMessage();
     }
 
-    private static String disconnectMessage(ConnectionDisconnectedEventArgs eventArgs) {
-        if (eventArgs.getException() != null) {
-            return message(eventArgs.getException());
+    private static String disconnectMessage(ConnectionDisconnectedEvent eventData) {
+        if (eventData.getException() != null) {
+            return message(eventData.getException());
         }
-        return eventArgs.getMessage();
+        return eventData.getMessage();
     }
 
     private record Winner<T>(T value, CompletableFuture<T> source) {}

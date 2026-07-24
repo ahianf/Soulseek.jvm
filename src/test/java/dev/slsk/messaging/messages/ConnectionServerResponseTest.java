@@ -127,9 +127,9 @@ class ConnectionServerResponseTest {
         assertNull(CannotConnect.fromByteArray(tokenOnly.toByteArray()).getUsername());
         assertArrayEquals(tokenOnly.toByteArray(), new CannotConnect(-42, "").toByteArray());
 
-        UserCannotConnectEvent eventArgs = new UserCannotConnectEvent(withName);
-        assertEquals(-42, eventArgs.getToken());
-        assertEquals("alice", eventArgs.getUsername());
+        UserCannotConnectEvent eventData = new UserCannotConnectEvent(withName);
+        assertEquals(-42, eventData.getToken());
+        assertEquals("alice", eventData.getUsername());
     }
 
     @Test

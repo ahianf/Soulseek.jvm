@@ -5,13 +5,13 @@
 package dev.slsk.network.tcp;
 
 /** Progress data for a TCP read or write operation. */
-public final class ConnectionDataEventArgs extends ConnectionEventArgs {
+public final class ConnectionDataEvent extends ConnectionEvent {
     private final long currentLength;
     private final double percentComplete;
     private final long totalLength;
 
     /** Creates connection data progress. */
-    public ConnectionDataEventArgs(long currentLength, long totalLength) {
+    public ConnectionDataEvent(long currentLength, long totalLength) {
         this.currentLength = currentLength;
         this.totalLength = totalLength;
         this.percentComplete = (currentLength / (double) totalLength) * 100.0;

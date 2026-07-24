@@ -31,7 +31,7 @@ import dev.slsk.network.DistributedConnectionManager;
 import dev.slsk.network.MessageConnection;
 import dev.slsk.network.MessageConnectionEventListener;
 import dev.slsk.network.MessageEvent;
-import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
+import dev.slsk.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.network.tcp.ConnectionEventListener;
 import dev.slsk.options.SoulseekClientOptions;
 import java.io.ByteArrayOutputStream;
@@ -111,7 +111,7 @@ class SoulseekClientConnectTest {
         CancellationTokenSource source = new CancellationTokenSource();
         CancellationToken token = source.getToken();
         List<SoulseekClientStates> states = new ArrayList<>();
-        fixture.client.addStateChangedListener((sender, eventArgs) -> states.add(eventArgs.getState()));
+        fixture.client.addStateChangedListener((sender, eventData) -> states.add(eventData.getState()));
         fixture.connection.fireConnected = true;
 
         fixture.client.connectAsync("127.0.0.1", 2271, "alice", "secret", token).join();
@@ -153,14 +153,14 @@ class SoulseekClientConnectTest {
         Fixture fixture = new Fixture();
         fixture.waiter.response = new LoginResponse(true, "", null, null, true);
         List<String> sequence = new ArrayList<>();
-        fixture.client.addServerInfoReceivedListener((sender, eventArgs) -> {
+        fixture.client.addServerInfoReceivedListener((sender, eventData) -> {
             assertSame(fixture.client, sender);
-            assertTrue(eventArgs.isSupporter());
+            assertTrue(eventData.isSupporter());
             assertNull(fixture.client.getUsername());
             sequence.add("server-info");
         });
-        fixture.client.addStateChangedListener((sender, eventArgs) -> {
-            if (eventArgs.getState().equals(loggedIn())) {
+        fixture.client.addStateChangedListener((sender, eventData) -> {
+            if (eventData.getState().equals(loggedIn())) {
                 sequence.add("logged-in");
             }
         });
@@ -242,7 +242,7 @@ class SoulseekClientConnectTest {
 
         fixture.factory.connected.handle(fixture.connection.proxy, null);
         assertEquals(SoulseekClientStates.CONNECTED, fixture.client.getState());
-        fixture.factory.disconnected.handle(fixture.connection.proxy, new ConnectionDisconnectedEventArgs("gone"));
+        fixture.factory.disconnected.handle(fixture.connection.proxy, new ConnectionDisconnectedEvent("gone"));
         assertEquals(SoulseekClientStates.DISCONNECTED, fixture.client.getState());
         fixture.close();
     }
@@ -391,7 +391,7 @@ class SoulseekClientConnectTest {
         private InetSocketAddress endpoint;
         private dev.slsk.options.ConnectionOptions options;
         private ConnectionEventListener<Void> connected;
-        private ConnectionEventListener<ConnectionDisconnectedEventArgs> disconnected;
+        private ConnectionEventListener<ConnectionDisconnectedEvent> disconnected;
         private MessageConnectionEventListener<MessageEvent> messageRead;
         private MessageConnectionEventListener<MessageEvent> messageWritten;
         private final ConnectionFactory proxy = (ConnectionFactory) Proxy.newProxyInstance(
@@ -407,7 +407,7 @@ class SoulseekClientConnectTest {
             if (method.getName().equals("getServerConnection")) {
                 endpoint = (InetSocketAddress) arguments[0];
                 connected = (ConnectionEventListener<Void>) arguments[1];
-                disconnected = (ConnectionEventListener<ConnectionDisconnectedEventArgs>) arguments[2];
+                disconnected = (ConnectionEventListener<ConnectionDisconnectedEvent>) arguments[2];
                 messageRead = (MessageConnectionEventListener<MessageEvent>) arguments[3];
                 messageWritten = (MessageConnectionEventListener<MessageEvent>) arguments[4];
                 options = (dev.slsk.options.ConnectionOptions) arguments[5];

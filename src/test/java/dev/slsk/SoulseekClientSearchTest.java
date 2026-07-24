@@ -122,12 +122,12 @@ class SoulseekClientSearchTest {
         AtomicInteger optionResponses = new AtomicInteger();
         AtomicInteger clientResponses = new AtomicInteger();
         AtomicInteger clientStates = new AtomicInteger();
-        fixture.client.addSearchResponseReceivedListener((sender, eventArgs) -> {
+        fixture.client.addSearchResponseReceivedListener((sender, eventData) -> {
             assertSame(fixture.client, sender);
-            assertEquals("alice", eventArgs.getResponse().getUsername());
+            assertEquals("alice", eventData.getResponse().getUsername());
             clientResponses.incrementAndGet();
         });
-        fixture.client.addSearchStateChangedListener((sender, eventArgs) -> clientStates.incrementAndGet());
+        fixture.client.addSearchStateChangedListener((sender, eventData) -> clientStates.incrementAndGet());
         SearchOptions options = options(2_000, 1, true, null, received -> optionResponses.incrementAndGet());
 
         CompletableFuture<SearchResult> task =

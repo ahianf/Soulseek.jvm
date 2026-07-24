@@ -34,7 +34,7 @@ import dev.slsk.messaging.messages.HaveNoParentsCommand;
 import dev.slsk.messaging.messages.PeerInit;
 import dev.slsk.messaging.messages.PierceFirewall;
 import dev.slsk.network.tcp.Connection;
-import dev.slsk.network.tcp.ConnectionDisconnectedEventArgs;
+import dev.slsk.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.network.tcp.ConnectionEventListener;
 import dev.slsk.network.tcp.ConnectionState;
 import dev.slsk.network.tcp.ConnectionTypes;
@@ -96,11 +96,11 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     private final CopyOnWriteArrayList<DistributedManagerEventListener<DistributedNetworkInfo>> stateChangedListeners =
             new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
-    private final ConnectionEventListener<ConnectionDisconnectedEventArgs> parentCandidateDisconnectedListener =
+    private final ConnectionEventListener<ConnectionDisconnectedEvent> parentCandidateDisconnectedListener =
             this::parentCandidateDisconnected;
-    private final ConnectionEventListener<ConnectionDisconnectedEventArgs> parentDisconnectedListener =
+    private final ConnectionEventListener<ConnectionDisconnectedEvent> parentDisconnectedListener =
             this::parentDisconnected;
-    private final ConnectionEventListener<ConnectionDisconnectedEventArgs> childDisconnectedListener =
+    private final ConnectionEventListener<ConnectionDisconnectedEvent> childDisconnectedListener =
             this::childDisconnected;
     private final MessageConnectionEventListener<MessageEvent> parentInitializationListener =
             this::handleParentCandidateMessage;
@@ -386,12 +386,12 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                             + parentConnection.getUsername() + " ("
                             + parentConnection.getIpEndpoint() + ")");
                     demoteFromBranchRoot();
-                    DistributedParentEvent eventArgs = new DistributedParentEvent(
+                    DistributedParentEvent eventData = new DistributedParentEvent(
                             parentConnection.getUsername(),
                             parentConnection.getIpEndpoint(),
                             parentBranchLevel,
                             parentBranchRoot);
-                    parentAdoptedListeners.forEach(listener -> listener.handle(this, eventArgs));
+                    parentAdoptedListeners.forEach(listener -> listener.handle(this, eventData));
                     raiseStateChanged();
 
                     parentCandidates = successful.stream()
@@ -640,9 +640,9 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         }
     }
 
-    void handleParentCandidateMessage(MessageConnection connection, MessageEvent eventArgs) {
+    void handleParentCandidateMessage(MessageConnection connection, MessageEvent eventData) {
         try {
-            byte[] message = eventArgs.getMessage();
+            byte[] message = eventData.getMessage();
             MessageCode.Distributed code = new MessageReader<>(message, MessageCode.Distributed.class).readCode();
             switch (code) {
                 case EMBEDDED_MESSAGE -> {
@@ -1013,18 +1013,18 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         connection.addMessageWrittenListener(handler::handleChildMessageWritten);
     }
 
-    private void childDisconnected(Connection sender, ConnectionDisconnectedEventArgs eventArgs) {
+    private void childDisconnected(Connection sender, ConnectionDisconnectedEvent eventData) {
         MessageConnection connection = (MessageConnection) sender;
         childConnections.remove(connection.getUsername());
         children.remove(connection.getUsername());
         diagnostic.debug("Child connection to " + connection.getUsername() + " ("
                 + connection.getIpEndpoint() + ") disconnected: "
-                + eventArgs.getMessage() + " (type: "
+                + eventData.getMessage() + " (type: "
                 + connection.getType() + ", id: "
                 + connection.getId() + ")");
         diagnostic.info("Child connection to " + connection.getUsername() + " ("
                 + connection.getIpEndpoint() + ") disconnected"
-                + (eventArgs.getMessage() == null ? "." : ": " + eventArgs.getMessage()));
+                + (eventData.getMessage() == null ? "." : ": " + eventData.getMessage()));
         DistributedChildEvent childEvent =
                 new DistributedChildEvent(connection.getUsername(), connection.getIpEndpoint());
         childDisconnectedListeners.forEach(listener -> listener.handle(this, childEvent));
@@ -1033,26 +1033,26 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         updateStatusEventuallyAsync();
     }
 
-    private void parentCandidateDisconnected(Connection sender, ConnectionDisconnectedEventArgs eventArgs) {
+    private void parentCandidateDisconnected(Connection sender, ConnectionDisconnectedEvent eventData) {
         MessageConnection connection = (MessageConnection) sender;
         diagnostic.debug("Parent candidate connection to " + connection.getUsername()
                 + " (" + connection.getIpEndpoint() + ") disconnected: "
-                + eventArgs.getMessage() + " (type: "
+                + eventData.getMessage() + " (type: "
                 + connection.getType() + ", id: "
                 + connection.getId() + ")");
         connection.close();
     }
 
-    private void parentDisconnected(Connection sender, ConnectionDisconnectedEventArgs eventArgs) {
+    private void parentDisconnected(Connection sender, ConnectionDisconnectedEvent eventData) {
         MessageConnection connection = (MessageConnection) sender;
         diagnostic.debug("Parent connection to " + connection.getUsername() + " ("
                 + connection.getIpEndpoint() + ") disconnected: "
-                + eventArgs.getMessage() + " (type: "
+                + eventData.getMessage() + " (type: "
                 + connection.getType() + ", id: "
                 + connection.getId() + ")");
         diagnostic.info("Parent connection to " + connection.getUsername() + " ("
                 + connection.getIpEndpoint() + ") disconnected"
-                + (eventArgs.getMessage() == null ? "." : ": " + eventArgs.getMessage()) + ".");
+                + (eventData.getMessage() == null ? "." : ": " + eventData.getMessage()) + ".");
         DistributedParentEvent parentEvent = new DistributedParentEvent(
                 connection.getUsername(), connection.getIpEndpoint(), parentBranchLevel, parentBranchRoot);
         parentDisconnectedListeners.forEach(listener -> listener.handle(this, parentEvent));
@@ -1096,9 +1096,9 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     }
 
     private void raiseChildAdded(MessageConnection connection) {
-        DistributedChildEvent eventArgs =
+        DistributedChildEvent eventData =
                 new DistributedChildEvent(connection.getUsername(), connection.getIpEndpoint());
-        childAddedListeners.forEach(listener -> listener.handle(this, eventArgs));
+        childAddedListeners.forEach(listener -> listener.handle(this, eventData));
     }
 
     private void raiseStateChanged() {
@@ -1117,8 +1117,8 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         stateChangedListeners.forEach(listener -> listener.handle(this, info));
     }
 
-    private void raiseDiagnostic(DiagnosticEvent eventArgs) {
-        diagnosticListeners.forEach(listener -> listener.handle(this, eventArgs));
+    private void raiseDiagnostic(DiagnosticEvent eventData) {
+        diagnosticListeners.forEach(listener -> listener.handle(this, eventData));
     }
 
     private static byte[] concatenate(byte[]... arrays) {
