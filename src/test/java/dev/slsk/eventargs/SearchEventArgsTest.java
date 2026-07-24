@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.slsk.Search;
 import dev.slsk.SearchQuery;
+import dev.slsk.SearchResponse;
 import dev.slsk.SearchScope;
 import dev.slsk.SearchStates;
 import org.junit.jupiter.api.DisplayName;
@@ -60,5 +61,26 @@ class SearchEventArgsTest {
     @DisplayName("Rejects null previous state because C# flags are non-nullable")
     void rejectsNullPreviousState() {
         assertThrows(NullPointerException.class, () -> new SearchStateChangedEventArgs(null, null));
+    }
+
+    @Test
+    void responseReceivedInstantiatesWithSearchAndResponse() {
+        Search search = new Search(null, null, 42, SearchStates.IN_PROGRESS, 1, 2, 3);
+        SearchResponse response = new SearchResponse("alice", 42, true, 1, 2, null);
+
+        SearchResponseReceivedEventArgs args = new SearchResponseReceivedEventArgs(response, search);
+
+        assertSame(search, args.getSearch());
+        assertSame(response, args.getResponse());
+    }
+
+    @Test
+    void requestResponseInstantiatesWithContextAndNullableResponse() {
+        SearchRequestResponseEventArgs args = new SearchRequestResponseEventArgs("alice", -1, "query", null);
+
+        assertEquals("alice", args.getUsername());
+        assertEquals(-1, args.getToken());
+        assertEquals("query", args.getQuery());
+        assertNull(args.getSearchResponse());
     }
 }
