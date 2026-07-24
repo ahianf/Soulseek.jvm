@@ -5,6 +5,7 @@
 package dev.slsk.eventargs;
 
 import dev.slsk.UserData;
+import dev.slsk.messaging.messages.UserJoinedRoomNotification;
 
 /**
  * Event arguments raised when a user joins a chat room.
@@ -22,6 +23,15 @@ public class RoomJoinedEventArgs extends RoomEventArgs {
     public RoomJoinedEventArgs(String roomName, String username, UserData userData) {
         super(roomName, username);
         this.userData = userData;
+    }
+
+    /**
+     * Creates event arguments from an internal protocol notification.
+     *
+     * @param notification the notification that raised the event
+     */
+    public RoomJoinedEventArgs(UserJoinedRoomNotification notification) {
+        this(notification.getRoomName(), notification.getUsername(), notification.getUserData());
     }
 
     /**

@@ -4,6 +4,8 @@
 
 package dev.slsk.eventargs;
 
+import dev.slsk.messaging.messages.UserLeftRoomNotification;
+
 /**
  * Event arguments raised when a user leaves a chat room.
  */
@@ -16,5 +18,14 @@ public class RoomLeftEventArgs extends RoomEventArgs {
      */
     public RoomLeftEventArgs(String roomName, String username) {
         super(roomName, username);
+    }
+
+    /**
+     * Creates event arguments from an internal protocol notification.
+     *
+     * @param notification the notification that raised the event
+     */
+    public RoomLeftEventArgs(UserLeftRoomNotification notification) {
+        this(notification.getRoomName(), notification.getUsername());
     }
 }
