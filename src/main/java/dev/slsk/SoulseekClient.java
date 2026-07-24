@@ -11,7 +11,7 @@ import dev.slsk.common.TokenBucket;
 import dev.slsk.common.TokenFactory;
 import dev.slsk.common.WaitKey;
 import dev.slsk.common.Waiter;
-import dev.slsk.diagnostics.DiagnosticEventArgs;
+import dev.slsk.diagnostics.DiagnosticEventListener;
 import dev.slsk.diagnostics.DiagnosticFactory;
 import dev.slsk.diagnostics.GlobalDiagnostic;
 import dev.slsk.diagnostics.IDiagnosticFactory;
@@ -200,7 +200,7 @@ import java.util.function.Consumer;
  * A client for the Soulseek file-sharing network.
  */
 public class SoulseekClient
-        implements AutoCloseable,
+        implements ISoulseekClient,
                 DistributedConnectionManagerClient,
                 DistributedMessageHandlerClient,
                 ListenerHandlerClient,
@@ -478,11 +478,11 @@ public class SoulseekClient
         remove(Event.DEMOTED_FROM_DISTRIBUTED_BRANCH_ROOT, value);
     }
 
-    public final void addDiagnosticGeneratedListener(SoulseekClientEventListener<DiagnosticEventArgs> value) {
+    public final void addDiagnosticGeneratedListener(DiagnosticEventListener value) {
         add(Event.DIAGNOSTIC_GENERATED, value);
     }
 
-    public final void removeDiagnosticGeneratedListener(SoulseekClientEventListener<DiagnosticEventArgs> value) {
+    public final void removeDiagnosticGeneratedListener(DiagnosticEventListener value) {
         remove(Event.DIAGNOSTIC_GENERATED, value);
     }
 

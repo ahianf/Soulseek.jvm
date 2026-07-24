@@ -4,9 +4,12 @@
 
 package dev.slsk.diagnostics;
 
+import dev.slsk.SoulseekClientEventListener;
+
 /** Handles an internally generated diagnostic message. */
 @FunctionalInterface
-public interface DiagnosticEventListener {
+public interface DiagnosticEventListener extends SoulseekClientEventListener<DiagnosticEventArgs> {
     /** Handles diagnostic event data. */
-    void handle(IDiagnosticGenerator sender, DiagnosticEventArgs eventArgs);
+    @Override
+    void handle(Object sender, DiagnosticEventArgs eventArgs);
 }

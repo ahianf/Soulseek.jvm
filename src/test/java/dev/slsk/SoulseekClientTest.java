@@ -210,7 +210,7 @@ class SoulseekClientTest {
         Fixture fixture = new Fixture();
         AtomicReference<Object> diagnosticSender = new AtomicReference<>();
         AtomicReference<DiagnosticEventArgs> diagnostic = new AtomicReference<>();
-        SoulseekClientEventListener<DiagnosticEventArgs> diagnosticListener = (sender, value) -> {
+        DiagnosticEventListener diagnosticListener = (sender, value) -> {
             diagnosticSender.set(sender);
             diagnostic.set(value);
         };
