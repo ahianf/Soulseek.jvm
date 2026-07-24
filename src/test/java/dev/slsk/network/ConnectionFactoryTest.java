@@ -1,0 +1,240 @@
+// SPDX-FileCopyrightText: JP Dillingham
+// SPDX-FileCopyrightText: 2026 Ahian Fernandez
+// SPDX-License-Identifier: GPL-3.0-only
+
+package dev.slsk.network;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import dev.slsk.CancellationToken;
+import dev.slsk.network.tcp.Connection;
+import dev.slsk.network.tcp.IConnection;
+import dev.slsk.network.tcp.INetworkStream;
+import dev.slsk.network.tcp.ITcpClient;
+import dev.slsk.options.ConnectionOptions;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+class ConnectionFactoryTest {
+    private static final InetSocketAddress ENDPOINT = new InetSocketAddress(InetAddress.getLoopbackAddress(), 2234);
+
+    @Test
+    @DisplayName("Factory creates transfer connection with supplied options")
+    void createsTransferConnection() {
+        ConnectionOptions options = new ConnectionOptions(1, 2, 3, 4, -1);
+        try (IConnection connection = new ConnectionFactory().getTransferConnection(ENDPOINT, options, null)) {
+            assertTrue(connection instanceof Connection);
+            assertSame(ENDPOINT, connection.getIpEndPoint());
+            assertSame(options, connection.getOptions());
+        }
+
+        try (IConnection defaults = new ConnectionFactory().getTransferConnection(ENDPOINT)) {
+            assertNotNull(defaults.getOptions());
+        }
+    }
+
+    @Test
+    @DisplayName("Factory creates peer and distributed message variants")
+    void createsPeerVariants() {
+        ConnectionOptions options = new ConnectionOptions(1, 2, 3, 4, -1);
+        ConnectionFactory factory = new ConnectionFactory();
+        try (IMessageConnection peer = factory.getMessageConnection("alice", ENDPOINT, options, null);
+                IMessageConnection distributed = factory.getDistributedConnection("alice", ENDPOINT, options, null)) {
+            assertSame(options, peer.getOptions());
+            assertEquals(4, peer.getCodeLength());
+            assertSame(options, distributed.getOptions());
+            assertEquals(1, distributed.getCodeLength());
+        }
+        try (IMessageConnection peer = factory.getMessageConnection("alice", ENDPOINT);
+                IMessageConnection distributed = factory.getDistributedConnection("alice", ENDPOINT)) {
+            assertNotNull(peer.getOptions());
+            assertNotNull(distributed.getOptions());
+        }
+    }
+
+    @Test
+    @DisplayName("Server factory disables inactivity and binds all handlers")
+    void createsServerConnectionAndBindsHandlers() throws Exception {
+        byte[] frame = ByteBuffer.allocate(8)
+                .order(ByteOrder.LITTLE_ENDIAN)
+                .putInt(4)
+                .putInt(42)
+                .array();
+        FakeStream stream = new FakeStream(frame);
+        FakeTcpClient client = new FakeTcpClient(stream);
+        AtomicInteger connected = new AtomicInteger();
+        AtomicInteger disconnected = new AtomicInteger();
+        AtomicInteger read = new AtomicInteger();
+        AtomicInteger written = new AtomicInteger();
+        CountDownLatch readEvent = new CountDownLatch(1);
+        ConnectionOptions options = new ConnectionOptions(8, 8, 3, 100, 50);
+
+        IMessageConnection connection = new ConnectionFactory()
+                .getServerConnection(
+                        ENDPOINT,
+                        (sender, args) -> connected.incrementAndGet(),
+                        (sender, args) -> disconnected.incrementAndGet(),
+                        (sender, args) -> {
+                            read.incrementAndGet();
+                            readEvent.countDown();
+                        },
+                        (sender, args) -> written.incrementAndGet(),
+                        options,
+                        client);
+
+        client.connectAction = () -> client.connected = true;
+        connection.connectAsync(null).get(1, TimeUnit.SECONDS);
+        assertTrue(readEvent.await(1, TimeUnit.SECONDS));
+        assertEquals(1, connected.get());
+        assertEquals(1, read.get());
+        assertEquals(-1, connection.getOptions().getInactivityTimeout());
+
+        client.connected = true;
+        connection.writeAsync(() -> new byte[] {1}).get(1, TimeUnit.SECONDS);
+        assertEquals(1, written.get());
+
+        connection.disconnect("done");
+        assertTrue(disconnected.get() >= 1);
+        connection.close();
+    }
+
+    @Test
+    @DisplayName("Server factory accepts null handlers and default options")
+    void serverDefaults() {
+        try (IMessageConnection connection =
+                new ConnectionFactory().getServerConnection(ENDPOINT, null, null, null, null)) {
+            assertNotNull(connection.getOptions());
+            assertEquals(-1, connection.getOptions().getInactivityTimeout());
+        }
+    }
+
+    private static final class FakeTcpClient implements ITcpClient {
+        private final Socket socket = new Socket();
+        private final FakeStream stream;
+        private boolean connected;
+        private Runnable connectAction;
+
+        private FakeTcpClient(FakeStream stream) {
+            this.stream = stream;
+        }
+
+        @Override
+        public Socket getClient() {
+            return socket;
+        }
+
+        @Override
+        public boolean isConnected() {
+            return connected && !socket.isClosed();
+        }
+
+        @Override
+        public InetSocketAddress getRemoteEndPoint() {
+            return ENDPOINT;
+        }
+
+        @Override
+        public CompletableFuture<Void> connectAsync(InetAddress address, int port) {
+            if (connectAction != null) {
+                connectAction.run();
+            }
+            return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public CompletableFuture<ProxyEndpoint> connectThroughProxyAsync(
+                InetAddress proxyAddress,
+                int proxyPort,
+                InetAddress destinationAddress,
+                int destinationPort,
+                String username,
+                String password,
+                CancellationToken cancellationToken) {
+            return CompletableFuture.completedFuture(new ProxyEndpoint("127.0.0.1", proxyPort));
+        }
+
+        @Override
+        public INetworkStream getStream() {
+            return stream;
+        }
+
+        @Override
+        public void close() throws IOException {
+            connected = false;
+            stream.close();
+            socket.close();
+        }
+    }
+
+    private static final class FakeStream implements INetworkStream {
+        private final byte[] input;
+        private final List<Byte> written = new ArrayList<>();
+        private int position;
+        private CompletableFuture<Integer> pendingRead;
+
+        private FakeStream(byte[] input) {
+            this.input = input;
+        }
+
+        @Override
+        public int getReadTimeout() {
+            return -1;
+        }
+
+        @Override
+        public void setReadTimeout(int timeout) {}
+
+        @Override
+        public int getWriteTimeout() {
+            return -1;
+        }
+
+        @Override
+        public void setWriteTimeout(int timeout) {}
+
+        @Override
+        public synchronized CompletableFuture<Integer> readAsync(
+                byte[] buffer, int offset, int size, CancellationToken cancellationToken) {
+            int count = Math.min(size, input.length - position);
+            if (count == 0) {
+                pendingRead = new CompletableFuture<>();
+                return pendingRead;
+            }
+            System.arraycopy(input, position, buffer, offset, count);
+            position += count;
+            return CompletableFuture.completedFuture(count);
+        }
+
+        @Override
+        public synchronized CompletableFuture<Void> writeAsync(
+                byte[] buffer, int offset, int size, CancellationToken cancellationToken) {
+            for (byte value : Arrays.copyOfRange(buffer, offset, offset + size)) {
+                written.add(value);
+            }
+            return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public synchronized void close() {
+            if (pendingRead != null) {
+                pendingRead.completeExceptionally(new java.util.concurrent.CancellationException("closed"));
+            }
+        }
+    }
+}
