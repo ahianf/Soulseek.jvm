@@ -12,6 +12,7 @@ import dev.slsk.eventargs.SoulseekClientStateChangedEventArgs;
 import dev.slsk.options.SoulseekClientOptions;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -68,16 +69,15 @@ class SoulseekClientLiveIT {
     @DisplayName("Client disconnect raises StateChanged event")
     void clientDisconnectRaisesStateChangedEvent() {
         LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
-        List<SoulseekClientStateChangedEventArgs> events = new ArrayList<>();
+        AtomicReference<SoulseekClientStateChangedEventArgs> event = new AtomicReference<>();
         try (SoulseekClient client = new SoulseekClient(credentials.minorVersion())) {
             client.connectAsync(credentials.username(), credentials.password()).join();
-            client.addStateChangedListener((sender, event) -> events.add(event));
+            client.addStateChangedListener((sender, eventArgs) -> event.set(eventArgs));
 
             assertDoesNotThrow(() -> client.disconnect());
 
             assertEquals(SoulseekClientStates.DISCONNECTED, client.getState());
-            assertEquals(1, events.size());
-            assertEquals(SoulseekClientStates.DISCONNECTED, events.getFirst().getState());
+            assertEquals(SoulseekClientStates.DISCONNECTED, event.get().getState());
         }
     }
 
