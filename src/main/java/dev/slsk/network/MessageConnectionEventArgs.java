@@ -1,0 +1,8 @@
+// SPDX-FileCopyrightText: JP Dillingham
+// SPDX-FileCopyrightText: 2026 Ahian Fernandez
+// SPDX-License-Identifier: GPL-3.0-only
+
+package dev.slsk.network;
+
+/** Base type for message-connection events. */
+public abstract class MessageConnectionEventArgs {}
