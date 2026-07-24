@@ -8,7 +8,6 @@ import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.MessageReader;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.UnknownHostException;
 import java.util.Objects;
 
 /** The response to a request for a peer's network address. */
@@ -52,20 +51,7 @@ public final class UserAddressResponse implements IIncomingMessage {
         MessageReader<MessageCode.Server> reader =
                 ServerMessageParser.reader(bytes, MessageCode.Server.GET_PEER_ADDRESS, "UserAddressResponse");
         String username = reader.readString();
-        byte[] address = reader.readBytes(4);
-        reverse(address);
-        try {
-            return new UserAddressResponse(username, InetAddress.getByAddress(address), reader.readInteger());
-        } catch (UnknownHostException exception) {
-            throw new AssertionError("Four-byte IPv4 addresses are always valid", exception);
-        }
-    }
-
-    private static void reverse(byte[] bytes) {
-        for (int left = 0, right = bytes.length - 1; left < right; left++, right--) {
-            byte temporary = bytes[left];
-            bytes[left] = bytes[right];
-            bytes[right] = temporary;
-        }
+        InetAddress address = ServerAddressCodec.readIpv4(reader);
+        return new UserAddressResponse(username, address, reader.readInteger());
     }
 }

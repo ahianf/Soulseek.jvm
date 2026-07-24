@@ -4,6 +4,8 @@
 
 package dev.slsk.eventargs;
 
+import dev.slsk.messaging.messages.CannotConnect;
+
 /**
  * Event arguments raised when a user reports that they cannot connect.
  */
@@ -19,6 +21,15 @@ public class UserCannotConnectEventArgs extends UserEventArgs {
     public UserCannotConnectEventArgs(int token, String username) {
         super(username);
         this.token = token;
+    }
+
+    /**
+     * Creates event arguments from an internal protocol message.
+     *
+     * @param cannotConnect the message that raised the event
+     */
+    public UserCannotConnectEventArgs(CannotConnect cannotConnect) {
+        this(cannotConnect.getToken(), cannotConnect.getUsername());
     }
 
     /**
