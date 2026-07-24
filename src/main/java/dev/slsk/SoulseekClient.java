@@ -128,10 +128,12 @@ import dev.slsk.network.tcp.IListener;
 import dev.slsk.network.tcp.Listener;
 import dev.slsk.options.BrowseOptions;
 import dev.slsk.options.BrowseProgress;
+import dev.slsk.options.ConnectionOptions;
 import dev.slsk.options.SearchOptions;
 import dev.slsk.options.SearchResponseReceived;
 import dev.slsk.options.SearchStateChange;
 import dev.slsk.options.SoulseekClientOptions;
+import dev.slsk.options.SoulseekClientOptionsPatch;
 import dev.slsk.search.ISearchResponder;
 import dev.slsk.search.SearchInternal;
 import dev.slsk.search.SearchResponder;
@@ -178,7 +180,7 @@ public class SoulseekClient
     private static final int DEFAULT_PORT = 2271;
     private static volatile boolean raiseEventsAsynchronously;
 
-    private final SoulseekClientOptions options;
+    private volatile SoulseekClientOptions options;
     private final int minorVersion;
     private final IWaiter waiter;
     private final TokenFactory tokenFactory;
@@ -196,6 +198,7 @@ public class SoulseekClient
     private final IDistributedConnectionManager distributedConnectionManager;
     private final IServerMessageHandler serverMessageHandler;
     private final IDiagnosticFactory diagnostic;
+    private volatile ClientListenerFactory clientListenerFactory = Listener::new;
     private final AtomicBoolean closed = new AtomicBoolean();
     private final ScheduledExecutorService cleanupScheduler;
     private final Map<Event, CopyOnWriteArrayList<SoulseekClientEventListener<?>>> listeners =
@@ -953,9 +956,9 @@ public class SoulseekClient
         }
 
         if (options.isEnableListener()) {
-            Listener probe = null;
+            IListener probe = null;
             try {
-                probe = new Listener(
+                probe = clientListenerFactory.create(
                         options.getListenIPAddress(), options.getListenPort(), options.getIncomingConnectionOptions());
                 probe.start();
             } catch (Throwable failure) {
@@ -1439,6 +1442,51 @@ public class SoulseekClient
                 .thenCompose(ignored -> responseWait)
                 .thenApply(ignored -> TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
         return mapClientFailure(operation, "Failed to ping the server: ");
+    }
+
+    /**
+     * Applies a patch to the current client options.
+     *
+     * @param patch the option substitutions
+     * @return whether reconnecting is required for full effect
+     */
+    public CompletableFuture<Boolean> reconfigureOptionsAsync(SoulseekClientOptionsPatch patch) {
+        return reconfigureOptionsAsync(patch, CancellationToken.none());
+    }
+
+    /**
+     * Applies a patch to the current client options.
+     *
+     * @param patch the option substitutions
+     * @param cancellationToken the cancellation token
+     * @return whether reconnecting is required for full effect
+     */
+    public CompletableFuture<Boolean> reconfigureOptionsAsync(
+            SoulseekClientOptionsPatch patch, CancellationToken cancellationToken) {
+        Objects.requireNonNull(patch, "patch");
+        boolean addressChanged = patch.getListenIPAddress() != null
+                && !patch.getListenIPAddress().equals(options.getListenIPAddress());
+        boolean portChanged = patch.getListenPort() != null && patch.getListenPort() != options.getListenPort();
+        if (addressChanged || portChanged) {
+            InetAddress newAddress =
+                    patch.getListenIPAddress() == null ? options.getListenIPAddress() : patch.getListenIPAddress();
+            int newPort = patch.getListenPort() == null ? options.getListenPort() : patch.getListenPort();
+            IListener probe = null;
+            try {
+                probe = clientListenerFactory.create(newAddress, newPort, options.getIncomingConnectionOptions());
+                probe.start();
+            } catch (Throwable failure) {
+                throw new ListenException("Failed to start listening on "
+                        + newAddress + ":" + newPort
+                        + "; the IP and/or port may be in use or "
+                        + "are otherwise unavailable");
+            } finally {
+                if (probe != null) {
+                    probe.stop();
+                }
+            }
+        }
+        return reconfigureOptionsInternalAsync(patch, defaultToken(cancellationToken));
     }
 
     public CompletableFuture<Void> addPrivateRoomModeratorAsync(String roomName, String requestedUsername) {
@@ -2004,6 +2052,10 @@ public class SoulseekClient
         serverConnection = value;
     }
 
+    void setListenerForTest(IListener value) {
+        listener = value;
+    }
+
     void setIpEndPointForTest(InetSocketAddress value) {
         ipEndPoint = value;
     }
@@ -2018,6 +2070,10 @@ public class SoulseekClient
 
     void setSearchesForTest(Map<Integer, SearchInternal> value) {
         searches = value;
+    }
+
+    void setClientListenerFactoryForTest(ClientListenerFactory value) {
+        clientListenerFactory = Objects.requireNonNull(value, "value");
     }
 
     void changeState(SoulseekClientStates newState, String message, Exception exception) {
@@ -2279,7 +2335,7 @@ public class SoulseekClient
             changeState(SoulseekClientStates.CONNECTING, "Connecting", null);
 
             if (options.isEnableListener()) {
-                listener = new Listener(
+                listener = clientListenerFactory.create(
                         options.getListenIPAddress(), options.getListenPort(), options.getIncomingConnectionOptions());
                 listener.addAcceptedListener(listenerHandler::handleConnection);
                 listener.start();
@@ -2351,6 +2407,142 @@ public class SoulseekClient
                         return CompletableFuture.failedFuture(failure);
                     }
                 });
+    }
+
+    private CompletableFuture<Boolean> reconfigureOptionsInternalAsync(
+            SoulseekClientOptionsPatch patch, CancellationToken cancellationToken) {
+        CompletableFuture<Boolean> serialized = acquirePermit(stateSemaphore, cancellationToken)
+                .thenCompose(ignored -> {
+                    CompletableFuture<Boolean> operation;
+                    try {
+                        operation = performReconfigureOptionsAsync(patch, cancellationToken);
+                    } catch (Throwable failure) {
+                        operation = CompletableFuture.failedFuture(failure);
+                    }
+                    return operation.whenComplete((result, failure) -> stateSemaphore.release());
+                });
+        return serialized.handle((result, failure) -> {
+            if (failure == null) {
+                return result;
+            }
+            Throwable cause = unwrap(failure);
+            if (cause instanceof CancellationException || cause instanceof TimeoutException) {
+                throw new CompletionException(cause);
+            }
+            throw new CompletionException(new SoulseekClientException(
+                    "Failed to reconfigure options: "
+                            + failureMessage(cause)
+                            + ".  Any successful reconfiguration has not "
+                            + "been rolled back; retry with the same patch "
+                            + "until successful or consider this as a "
+                            + "fatal Exception",
+                    cause));
+        });
+    }
+
+    private CompletableFuture<Boolean> performReconfigureOptionsAsync(
+            SoulseekClientOptionsPatch patch, CancellationToken cancellationToken) {
+        boolean connected = isConnectedAndLoggedIn();
+        boolean enableDistributedNetworkChanged = patch.getEnableDistributedNetwork() != null
+                && patch.getEnableDistributedNetwork() != options.isEnableDistributedNetwork();
+        boolean acceptDistributedChildrenChanged = patch.getAcceptDistributedChildren() != null
+                && patch.getAcceptDistributedChildren() != options.isAcceptDistributedChildren();
+        boolean distributedConnectionOptionsChanged = patch.getDistributedConnectionOptions() != null
+                && patch.getDistributedConnectionOptions() != options.getDistributedConnectionOptions();
+        boolean distributedNetworkWasDisabled = enableDistributedNetworkChanged && !patch.getEnableDistributedNetwork();
+        boolean distributedChildrenWereDisabled =
+                acceptDistributedChildrenChanged && !patch.getAcceptDistributedChildren();
+        boolean reconnectRequired = connected
+                && (distributedNetworkWasDisabled
+                        || distributedChildrenWereDisabled
+                        || distributedConnectionOptionsChanged);
+        boolean serverConnectionOptionsChanged = patch.getServerConnectionOptions() != null
+                && patch.getServerConnectionOptions() != options.getServerConnectionOptions();
+        if (connected && serverConnectionOptionsChanged) {
+            reconnectRequired = true;
+        }
+
+        boolean enableListenerChanged =
+                patch.getEnableListener() != null && patch.getEnableListener() != options.isEnableListener();
+        boolean listenAddressChanged = patch.getListenIPAddress() != null
+                && !patch.getListenIPAddress().equals(options.getListenIPAddress());
+        boolean listenPortChanged = patch.getListenPort() != null && patch.getListenPort() != options.getListenPort();
+        boolean incomingConnectionOptionsChanged = patch.getIncomingConnectionOptions() != null
+                && patch.getIncomingConnectionOptions() != options.getIncomingConnectionOptions();
+
+        if (enableListenerChanged || listenAddressChanged || listenPortChanged || incomingConnectionOptionsChanged) {
+            boolean wasListening = listener != null && listener.isListening();
+            if (listener != null) {
+                listener.stop();
+            }
+            listener = null;
+            options = options.with(listenerPatch(patch));
+            if (wasListening && options.isEnableListener()) {
+                listener = clientListenerFactory.create(
+                        options.getListenIPAddress(), options.getListenPort(), options.getIncomingConnectionOptions());
+                listener.addAcceptedListener(listenerHandler::handleConnection);
+                listener.start();
+            }
+        }
+
+        boolean maximumUploadSpeedChanged = patch.getMaximumUploadSpeed() != null
+                && patch.getMaximumUploadSpeed() != options.getMaximumUploadSpeed();
+        boolean maximumDownloadSpeedChanged = patch.getMaximumDownloadSpeed() != null
+                && patch.getMaximumDownloadSpeed() != options.getMaximumDownloadSpeed();
+        options = options.with(patch);
+
+        if (maximumUploadSpeedChanged) {
+            uploadTokenBucket.setCapacity((options.getMaximumUploadSpeed() * 1024L) / 10);
+        }
+        if (maximumDownloadSpeedChanged) {
+            downloadTokenBucket.setCapacity((options.getMaximumDownloadSpeed() * 1024L) / 10);
+        }
+
+        diagnostic.info("Options reconfigured successfully");
+        if (!isConnectedAndLoggedIn()) {
+            return CompletableFuture.completedFuture(false);
+        }
+        diagnostic.debug("Updating server with latest configuration");
+        boolean requiresReconnect = reconnectRequired;
+        return sendConfigurationMessagesAsync(cancellationToken).thenApply(ignored -> {
+            if (requiresReconnect) {
+                diagnostic.warning("Server reconnect required for options " + "to fully take effect");
+            }
+            return requiresReconnect;
+        });
+    }
+
+    private boolean isConnectedAndLoggedIn() {
+        return state.hasFlag(SoulseekClientStates.CONNECTED) && state.hasFlag(SoulseekClientStates.LOGGED_IN);
+    }
+
+    private static SoulseekClientOptionsPatch listenerPatch(SoulseekClientOptionsPatch patch) {
+        return new SoulseekClientOptionsPatch(
+                patch.getEnableListener(),
+                patch.getListenIPAddress(),
+                patch.getListenPort(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                patch.getIncomingConnectionOptions(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 
     private static Exception asException(Throwable failure) {
@@ -2711,6 +2903,11 @@ public class SoulseekClient
     }
 
     private record SearchInvocation(SearchQuery query, SearchScope scope, int token, SearchOptions options) {}
+
+    @FunctionalInterface
+    interface ClientListenerFactory {
+        IListener create(InetAddress ipAddress, int port, ConnectionOptions connectionOptions);
+    }
 
     private enum Event {
         BROWSE_PROGRESS_UPDATED,
