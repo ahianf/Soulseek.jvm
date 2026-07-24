@@ -6,7 +6,7 @@
 
   <groupId>dev.slsk</groupId>
   <artifactId>slsk-jvm</artifactId>
-  <version>0.3.3</version>
+  <version>0.3.4</version>
   <name>Soulseek.jvm</name>
   <description>A Java library for the Soulseek network.</description>
 
