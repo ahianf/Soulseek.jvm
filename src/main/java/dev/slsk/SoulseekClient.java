@@ -85,6 +85,7 @@ import dev.slsk.messaging.messages.StopPublicChatCommand;
 import dev.slsk.messaging.messages.UnwatchUserCommand;
 import dev.slsk.messaging.messages.UserAddressRequest;
 import dev.slsk.messaging.messages.UserAddressResponse;
+import dev.slsk.messaging.messages.UserInfoRequest;
 import dev.slsk.messaging.messages.UserPrivilegesRequest;
 import dev.slsk.messaging.messages.UserStatisticsRequest;
 import dev.slsk.messaging.messages.UserStatusRequest;
@@ -840,6 +841,37 @@ public class SoulseekClient
                 });
     }
 
+    public CompletableFuture<Void> connectToUserAsync(String requestedUsername) {
+        return connectToUserAsync(requestedUsername, false, CancellationToken.none());
+    }
+
+    public CompletableFuture<Void> connectToUserAsync(String requestedUsername, boolean invalidateCache) {
+        return connectToUserAsync(requestedUsername, invalidateCache, CancellationToken.none());
+    }
+
+    public CompletableFuture<Void> connectToUserAsync(String requestedUsername, CancellationToken cancellationToken) {
+        return connectToUserAsync(requestedUsername, false, cancellationToken);
+    }
+
+    public CompletableFuture<Void> connectToUserAsync(
+            String requestedUsername, boolean invalidateCache, CancellationToken cancellationToken) {
+        requireText(requestedUsername, "username");
+        requireLoggedIn("connect to other users");
+        CancellationToken token = defaultToken(cancellationToken);
+        CompletableFuture<Void> operation = getUserEndPointAsync(requestedUsername, token)
+                .thenCompose(endpoint -> {
+                    if (invalidateCache
+                            && peerConnectionManager.tryInvalidateMessageConnectionCache(requestedUsername)) {
+                        diagnostic.debug("Invalidated message connection cache for " + requestedUsername);
+                    }
+                    return peerConnectionManager
+                            .getOrAddMessageConnectionAsync(requestedUsername, endpoint, token)
+                            .thenApply(ignored -> null);
+                });
+        return mapClientFailure(
+                operation, "Failed to connect to user " + requestedUsername + ": ", UserOfflineException.class);
+    }
+
     public CompletableFuture<Integer> getPrivilegesAsync() {
         return getPrivilegesAsync(CancellationToken.none());
     }
@@ -983,6 +1015,35 @@ public class SoulseekClient
                 UserStatistics.class,
                 cancellationToken,
                 "Failed to retrieve statistics for user " + username + ": ");
+    }
+
+    public CompletableFuture<UserInfo> getUserInfoAsync(String requestedUsername) {
+        return getUserInfoAsync(requestedUsername, CancellationToken.none());
+    }
+
+    public CompletableFuture<UserInfo> getUserInfoAsync(String requestedUsername, CancellationToken cancellationToken) {
+        requireText(requestedUsername, "username");
+        requireLoggedIn("fetch user information");
+        CancellationToken token = defaultToken(cancellationToken);
+        CompletableFuture<UserInfo> infoWait;
+        try {
+            infoWait = waiter.waitAsync(
+                    new WaitKey(MessageCode.Peer.INFO_RESPONSE, requestedUsername), UserInfo.class, null, token);
+        } catch (Throwable failure) {
+            return mapClientFailure(
+                    CompletableFuture.failedFuture(failure),
+                    "Failed to retrieve information for user " + requestedUsername + ": ",
+                    UserOfflineException.class);
+        }
+        CompletableFuture<UserInfo> operation = getUserEndPointAsync(requestedUsername, token)
+                .thenCompose(endpoint ->
+                        peerConnectionManager.getOrAddMessageConnectionAsync(requestedUsername, endpoint, token))
+                .thenCompose(connection -> invokeMessageWrite(connection, new UserInfoRequest(), token))
+                .thenCompose(ignored -> infoWait);
+        return mapClientFailure(
+                operation,
+                "Failed to retrieve information for user " + requestedUsername + ": ",
+                UserOfflineException.class);
     }
 
     public CompletableFuture<UserStatus> getUserStatusAsync(String requestedUsername) {
@@ -1294,10 +1355,10 @@ public class SoulseekClient
                 return CompletableFuture.completedFuture(cached.value());
             }
         }
-        return endpointRequests.computeIfAbsent(
-                requestedUsername,
-                ignored -> retrieveUserEndPoint(requestedUsername, token, cache)
-                        .whenComplete((result, failure) -> endpointRequests.remove(requestedUsername)));
+        CompletableFuture<InetSocketAddress> request = endpointRequests.computeIfAbsent(
+                requestedUsername, ignored -> retrieveUserEndPoint(requestedUsername, token, cache));
+        request.whenComplete((result, failure) -> endpointRequests.remove(requestedUsername, request));
+        return request;
     }
 
     /** Disconnects with the default reason. */
@@ -1688,9 +1749,14 @@ public class SoulseekClient
     }
 
     private CompletableFuture<Void> invokeServerWrite(IOutgoingMessage message, CancellationToken cancellationToken) {
+        return invokeMessageWrite(serverConnection, message, cancellationToken);
+    }
+
+    private static CompletableFuture<Void> invokeMessageWrite(
+            IMessageConnection connection, IOutgoingMessage message, CancellationToken cancellationToken) {
         CompletableFuture<Void> operation;
         try {
-            operation = serverConnection.writeAsync(message, defaultToken(cancellationToken));
+            operation = connection.writeAsync(message, defaultToken(cancellationToken));
         } catch (Throwable failure) {
             operation = CompletableFuture.failedFuture(failure);
         }
@@ -1704,8 +1770,8 @@ public class SoulseekClient
                 UserAddressResponse.class,
                 null,
                 cancellationToken);
-        CompletableFuture<InetSocketAddress> operation = serverConnection
-                .writeAsync(new UserAddressRequest(requestedUsername), cancellationToken)
+        CompletableFuture<InetSocketAddress> operation = invokeServerWrite(
+                        new UserAddressRequest(requestedUsername), cancellationToken)
                 .thenCompose(ignored -> wait)
                 .thenApply(response -> {
                     if (response.getIpAddress().isAnyLocalAddress()) {
