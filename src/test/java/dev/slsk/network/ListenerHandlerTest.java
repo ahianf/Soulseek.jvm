@@ -16,6 +16,7 @@ import dev.slsk.CacheLookupResult;
 import dev.slsk.ISearchResponseCache;
 import dev.slsk.SearchResponseCacheRecord;
 import dev.slsk.common.Constants;
+import dev.slsk.common.IWaiter;
 import dev.slsk.common.WaitKey;
 import dev.slsk.common.Waiter;
 import dev.slsk.diagnostics.DiagnosticEventArgs;
@@ -278,7 +279,7 @@ class ListenerHandlerTest {
         }
 
         @Override
-        public Waiter getWaiter() {
+        public IWaiter getWaiter() {
             return waiter;
         }
 

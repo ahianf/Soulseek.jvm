@@ -23,7 +23,7 @@ import java.util.concurrent.TimeoutException;
 /**
  * Correlates asynchronous responses with FIFO waits.
  */
-public final class Waiter implements AutoCloseable {
+public final class Waiter implements IWaiter {
     static final int DEFAULT_TIMEOUT = 5_000;
 
     private final int defaultTimeout;
