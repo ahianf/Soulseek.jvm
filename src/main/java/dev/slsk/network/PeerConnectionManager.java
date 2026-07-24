@@ -119,7 +119,7 @@ public final class PeerConnectionManager implements IPeerConnectionManager {
                 diagnostic.debug("Purging message connection cache of failed connection "
                         + "to " + username + " ("
                         + incomingConnection.getIpEndPoint() + ").");
-                messageConnections.remove(username, replacement);
+                messageConnections.remove(username);
                 throw new CompletionException(new ConnectionException(message, cause));
             }
             return null;
@@ -203,13 +203,11 @@ public final class PeerConnectionManager implements IPeerConnectionManager {
     @Override
     public CompletableFuture<IMessageConnection> getOrAddMessageConnectionAsync(ConnectToPeerResponse response) {
         AtomicBoolean cached = new AtomicBoolean(true);
-        AtomicReference<CompletableFuture<IMessageConnection>> selected = new AtomicReference<>();
         CompletableFuture<IMessageConnection> future =
                 messageConnections.computeIfAbsent(response.getUsername(), key -> {
                     cached.set(false);
                     return invoke(() -> establishInboundIndirectMessageConnection(response));
                 });
-        selected.set(future);
 
         return future.handle((connection, failure) -> {
             if (failure == null) {
@@ -232,14 +230,15 @@ public final class PeerConnectionManager implements IPeerConnectionManager {
                 diagnostic.debug("Purging message connection cache of failed connection "
                         + "to " + response.getUsername() + " ("
                         + response.getIpEndPoint() + ").");
-                if (messageConnections.remove(response.getUsername(), selected.get())) {
-                    selected.get().handle((removed, ignored) -> {
+                CompletableFuture<IMessageConnection> removedRecord = messageConnections.remove(response.getUsername());
+                if (removedRecord != null) {
+                    removedRecord.handle((removed, ignored) -> {
                         if (removed != null && removed.getType().hasFlag(ConnectionTypes.DIRECT)) {
                             diagnostic.warning("Erroneously purged direct message "
                                     + "connection to "
                                     + response.getUsername()
                                     + " upon indirect failure");
-                            messageConnections.putIfAbsent(response.getUsername(), selected.get());
+                            messageConnections.putIfAbsent(response.getUsername(), removedRecord);
                         }
                         return null;
                     });
@@ -259,17 +258,15 @@ public final class PeerConnectionManager implements IPeerConnectionManager {
     public CompletableFuture<IMessageConnection> getOrAddMessageConnectionAsync(
             String username, InetSocketAddress ipEndPoint, int solicitationToken, CancellationToken cancellationToken) {
         AtomicBoolean cached = new AtomicBoolean(true);
-        AtomicReference<CompletableFuture<IMessageConnection>> selected = new AtomicReference<>();
         CompletableFuture<IMessageConnection> future = messageConnections.computeIfAbsent(username, key -> {
             cached.set(false);
             return establishRacingMessageConnection(username, ipEndPoint, solicitationToken, cancellationToken);
         });
-        selected.set(future);
         return future.handle((connection, failure) -> {
             if (failure != null) {
                 diagnostic.debug("Purging message connection cache of failed connection " + "to " + username + " ("
                         + ipEndPoint + ").");
-                messageConnections.remove(username, selected.get());
+                messageConnections.remove(username);
                 throw new CompletionException(unwrap(failure));
             }
             if (cached.get()) {
