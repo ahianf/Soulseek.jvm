@@ -153,7 +153,9 @@ class SoulseekClientEndpointTest {
         Thread firstCaller = Thread.ofVirtual().start(() -> first.set(fixture.client.getUserEndpoint("alice")));
         Thread secondCaller = Thread.ofVirtual().start(() -> second.set(fixture.client.getUserEndpoint("alice")));
 
-        awaitValue(() -> fixture.waiter.registrations == 2);
+        // Both callers run on their own threads; wait for the write as well as
+        // the registration before asserting on either.
+        awaitValue(() -> fixture.waiter.registrations == 2 && fixture.connection.writes == 2);
         assertEquals(2, fixture.connection.writes);
         assertEquals(2, fixture.waiter.registrations);
 

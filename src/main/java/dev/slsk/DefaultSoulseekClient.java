@@ -100,7 +100,6 @@ import dev.slsk.messaging.messages.PrivateRoomToggle;
 import dev.slsk.messaging.messages.RoomListRequest;
 import dev.slsk.messaging.messages.RoomMessageCommand;
 import dev.slsk.messaging.messages.RoomSearchRequest;
-import dev.slsk.messaging.messages.SearchRequest;
 import dev.slsk.messaging.messages.SendUploadSpeedCommand;
 import dev.slsk.messaging.messages.ServerPing;
 import dev.slsk.messaging.messages.SetListenPortCommand;
@@ -4706,203 +4705,121 @@ final class DefaultSoulseekClient
     }
 
     @Override
-    public TransferHandle enqueueDownload(String username, String remoteFilename, String localFilename) {
-        return new TransferHandle(unwrapped(enqueueDownloadOperation(username, remoteFilename, localFilename)));
+    public Transfer download(DownloadRequest request) {
+        Objects.requireNonNull(request, "request");
+        return unwrapped(
+                !request.isToStream()
+                        ? downloadOperation(
+                                request.getUsername(),
+                                request.getRemoteFilename(),
+                                request.getLocalFilename(),
+                                request.getSize(),
+                                request.getStartOffset(),
+                                request.getToken(),
+                                request.getOptions(),
+                                request.getCancellationSignal())
+                        : downloadOperation(
+                                request.getUsername(),
+                                request.getRemoteFilename(),
+                                request.getOutputStreamFactory(),
+                                request.getSize(),
+                                request.getStartOffset(),
+                                request.getToken(),
+                                request.getOptions(),
+                                request.getCancellationSignal()));
     }
 
     @Override
-    public TransferHandle enqueueDownload(String username, String remoteFilename, String localFilename, Long size) {
-        return new TransferHandle(unwrapped(enqueueDownloadOperation(username, remoteFilename, localFilename, size)));
-    }
-
-    @Override
-    public TransferHandle enqueueDownload(
-            String username, String remoteFilename, String localFilename, Long size, long startOffset) {
-        return new TransferHandle(
-                unwrapped(enqueueDownloadOperation(username, remoteFilename, localFilename, size, startOffset)));
-    }
-
-    @Override
-    public TransferHandle enqueueDownload(
-            String username, String remoteFilename, String localFilename, Long size, long startOffset, Integer token) {
-        return new TransferHandle(
-                unwrapped(enqueueDownloadOperation(username, remoteFilename, localFilename, size, startOffset, token)));
-    }
-
-    @Override
-    public TransferHandle enqueueDownload(
-            String username,
-            String remoteFilename,
-            String localFilename,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions options) {
+    public TransferHandle enqueueDownload(DownloadRequest request) {
+        Objects.requireNonNull(request, "request");
         return new TransferHandle(unwrapped(
-                enqueueDownloadOperation(username, remoteFilename, localFilename, size, startOffset, token, options)));
+                !request.isToStream()
+                        ? enqueueDownloadOperation(
+                                request.getUsername(),
+                                request.getRemoteFilename(),
+                                request.getLocalFilename(),
+                                request.getSize(),
+                                request.getStartOffset(),
+                                request.getToken(),
+                                request.getOptions(),
+                                request.getCancellationSignal())
+                        : enqueueDownloadOperation(
+                                request.getUsername(),
+                                request.getRemoteFilename(),
+                                request.getOutputStreamFactory(),
+                                request.getSize(),
+                                request.getStartOffset(),
+                                request.getToken(),
+                                request.getOptions(),
+                                request.getCancellationSignal())));
     }
 
     @Override
-    public TransferHandle enqueueDownload(
-            String username,
-            String remoteFilename,
-            String localFilename,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions options,
-            CancellationSignal cancellationSignal) {
-        return new TransferHandle(unwrapped(enqueueDownloadOperation(
-                username, remoteFilename, localFilename, size, startOffset, token, options, cancellationSignal)));
+    public Transfer upload(UploadRequest request) {
+        Objects.requireNonNull(request, "request");
+        return unwrapped(
+                !request.isFromStream()
+                        ? uploadOperation(
+                                request.getUsername(),
+                                request.getRemoteFilename(),
+                                request.getLocalFilename(),
+                                request.getToken(),
+                                request.getOptions(),
+                                request.getCancellationSignal())
+                        : uploadOperation(
+                                request.getUsername(),
+                                request.getRemoteFilename(),
+                                request.getSize(),
+                                request.getInputStreamFactory(),
+                                request.getToken(),
+                                request.getOptions(),
+                                request.getCancellationSignal()));
     }
 
     @Override
-    public TransferHandle enqueueDownload(
-            String username, String remoteFilename, DownloadStreamFactory outputStreamFactory) {
-        return new TransferHandle(unwrapped(enqueueDownloadOperation(username, remoteFilename, outputStreamFactory)));
-    }
-
-    @Override
-    public TransferHandle enqueueDownload(
-            String username, String remoteFilename, DownloadStreamFactory outputStreamFactory, Long size) {
-        return new TransferHandle(
-                unwrapped(enqueueDownloadOperation(username, remoteFilename, outputStreamFactory, size)));
-    }
-
-    @Override
-    public TransferHandle enqueueDownload(
-            String username,
-            String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
-            Long size,
-            long startOffset) {
-        return new TransferHandle(
-                unwrapped(enqueueDownloadOperation(username, remoteFilename, outputStreamFactory, size, startOffset)));
-    }
-
-    @Override
-    public TransferHandle enqueueDownload(
-            String username,
-            String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
-            Long size,
-            long startOffset,
-            Integer token) {
+    public TransferHandle enqueueUpload(UploadRequest request) {
+        Objects.requireNonNull(request, "request");
         return new TransferHandle(unwrapped(
-                enqueueDownloadOperation(username, remoteFilename, outputStreamFactory, size, startOffset, token)));
+                !request.isFromStream()
+                        ? enqueueUploadOperation(
+                                request.getUsername(),
+                                request.getRemoteFilename(),
+                                request.getLocalFilename(),
+                                request.getToken(),
+                                request.getOptions(),
+                                request.getCancellationSignal())
+                        : enqueueUploadOperation(
+                                request.getUsername(),
+                                request.getRemoteFilename(),
+                                request.getSize(),
+                                request.getInputStreamFactory(),
+                                request.getToken(),
+                                request.getOptions(),
+                                request.getCancellationSignal())));
     }
 
     @Override
-    public TransferHandle enqueueDownload(
-            String username,
-            String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions options) {
-        return new TransferHandle(unwrapped(enqueueDownloadOperation(
-                username, remoteFilename, outputStreamFactory, size, startOffset, token, options)));
+    public SearchResult search(SearchRequest request) {
+        Objects.requireNonNull(request, "request");
+        return unwrapped(searchOperation(
+                request.getQuery(),
+                request.getScope(),
+                request.getToken(),
+                request.getOptions(),
+                request.getCancellationSignal()));
     }
 
     @Override
-    public TransferHandle enqueueDownload(
-            String username,
-            String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions options,
-            CancellationSignal cancellationSignal) {
-        return new TransferHandle(unwrapped(enqueueDownloadOperation(
-                username, remoteFilename, outputStreamFactory, size, startOffset, token, options, cancellationSignal)));
-    }
-
-    @Override
-    public TransferHandle enqueueUpload(String username, String remoteFilename, String localFilename) {
-        return new TransferHandle(unwrapped(enqueueUploadOperation(username, remoteFilename, localFilename)));
-    }
-
-    @Override
-    public TransferHandle enqueueUpload(String username, String remoteFilename, String localFilename, Integer token) {
-        return new TransferHandle(unwrapped(enqueueUploadOperation(username, remoteFilename, localFilename, token)));
-    }
-
-    @Override
-    public TransferHandle enqueueUpload(
-            String username, String remoteFilename, String localFilename, CancellationSignal cancellationSignal) {
-        return new TransferHandle(
-                unwrapped(enqueueUploadOperation(username, remoteFilename, localFilename, cancellationSignal)));
-    }
-
-    @Override
-    public TransferHandle enqueueUpload(
-            String username, String remoteFilename, String localFilename, Integer token, TransferOptions options) {
-        return new TransferHandle(
-                unwrapped(enqueueUploadOperation(username, remoteFilename, localFilename, token, options)));
-    }
-
-    @Override
-    public TransferHandle enqueueUpload(
-            String username,
-            String remoteFilename,
-            String localFilename,
-            Integer token,
-            TransferOptions options,
-            CancellationSignal cancellationSignal) {
-        return new TransferHandle(unwrapped(
-                enqueueUploadOperation(username, remoteFilename, localFilename, token, options, cancellationSignal)));
-    }
-
-    @Override
-    public TransferHandle enqueueUpload(
-            String username, String remoteFilename, long size, UploadStreamFactory inputStreamFactory) {
-        return new TransferHandle(
-                unwrapped(enqueueUploadOperation(username, remoteFilename, size, inputStreamFactory)));
-    }
-
-    @Override
-    public TransferHandle enqueueUpload(
-            String username, String remoteFilename, long size, UploadStreamFactory inputStreamFactory, Integer token) {
-        return new TransferHandle(
-                unwrapped(enqueueUploadOperation(username, remoteFilename, size, inputStreamFactory, token)));
-    }
-
-    @Override
-    public TransferHandle enqueueUpload(
-            String username,
-            String remoteFilename,
-            long size,
-            UploadStreamFactory inputStreamFactory,
-            CancellationSignal cancellationSignal) {
-        return new TransferHandle(unwrapped(
-                enqueueUploadOperation(username, remoteFilename, size, inputStreamFactory, cancellationSignal)));
-    }
-
-    @Override
-    public TransferHandle enqueueUpload(
-            String username,
-            String remoteFilename,
-            long size,
-            UploadStreamFactory inputStreamFactory,
-            Integer token,
-            TransferOptions options) {
-        return new TransferHandle(
-                unwrapped(enqueueUploadOperation(username, remoteFilename, size, inputStreamFactory, token, options)));
-    }
-
-    @Override
-    public TransferHandle enqueueUpload(
-            String username,
-            String remoteFilename,
-            long size,
-            UploadStreamFactory inputStreamFactory,
-            Integer token,
-            TransferOptions options,
-            CancellationSignal cancellationSignal) {
-        return new TransferHandle(unwrapped(enqueueUploadOperation(
-                username, remoteFilename, size, inputStreamFactory, token, options, cancellationSignal)));
+    public Search search(SearchRequest request, Consumer<SearchResponse> responseHandler) {
+        Objects.requireNonNull(request, "request");
+        Objects.requireNonNull(responseHandler, "responseHandler");
+        return unwrapped(searchOperation(
+                request.getQuery(),
+                responseHandler,
+                request.getScope(),
+                request.getToken(),
+                request.getOptions(),
+                request.getCancellationSignal()));
     }
 
     // ---- Blocking public API ----------------------------------------------
@@ -5018,128 +4935,6 @@ final class DefaultSoulseekClient
     @Override
     public void connectToUser(String username, boolean invalidateCache, CancellationSignal cancellationSignal) {
         unwrapped(connectToUserOperation(username, invalidateCache, cancellationSignal));
-    }
-
-    @Override
-    public Transfer download(String username, String remoteFilename, String localFilename) {
-        return unwrapped(downloadOperation(username, remoteFilename, localFilename));
-    }
-
-    @Override
-    public Transfer download(String username, String remoteFilename, String localFilename, Long size) {
-        return unwrapped(downloadOperation(username, remoteFilename, localFilename, size));
-    }
-
-    @Override
-    public Transfer download(
-            String username, String remoteFilename, String localFilename, CancellationSignal cancellationSignal) {
-        return unwrapped(downloadOperation(username, remoteFilename, localFilename, cancellationSignal));
-    }
-
-    @Override
-    public Transfer download(
-            String username, String remoteFilename, String localFilename, Long size, long startOffset) {
-        return unwrapped(downloadOperation(username, remoteFilename, localFilename, size, startOffset));
-    }
-
-    @Override
-    public Transfer download(
-            String username, String remoteFilename, String localFilename, Long size, long startOffset, Integer token) {
-        return unwrapped(downloadOperation(username, remoteFilename, localFilename, size, startOffset, token));
-    }
-
-    @Override
-    public Transfer download(
-            String username,
-            String remoteFilename,
-            String localFilename,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions options) {
-        return unwrapped(downloadOperation(username, remoteFilename, localFilename, size, startOffset, token, options));
-    }
-
-    @Override
-    public Transfer download(
-            String username,
-            String remoteFilename,
-            String localFilename,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions options,
-            CancellationSignal cancellationSignal) {
-        return unwrapped(downloadOperation(
-                username, remoteFilename, localFilename, size, startOffset, token, options, cancellationSignal));
-    }
-
-    @Override
-    public Transfer download(String username, String remoteFilename, DownloadStreamFactory outputStreamFactory) {
-        return unwrapped(downloadOperation(username, remoteFilename, outputStreamFactory));
-    }
-
-    @Override
-    public Transfer download(
-            String username, String remoteFilename, DownloadStreamFactory outputStreamFactory, Long size) {
-        return unwrapped(downloadOperation(username, remoteFilename, outputStreamFactory, size));
-    }
-
-    @Override
-    public Transfer download(
-            String username,
-            String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
-            CancellationSignal cancellationSignal) {
-        return unwrapped(downloadOperation(username, remoteFilename, outputStreamFactory, cancellationSignal));
-    }
-
-    @Override
-    public Transfer download(
-            String username,
-            String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
-            Long size,
-            long startOffset) {
-        return unwrapped(downloadOperation(username, remoteFilename, outputStreamFactory, size, startOffset));
-    }
-
-    @Override
-    public Transfer download(
-            String username,
-            String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
-            Long size,
-            long startOffset,
-            Integer token) {
-        return unwrapped(downloadOperation(username, remoteFilename, outputStreamFactory, size, startOffset, token));
-    }
-
-    @Override
-    public Transfer download(
-            String username,
-            String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions options) {
-        return unwrapped(
-                downloadOperation(username, remoteFilename, outputStreamFactory, size, startOffset, token, options));
-    }
-
-    @Override
-    public Transfer download(
-            String username,
-            String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions options,
-            CancellationSignal cancellationSignal) {
-        return unwrapped(downloadOperation(
-                username, remoteFilename, outputStreamFactory, size, startOffset, token, options, cancellationSignal));
     }
 
     @Override
@@ -5345,84 +5140,6 @@ final class DefaultSoulseekClient
     }
 
     @Override
-    public SearchResult search(SearchQuery query) {
-        return unwrapped(searchOperation(query));
-    }
-
-    @Override
-    public SearchResult search(SearchQuery query, CancellationSignal cancellationSignal) {
-        return unwrapped(searchOperation(query, cancellationSignal));
-    }
-
-    @Override
-    public SearchResult search(SearchQuery query, SearchScope scope) {
-        return unwrapped(searchOperation(query, scope));
-    }
-
-    @Override
-    public SearchResult search(SearchQuery query, SearchScope scope, Integer token) {
-        return unwrapped(searchOperation(query, scope, token));
-    }
-
-    @Override
-    public SearchResult search(SearchQuery query, SearchScope scope, Integer token, SearchOptions options) {
-        return unwrapped(searchOperation(query, scope, token, options));
-    }
-
-    @Override
-    public SearchResult search(
-            SearchQuery query,
-            SearchScope scope,
-            Integer token,
-            SearchOptions options,
-            CancellationSignal cancellationSignal) {
-        return unwrapped(searchOperation(query, scope, token, options, cancellationSignal));
-    }
-
-    @Override
-    public Search search(SearchQuery query, Consumer<SearchResponse> responseHandler) {
-        return unwrapped(searchOperation(query, responseHandler));
-    }
-
-    @Override
-    public Search search(
-            SearchQuery query, Consumer<SearchResponse> responseHandler, CancellationSignal cancellationSignal) {
-        return unwrapped(searchOperation(query, responseHandler, cancellationSignal));
-    }
-
-    @Override
-    public Search search(SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope) {
-        return unwrapped(searchOperation(query, responseHandler, scope));
-    }
-
-    @Override
-    public Search search(
-            SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope, Integer token) {
-        return unwrapped(searchOperation(query, responseHandler, scope, token));
-    }
-
-    @Override
-    public Search search(
-            SearchQuery query,
-            Consumer<SearchResponse> responseHandler,
-            SearchScope scope,
-            Integer token,
-            SearchOptions options) {
-        return unwrapped(searchOperation(query, responseHandler, scope, token, options));
-    }
-
-    @Override
-    public Search search(
-            SearchQuery query,
-            Consumer<SearchResponse> responseHandler,
-            SearchScope scope,
-            Integer token,
-            SearchOptions options,
-            CancellationSignal cancellationSignal) {
-        return unwrapped(searchOperation(query, responseHandler, scope, token, options, cancellationSignal));
-    }
-
-    @Override
     public void sendPrivateMessage(String username, String message) {
         unwrapped(sendPrivateMessageOperation(username, message));
     }
@@ -5510,99 +5227,6 @@ final class DefaultSoulseekClient
     @Override
     public void unwatchUser(String username, CancellationSignal cancellationSignal) {
         unwrapped(unwatchUserOperation(username, cancellationSignal));
-    }
-
-    @Override
-    public Transfer upload(String username, String remoteFilename, String localFilename) {
-        return unwrapped(uploadOperation(username, remoteFilename, localFilename));
-    }
-
-    @Override
-    public Transfer upload(String username, String remoteFilename, String localFilename, Integer token) {
-        return unwrapped(uploadOperation(username, remoteFilename, localFilename, token));
-    }
-
-    @Override
-    public Transfer upload(
-            String username, String remoteFilename, String localFilename, CancellationSignal cancellationSignal) {
-        return unwrapped(uploadOperation(username, remoteFilename, localFilename, cancellationSignal));
-    }
-
-    @Override
-    public Transfer upload(String username, String remoteFilename, String localFilename, TransferOptions options) {
-        return unwrapped(uploadOperation(username, remoteFilename, localFilename, options));
-    }
-
-    @Override
-    public Transfer upload(
-            String username, String remoteFilename, String localFilename, Integer token, TransferOptions options) {
-        return unwrapped(uploadOperation(username, remoteFilename, localFilename, token, options));
-    }
-
-    @Override
-    public Transfer upload(
-            String username,
-            String remoteFilename,
-            String localFilename,
-            Integer token,
-            TransferOptions options,
-            CancellationSignal cancellationSignal) {
-        return unwrapped(uploadOperation(username, remoteFilename, localFilename, token, options, cancellationSignal));
-    }
-
-    @Override
-    public Transfer upload(String username, String remoteFilename, long size, UploadStreamFactory inputStreamFactory) {
-        return unwrapped(uploadOperation(username, remoteFilename, size, inputStreamFactory));
-    }
-
-    @Override
-    public Transfer upload(
-            String username, String remoteFilename, long size, UploadStreamFactory inputStreamFactory, Integer token) {
-        return unwrapped(uploadOperation(username, remoteFilename, size, inputStreamFactory, token));
-    }
-
-    @Override
-    public Transfer upload(
-            String username,
-            String remoteFilename,
-            long size,
-            UploadStreamFactory inputStreamFactory,
-            CancellationSignal cancellationSignal) {
-        return unwrapped(uploadOperation(username, remoteFilename, size, inputStreamFactory, cancellationSignal));
-    }
-
-    @Override
-    public Transfer upload(
-            String username,
-            String remoteFilename,
-            long size,
-            UploadStreamFactory inputStreamFactory,
-            TransferOptions options) {
-        return unwrapped(uploadOperation(username, remoteFilename, size, inputStreamFactory, options));
-    }
-
-    @Override
-    public Transfer upload(
-            String username,
-            String remoteFilename,
-            long size,
-            UploadStreamFactory inputStreamFactory,
-            Integer token,
-            TransferOptions options) {
-        return unwrapped(uploadOperation(username, remoteFilename, size, inputStreamFactory, token, options));
-    }
-
-    @Override
-    public Transfer upload(
-            String username,
-            String remoteFilename,
-            long size,
-            UploadStreamFactory inputStreamFactory,
-            Integer token,
-            TransferOptions options,
-            CancellationSignal cancellationSignal) {
-        return unwrapped(uploadOperation(
-                username, remoteFilename, size, inputStreamFactory, token, options, cancellationSignal));
     }
 
     @Override
@@ -5750,7 +5374,7 @@ final class DefaultSoulseekClient
                 yield messages.toByteArray();
             }
             case WISHLIST -> new WishlistSearchRequest(text, search.getToken()).toByteArray();
-            case NETWORK -> new SearchRequest(text, search.getToken()).toByteArray();
+            case NETWORK -> new dev.slsk.messaging.messages.SearchRequest(text, search.getToken()).toByteArray();
         };
     }
 

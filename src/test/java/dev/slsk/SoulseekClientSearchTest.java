@@ -16,7 +16,6 @@ import dev.slsk.exceptions.DuplicateTokenException;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.messaging.messages.RoomSearchRequest;
-import dev.slsk.messaging.messages.SearchRequest;
 import dev.slsk.messaging.messages.UserSearchRequest;
 import dev.slsk.messaging.messages.WishlistSearchRequest;
 import dev.slsk.network.MessageConnection;
@@ -41,25 +40,39 @@ class SoulseekClientSearchTest {
     void validatesQueryHandlerLoginAndDuplicateToken() {
         Fixture fixture = new Fixture();
 
-        assertThrows(NullPointerException.class, () -> fixture.client.search((SearchQuery) null));
-        for (String invalid :
-                new String[] {"", " ", "\t", "-excluded", "\u00A0", "\u2003", "\u202F", "\u3000", " \u2003\t"}) {
-            assertThrows(IllegalArgumentException.class, () -> fixture.client.search(SearchQuery.fromText(invalid)));
-        }
-        assertThrows(IllegalArgumentException.class, () -> fixture.client.search(SearchQuery.fromText("a")));
         assertThrows(
                 NullPointerException.class,
-                () -> fixture.client.search(SearchQuery.fromText("valid"), (Consumer<SearchResponse>) null));
+                () -> fixture.client.search(SearchRequest.of((SearchQuery) null).build()));
+        for (String invalid :
+                new String[] {"", " ", "\t", "-excluded", "\u00A0", "\u2003", "\u202F", "\u3000", " \u2003\t"}) {
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> fixture.client.search(
+                            SearchRequest.of(SearchQuery.fromText(invalid)).build()));
+        }
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> fixture.client.search(
+                        SearchRequest.of(SearchQuery.fromText("a")).build()));
+        assertThrows(
+                NullPointerException.class,
+                () -> fixture.client.search(
+                        SearchRequest.of(SearchQuery.fromText("valid")).build(), (Consumer<SearchResponse>) null));
 
         fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
-        assertThrows(IllegalStateException.class, () -> fixture.client.search(SearchQuery.fromText("valid")));
+        assertThrows(
+                IllegalStateException.class,
+                () -> fixture.client.search(
+                        SearchRequest.of(SearchQuery.fromText("valid")).build()));
 
         fixture.client.setStateForTest(loggedIn());
         SearchInternal existing = new SearchInternal(SearchQuery.fromText("existing"), SearchScope.getNetwork(), 42);
         fixture.client.getSearches().put(42, existing);
         assertThrows(
                 DuplicateTokenException.class,
-                () -> fixture.client.search(SearchQuery.fromText("valid"), null, 42, null, CancellationSignal.none()));
+                () -> fixture.client.search(SearchRequest.of(SearchQuery.fromText("valid"))
+                        .token(42)
+                        .build()));
         fixture.client.getSearches().remove(42);
         existing.close();
         fixture.close();
@@ -70,10 +83,13 @@ class SoulseekClientSearchTest {
         Fixture fixture = new Fixture();
         SearchOptions options = options(40, 250, false);
 
-        SearchResult result =
-                fixture.client.search(SearchQuery.fromText("a"), null, 10, options, CancellationSignal.none());
+        SearchResult result = fixture.client.search(SearchRequest.of(SearchQuery.fromText("a"))
+                .token(10)
+                .options(options)
+                .build());
 
-        assertArrayEquals(new SearchRequest("a", 10).toByteArray(), fixture.server.messages.get(0));
+        assertArrayEquals(
+                new dev.slsk.messaging.messages.SearchRequest("a", 10).toByteArray(), fixture.server.messages.get(0));
         assertTrue(result.search().getState().contains(SearchState.TIMED_OUT));
         fixture.close();
     }
@@ -85,10 +101,14 @@ class SoulseekClientSearchTest {
         SearchOptions options =
                 options(40, 250, true, change -> states.add(change.search().getState()), null);
 
-        SearchResult result =
-                fixture.client.search(SearchQuery.fromText("foo a -bar"), null, 11, options, CancellationSignal.none());
+        SearchResult result = fixture.client.search(SearchRequest.of(SearchQuery.fromText("foo a -bar"))
+                .token(11)
+                .options(options)
+                .build());
 
-        assertArrayEquals(new SearchRequest("foo -bar", 11).toByteArray(), fixture.server.messages.get(0));
+        assertArrayEquals(
+                new dev.slsk.messaging.messages.SearchRequest("foo -bar", 11).toByteArray(),
+                fixture.server.messages.get(0));
         assertEquals(
                 List.of(
                         SearchState.REQUESTED,
@@ -128,8 +148,11 @@ class SoulseekClientSearchTest {
         fixture.client.addSearchStateChangedListener((sender, eventData) -> clientStates.incrementAndGet());
         SearchOptions options = options(2_000, 1, true, null, received -> optionResponses.incrementAndGet());
 
-        CompletableFuture<SearchResult> task = inBackground(() ->
-                fixture.client.search(SearchQuery.fromText("query"), null, 30, options, CancellationSignal.none()));
+        CompletableFuture<SearchResult> task =
+                inBackground(() -> fixture.client.search(SearchRequest.of(SearchQuery.fromText("query"))
+                        .token(30)
+                        .options(options)
+                        .build()));
         waitUntil(() -> {
             SearchInternal active = fixture.client.getSearches().get(30);
             return active != null && active.getState().equals(SearchState.IN_PROGRESS);
@@ -162,12 +185,12 @@ class SoulseekClientSearchTest {
         SearchOptions options = options(2_000, 1, true);
 
         CompletableFuture<Search> task = inBackground(() -> fixture.client.search(
-                SearchQuery.fromText("query"),
-                responses::add,
-                SearchScope.getNetwork(),
-                31,
-                options,
-                CancellationSignal.none()));
+                SearchRequest.of(SearchQuery.fromText("query"))
+                        .scope(SearchScope.getNetwork())
+                        .token(31)
+                        .options(options)
+                        .build(),
+                responses::add));
         waitUntil(() -> fixture.client.getSearches().containsKey(31)
                 && fixture.client.getSearches().get(31).getState().equals(SearchState.IN_PROGRESS));
         SearchResponse response = new SearchResponse("bob", 31, true, 1, 0, List.of(new File(2, "file", 3, "ext")));
@@ -186,8 +209,11 @@ class SoulseekClientSearchTest {
     void generatesTokenAndTracksActiveSearch() {
         Fixture fixture = new Fixture();
         CancellationController source = new CancellationController();
-        CompletableFuture<SearchResult> task = inBackground(() -> fixture.client.search(
-                SearchQuery.fromText("query"), null, null, options(2_000, 250, true), source.getSignal()));
+        CompletableFuture<SearchResult> task =
+                inBackground(() -> fixture.client.search(SearchRequest.of(SearchQuery.fromText("query"))
+                        .options(options(2_000, 250, true))
+                        .cancellation(source.getSignal())
+                        .build()));
 
         waitUntil(() -> fixture.client.getSearches().size() == 1);
         SearchInternal active = fixture.client.getSearches().values().iterator().next();
@@ -203,14 +229,21 @@ class SoulseekClientSearchTest {
         Fixture fixture = new Fixture();
         CancellationController source = new CancellationController();
         source.cancel();
-        CompletableFuture<SearchResult> cancelled = inBackground(() -> fixture.client.search(
-                SearchQuery.fromText("cancelled"), null, 40, options(2_000, 250, true), source.getSignal()));
+        CompletableFuture<SearchResult> cancelled =
+                inBackground(() -> fixture.client.search(SearchRequest.of(SearchQuery.fromText("cancelled"))
+                        .token(40)
+                        .options(options(2_000, 250, true))
+                        .cancellation(source.getSignal())
+                        .build()));
         assertInstanceOf(CancellationException.class, completionCause(() -> cancelled.join()));
 
         TimeoutException timeout = new TimeoutException("write");
         fixture.server.result = CompletableFuture.failedFuture(timeout);
-        CompletableFuture<SearchResult> timedOut = inBackground(() -> fixture.client.search(
-                SearchQuery.fromText("timeout"), null, 41, options(2_000, 250, true), CancellationSignal.none()));
+        CompletableFuture<SearchResult> timedOut =
+                inBackground(() -> fixture.client.search(SearchRequest.of(SearchQuery.fromText("timeout"))
+                        .token(41)
+                        .options(options(2_000, 250, true))
+                        .build()));
         assertSame(
                 timeout,
                 assertInstanceOf(NoResponseException.class, completionCause(() -> timedOut.join()))
@@ -218,8 +251,11 @@ class SoulseekClientSearchTest {
 
         IllegalStateException error = new IllegalStateException("boom");
         fixture.server.result = CompletableFuture.failedFuture(error);
-        CompletableFuture<SearchResult> failed = inBackground(() -> fixture.client.search(
-                SearchQuery.fromText("error"), null, 42, options(2_000, 250, true), CancellationSignal.none()));
+        CompletableFuture<SearchResult> failed =
+                inBackground(() -> fixture.client.search(SearchRequest.of(SearchQuery.fromText("error"))
+                        .token(42)
+                        .options(options(2_000, 250, true))
+                        .build()));
         SoulseekClientException wrapped =
                 assertInstanceOf(SoulseekClientException.class, completionCause(() -> failed.join()));
         assertSame(error, wrapped.getCause());
@@ -234,12 +270,24 @@ class SoulseekClientSearchTest {
         CancellationController firstSource = new CancellationController();
         CancellationController secondSource = new CancellationController();
         CancellationController thirdSource = new CancellationController();
-        CompletableFuture<SearchResult> first = inBackground(
-                () -> fixture.client.search(SearchQuery.fromText("one"), null, 51, options, firstSource.getSignal()));
-        CompletableFuture<SearchResult> second = inBackground(
-                () -> fixture.client.search(SearchQuery.fromText("two"), null, 52, options, secondSource.getSignal()));
-        CompletableFuture<SearchResult> third = inBackground(
-                () -> fixture.client.search(SearchQuery.fromText("three"), null, 53, options, thirdSource.getSignal()));
+        CompletableFuture<SearchResult> first =
+                inBackground(() -> fixture.client.search(SearchRequest.of(SearchQuery.fromText("one"))
+                        .token(51)
+                        .options(options)
+                        .cancellation(firstSource.getSignal())
+                        .build()));
+        CompletableFuture<SearchResult> second =
+                inBackground(() -> fixture.client.search(SearchRequest.of(SearchQuery.fromText("two"))
+                        .token(52)
+                        .options(options)
+                        .cancellation(secondSource.getSignal())
+                        .build()));
+        CompletableFuture<SearchResult> third =
+                inBackground(() -> fixture.client.search(SearchRequest.of(SearchQuery.fromText("three"))
+                        .token(53)
+                        .options(options)
+                        .cancellation(thirdSource.getSignal())
+                        .build()));
 
         waitUntil(() -> fixture.server.messages.size() == 2);
         // The three callers each run on their own thread now, so the queued one
@@ -249,7 +297,9 @@ class SoulseekClientSearchTest {
         firstSource.cancel();
         assertInstanceOf(CancellationException.class, completionCause(() -> first.join()));
         waitUntil(() -> fixture.server.messages.size() == 3);
-        assertArrayEquals(new SearchRequest("three", 53).toByteArray(), fixture.server.messages.get(2));
+        assertArrayEquals(
+                new dev.slsk.messaging.messages.SearchRequest("three", 53).toByteArray(),
+                fixture.server.messages.get(2));
         secondSource.cancel();
         thirdSource.cancel();
         assertInstanceOf(CancellationException.class, completionCause(() -> second.join()));
@@ -259,8 +309,11 @@ class SoulseekClientSearchTest {
 
     private static void assertScopeMessage(SearchScope scope, byte[] expected) {
         Fixture fixture = new Fixture();
-        SearchResult result = fixture.client.search(
-                SearchQuery.fromText("query"), scope, 20, options(30, 250, true), CancellationSignal.none());
+        SearchResult result = fixture.client.search(SearchRequest.of(SearchQuery.fromText("query"))
+                .scope(scope)
+                .token(20)
+                .options(options(30, 250, true))
+                .build());
         assertArrayEquals(expected, fixture.server.messages.get(0));
         assertTrue(result.search().getState().contains(SearchState.TIMED_OUT));
         fixture.close();

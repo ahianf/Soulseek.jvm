@@ -29,12 +29,8 @@ import dev.slsk.events.TransferProgressUpdatedEvent;
 import dev.slsk.events.TransferStateChangedEvent;
 import dev.slsk.events.UserCannotConnectEvent;
 import dev.slsk.options.BrowseOptions;
-import dev.slsk.options.DownloadStreamFactory;
-import dev.slsk.options.SearchOptions;
 import dev.slsk.options.SoulseekClientOptions;
 import dev.slsk.options.SoulseekClientOptionsPatch;
-import dev.slsk.options.TransferOptions;
-import dev.slsk.options.UploadStreamFactory;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.List;
@@ -353,81 +349,6 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
 
     void disconnect(String message, Exception exception);
 
-    Transfer download(String username, String remoteFilename, String localFilename);
-
-    Transfer download(String username, String remoteFilename, String localFilename, Long size);
-
-    Transfer download(
-            String username, String remoteFilename, String localFilename, CancellationSignal cancellationSignal);
-
-    Transfer download(String username, String remoteFilename, String localFilename, Long size, long startOffset);
-
-    Transfer download(
-            String username, String remoteFilename, String localFilename, Long size, long startOffset, Integer token);
-
-    Transfer download(
-            String username,
-            String remoteFilename,
-            String localFilename,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions options);
-
-    Transfer download(
-            String username,
-            String remoteFilename,
-            String localFilename,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions options,
-            CancellationSignal cancellationSignal);
-
-    Transfer download(String username, String remoteFilename, DownloadStreamFactory outputStreamFactory);
-
-    Transfer download(String username, String remoteFilename, DownloadStreamFactory outputStreamFactory, Long size);
-
-    Transfer download(
-            String username,
-            String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
-            CancellationSignal cancellationSignal);
-
-    Transfer download(
-            String username,
-            String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
-            Long size,
-            long startOffset);
-
-    Transfer download(
-            String username,
-            String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
-            Long size,
-            long startOffset,
-            Integer token);
-
-    Transfer download(
-            String username,
-            String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions options);
-
-    Transfer download(
-            String username,
-            String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions options,
-            CancellationSignal cancellationSignal);
-
     void dropPrivateRoomMembership(String roomName);
 
     void dropPrivateRoomMembership(String roomName, CancellationSignal cancellationSignal);
@@ -435,122 +356,6 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
     void dropPrivateRoomOwnership(String roomName);
 
     void dropPrivateRoomOwnership(String roomName, CancellationSignal cancellationSignal);
-
-    TransferHandle enqueueDownload(String username, String remoteFilename, String localFilename);
-
-    TransferHandle enqueueDownload(String username, String remoteFilename, String localFilename, Long size);
-
-    TransferHandle enqueueDownload(
-            String username, String remoteFilename, String localFilename, Long size, long startOffset);
-
-    TransferHandle enqueueDownload(
-            String username, String remoteFilename, String localFilename, Long size, long startOffset, Integer token);
-
-    TransferHandle enqueueDownload(
-            String username,
-            String remoteFilename,
-            String localFilename,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions options);
-
-    TransferHandle enqueueDownload(
-            String username,
-            String remoteFilename,
-            String localFilename,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions options,
-            CancellationSignal cancellationSignal);
-
-    TransferHandle enqueueDownload(String username, String remoteFilename, DownloadStreamFactory outputStreamFactory);
-
-    TransferHandle enqueueDownload(
-            String username, String remoteFilename, DownloadStreamFactory outputStreamFactory, Long size);
-
-    TransferHandle enqueueDownload(
-            String username,
-            String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
-            Long size,
-            long startOffset);
-
-    TransferHandle enqueueDownload(
-            String username,
-            String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
-            Long size,
-            long startOffset,
-            Integer token);
-
-    TransferHandle enqueueDownload(
-            String username,
-            String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions options);
-
-    TransferHandle enqueueDownload(
-            String username,
-            String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions options,
-            CancellationSignal cancellationSignal);
-
-    TransferHandle enqueueUpload(String username, String remoteFilename, String localFilename);
-
-    TransferHandle enqueueUpload(String username, String remoteFilename, String localFilename, Integer token);
-
-    TransferHandle enqueueUpload(
-            String username, String remoteFilename, String localFilename, CancellationSignal cancellationSignal);
-
-    TransferHandle enqueueUpload(
-            String username, String remoteFilename, String localFilename, Integer token, TransferOptions options);
-
-    TransferHandle enqueueUpload(
-            String username,
-            String remoteFilename,
-            String localFilename,
-            Integer token,
-            TransferOptions options,
-            CancellationSignal cancellationSignal);
-
-    TransferHandle enqueueUpload(
-            String username, String remoteFilename, long size, UploadStreamFactory inputStreamFactory);
-
-    TransferHandle enqueueUpload(
-            String username, String remoteFilename, long size, UploadStreamFactory inputStreamFactory, Integer token);
-
-    TransferHandle enqueueUpload(
-            String username,
-            String remoteFilename,
-            long size,
-            UploadStreamFactory inputStreamFactory,
-            CancellationSignal cancellationSignal);
-
-    TransferHandle enqueueUpload(
-            String username,
-            String remoteFilename,
-            long size,
-            UploadStreamFactory inputStreamFactory,
-            Integer token,
-            TransferOptions options);
-
-    TransferHandle enqueueUpload(
-            String username,
-            String remoteFilename,
-            long size,
-            UploadStreamFactory inputStreamFactory,
-            Integer token,
-            TransferOptions options,
-            CancellationSignal cancellationSignal);
 
     List<Directory> getDirectoryContents(String username, String directoryName);
 
@@ -625,45 +430,56 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
 
     void removePrivateRoomModerator(String roomName, String username, CancellationSignal cancellationSignal);
 
-    SearchResult search(SearchQuery query);
+    /**
+     * Downloads a file, blocking until the transfer finishes.
+     *
+     * @param request the download to perform
+     * @return the completed transfer
+     */
+    Transfer download(DownloadRequest request);
 
-    SearchResult search(SearchQuery query, CancellationSignal cancellationSignal);
+    /**
+     * Asks a peer to queue a download, blocking only until it accepts.
+     *
+     * @param request the download to enqueue
+     * @return a handle whose {@link TransferHandle#await()} blocks for completion
+     */
+    TransferHandle enqueueDownload(DownloadRequest request);
 
-    SearchResult search(SearchQuery query, SearchScope scope);
+    /**
+     * Uploads a file, blocking until the transfer finishes.
+     *
+     * @param request the upload to perform
+     * @return the completed transfer
+     */
+    Transfer upload(UploadRequest request);
 
-    SearchResult search(SearchQuery query, SearchScope scope, Integer token);
+    /**
+     * Offers a peer an upload, blocking only until it accepts.
+     *
+     * @param request the upload to enqueue
+     * @return a handle whose {@link TransferHandle#await()} blocks for completion
+     */
+    TransferHandle enqueueUpload(UploadRequest request);
 
-    SearchResult search(SearchQuery query, SearchScope scope, Integer token, SearchOptions options);
+    /**
+     * Searches, blocking until the search completes, and returns everything it
+     * collected.
+     *
+     * @param request the search to perform
+     * @return the collected result
+     */
+    SearchResult search(SearchRequest request);
 
-    SearchResult search(
-            SearchQuery query,
-            SearchScope scope,
-            Integer token,
-            SearchOptions options,
-            CancellationSignal cancellationSignal);
-
-    Search search(SearchQuery query, Consumer<SearchResponse> responseHandler);
-
-    Search search(SearchQuery query, Consumer<SearchResponse> responseHandler, CancellationSignal cancellationSignal);
-
-    Search search(SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope);
-
-    Search search(SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope, Integer token);
-
-    Search search(
-            SearchQuery query,
-            Consumer<SearchResponse> responseHandler,
-            SearchScope scope,
-            Integer token,
-            SearchOptions options);
-
-    Search search(
-            SearchQuery query,
-            Consumer<SearchResponse> responseHandler,
-            SearchScope scope,
-            Integer token,
-            SearchOptions options,
-            CancellationSignal cancellationSignal);
+    /**
+     * Searches, streaming each response to {@code responseHandler} as it
+     * arrives.
+     *
+     * @param request the search to perform
+     * @param responseHandler receives each response
+     * @return the completed search
+     */
+    Search search(SearchRequest request, Consumer<SearchResponse> responseHandler);
 
     void sendPrivateMessage(String username, String message);
 
@@ -700,62 +516,6 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
     void unwatchUser(String username);
 
     void unwatchUser(String username, CancellationSignal cancellationSignal);
-
-    Transfer upload(String username, String remoteFilename, String localFilename);
-
-    Transfer upload(String username, String remoteFilename, String localFilename, Integer token);
-
-    Transfer upload(
-            String username, String remoteFilename, String localFilename, CancellationSignal cancellationSignal);
-
-    Transfer upload(String username, String remoteFilename, String localFilename, TransferOptions options);
-
-    Transfer upload(
-            String username, String remoteFilename, String localFilename, Integer token, TransferOptions options);
-
-    Transfer upload(
-            String username,
-            String remoteFilename,
-            String localFilename,
-            Integer token,
-            TransferOptions options,
-            CancellationSignal cancellationSignal);
-
-    Transfer upload(String username, String remoteFilename, long size, UploadStreamFactory inputStreamFactory);
-
-    Transfer upload(
-            String username, String remoteFilename, long size, UploadStreamFactory inputStreamFactory, Integer token);
-
-    Transfer upload(
-            String username,
-            String remoteFilename,
-            long size,
-            UploadStreamFactory inputStreamFactory,
-            CancellationSignal cancellationSignal);
-
-    Transfer upload(
-            String username,
-            String remoteFilename,
-            long size,
-            UploadStreamFactory inputStreamFactory,
-            TransferOptions options);
-
-    Transfer upload(
-            String username,
-            String remoteFilename,
-            long size,
-            UploadStreamFactory inputStreamFactory,
-            Integer token,
-            TransferOptions options);
-
-    Transfer upload(
-            String username,
-            String remoteFilename,
-            long size,
-            UploadStreamFactory inputStreamFactory,
-            Integer token,
-            TransferOptions options,
-            CancellationSignal cancellationSignal);
 
     UserData watchUser(String username);
 

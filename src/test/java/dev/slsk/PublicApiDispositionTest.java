@@ -170,9 +170,10 @@ class PublicApiDispositionTest {
             }
         }
 
-        // 141 since Phase 4 added TransferHandle, which replaced the nested
-        // CompletableFuture<CompletableFuture<Transfer>> enqueue return.
-        assertEquals(141, publicTypes);
+        // 144 since Phase 4: TransferHandle replaced the nested enqueue future,
+        // and DownloadRequest/UploadRequest/SearchRequest replaced the overload
+        // cross products.
+        assertEquals(144, publicTypes);
     }
 
     private static int countOccurrences(String text, String value) {
