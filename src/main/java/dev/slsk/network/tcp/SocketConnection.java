@@ -30,9 +30,9 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -44,8 +44,13 @@ public class SocketConnection implements Connection {
     // read unmounts its carrier instead of pinning a bounded pool worker; see
     // NetworkExecutor for why the common pool is unusable here.
     private static final ExecutorService IO_EXECUTOR = NetworkExecutor.executor();
-    private static final ScheduledExecutorService TIMER_EXECUTOR =
-            Executors.newScheduledThreadPool(2, daemonFactory("soulseek-connection-timer"));
+    private static final ScheduledExecutorService TIMER_EXECUTOR = createTimerExecutor();
+
+    /** Fastest monitor tick, so a very short inactivity timeout stays precise. */
+    private static final int MIN_MONITOR_INTERVAL_MILLIS = 10;
+
+    /** Slowest monitor tick, matching the original watchdog cadence. */
+    private static final int MAX_MONITOR_INTERVAL_MILLIS = 250;
 
     private final UUID id = UUID.randomUUID();
     private final CopyOnWriteArrayList<ConnectionEventListener<Void>> connectedListeners = new CopyOnWriteArrayList<>();
@@ -67,8 +72,7 @@ public class SocketConnection implements Connection {
     private volatile ConnectionState state = ConnectionState.PENDING;
     private volatile ConnectionTypes type = ConnectionTypes.NONE;
     private volatile boolean writeQueueFull;
-    private ScheduledFuture<?> inactivityTask;
-    private ScheduledFuture<?> watchdogTask;
+    private ScheduledFuture<?> monitorTask;
 
     protected InetSocketAddress ipEndpoint;
     protected final ConnectionOptions options;
@@ -417,12 +421,19 @@ public class SocketConnection implements Connection {
         }
     }
 
-    /** Resets the activity timestamp and inactivity timer. */
+    /**
+     * Records activity.
+     *
+     * <p>Called once per buffer chunk on both the read and write paths, so it
+     * must stay a single volatile store. It used to cancel and reschedule a
+     * {@link ScheduledFuture} on every call; because the shared executor did
+     * not evict cancelled tasks, each reschedule left a dead entry in the delay
+     * queue for the whole inactivity window. A 2 GiB transfer at the 16 KiB
+     * default buffer ended with 131,077 of them — one per chunk. The periodic
+     * monitor reads this timestamp instead.
+     */
     protected final void resetInactivityTime() {
         lastActivityNanos = System.nanoTime();
-        if (options.getInactivityTimeout() > 0) {
-            scheduleInactivityTimeout();
-        }
     }
 
     /** Returns the currently associated network stream. */
@@ -582,52 +593,71 @@ public class SocketConnection implements Connection {
     }
 
     private void startTimers() {
-        if (options.getInactivityTimeout() > 0) {
-            scheduleInactivityTimeout();
-        }
         synchronized (timerLock) {
-            if (watchdogTask == null || watchdogTask.isDone()) {
-                watchdogTask = TIMER_EXECUTOR.scheduleAtFixedRate(this::watchdogTick, 250, 250, TimeUnit.MILLISECONDS);
+            if (monitorTask == null || monitorTask.isDone()) {
+                int interval = monitorIntervalMillis();
+                monitorTask = TIMER_EXECUTOR.scheduleAtFixedRate(
+                        this::monitorTick, interval, interval, TimeUnit.MILLISECONDS);
             }
         }
     }
 
     private void stopTimers() {
         synchronized (timerLock) {
-            if (inactivityTask != null) {
-                inactivityTask.cancel(false);
-                inactivityTask = null;
-            }
-            if (watchdogTask != null) {
-                watchdogTask.cancel(false);
-                watchdogTask = null;
+            if (monitorTask != null) {
+                monitorTask.cancel(false);
+                monitorTask = null;
             }
         }
     }
 
-    private void scheduleInactivityTimeout() {
-        synchronized (timerLock) {
-            if (inactivityTask != null) {
-                inactivityTask.cancel(false);
-            }
-            int timeout = options.getInactivityTimeout();
-            inactivityTask = TIMER_EXECUTOR.schedule(
-                    () -> {
-                        TimeoutException exception =
-                                new TimeoutException("Inactivity timeout of " + timeout + " milliseconds was reached");
-                        disconnect(exception.getMessage(), exception);
-                    },
-                    timeout,
-                    TimeUnit.MILLISECONDS);
+    /**
+     * Returns the monitor cadence.
+     *
+     * <p>Capped at the original 250 ms watchdog interval so liveness detection
+     * is unchanged, and scaled down for short inactivity timeouts so those stay
+     * about as precise as the old dedicated one-shot timer.
+     */
+    private int monitorIntervalMillis() {
+        int timeout = options.getInactivityTimeout();
+        if (timeout <= 0) {
+            return MAX_MONITOR_INTERVAL_MILLIS;
         }
+        return Math.clamp(timeout / 4, MIN_MONITOR_INTERVAL_MILLIS, MAX_MONITOR_INTERVAL_MILLIS);
     }
 
-    private void watchdogTick() {
+    /**
+     * One periodic task per connection covering both checks the connection
+     * needs: that the transport is still there, and that it has not gone idle
+     * past its budget.
+     */
+    private void monitorTick() {
         TcpClient client = tcpClient;
         if (client == null || !client.isConnected()) {
             String message = "The connection was closed unexpectedly";
             disconnect(message, new ConnectionException(message));
+            return;
         }
+
+        int timeout = options.getInactivityTimeout();
+        if (timeout > 0) {
+            long idleMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - lastActivityNanos);
+            if (idleMillis >= timeout) {
+                TimeoutException exception =
+                        new TimeoutException("Inactivity timeout of " + timeout + " milliseconds was reached");
+                disconnect(exception.getMessage(), exception);
+            }
+        }
+    }
+
+    private static ScheduledExecutorService createTimerExecutor() {
+        ScheduledThreadPoolExecutor executor =
+                new ScheduledThreadPoolExecutor(2, daemonFactory("soulseek-connection-timer"));
+        // Without this, a cancelled task stays resident in the delay queue
+        // until its original deadline passes. Defence in depth now that the
+        // per-chunk reschedule is gone.
+        executor.setRemoveOnCancelPolicy(true);
+        return executor;
     }
 
     private void closeTransport() {

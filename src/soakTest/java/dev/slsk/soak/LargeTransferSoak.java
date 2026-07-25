@@ -11,7 +11,6 @@ import dev.slsk.network.tcp.SocketConnection;
 import dev.slsk.options.ConnectionOptions;
 import java.io.OutputStream;
 import java.util.Locale;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -84,13 +83,10 @@ class LargeTransferSoak {
     /**
      * The timer queue must stay bounded across a large transfer.
      *
-     * <p>Disabled: fails on the 0.11.0 baseline. {@code resetInactivityTime()}
-     * runs once per 16 KiB chunk, each reschedule leaves a cancelled task
-     * resident for the 15-second inactivity window, and the shared executor has
-     * {@code removeOnCancelPolicy=false}. Defect 1.2 is what makes this pass.
+     * <p>On the 0.11.0 baseline a 2 GiB transfer ended with 131,077 entries,
+     * one per 16 KiB chunk. Defect 1.2 removed the per-chunk reschedule.
      */
     @Test
-    @Disabled("Baseline queue grows with chunk count: defect 1.2 — enable in Phase 1")
     @DisplayName("Timer queue stays bounded across a large transfer")
     void timerQueueStaysBoundedAcrossTransfer() throws Exception {
         try (LoopbackPeer peer =

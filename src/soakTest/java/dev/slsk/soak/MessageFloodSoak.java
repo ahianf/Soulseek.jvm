@@ -11,7 +11,6 @@ import dev.slsk.options.ConnectionOptions;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -79,14 +78,12 @@ class MessageFloodSoak {
     /**
      * The timer queue must not grow while a connection reads.
      *
-     * <p>Disabled: fails on the 0.11.0 baseline. Every framed read reschedules
-     * the inactivity timeout, and the executor is created without
-     * {@code setRemoveOnCancelPolicy(true)}, so each cancelled task stays
-     * resident for the full 15-second inactivity window. Defect 1.2 removes the
-     * per-chunk rescheduling; remove the {@code @Disabled} in that commit.
+     * <p>On the 0.11.0 baseline this reached 835,720 entries: every framed read
+     * rescheduled the inactivity timeout and the executor never evicted the
+     * cancelled tasks. Defect 1.2 replaced the per-chunk reschedule with a
+     * periodic monitor that reads {@code lastActivityNanos}.
      */
     @Test
-    @Disabled("Baseline queue grows with message count: defect 1.2 — enable in Phase 1")
     @DisplayName("Timer queue stays bounded under message flood")
     void timerQueueStaysBoundedUnderFlood() throws Exception {
         try (LoopbackPeer peer =
