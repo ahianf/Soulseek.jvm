@@ -11,6 +11,7 @@ import dev.slsk.DistributedNetworkInfo;
 import dev.slsk.DistributedPeer;
 import dev.slsk.SoulseekClientState;
 import dev.slsk.common.Constants;
+import dev.slsk.common.NetworkExecutor;
 import dev.slsk.common.Scheduler;
 import dev.slsk.common.WaitKey;
 import dev.slsk.diagnostics.DiagnosticEvent;
@@ -52,6 +53,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -439,25 +443,69 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
 
     @Override
     public CompletableFuture<Void> broadcastMessageAsync(byte[] bytes, CancellationSignal cancellationSignal) {
+        return NetworkExecutor.runAsync(() -> broadcastMessage(bytes, cancellationSignal));
+    }
+
+    /**
+     * Writes a message to every child, blocking until all of them have settled.
+     *
+     * <p>One virtual thread per child, joined at the end. This replaced a
+     * {@code CompletableFuture.allOf} over per-child continuation chains; the
+     * shape is identical but there is no chain to read, and each child's write
+     * is a plain blocking call.
+     *
+     * <p>A failing child is disconnected and does not affect the others, which
+     * is what the per-child {@code exceptionally} used to guarantee.
+     *
+     * <p>This is the shape {@code StructuredTaskScope} exists for. It is
+     * deliberately not used: still a preview API in Java 25, and a library
+     * cannot force {@code --enable-preview} onto its consumers. Revisit when it
+     * is final.
+     */
+    void broadcastMessage(byte[] bytes, CancellationSignal cancellationSignal) {
         long started = System.nanoTime();
         CancellationSignal effectiveToken = token(cancellationSignal);
-        List<CompletableFuture<Void>> writes = childConnections.values().stream()
-                .map(future -> future.thenCompose(connection -> {
-                            if (connection == null || connection.getState() != ConnectionState.CONNECTED) {
-                                return CompletableFuture.completedFuture(null);
-                            }
-                            return connection.writeAsync(bytes, effectiveToken).exceptionally(failure -> {
-                                connection.disconnect("Broadcast failure: " + message(unwrap(failure)));
-                                return null;
-                            });
-                        })
-                        .exceptionally(failure -> null))
-                .toList();
-        return CompletableFuture.allOf(writes.toArray(CompletableFuture[]::new)).thenRun(() -> {
-            double elapsed = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
-            Double current = averageBroadcastLatency;
-            averageBroadcastLatency = current == null ? elapsed : ((elapsed - current) * LATENCY_ALPHA) + current;
-        });
+        ExecutorService executor = NetworkExecutor.executor();
+
+        List<Future<?>> writes = new ArrayList<>(childConnections.size());
+        for (CompletableFuture<MessageConnection> pending : childConnections.values()) {
+            writes.add(executor.submit(() -> writeToChild(pending, bytes, effectiveToken)));
+        }
+
+        for (Future<?> write : writes) {
+            try {
+                write.get();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return;
+            } catch (ExecutionException failure) {
+                // Already handled per child in writeToChild; one child must not
+                // abort the broadcast to the rest.
+            }
+        }
+
+        double elapsed = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+        Double current = averageBroadcastLatency;
+        averageBroadcastLatency = current == null ? elapsed : ((elapsed - current) * LATENCY_ALPHA) + current;
+    }
+
+    private void writeToChild(
+            CompletableFuture<MessageConnection> pending, byte[] bytes, CancellationSignal cancellationSignal) {
+        MessageConnection connection;
+        try {
+            // The child may still be completing its handshake.
+            connection = pending.join();
+        } catch (RuntimeException notReady) {
+            return;
+        }
+        if (connection == null || connection.getState() != ConnectionState.CONNECTED) {
+            return;
+        }
+        try {
+            connection.writeAsync(bytes, cancellationSignal).join();
+        } catch (RuntimeException failure) {
+            connection.disconnect("Broadcast failure: " + message(unwrap(failure)));
+        }
     }
 
     @Override
