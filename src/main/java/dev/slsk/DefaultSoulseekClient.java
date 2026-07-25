@@ -77,26 +77,15 @@ import dev.slsk.messaging.handlers.PeerMessageHandlerClient;
 import dev.slsk.messaging.handlers.ServerMessageEvent;
 import dev.slsk.messaging.handlers.ServerMessageHandler;
 import dev.slsk.messaging.handlers.ServerMessageHandlerClient;
-import dev.slsk.messaging.messages.AcknowledgePrivateMessageCommand;
-import dev.slsk.messaging.messages.AcknowledgePrivilegeNotificationCommand;
-import dev.slsk.messaging.messages.CheckPrivilegesRequest;
 import dev.slsk.messaging.messages.FolderContentsRequest;
 import dev.slsk.messaging.messages.LoginRequest;
 import dev.slsk.messaging.messages.LoginResponse;
-import dev.slsk.messaging.messages.NewPassword;
 import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.messaging.messages.PlaceInQueueRequest;
 import dev.slsk.messaging.messages.PlaceInQueueResponse;
-import dev.slsk.messaging.messages.PrivateMessageCommand;
 import dev.slsk.messaging.messages.PrivateRoomToggle;
 import dev.slsk.messaging.messages.RoomSearchRequest;
-import dev.slsk.messaging.messages.SendUploadSpeedCommand;
-import dev.slsk.messaging.messages.ServerPing;
 import dev.slsk.messaging.messages.SetListenPortCommand;
-import dev.slsk.messaging.messages.SetOnlineStatusCommand;
-import dev.slsk.messaging.messages.SetSharedCountsCommand;
-import dev.slsk.messaging.messages.StartPublicChatCommand;
-import dev.slsk.messaging.messages.StopPublicChatCommand;
 import dev.slsk.messaging.messages.TransferRequest;
 import dev.slsk.messaging.messages.TransferResponse;
 import dev.slsk.messaging.messages.UploadDenied;
@@ -235,6 +224,9 @@ final class DefaultSoulseekClient
     /** User info, presence and browsing, split out; see UserDirectory. */
     private final UserDirectory users;
 
+    /** Stateless server commands, split out; see ServerSession. */
+    private final ServerSession server;
+
     private final Map<Event, CopyOnWriteArrayList<SoulseekClientEventListener<?>>> listeners =
             new EnumMap<>(Event.class);
 
@@ -312,6 +304,7 @@ final class DefaultSoulseekClient
         this.scheduler = new Scheduler("soulseek-client-timer");
         this.rooms = new RoomRegistry(this);
         this.users = new UserDirectory(this);
+        this.server = new ServerSession(this);
         this.waiter = waiter == null ? new DefaultWaiter(this.options.getMessageTimeout(), scheduler) : waiter;
         this.tokenFactory = tokenFactory == null ? new TokenFactory(this.options.getStartingToken()) : tokenFactory;
         this.searchSemaphore = new Semaphore(this.options.getMaximumConcurrentSearches());
@@ -858,44 +851,6 @@ final class DefaultSoulseekClient
         return tokenFactory.nextToken();
     }
 
-    private CompletableFuture<Void> sendPrivateMessageOperation(String requestedUsername, String message) {
-        return sendPrivateMessageOperation(requestedUsername, message, CancellationSignal.none());
-    }
-
-    private CompletableFuture<Void> sendPrivateMessageOperation(
-            String requestedUsername, String message, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
-        requireNonEmpty(message, "message");
-        requireLoggedIn("send a private message");
-        return writeServerAsync(
-                new PrivateMessageCommand(requestedUsername, message),
-                cancellationSignal,
-                "Failed to send private message to user " + requestedUsername + ": ");
-    }
-
-    private CompletableFuture<Void> changePasswordOperation(String password) {
-        return changePasswordOperation(password, CancellationSignal.none());
-    }
-
-    private CompletableFuture<Void> changePasswordOperation(String password, CancellationSignal cancellationSignal) {
-        requireText(password, "password");
-        requireLoggedIn("change a password");
-        return executeCorrelatedServerRequest(
-                        new NewPassword(password),
-                        new WaitKey(MessageCode.Server.NEW_PASSWORD),
-                        String.class,
-                        cancellationSignal,
-                        "Failed to change password: ")
-                .thenApply(response -> {
-                    if (!password.equals(response)) {
-                        throw new SoulseekClientException("Probably failed to change password; the response "
-                                + "from the server doesn't match the specified "
-                                + "password");
-                    }
-                    return null;
-                });
-    }
-
     /**
      * Connects to the default Soulseek server and logs in.
      *
@@ -999,20 +954,6 @@ final class DefaultSoulseekClient
                 defaultToken(cancellationSignal));
     }
 
-    private CompletableFuture<Integer> getPrivilegesOperation() {
-        return getPrivilegesOperation(CancellationSignal.none());
-    }
-
-    private CompletableFuture<Integer> getPrivilegesOperation(CancellationSignal cancellationSignal) {
-        requireLoggedIn("check privileges");
-        return executeCorrelatedServerRequest(
-                new CheckPrivilegesRequest(),
-                new WaitKey(MessageCode.Server.CHECK_PRIVILEGES),
-                Integer.class,
-                cancellationSignal,
-                "Failed to get privileges: ");
-    }
-
     private CompletableFuture<List<Directory>> getDirectoryContentsOperation(
             String requestedUsername, String directoryName) {
         return getDirectoryContentsOperation(requestedUsername, directoryName, null, CancellationSignal.none());
@@ -1108,27 +1049,6 @@ final class DefaultSoulseekClient
                 operation,
                 "Failed to fetch place in queue for download of " + filename + " from " + requestedUsername + ": ",
                 UserOfflineException.class);
-    }
-
-    private CompletableFuture<Long> pingServerOperation() {
-        return pingServerOperation(CancellationSignal.none());
-    }
-
-    private CompletableFuture<Long> pingServerOperation(CancellationSignal cancellationSignal) {
-        requireLoggedIn("send a ping");
-        CancellationSignal token = defaultToken(cancellationSignal);
-        CompletableFuture<Void> wait;
-        try {
-            wait = waiter.waitAsync(new WaitKey(MessageCode.Server.PING), null, token);
-        } catch (Throwable failure) {
-            return mapClientFailure(CompletableFuture.failedFuture(failure), "Failed to ping the server: ");
-        }
-        long started = System.nanoTime();
-        CompletableFuture<Void> responseWait = wait;
-        CompletableFuture<Long> operation = invokeServerWrite(new ServerPing(), token)
-                .thenCompose(ignored -> responseWait)
-                .thenApply(ignored -> TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
-        return mapClientFailure(operation, "Failed to ping the server: ");
     }
 
     /**
@@ -1891,100 +1811,6 @@ final class DefaultSoulseekClient
         CompletableFuture<Transfer> upload = uploadOperation(
                 requestedUsername, remoteFilename, size, inputStreamFactory, token, options, cancellationSignal);
         return enqueued.thenApply(ignored -> upload);
-    }
-
-    private CompletableFuture<Void> sendUploadSpeedOperation(int speed) {
-        return sendUploadSpeedOperation(speed, CancellationSignal.none());
-    }
-
-    private CompletableFuture<Void> sendUploadSpeedOperation(int speed, CancellationSignal cancellationSignal) {
-        requireLoggedIn("set upload speed");
-        if (speed <= 0) {
-            throw new IllegalArgumentException("The upload speed must be greater than zero");
-        }
-        return writeServerAsync(new SendUploadSpeedCommand(speed), cancellationSignal, "Failed to set upload speed: ");
-    }
-
-    private CompletableFuture<Void> setSharedCountsOperation(int directories, int files) {
-        return setSharedCountsOperation(directories, files, CancellationSignal.none());
-    }
-
-    private CompletableFuture<Void> setSharedCountsOperation(
-            int directories, int files, CancellationSignal cancellationSignal) {
-        if (directories < 0) {
-            throw new IllegalArgumentException("The directory count must be equal to or greater than zero");
-        }
-        if (files < 0) {
-            throw new IllegalArgumentException("The file count must be equal to or greater than zero");
-        }
-        requireLoggedIn("set shared counts");
-        return writeServerAsync(
-                new SetSharedCountsCommand(directories, files),
-                cancellationSignal,
-                "Failed to set shared counts to " + directories + " directories and " + files + " files: ");
-    }
-
-    private CompletableFuture<Void> setStatusOperation(UserPresence status) {
-        return setStatusOperation(status, CancellationSignal.none());
-    }
-
-    private CompletableFuture<Void> setStatusOperation(UserPresence status, CancellationSignal cancellationSignal) {
-        requireLoggedIn("set online status");
-        return writeServerAsync(
-                new SetOnlineStatusCommand(status),
-                cancellationSignal,
-                "Failed to set user status to " + status + ": ");
-    }
-
-    private CompletableFuture<Void> startPublicChatOperation() {
-        return startPublicChatOperation(CancellationSignal.none());
-    }
-
-    private CompletableFuture<Void> startPublicChatOperation(CancellationSignal cancellationSignal) {
-        requireLoggedIn("start public chat");
-        return writeServerAsync(new StartPublicChatCommand(), cancellationSignal, "Failed to start public chat: ");
-    }
-
-    private CompletableFuture<Void> stopPublicChatOperation() {
-        return stopPublicChatOperation(CancellationSignal.none());
-    }
-
-    private CompletableFuture<Void> stopPublicChatOperation(CancellationSignal cancellationSignal) {
-        requireLoggedIn("stop public chat");
-        return writeServerAsync(new StopPublicChatCommand(), cancellationSignal, "Failed to stop public chat: ");
-    }
-
-    public CompletableFuture<Void> acknowledgePrivateMessageOperation(int privateMessageId) {
-        return acknowledgePrivateMessageOperation(privateMessageId, CancellationSignal.none());
-    }
-
-    public CompletableFuture<Void> acknowledgePrivateMessageOperation(
-            int privateMessageId, CancellationSignal cancellationSignal) {
-        if (privateMessageId < 0) {
-            throw new IllegalArgumentException("The private message ID must be greater than zero");
-        }
-        requireLoggedIn("acknowledge private messages");
-        CompletableFuture<Void> write = writeServerAsync(
-                new AcknowledgePrivateMessageCommand(privateMessageId),
-                cancellationSignal,
-                "Failed to acknowledge private message with ID " + privateMessageId + ": ");
-        return write.thenRun(() -> diagnostic.debug("Acknowledged private message ID " + privateMessageId));
-    }
-
-    public CompletableFuture<Void> acknowledgePrivilegeNotificationOperation(int privilegeNotificationId) {
-        return acknowledgePrivilegeNotificationOperation(privilegeNotificationId, CancellationSignal.none());
-    }
-
-    public CompletableFuture<Void> acknowledgePrivilegeNotificationOperation(
-            int privilegeNotificationId, CancellationSignal cancellationSignal) {
-        if (privilegeNotificationId < 0) {
-            throw new IllegalArgumentException("The privilege notification ID must be greater than zero");
-        }
-        requireLoggedIn("acknowledge privilege notifications");
-        return writeServerAsync(
-                new AcknowledgePrivilegeNotificationCommand(privilegeNotificationId),
-                cancellationSignal,
-                "Failed to acknowledge privilege notification with ID " + privilegeNotificationId + ": ");
     }
 
     public CompletableFuture<InetSocketAddress> getUserEndpointOperation(String requestedUsername) {
@@ -4342,6 +4168,18 @@ final class DefaultSoulseekClient
     }
 
     @Override
+    public CompletableFuture<Void> acknowledgePrivateMessageOperation(
+            int privateMessageId, CancellationSignal cancellationSignal) {
+        return server.acknowledgePrivateMessage(privateMessageId, cancellationSignal);
+    }
+
+    @Override
+    public CompletableFuture<Void> acknowledgePrivilegeNotificationOperation(
+            int notificationId, CancellationSignal cancellationSignal) {
+        return server.acknowledgePrivilegeNotification(notificationId, cancellationSignal);
+    }
+
+    @Override
     public String getLoggedInUsername() {
         return username;
     }
@@ -4386,22 +4224,22 @@ final class DefaultSoulseekClient
 
     @Override
     public void acknowledgePrivateMessage(int privateMessageId) {
-        unwrapped(acknowledgePrivateMessageOperation(privateMessageId));
+        unwrapped(server.acknowledgePrivateMessage(privateMessageId));
     }
 
     @Override
     public void acknowledgePrivateMessage(int privateMessageId, CancellationSignal cancellationSignal) {
-        unwrapped(acknowledgePrivateMessageOperation(privateMessageId, cancellationSignal));
+        unwrapped(server.acknowledgePrivateMessage(privateMessageId, cancellationSignal));
     }
 
     @Override
     public void acknowledgePrivilegeNotification(int privilegeNotificationId) {
-        unwrapped(acknowledgePrivilegeNotificationOperation(privilegeNotificationId));
+        unwrapped(server.acknowledgePrivilegeNotification(privilegeNotificationId));
     }
 
     @Override
     public void acknowledgePrivilegeNotification(int privilegeNotificationId, CancellationSignal cancellationSignal) {
-        unwrapped(acknowledgePrivilegeNotificationOperation(privilegeNotificationId, cancellationSignal));
+        unwrapped(server.acknowledgePrivilegeNotification(privilegeNotificationId, cancellationSignal));
     }
 
     @Override
@@ -4446,12 +4284,12 @@ final class DefaultSoulseekClient
 
     @Override
     public void changePassword(String password) {
-        unwrapped(changePasswordOperation(password));
+        unwrapped(server.changePassword(password));
     }
 
     @Override
     public void changePassword(String password, CancellationSignal cancellationSignal) {
-        unwrapped(changePasswordOperation(password, cancellationSignal));
+        unwrapped(server.changePassword(password, cancellationSignal));
     }
 
     @Override
@@ -4549,12 +4387,12 @@ final class DefaultSoulseekClient
 
     @Override
     public Integer getPrivileges() {
-        return unwrapped(getPrivilegesOperation());
+        return unwrapped(server.getPrivileges());
     }
 
     @Override
     public Integer getPrivileges(CancellationSignal cancellationSignal) {
-        return unwrapped(getPrivilegesOperation(cancellationSignal));
+        return unwrapped(server.getPrivileges(cancellationSignal));
     }
 
     @Override
@@ -4659,12 +4497,12 @@ final class DefaultSoulseekClient
 
     @Override
     public Long pingServer() {
-        return unwrapped(pingServerOperation());
+        return unwrapped(server.pingServer());
     }
 
     @Override
     public Long pingServer(CancellationSignal cancellationSignal) {
-        return unwrapped(pingServerOperation(cancellationSignal));
+        return unwrapped(server.pingServer(cancellationSignal));
     }
 
     @Override
@@ -4699,12 +4537,12 @@ final class DefaultSoulseekClient
 
     @Override
     public void sendPrivateMessage(String username, String message) {
-        unwrapped(sendPrivateMessageOperation(username, message));
+        unwrapped(server.sendPrivateMessage(username, message));
     }
 
     @Override
     public void sendPrivateMessage(String username, String message, CancellationSignal cancellationSignal) {
-        unwrapped(sendPrivateMessageOperation(username, message, cancellationSignal));
+        unwrapped(server.sendPrivateMessage(username, message, cancellationSignal));
     }
 
     @Override
@@ -4719,12 +4557,12 @@ final class DefaultSoulseekClient
 
     @Override
     public void sendUploadSpeed(int speed) {
-        unwrapped(sendUploadSpeedOperation(speed));
+        unwrapped(server.sendUploadSpeed(speed));
     }
 
     @Override
     public void sendUploadSpeed(int speed, CancellationSignal cancellationSignal) {
-        unwrapped(sendUploadSpeedOperation(speed, cancellationSignal));
+        unwrapped(server.sendUploadSpeed(speed, cancellationSignal));
     }
 
     @Override
@@ -4739,42 +4577,42 @@ final class DefaultSoulseekClient
 
     @Override
     public void setSharedCounts(int directories, int files) {
-        unwrapped(setSharedCountsOperation(directories, files));
+        unwrapped(server.setSharedCounts(directories, files));
     }
 
     @Override
     public void setSharedCounts(int directories, int files, CancellationSignal cancellationSignal) {
-        unwrapped(setSharedCountsOperation(directories, files, cancellationSignal));
+        unwrapped(server.setSharedCounts(directories, files, cancellationSignal));
     }
 
     @Override
     public void setStatus(UserPresence status) {
-        unwrapped(setStatusOperation(status));
+        unwrapped(server.setStatus(status));
     }
 
     @Override
     public void setStatus(UserPresence status, CancellationSignal cancellationSignal) {
-        unwrapped(setStatusOperation(status, cancellationSignal));
+        unwrapped(server.setStatus(status, cancellationSignal));
     }
 
     @Override
     public void startPublicChat() {
-        unwrapped(startPublicChatOperation());
+        unwrapped(server.startPublicChat());
     }
 
     @Override
     public void startPublicChat(CancellationSignal cancellationSignal) {
-        unwrapped(startPublicChatOperation(cancellationSignal));
+        unwrapped(server.startPublicChat(cancellationSignal));
     }
 
     @Override
     public void stopPublicChat() {
-        unwrapped(stopPublicChatOperation());
+        unwrapped(server.stopPublicChat());
     }
 
     @Override
     public void stopPublicChat(CancellationSignal cancellationSignal) {
-        unwrapped(stopPublicChatOperation(cancellationSignal));
+        unwrapped(server.stopPublicChat(cancellationSignal));
     }
 
     @Override
