@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -86,13 +85,12 @@ class WriteContentionSoak {
     /**
      * Blocked writers must not burn CPU.
      *
-     * <p>Disabled: fails on the 0.11.0 baseline, where
-     * {@code SocketConnection.acquire} spins {@code tryAcquire(25 ms)} in a
-     * loop per waiting writer. Defect 1.4 replaces it with a blocking acquire
-     * made cancellable by interruption; remove the {@code @Disabled} then.
+     * <p>On the 0.11.0 baseline {@code SocketConnection.acquire} spun
+     * {@code tryAcquire(25 ms)} per waiting writer, burning 0.135 cores across
+     * 100 of them. Defect 1.4 replaced it with a blocking acquire made
+     * cancellable by interruption.
      */
     @Test
-    @Disabled("Baseline polls at 25 ms per blocked writer: defect 1.4 — enable in Phase 1")
     @DisplayName("Blocked writers consume near-zero CPU")
     void blockedWritersAreFree() throws Exception {
         try (LoopbackPeer peer = LoopbackPeer.start(LoopbackPeer.Behaviour.STALL)) {

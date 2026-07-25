@@ -686,17 +686,40 @@ public class SocketConnection implements Connection {
                 "Failed to connect to " + formatEndpoint(ipEndpoint) + ": " + actual.getMessage(), actual);
     }
 
+    /**
+     * Acquires a permit, blocking until one is available.
+     *
+     * <p>This used to spin {@code tryAcquire(25, MILLISECONDS)} so that it could
+     * notice cancellation between attempts, which is how C#'s natively
+     * cancellable {@code SemaphoreSlim.WaitAsync(token)} was emulated. Every
+     * queued writer therefore woke forty times a second doing nothing.
+     *
+     * <p>The caller is a virtual thread, so a genuine blocking acquire costs
+     * nothing while parked. Cancellation arrives as an interrupt instead of
+     * being polled for.
+     */
     private static void acquire(Semaphore semaphore, CancellationSignal cancellationSignal) {
+        Thread caller = Thread.currentThread();
+        // Registering runs the callback inline if cancellation already
+        // happened, so an already-cancelled signal interrupts before the
+        // acquire and takes the InterruptedException path immediately.
+        CancellationSubscription registration = cancellationSignal.register(caller::interrupt);
+        boolean acquired = false;
         try {
-            while (true) {
-                cancellationSignal.throwIfCancellationRequested();
-                if (semaphore.tryAcquire(25, TimeUnit.MILLISECONDS)) {
-                    return;
-                }
-            }
+            semaphore.acquire();
+            acquired = true;
         } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
             throw new CancellationException("Operation cancelled");
+        } finally {
+            registration.close();
+            // A cancellation racing a successful acquire can land the interrupt
+            // after the permit is taken. Clear it so it cannot leak into the
+            // caller's next blocking call, and give the permit back.
+            boolean interrupted = Thread.interrupted();
+            if (interrupted && acquired) {
+                semaphore.release();
+                throw new CancellationException("Operation cancelled");
+            }
         }
     }
 
