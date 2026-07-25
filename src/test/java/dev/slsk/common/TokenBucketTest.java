@@ -14,6 +14,9 @@ import java.time.Duration;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -193,5 +196,27 @@ class TokenBucketTest {
         CompletionException newFailure =
                 assertThrows(CompletionException.class, () -> bucket.getAsync(1).join());
         assertTrue(newFailure.getCause() instanceof IllegalStateException);
+    }
+
+    @Test
+    @DisplayName("Grant continuations do not run while the bucket monitor is held")
+    void grantContinuationsRunWithoutHoldingTheBucketLock() throws Exception {
+        // Defect 1.8: reset() completed the pending futures while holding the
+        // bucket monitor, so any inline continuation a caller chained onto a
+        // grant ran under the same lock every other getAsync caller needs.
+        try (TokenBucket bucket = new TokenBucket(1, 25)) {
+            bucket.getAsync(1).join();
+
+            AtomicBoolean heldDuringContinuation = new AtomicBoolean();
+            CountDownLatch granted = new CountDownLatch(1);
+            bucket.getAsync(1).thenAccept(tokens -> {
+                heldDuringContinuation.set(Thread.holdsLock(bucket));
+                granted.countDown();
+            });
+
+            assertTrue(granted.await(5, TimeUnit.SECONDS), "The pending request was never granted");
+            assertFalse(
+                    heldDuringContinuation.get(), "A grant continuation ran while holding the token bucket monitor");
+        }
     }
 }

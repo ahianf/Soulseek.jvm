@@ -7,6 +7,8 @@ package dev.slsk.common;
 import dev.slsk.CancellationSignal;
 import dev.slsk.CancellationSubscription;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -183,16 +185,39 @@ public final class TokenBucket implements AutoCloseable {
         }
     }
 
-    private synchronized void reset() {
-        if (closed) {
-            return;
+    /**
+     * Replenishes and releases whatever the new tokens allow.
+     *
+     * <p>The futures are completed after the lock is dropped. Completing them
+     * under it ran every inline continuation — including anything a caller
+     * chained onto the grant — while holding the bucket monitor, which is the
+     * same lock every other {@code getAsync} caller needs.
+     */
+    private void reset() {
+        List<Grant> grants;
+
+        synchronized (this) {
+            if (closed) {
+                return;
+            }
+            currentCount = capacity;
+            grants = drainRequests();
         }
 
-        currentCount = capacity;
-        drainRequests();
+        for (Grant grant : grants) {
+            grant.request.future.complete(grant.amount);
+        }
     }
 
-    private void drainRequests() {
+    /**
+     * Decides which pending requests the current tokens satisfy.
+     *
+     * <p>Returns the grants rather than applying them, so the caller can
+     * complete the futures outside the lock. Must be called while holding the
+     * monitor.
+     */
+    private List<Grant> drainRequests() {
+        List<Grant> grants = new ArrayList<>();
         while (!requests.isEmpty() && currentCount != 0) {
             Request request = requests.removeFirst();
             request.closeRegistration();
@@ -204,10 +229,14 @@ public final class TokenBucket implements AutoCloseable {
 
             int available = (int) Math.min(currentCount, request.count);
             currentCount -= available;
-            request.future.complete(available);
+            grants.add(new Grant(request, available));
             activateFirstRequest();
         }
+        return grants;
     }
+
+    /** A decided-but-not-yet-published token grant. */
+    private record Grant(Request request, int amount) {}
 
     private void activateFirstRequest() {
         while (!requests.isEmpty()) {

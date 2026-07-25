@@ -37,6 +37,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Provides client connections for TCP network services. */
 public class SocketConnection implements Connection {
@@ -70,6 +71,7 @@ public class SocketConnection implements Connection {
     private final Semaphore writeSemaphore = new Semaphore(1);
     private final Semaphore writeQueueSemaphore;
 
+    private final AtomicBoolean closeStarted = new AtomicBoolean();
     private volatile boolean disposed;
     private volatile long lastActivityNanos = System.nanoTime();
     private volatile ConnectionState state = ConnectionState.PENDING;
@@ -285,19 +287,42 @@ public class SocketConnection implements Connection {
         });
     }
 
+    /**
+     * Disconnects, raising the state and disconnected events.
+     *
+     * <p>The monitor is used only to claim the transition, so exactly one
+     * caller proceeds. Everything after that — transport teardown and every
+     * listener callback — runs with no library lock held.
+     *
+     * <p>This previously held {@code synchronized(this)} across both
+     * {@code changeState} calls, so every state-changed and disconnected
+     * listener ran under the connection's monitor. User code that blocked, or
+     * that called back into the connection from another thread, could deadlock
+     * against it. On Java 21 it also pinned the carrier thread; JEP 491 removed
+     * that half of the problem on 25, but the deadlock exposure was real either
+     * way.
+     */
     @Override
     public void disconnect(String message, Exception exception) {
+        ConnectionState previousState;
+        String reason;
+
         synchronized (this) {
             if (state == ConnectionState.DISCONNECTED || state == ConnectionState.DISCONNECTING) {
                 return;
             }
-            String reason = message != null ? message : exception == null ? null : exception.getMessage();
-
-            changeState(ConnectionState.DISCONNECTING, reason, null);
-            stopTimers();
-            closeTransport();
-            changeState(ConnectionState.DISCONNECTED, reason, exception);
+            reason = message != null ? message : exception == null ? null : exception.getMessage();
+            previousState = state;
+            state = ConnectionState.DISCONNECTING;
         }
+
+        publishStateChanged(previousState, ConnectionState.DISCONNECTING, reason, null);
+        stopTimers();
+        closeTransport();
+
+        state = ConnectionState.DISCONNECTED;
+        publishStateChanged(ConnectionState.DISCONNECTING, ConnectionState.DISCONNECTED, reason, exception);
+        publishDisconnected(reason, exception);
     }
 
     @Override
@@ -404,43 +429,61 @@ public class SocketConnection implements Connection {
 
     @Override
     public void close() {
-        synchronized (this) {
-            if (disposed) {
-                return;
-            }
-            disconnect(
-                    "SocketConnection is being disposed",
-                    new IllegalStateException(getClass().getSimpleName() + " has been disposed"));
-            stopTimers();
-            closeTransport();
-            disposed = true;
+        // An atomic claim rather than a monitor, because disconnect() below
+        // runs user listeners and must not do so under a library lock.
+        if (!closeStarted.compareAndSet(false, true)) {
+            return;
         }
+        disconnect(
+                "SocketConnection is being disposed",
+                new IllegalStateException(getClass().getSimpleName() + " has been disposed"));
+        stopTimers();
+        closeTransport();
+        disposed = true;
     }
 
-    /** Changes state and raises the matching source events. */
+    /**
+     * Changes state and raises the matching source events.
+     *
+     * <p>Callers must not hold a library lock: this invokes user listeners.
+     */
     protected void changeState(ConnectionState newState, String message, Exception exception) {
         ConnectionState previousState = state;
-        ConnectionStateChangedEvent eventData =
-                new ConnectionStateChangedEvent(previousState, newState, message, exception);
         state = newState;
 
-        for (ConnectionEventListener<ConnectionStateChangedEvent> listener : stateChangedListeners) {
-            listener.handle(this, eventData);
-        }
+        publishStateChanged(previousState, newState, message, exception);
         if (newState == ConnectionState.CONNECTED) {
             for (ConnectionEventListener<Void> listener : connectedListeners) {
                 listener.handle(this, null);
             }
         } else if (newState == ConnectionState.DISCONNECTED) {
-            ConnectionDisconnectedEvent disconnected = new ConnectionDisconnectedEvent(message, exception);
-            for (ConnectionEventListener<ConnectionDisconnectedEvent> listener : disconnectedListeners) {
-                listener.handle(this, disconnected);
-            }
-            if (exception == null) {
-                disconnectFuture.complete(message);
-            } else {
-                disconnectFuture.completeExceptionally(exception);
-            }
+            publishDisconnected(message, exception);
+        }
+    }
+
+    /** Raises the state-changed event. Must be called with no lock held. */
+    private void publishStateChanged(
+            ConnectionState previousState, ConnectionState newState, String message, Exception exception) {
+        ConnectionStateChangedEvent eventData =
+                new ConnectionStateChangedEvent(previousState, newState, message, exception);
+        for (ConnectionEventListener<ConnectionStateChangedEvent> listener : stateChangedListeners) {
+            listener.handle(this, eventData);
+        }
+    }
+
+    /**
+     * Raises the disconnected event and settles the disconnect future. Must be
+     * called with no lock held.
+     */
+    private void publishDisconnected(String message, Exception exception) {
+        ConnectionDisconnectedEvent disconnected = new ConnectionDisconnectedEvent(message, exception);
+        for (ConnectionEventListener<ConnectionDisconnectedEvent> listener : disconnectedListeners) {
+            listener.handle(this, disconnected);
+        }
+        if (exception == null) {
+            disconnectFuture.complete(message);
+        } else {
+            disconnectFuture.completeExceptionally(exception);
         }
     }
 

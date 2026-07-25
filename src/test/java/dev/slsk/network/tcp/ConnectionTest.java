@@ -469,6 +469,34 @@ class ConnectionTest {
         assertTrue(condition.get());
     }
 
+    @Test
+    @DisplayName("Listeners never run while the connection monitor is held")
+    void listenersRunWithoutHoldingTheConnectionLock() {
+        // Defect 1.8: disconnect() used to hold synchronized(this) across both
+        // changeState calls, so every listener ran under the connection's
+        // monitor. Asserting holdsLock directly is deterministic, where a
+        // deadlock reproduction would be timing-dependent.
+        FakeTcpClient client = new FakeTcpClient(new FakeStream(), true);
+        SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), client);
+        List<String> heldDuring = new ArrayList<>();
+
+        connection.addStateChangedListener((sender, args) -> {
+            if (Thread.holdsLock(sender)) {
+                heldDuring.add("stateChanged->" + args.getCurrentState());
+            }
+        });
+        connection.addDisconnectedListener((sender, args) -> {
+            if (Thread.holdsLock(sender)) {
+                heldDuring.add("disconnected");
+            }
+        });
+
+        connection.disconnect("test", null);
+        connection.close();
+
+        assertEquals(List.of(), heldDuring, "A listener ran while holding the connection monitor");
+    }
+
     private static ConnectionOptions noTimers() {
         return options(8, 8, 3, 100, -1, null, null);
     }
