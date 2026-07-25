@@ -6,7 +6,6 @@ package dev.slsk.network.tcp;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.CancellationSubscription;
-import dev.slsk.common.EventDispatch;
 import dev.slsk.common.NetworkExecutor;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.ConnectionReadException;
@@ -888,7 +887,7 @@ public class SocketConnection implements Connection {
                 scopedListener.handle(this, eventData);
             }
         };
-        if (EventDispatch.isAsynchronous()) {
+        if (options.isRaiseEventsAsynchronously()) {
             if (!cancellationSignal.isCancellationRequested()) {
                 IO_EXECUTOR.execute(dispatch);
             }

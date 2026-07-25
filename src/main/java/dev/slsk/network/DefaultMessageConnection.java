@@ -6,7 +6,6 @@ package dev.slsk.network;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.common.CommonUtils;
-import dev.slsk.common.EventDispatch;
 import dev.slsk.common.NetworkExecutor;
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.messaging.messages.OutgoingMessage;
@@ -290,8 +289,8 @@ public final class DefaultMessageConnection extends SocketConnection implements 
                 cancellationSignal);
     }
 
-    private static void dispatch(Runnable event, CancellationSignal cancellationSignal) {
-        if (EventDispatch.isAsynchronous()) {
+    private void dispatch(Runnable event, CancellationSignal cancellationSignal) {
+        if (getOptions().isRaiseEventsAsynchronously()) {
             if (!cancellationSignal.isCancellationRequested()) {
                 NetworkExecutor.runAsync(event);
             }

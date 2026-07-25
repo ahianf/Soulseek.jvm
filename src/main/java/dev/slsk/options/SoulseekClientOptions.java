@@ -274,6 +274,10 @@ public class SoulseekClientOptions {
             EnqueueDownloadCallback enqueueDownload,
             PlaceInQueueResolver placeInQueueResolver,
             boolean raiseEventsAsynchronously) {
+        // Assigned first: the connection options below are stamped with it, so a
+        // connection reads the dispatch policy from itself rather than a static
+        // (defect 3.2).
+        this.raiseEventsAsynchronously = raiseEventsAsynchronously;
         this.enableListener = enableListener;
         this.listenIpAddress = listenIpAddress == null ? wildcardAddress() : listenIpAddress;
         this.listenPort = listenPort;
@@ -321,7 +325,8 @@ public class SoulseekClientOptions {
         this.serverConnectionOptions = (serverConnectionOptions == null
                         ? new ConnectionOptions()
                         : serverConnectionOptions)
-                .withoutInactivityTimeout();
+                .withoutInactivityTimeout()
+                .withEventsRaisedAsynchronously(raiseEventsAsynchronously);
         this.peerConnectionOptions = peerConnectionOptions == null ? new ConnectionOptions() : peerConnectionOptions;
         this.transferConnectionOptions =
                 transferConnectionOptions == null ? new ConnectionOptions() : transferConnectionOptions;
@@ -346,7 +351,6 @@ public class SoulseekClientOptions {
         this.placeInQueueResolver = placeInQueueResolver == null
                 ? (username, endpoint, filename) -> CompletableFuture.completedFuture(null)
                 : placeInQueueResolver;
-        this.raiseEventsAsynchronously = raiseEventsAsynchronously;
     }
 
     /** Returns a clone with the supplied patch applied. */

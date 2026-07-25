@@ -15,7 +15,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationController;
 import dev.slsk.CancellationSignal;
-import dev.slsk.common.EventDispatch;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.ConnectionReadException;
 import dev.slsk.exceptions.ConnectionWriteDroppedException;
@@ -403,9 +402,13 @@ class ConnectionTest {
         FakeStream stream = new FakeStream();
         stream.readBytes = new byte[] {1};
         FakeTcpClient client = new FakeTcpClient(stream, true);
-        SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), client);
+        // The dispatch policy is a property of this connection's options now,
+        // so there is no global flag to set and restore — which is the point of
+        // defect 3.2: a test that flipped the static corrupted every other
+        // client in the JVM.
+        SocketConnection connection =
+                new SocketConnection(ENDPOINT, noTimers().withEventsRaisedAsynchronously(true), client);
         CountDownLatch event = new CountDownLatch(1);
-        EventDispatch.setAsynchronous(true);
         try {
             connection.addDataReadListener((sender, args) -> event.countDown());
             connection.readAsync(1, null).get(1, TimeUnit.SECONDS);
@@ -415,7 +418,6 @@ class ConnectionTest {
             connection.close();
             assertFalse(client.closed);
         } finally {
-            EventDispatch.setAsynchronous(false);
             client.close();
         }
     }
