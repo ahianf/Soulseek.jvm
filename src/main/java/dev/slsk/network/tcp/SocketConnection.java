@@ -46,6 +46,10 @@ public class SocketConnection implements Connection {
     private static final ExecutorService IO_EXECUTOR = NetworkExecutor.executor();
     private static final ScheduledExecutorService TIMER_EXECUTOR = createTimerExecutor();
 
+    // One sweep task covers every connection; see ConnectionMonitor. Defect 1.6
+    // moves this off a static field so each client owns its own.
+    private static final ConnectionMonitor MONITOR = new ConnectionMonitor(TIMER_EXECUTOR);
+
     /** Fastest monitor tick, so a very short inactivity timeout stays precise. */
     private static final int MIN_MONITOR_INTERVAL_MILLIS = 10;
 
@@ -65,14 +69,12 @@ public class SocketConnection implements Connection {
     private final CompletableFuture<String> disconnectFuture = new CompletableFuture<>();
     private final Semaphore writeSemaphore = new Semaphore(1);
     private final Semaphore writeQueueSemaphore;
-    private final Object timerLock = new Object();
 
     private volatile boolean disposed;
     private volatile long lastActivityNanos = System.nanoTime();
     private volatile ConnectionState state = ConnectionState.PENDING;
     private volatile ConnectionTypes type = ConnectionTypes.NONE;
     private volatile boolean writeQueueFull;
-    private ScheduledFuture<?> monitorTask;
 
     protected InetSocketAddress ipEndpoint;
     protected final ConnectionOptions options;
@@ -593,22 +595,11 @@ public class SocketConnection implements Connection {
     }
 
     private void startTimers() {
-        synchronized (timerLock) {
-            if (monitorTask == null || monitorTask.isDone()) {
-                int interval = monitorIntervalMillis();
-                monitorTask = TIMER_EXECUTOR.scheduleAtFixedRate(
-                        this::monitorTick, interval, interval, TimeUnit.MILLISECONDS);
-            }
-        }
+        MONITOR.register(this);
     }
 
     private void stopTimers() {
-        synchronized (timerLock) {
-            if (monitorTask != null) {
-                monitorTask.cancel(false);
-                monitorTask = null;
-            }
-        }
+        MONITOR.unregister(this);
     }
 
     /**
@@ -618,7 +609,7 @@ public class SocketConnection implements Connection {
      * is unchanged, and scaled down for short inactivity timeouts so those stay
      * about as precise as the old dedicated one-shot timer.
      */
-    private int monitorIntervalMillis() {
+    int monitorIntervalMillis() {
         int timeout = options.getInactivityTimeout();
         if (timeout <= 0) {
             return MAX_MONITOR_INTERVAL_MILLIS;
@@ -627,11 +618,13 @@ public class SocketConnection implements Connection {
     }
 
     /**
-     * One periodic task per connection covering both checks the connection
-     * needs: that the transport is still there, and that it has not gone idle
-     * past its budget.
+     * Both checks the connection needs: that the transport is still there, and
+     * that it has not gone idle past its budget.
+     *
+     * <p>Driven by the shared {@link ConnectionMonitor} sweep, not by a task of
+     * this connection's own.
      */
-    private void monitorTick() {
+    void monitorTick() {
         TcpClient client = tcpClient;
         if (client == null || !client.isConnected()) {
             String message = "The connection was closed unexpectedly";

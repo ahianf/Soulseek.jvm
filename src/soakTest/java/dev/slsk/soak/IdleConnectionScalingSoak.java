@@ -11,7 +11,6 @@ import dev.slsk.options.ConnectionOptions;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -81,17 +80,14 @@ class IdleConnectionScalingSoak {
     /**
      * Scheduled tasks must not scale with connection count.
      *
-     * <p>Disabled: fails on the 0.11.0 baseline at roughly 3.2 tasks per
-     * connection (measured 3 / 33 / 322 / 3211 at the four scales). Every
-     * {@code SocketConnection} installs its own 250 ms
-     * {@code scheduleAtFixedRate} watchdog plus a per-chunk inactivity timeout,
-     * and the executor never evicts cancelled tasks.
-     *
-     * <p>Defects 1.2 and 1.3 fold both into a single per-client sweep. Remove
-     * the {@code @Disabled} in the commit that lands 1.3.
+     * <p>The 0.11.0 baseline was O(N) at roughly 3 tasks per connection
+     * (3 / 33 / 300 / 3,000 at the four scales): each connection installed its
+     * own fixed-rate watchdog plus a per-chunk inactivity timeout, into an
+     * executor that never evicted cancelled tasks. Defect 1.2 removed the
+     * per-chunk churn and 1.3 folded the per-connection watchdog into one
+     * shared sweep.
      */
     @Test
-    @Disabled("Baseline is O(N): defects 1.2 and 1.3 — enable in Phase 1")
     @DisplayName("Scheduled task count is O(1) in connection count")
     void scheduledTaskCountIsConstant() throws Exception {
         try (LoopbackPeer peer = LoopbackPeer.start(LoopbackPeer.Behaviour.IDLE, 2048)) {
