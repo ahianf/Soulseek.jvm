@@ -65,6 +65,11 @@ class SoulseekClientApiTest {
                 "resolveUserEndpoint",
                 "reportBrowseProgress",
                 "getLoggedInUsername",
+                "getSearchRegistry",
+                "getTokenFactory",
+                "getScheduler",
+                "writeBytesToServer",
+                "raiseSearchEvent",
                 "acknowledgePrivateMessageOperation",
                 "acknowledgePrivilegeNotificationOperation",
                 "getUserEndpointOperation");

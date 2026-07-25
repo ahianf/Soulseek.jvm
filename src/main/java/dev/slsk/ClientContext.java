@@ -98,6 +98,40 @@ interface ClientContext {
      */
     String getLoggedInUsername();
 
+    /**
+     * Returns the live search registry.
+     *
+     * <p>Stays on the client because incoming distributed and peer messages are
+     * dispatched against it from the message handlers, which the client owns.
+     *
+     * @return searches by token
+     */
+    java.util.Map<Integer, dev.slsk.search.SearchInternal> getSearchRegistry();
+
+    /** Returns the token allocator. */
+    dev.slsk.common.TokenFactory getTokenFactory();
+
+    /** Returns the client's shared timer. */
+    dev.slsk.common.Scheduler getScheduler();
+
+    /**
+     * Writes pre-encoded bytes to the server connection.
+     *
+     * @param message the encoded message
+     * @param cancellationSignal the cancellation signal
+     * @return a future completing when the write lands
+     */
+    CompletableFuture<Void> writeBytesToServer(byte[] message, CancellationSignal cancellationSignal);
+
+    /**
+     * Raises a search-related client event.
+     *
+     * @param event which event
+     * @param eventData the payload
+     * @param <T> the payload type
+     */
+    <T> void raiseSearchEvent(DefaultSoulseekClient.Event event, T eventData);
+
     /** Returns the peer connection manager. */
     dev.slsk.network.PeerConnectionManager getPeerConnectionManager();
 

@@ -4,10 +4,12 @@
 package dev.slsk;
 
 import dev.slsk.common.CommonUtils;
+import dev.slsk.common.NetworkExecutor;
 import dev.slsk.exceptions.SoulseekClientException;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -63,5 +65,55 @@ final class ClientSupport {
             current = current.getCause();
         }
         return current;
+    }
+    /**
+     * Acquires a permit, completing when one is available.
+     *
+     * <p>This used to spin {@code tryAcquire(50, MILLISECONDS)} on a virtual
+     * thread so that it could notice cancellation between attempts, emulating
+     * C#'s natively cancellable {@code SemaphoreSlim.WaitAsync(token)}. A
+     * hundred queued transfers meant two thousand pointless wakeups a second.
+     *
+     * <p>The wait now blocks on a virtual thread, which costs nothing while
+     * parked, and cancellation arrives as an interrupt.
+     */
+    static CompletableFuture<Void> acquirePermit(Semaphore semaphore, CancellationSignal cancellationSignal) {
+        try {
+            cancellationSignal.throwIfCancellationRequested();
+            if (semaphore.tryAcquire()) {
+                return CompletableFuture.completedFuture(null);
+            }
+        } catch (Throwable failure) {
+            return CompletableFuture.failedFuture(failure);
+        }
+
+        CompletableFuture<Void> result = new CompletableFuture<>();
+        NetworkExecutor.runAsync(() -> {
+            Thread waiter = Thread.currentThread();
+            CancellationSubscription registration = cancellationSignal.register(waiter::interrupt);
+            boolean acquired = false;
+            try {
+                semaphore.acquire();
+                acquired = true;
+                if (!result.complete(null)) {
+                    // Someone else already completed the future; do not strand
+                    // the permit we just took.
+                    semaphore.release();
+                }
+            } catch (InterruptedException failure) {
+                result.completeExceptionally(new CancellationException("The operation was cancelled"));
+            } catch (Throwable failure) {
+                result.completeExceptionally(failure);
+            } finally {
+                registration.close();
+                // A cancellation racing a successful acquire can leave the
+                // interrupt set after the permit is taken. This thread is about
+                // to die, but clear it so nothing observes a stray flag.
+                if (Thread.interrupted() && acquired && result.isCompletedExceptionally()) {
+                    semaphore.release();
+                }
+            }
+        });
+        return result;
     }
 }
