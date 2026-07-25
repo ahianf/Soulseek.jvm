@@ -3647,10 +3647,17 @@ final class DefaultSoulseekClient
                 updateState(TransferState.QUEUED.or(TransferState.LOCALLY));
                 await(acquirePermit(globalDownloadSemaphore, cancellationSignal));
                 globalPermit.set(true);
+                diagnostic.debug("Global download semaphore for file "
+                        + filenameOnly(download.getFilename()) + " to "
+                        + download.getUsername() + " acquired");
 
                 endpoint = await(getUserEndpointAsync(download.getUsername(), cancellationSignal));
                 MessageConnection peerConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
                         download.getUsername(), endpoint, cancellationSignal));
+                diagnostic.debug("Fetched peer connection for download of "
+                        + filenameOnly(download.getFilename()) + " from "
+                        + download.getUsername() + " (id: " + peerConnection.getId()
+                        + ", state: " + peerConnection.getState() + ")");
 
                 CompletableFuture<TransferResponse> transferRequestAcknowledged = waiter.waitAsync(
                         new WaitKey(MessageCode.Peer.TRANSFER_RESPONSE, download.getUsername(), download.getToken()),
@@ -3664,9 +3671,18 @@ final class DefaultSoulseekClient
                         peerConnection,
                         new TransferRequest(TransferDirection.DOWNLOAD, download.getToken(), download.getFilename()),
                         cancellationSignal));
+                diagnostic.debug("Wrote transfer request for download of "
+                        + filenameOnly(download.getFilename()) + " from "
+                        + download.getUsername() + " (id: " + peerConnection.getId()
+                        + ", state: " + peerConnection.getState() + ")");
                 updateState(TransferState.REQUESTED);
 
                 TransferResponse acknowledgement = await(transferRequestAcknowledged);
+                diagnostic.debug("Received transfer request ACK for download of "
+                        + filenameOnly(download.getFilename()) + " from "
+                        + download.getUsername() + ": allowed: " + acknowledgement.isAllowed()
+                        + ", message: " + acknowledgement.getMessage()
+                        + " (token: " + download.getToken() + ")");
                 if (acknowledgement.isAllowed()) {
                     peerConnection = beginImmediateDownload(acknowledgement, peerConnection);
                 } else if (!isQueuedResponse(acknowledgement.getMessage())) {
@@ -3688,6 +3704,9 @@ final class DefaultSoulseekClient
 
                 updateProgress(currentOutputPosition());
                 updateState(TransferState.COMPLETED.or(TransferState.SUCCEEDED));
+                diagnostic.info("Download of " + filenameOnly(download.getFilename())
+                        + " from " + download.getUsername() + " complete ("
+                        + currentOutputPosition() + " of " + download.getSize() + " bytes).");
                 connection.disconnect("Transfer complete");
                 return download.toTransfer();
             } catch (Throwable failure) {
@@ -3709,6 +3728,10 @@ final class DefaultSoulseekClient
             updateState(TransferState.INITIALIZING);
             connection = await(peerConnectionManager.getTransferConnectionAsync(
                     download.getUsername(), endpoint, acknowledgement.getToken(), cancellationSignal));
+            diagnostic.debug("Fetched transfer connection for download of "
+                    + filenameOnly(download.getFilename()) + " from "
+                    + download.getUsername() + " (id: " + connection.getId()
+                    + ", state: " + connection.getState() + ")");
             download.setConnection(connection);
             return peerConnection;
         }
@@ -3726,6 +3749,10 @@ final class DefaultSoulseekClient
 
             MessageConnection refreshed = await(peerConnectionManager.getOrAddMessageConnectionAsync(
                     download.getUsername(), endpoint, cancellationSignal));
+            diagnostic.debug("Fetched peer connection for download of "
+                    + filenameOnly(download.getFilename()) + " from "
+                    + download.getUsername() + " (id: " + refreshed.getId()
+                    + ", state: " + refreshed.getState() + ")");
             CompletableFuture<Connection> connectionTask = peerConnectionManager.awaitTransferConnectionAsync(
                     download.getUsername(), download.getFilename(), download.getRemoteToken(), cancellationSignal);
             await(invokeMessageWrite(
@@ -3735,13 +3762,23 @@ final class DefaultSoulseekClient
                     cancellationSignal));
             try {
                 connection = await(connectionTask);
+                diagnostic.debug("Fetched transfer connection for download of "
+                        + filenameOnly(download.getFilename()) + " from "
+                        + download.getUsername() + " (id: " + connection.getId()
+                        + ", state: " + connection.getState() + ")");
             } catch (Throwable failure) {
                 Throwable cause = unwrap(failure);
                 if (!(cause instanceof ConnectionException)) {
                     throw failure;
                 }
+                // The remote client never initiated the transfer connection, so initiate one from
+                // this end. The remote client in this scenario is most likely Nicotine+.
+                diagnostic.warning("Attempting to initiate a second-chance transfer connection to "
+                        + download.getUsername() + " for download of " + download.getFilename());
                 connection = await(peerConnectionManager.getTransferConnectionAsync(
                         download.getUsername(), endpoint, download.getRemoteToken(), cancellationSignal));
+                diagnostic.warning("Successfully established a second-chance transfer connection to "
+                        + download.getUsername() + " for download of " + download.getFilename());
             }
             download.setConnection(connection);
             return refreshed;
@@ -3779,6 +3816,10 @@ final class DefaultSoulseekClient
             if (download.getStartOffset() <= 0 || !transferOptions.isSeekOutputStreamAutomatically()) {
                 return;
             }
+            diagnostic.debug("Seeking output stream for download of "
+                    + filenameOnly(download.getFilename()) + " from "
+                    + download.getUsername() + " to starting offset of "
+                    + download.getStartOffset() + " bytes");
             try {
                 seekOutputStream(outputStream, download.getStartOffset());
             } catch (IOException failure) {
@@ -3791,6 +3832,9 @@ final class DefaultSoulseekClient
             try (CancellationController linkedController = new CancellationController();
                     CancellationSubscription registration = cancellationSignal.register(linkedController::cancel)) {
                 CancellationSignal linkedToken = linkedController.getSignal();
+                diagnostic.debug("Seeking download of " + filenameOnly(download.getFilename())
+                        + " from " + download.getUsername() + " to starting offset of "
+                        + download.getStartOffset() + " bytes");
                 byte[] offset = ByteBuffer.allocate(8)
                         .order(ByteOrder.LITTLE_ENDIAN)
                         .putLong(download.getStartOffset())
@@ -4132,6 +4176,9 @@ final class DefaultSoulseekClient
                 try {
                     await(transferOptions.getSlotAwaiter().awaitSlotAsync(upload.toTransfer(), cancellationSignal));
                     slot.set(true);
+                    diagnostic.debug("Upload slot for file "
+                            + filenameOnly(upload.getFilename()) + " to "
+                            + upload.getUsername() + " acquired");
                 } catch (Throwable failure) {
                     Throwable cause = unwrap(failure);
                     if (cause instanceof CancellationException) {
@@ -4147,10 +4194,17 @@ final class DefaultSoulseekClient
 
                 await(acquirePermit(globalUploadSemaphore, cancellationSignal));
                 globalPermit.set(true);
+                diagnostic.debug("Global upload semaphore for file "
+                        + filenameOnly(upload.getFilename()) + " to "
+                        + upload.getUsername() + " acquired");
 
                 endpoint = await(getUserEndpointAsync(upload.getUsername(), cancellationSignal));
                 MessageConnection messageConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
                         upload.getUsername(), endpoint, cancellationSignal));
+                diagnostic.debug("Fetched peer connection for upload of "
+                        + filenameOnly(upload.getFilename()) + " to "
+                        + upload.getUsername() + " (id: " + messageConnection.getId()
+                        + ", state: " + messageConnection.getState() + ")");
 
                 CompletableFuture<TransferResponse> transferRequestAcknowledged = waiter.waitAsync(
                         new WaitKey(MessageCode.Peer.TRANSFER_RESPONSE, upload.getUsername(), upload.getToken()),
@@ -4162,9 +4216,18 @@ final class DefaultSoulseekClient
                         new TransferRequest(
                                 TransferDirection.UPLOAD, upload.getToken(), upload.getFilename(), upload.getSize()),
                         cancellationSignal));
+                diagnostic.debug("Wrote transfer request for upload of "
+                        + filenameOnly(upload.getFilename()) + " to "
+                        + upload.getUsername() + " (id: " + messageConnection.getId()
+                        + ", state: " + messageConnection.getState() + ")");
                 updateState(TransferState.REQUESTED);
 
                 TransferResponse acknowledgement = await(transferRequestAcknowledged);
+                diagnostic.debug("Received transfer request ACK for upload of "
+                        + filenameOnly(upload.getFilename()) + " to "
+                        + upload.getUsername() + ": allowed: " + acknowledgement.isAllowed()
+                        + ", message: " + acknowledgement.getMessage()
+                        + " (token: " + upload.getToken() + ")");
                 if (!acknowledgement.isAllowed()) {
                     throw new TransferRejectedException("Transfer rejected: " + acknowledgement.getMessage());
                 }
@@ -4172,6 +4235,10 @@ final class DefaultSoulseekClient
                 updateState(TransferState.INITIALIZING);
                 connection = await(peerConnectionManager.getTransferConnectionAsync(
                         upload.getUsername(), endpoint, upload.getToken(), cancellationSignal));
+                diagnostic.debug("Fetched transfer connection for upload of "
+                        + filenameOnly(upload.getFilename()) + " to "
+                        + upload.getUsername() + " (id: " + connection.getId()
+                        + ", state: " + connection.getState() + ")");
                 upload.setConnection(connection);
                 bindConnectionEvents();
 
@@ -4183,6 +4250,8 @@ final class DefaultSoulseekClient
                             + upload.getSize() + " bytes");
                 }
 
+                diagnostic.debug("Resolving input stream for upload of " + filenameOnly(upload.getFilename()) + " to "
+                        + upload.getUsername());
                 inputStream = Objects.requireNonNull(
                         await(inputStreamFactory.openAsync(upload.getStartOffset())), "inputStreamFactory result");
                 positionInputStream();
@@ -4232,6 +4301,9 @@ final class DefaultSoulseekClient
                         ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).getLong());
             } catch (Throwable failure) {
                 Throwable cause = unwrap(failure);
+                diagnostic.debug("Failed to read start offset for upload of "
+                        + filenameOnly(upload.getFilename()) + " to "
+                        + upload.getUsername() + ": " + failureMessage(cause));
                 if (cause instanceof CancellationException || cause instanceof TimeoutException) {
                     throw new CompletionException(cause);
                 }
@@ -4243,6 +4315,10 @@ final class DefaultSoulseekClient
             if (upload.getStartOffset() <= 0 || !transferOptions.isSeekInputStreamAutomatically()) {
                 return;
             }
+            diagnostic.debug("Seeking input stream for upload of "
+                    + filenameOnly(upload.getFilename()) + " to "
+                    + upload.getUsername() + " to starting offset of "
+                    + upload.getStartOffset() + " bytes");
             try {
                 seekInputStream(inputStream, upload.getStartOffset());
             } catch (IOException failure) {
@@ -4423,19 +4499,30 @@ final class DefaultSoulseekClient
         private void releasePermits() {
             if (perUserPermit.compareAndSet(true, false)) {
                 perUserSemaphore.release();
+                diagnostic.debug("Upload semaphore for file "
+                        + filenameOnly(upload.getFilename()) + " to "
+                        + upload.getUsername() + " released");
             }
-            if (slot.compareAndSet(true, false) && transferOptions.getSlotReleased() != null) {
-                try {
-                    Thread.sleep(10);
-                    transferOptions.getSlotReleased().onSlotReleased(upload.toTransfer());
-                } catch (InterruptedException failure) {
-                    Thread.currentThread().interrupt();
-                } catch (Throwable ignored) {
-                    // Slot-release callbacks cannot block cleanup.
+            if (slot.compareAndSet(true, false)) {
+                diagnostic.debug("Upload slot for file "
+                        + filenameOnly(upload.getFilename()) + " to "
+                        + upload.getUsername() + " released");
+                if (transferOptions.getSlotReleased() != null) {
+                    try {
+                        Thread.sleep(10);
+                        transferOptions.getSlotReleased().onSlotReleased(upload.toTransfer());
+                    } catch (InterruptedException failure) {
+                        Thread.currentThread().interrupt();
+                    } catch (Throwable ignored) {
+                        // Slot-release callbacks cannot block cleanup.
+                    }
                 }
             }
             if (globalPermit.compareAndSet(true, false)) {
                 globalUploadSemaphore.release();
+                diagnostic.debug("Global upload semaphore for file "
+                        + filenameOnly(upload.getFilename()) + " to "
+                        + upload.getUsername() + " released");
             }
         }
 
