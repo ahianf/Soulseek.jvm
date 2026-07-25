@@ -209,14 +209,17 @@ public final class DefaultMessageConnection extends SocketConnection implements 
             try {
                 while (!isDisposed()) {
                     ByteArrayOutputStream message = new ByteArrayOutputStream();
-                    byte[] lengthBytes = readAsync(4, CancellationSignal.none()).join();
+                    // Read on this thread. Each of these used to dispatch onto
+                    // a fresh virtual thread and block on the future, three
+                    // times per frame, on the path that carries distributed
+                    // search traffic.
+                    byte[] lengthBytes = read(4, null, CancellationSignal.none());
                     int length = ByteBuffer.wrap(lengthBytes)
                             .order(ByteOrder.LITTLE_ENDIAN)
                             .getInt();
                     message.writeBytes(lengthBytes);
 
-                    byte[] codeBytes =
-                            readAsync(codeLength, CancellationSignal.none()).join();
+                    byte[] codeBytes = read(codeLength, null, CancellationSignal.none());
                     codeHolder[0] = codeBytes;
                     message.writeBytes(codeBytes);
 
@@ -226,11 +229,17 @@ public final class DefaultMessageConnection extends SocketConnection implements 
                     // Passed to the read rather than added to the shared
                     // listener list and removed afterwards, which cost two
                     // CopyOnWriteArrayList copies per message.
-                    byte[] payload = readAsync(length - codeLength, payloadProgress, CancellationSignal.none())
-                            .join();
+                    byte[] payload = read(length - codeLength, payloadProgress, CancellationSignal.none());
                     message.writeBytes(payload);
                     raiseMessageRead(message.toByteArray());
                 }
+            } catch (RuntimeException | Error unchecked) {
+                throw unchecked;
+            } catch (Exception checked) {
+                // The loop body is a Runnable, so a checked failure (a lapsed
+                // deadline, say) is wrapped here. watchReadLoop unwraps it
+                // again before reporting the cause.
+                throw new CompletionException(checked);
             } finally {
                 readingContinuously = false;
             }

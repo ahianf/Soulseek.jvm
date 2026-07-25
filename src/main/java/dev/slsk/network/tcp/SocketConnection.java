@@ -372,13 +372,37 @@ public class SocketConnection implements Connection {
             long length,
             ConnectionEventListener<ConnectionDataEvent> scopedProgress,
             CancellationSignal cancellationSignal) {
+        // Validated here, before dispatching, so argument and state errors stay
+        // synchronous for the caller instead of surfacing inside the future.
+        validateRead(length);
+        return async(() -> read(length, scopedProgress, cancellationSignal));
+    }
+
+    /**
+     * Reads {@code length} bytes on the calling thread.
+     *
+     * <p>For callers that are already running on their own virtual thread and
+     * would otherwise dispatch a read and immediately block on the result. The
+     * framed read loop does exactly that three times per protocol message, so
+     * going through {@link #readAsync} there cost three thread creations and
+     * three futures per frame to no purpose.
+     *
+     * @param length the number of bytes to read
+     * @param scopedProgress the progress listener for this read, or {@code null}
+     * @param cancellationSignal the cancellation signal
+     * @return the bytes read
+     * @throws Exception if the read fails; the connection is disconnected first
+     */
+    protected final byte[] read(
+            long length,
+            ConnectionEventListener<ConnectionDataEvent> scopedProgress,
+            CancellationSignal cancellationSignal)
+            throws Exception {
         validateRead(length);
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
-        return async(() -> {
-            ByteArrayOutputStream output = new ByteArrayOutputStream();
-            readInternal(length, output, SocketConnection::grantAll, null, scopedProgress, token);
-            return output.toByteArray();
-        });
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        readInternal(length, output, SocketConnection::grantAll, null, scopedProgress, token);
+        return output.toByteArray();
     }
 
     @Override
@@ -547,7 +571,11 @@ public class SocketConnection implements Connection {
             CancellationSignal cancellationSignal)
             throws Exception {
         resetInactivityTime();
-        byte[] buffer = new byte[options.getReadBufferSize()];
+        // Sized to the request, not to the configured maximum. The framed read
+        // loop asks for 4 bytes, then the code, then the payload; a full
+        // read-buffer allocation for each of those was 48 KiB of garbage per
+        // 40-byte protocol message.
+        byte[] buffer = new byte[(int) Math.min(options.getReadBufferSize(), Math.max(1L, length))];
         long totalBytesRead = 0;
 
         try {
@@ -621,7 +649,7 @@ public class SocketConnection implements Connection {
 
         try {
             resetInactivityTime();
-            byte[] buffer = new byte[options.getWriteBufferSize()];
+            byte[] buffer = new byte[(int) Math.min(options.getWriteBufferSize(), Math.max(1L, length))];
             long totalBytesWritten = 0;
 
             while (totalBytesWritten < length) {
