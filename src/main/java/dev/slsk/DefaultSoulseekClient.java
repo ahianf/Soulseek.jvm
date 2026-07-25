@@ -4,6 +4,12 @@
 
 package dev.slsk;
 
+import static dev.slsk.ClientSupport.failureMessage;
+import static dev.slsk.ClientSupport.mapClientFailure;
+import static dev.slsk.ClientSupport.requireNonEmpty;
+import static dev.slsk.ClientSupport.requireText;
+import static dev.slsk.ClientSupport.unwrap;
+
 import dev.slsk.common.CommonUtils;
 import dev.slsk.common.Constants;
 import dev.slsk.common.DefaultWaiter;
@@ -51,7 +57,6 @@ import dev.slsk.exceptions.ListenException;
 import dev.slsk.exceptions.LoginRejectedException;
 import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.exceptions.NoResponseException;
-import dev.slsk.exceptions.RoomJoinForbiddenException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferException;
 import dev.slsk.exceptions.TransferNotFoundException;
@@ -81,8 +86,6 @@ import dev.slsk.messaging.messages.BrowseRequest;
 import dev.slsk.messaging.messages.CheckPrivilegesRequest;
 import dev.slsk.messaging.messages.FolderContentsRequest;
 import dev.slsk.messaging.messages.GivePrivilegesCommand;
-import dev.slsk.messaging.messages.JoinRoomRequest;
-import dev.slsk.messaging.messages.LeaveRoomRequest;
 import dev.slsk.messaging.messages.LoginRequest;
 import dev.slsk.messaging.messages.LoginResponse;
 import dev.slsk.messaging.messages.NewPassword;
@@ -90,21 +93,12 @@ import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.messaging.messages.PlaceInQueueRequest;
 import dev.slsk.messaging.messages.PlaceInQueueResponse;
 import dev.slsk.messaging.messages.PrivateMessageCommand;
-import dev.slsk.messaging.messages.PrivateRoomAddOperator;
-import dev.slsk.messaging.messages.PrivateRoomAddUser;
-import dev.slsk.messaging.messages.PrivateRoomDropMembershipCommand;
-import dev.slsk.messaging.messages.PrivateRoomDropOwnershipCommand;
-import dev.slsk.messaging.messages.PrivateRoomRemoveOperator;
-import dev.slsk.messaging.messages.PrivateRoomRemoveUser;
 import dev.slsk.messaging.messages.PrivateRoomToggle;
-import dev.slsk.messaging.messages.RoomListRequest;
-import dev.slsk.messaging.messages.RoomMessageCommand;
 import dev.slsk.messaging.messages.RoomSearchRequest;
 import dev.slsk.messaging.messages.SendUploadSpeedCommand;
 import dev.slsk.messaging.messages.ServerPing;
 import dev.slsk.messaging.messages.SetListenPortCommand;
 import dev.slsk.messaging.messages.SetOnlineStatusCommand;
-import dev.slsk.messaging.messages.SetRoomTickerCommand;
 import dev.slsk.messaging.messages.SetSharedCountsCommand;
 import dev.slsk.messaging.messages.StartPublicChatCommand;
 import dev.slsk.messaging.messages.StopPublicChatCommand;
@@ -201,6 +195,7 @@ import java.util.function.Consumer;
  */
 final class DefaultSoulseekClient
         implements SoulseekClient,
+                ClientContext,
                 DistributedConnectionManagerClient,
                 DistributedMessageHandlerClient,
                 ListenerHandlerClient,
@@ -245,6 +240,9 @@ final class DefaultSoulseekClient
      * the client owned four platform threads at rest plus one per search.
      */
     private final Scheduler scheduler;
+
+    /** Chat rooms, split out of this class; see RoomRegistry. */
+    private final RoomRegistry rooms;
 
     private final Map<Event, CopyOnWriteArrayList<SoulseekClientEventListener<?>>> listeners =
             new EnumMap<>(Event.class);
@@ -321,6 +319,7 @@ final class DefaultSoulseekClient
         // Constructed before every component that schedules, since they all
         // share it.
         this.scheduler = new Scheduler("soulseek-client-timer");
+        this.rooms = new RoomRegistry(this);
         this.waiter = waiter == null ? new DefaultWaiter(this.options.getMessageTimeout(), scheduler) : waiter;
         this.tokenFactory = tokenFactory == null ? new TokenFactory(this.options.getStartingToken()) : tokenFactory;
         this.searchSemaphore = new Semaphore(this.options.getMaximumConcurrentSearches());
@@ -882,22 +881,6 @@ final class DefaultSoulseekClient
                 "Failed to send private message to user " + requestedUsername + ": ");
     }
 
-    private CompletableFuture<Void> addPrivateRoomMemberOperation(String roomName, String requestedUsername) {
-        return addPrivateRoomMemberOperation(roomName, requestedUsername, CancellationSignal.none());
-    }
-
-    private CompletableFuture<Void> addPrivateRoomMemberOperation(
-            String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
-        requireText(roomName, "roomName");
-        requireText(requestedUsername, "username");
-        requireLoggedIn("add members to private rooms");
-        return executeCorrelatedServerCommand(
-                new PrivateRoomAddUser(roomName, requestedUsername),
-                new WaitKey(MessageCode.Server.PRIVATE_ROOM_ADD_USER, roomName, requestedUsername),
-                cancellationSignal,
-                "Failed to add user " + requestedUsername + " as member of private room " + roomName + ": ");
-    }
-
     private CompletableFuture<Void> changePasswordOperation(String password) {
         return changePasswordOperation(password, CancellationSignal.none());
     }
@@ -1154,20 +1137,6 @@ final class DefaultSoulseekClient
                 "Failed to get privileges: ");
     }
 
-    private CompletableFuture<RoomList> getRoomListOperation() {
-        return getRoomListOperation(CancellationSignal.none());
-    }
-
-    private CompletableFuture<RoomList> getRoomListOperation(CancellationSignal cancellationSignal) {
-        requireLoggedIn("fetch the list of chat rooms");
-        return executeCorrelatedServerRequest(
-                new RoomListRequest(),
-                new WaitKey(MessageCode.Server.ROOM_LIST),
-                RoomList.class,
-                cancellationSignal,
-                "Failed to fetch the list of chat rooms from the server: ");
-    }
-
     private CompletableFuture<List<Directory>> getDirectoryContentsOperation(
             String requestedUsername, String directoryName) {
         return getDirectoryContentsOperation(requestedUsername, directoryName, null, CancellationSignal.none());
@@ -1263,90 +1232,6 @@ final class DefaultSoulseekClient
                 operation,
                 "Failed to fetch place in queue for download of " + filename + " from " + requestedUsername + ": ",
                 UserOfflineException.class);
-    }
-
-    private CompletableFuture<RoomData> joinRoomOperation(String roomName) {
-        return joinRoomOperation(roomName, false, CancellationSignal.none());
-    }
-
-    private CompletableFuture<RoomData> joinRoomOperation(String roomName, boolean isPrivate) {
-        return joinRoomOperation(roomName, isPrivate, CancellationSignal.none());
-    }
-
-    private CompletableFuture<RoomData> joinRoomOperation(String roomName, CancellationSignal cancellationSignal) {
-        return joinRoomOperation(roomName, false, cancellationSignal);
-    }
-
-    private CompletableFuture<RoomData> joinRoomOperation(
-            String roomName, boolean isPrivate, CancellationSignal cancellationSignal) {
-        requireText(roomName, "roomName");
-        requireLoggedIn("join a chat room");
-        CancellationSignal token = defaultToken(cancellationSignal);
-        CompletableFuture<RoomData> wait;
-        try {
-            wait = waiter.waitAsync(new WaitKey(MessageCode.Server.JOIN_ROOM, roomName), RoomData.class, null, token);
-        } catch (Throwable failure) {
-            return mapClientFailure(
-                    CompletableFuture.failedFuture(failure),
-                    "Failed to join chat room " + roomName + ": ",
-                    RoomJoinForbiddenException.class,
-                    NoResponseException.class);
-        }
-        CompletableFuture<RoomData> translatedWait = wait.handle((response, failure) -> {
-            if (failure == null) {
-                return response;
-            }
-            Throwable cause = unwrap(failure);
-            if (cause instanceof TimeoutException) {
-                throw new CompletionException(new NoResponseException("The server didn't respond to the request "
-                        + "to join chat room " + roomName
-                        + ". This probably indicates that the "
-                        + "room is already joined."));
-            }
-            throw new CompletionException(cause);
-        });
-        CompletableFuture<RoomData> operation = invokeServerWrite(new JoinRoomRequest(roomName, isPrivate), token)
-                .thenCompose(ignored -> translatedWait);
-        return mapClientFailure(
-                operation,
-                "Failed to join chat room " + roomName + ": ",
-                RoomJoinForbiddenException.class,
-                NoResponseException.class);
-    }
-
-    private CompletableFuture<Void> leaveRoomOperation(String roomName) {
-        return leaveRoomOperation(roomName, CancellationSignal.none());
-    }
-
-    private CompletableFuture<Void> leaveRoomOperation(String roomName, CancellationSignal cancellationSignal) {
-        requireText(roomName, "roomName");
-        requireLoggedIn("leave a chat room");
-        CancellationSignal token = defaultToken(cancellationSignal);
-        CompletableFuture<Void> wait;
-        try {
-            wait = waiter.waitAsync(new WaitKey(MessageCode.Server.LEAVE_ROOM, roomName), null, token);
-        } catch (Throwable failure) {
-            return mapClientFailure(
-                    CompletableFuture.failedFuture(failure),
-                    "Failed to leave chat room " + roomName + ": ",
-                    NoResponseException.class);
-        }
-        CompletableFuture<Void> translatedWait = wait.handle((ignored, failure) -> {
-            if (failure == null) {
-                return null;
-            }
-            Throwable cause = unwrap(failure);
-            if (cause instanceof TimeoutException) {
-                throw new CompletionException(new NoResponseException("The server didn't respond to the request "
-                        + "to leave chat room " + roomName
-                        + ".  This probably indicates that the "
-                        + "room is not joined."));
-            }
-            throw new CompletionException(cause);
-        });
-        CompletableFuture<Void> operation =
-                invokeServerWrite(new LeaveRoomRequest(roomName), token).thenCompose(ignored -> translatedWait);
-        return mapClientFailure(operation, "Failed to leave chat room " + roomName + ": ", NoResponseException.class);
     }
 
     private CompletableFuture<Boolean> getUserPrivilegedOperation(String requestedUsername) {
@@ -2252,99 +2137,6 @@ final class DefaultSoulseekClient
         return enqueued.thenApply(ignored -> upload);
     }
 
-    private CompletableFuture<Void> addPrivateRoomModeratorOperation(String roomName, String requestedUsername) {
-        return addPrivateRoomModeratorOperation(roomName, requestedUsername, CancellationSignal.none());
-    }
-
-    private CompletableFuture<Void> addPrivateRoomModeratorOperation(
-            String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
-        requireText(roomName, "roomName");
-        requireText(requestedUsername, "username");
-        requireLoggedIn("add moderators to private rooms");
-        return executeCorrelatedServerCommand(
-                new PrivateRoomAddOperator(roomName, requestedUsername),
-                new WaitKey(MessageCode.Server.PRIVATE_ROOM_ADD_OPERATOR, roomName, requestedUsername),
-                cancellationSignal,
-                "Failed to add user " + requestedUsername + " as moderator of private room " + roomName + ": ");
-    }
-
-    private CompletableFuture<Void> removePrivateRoomMemberOperation(String roomName, String requestedUsername) {
-        return removePrivateRoomMemberOperation(roomName, requestedUsername, CancellationSignal.none());
-    }
-
-    private CompletableFuture<Void> removePrivateRoomMemberOperation(
-            String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
-        requireText(roomName, "roomName");
-        requireText(requestedUsername, "username");
-        requireLoggedIn("remove users from private rooms");
-        return executeCorrelatedServerCommand(
-                new PrivateRoomRemoveUser(roomName, requestedUsername),
-                new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVE_USER, roomName, requestedUsername),
-                cancellationSignal,
-                "Failed to remove user " + requestedUsername + " as member of private room " + roomName + ": ");
-    }
-
-    private CompletableFuture<Void> removePrivateRoomModeratorOperation(String roomName, String requestedUsername) {
-        return removePrivateRoomModeratorOperation(roomName, requestedUsername, CancellationSignal.none());
-    }
-
-    private CompletableFuture<Void> removePrivateRoomModeratorOperation(
-            String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
-        requireText(roomName, "roomName");
-        requireText(requestedUsername, "username");
-        requireLoggedIn("remove moderators from private rooms");
-        return executeCorrelatedServerCommand(
-                new PrivateRoomRemoveOperator(roomName, requestedUsername),
-                new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVE_OPERATOR, roomName, requestedUsername),
-                cancellationSignal,
-                "Failed to remove user " + requestedUsername + " as moderator of private room " + roomName + ": ");
-    }
-
-    private CompletableFuture<Void> dropPrivateRoomMembershipOperation(String roomName) {
-        return dropPrivateRoomMembershipOperation(roomName, CancellationSignal.none());
-    }
-
-    private CompletableFuture<Void> dropPrivateRoomMembershipOperation(
-            String roomName, CancellationSignal cancellationSignal) {
-        requireText(roomName, "roomName");
-        requireLoggedIn("drop private room membership");
-        return executeCorrelatedServerCommand(
-                new PrivateRoomDropMembershipCommand(roomName),
-                new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVED, roomName),
-                cancellationSignal,
-                "Failed to drop membership of private room " + roomName + ": ");
-    }
-
-    private CompletableFuture<Void> dropPrivateRoomOwnershipOperation(String roomName) {
-        return dropPrivateRoomOwnershipOperation(roomName, CancellationSignal.none());
-    }
-
-    private CompletableFuture<Void> dropPrivateRoomOwnershipOperation(
-            String roomName, CancellationSignal cancellationSignal) {
-        requireText(roomName, "roomName");
-        requireLoggedIn("drop private room ownership");
-        return executeCorrelatedServerCommand(
-                new PrivateRoomDropOwnershipCommand(roomName),
-                new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVED, roomName),
-                cancellationSignal,
-                "Failed to drop ownership of private room " + roomName + ": ");
-    }
-
-    private CompletableFuture<Void> sendRoomMessageOperation(String roomName, String message) {
-        return sendRoomMessageOperation(roomName, message, CancellationSignal.none());
-    }
-
-    private CompletableFuture<Void> sendRoomMessageOperation(
-            String roomName, String message, CancellationSignal cancellationSignal) {
-        requireText(roomName, "roomName");
-        requireNonEmpty(message, "message");
-        requireLoggedIn("send a chat room message");
-        return writeServerAsync(
-                new RoomMessageCommand(roomName, message),
-                cancellationSignal,
-                "Failed to send message to room " + roomName + ": ");
-    }
-
     private CompletableFuture<Void> sendUploadSpeedOperation(int speed) {
         return sendUploadSpeedOperation(speed, CancellationSignal.none());
     }
@@ -2355,21 +2147,6 @@ final class DefaultSoulseekClient
             throw new IllegalArgumentException("The upload speed must be greater than zero");
         }
         return writeServerAsync(new SendUploadSpeedCommand(speed), cancellationSignal, "Failed to set upload speed: ");
-    }
-
-    private CompletableFuture<Void> setRoomTickerOperation(String roomName, String message) {
-        return setRoomTickerOperation(roomName, message, CancellationSignal.none());
-    }
-
-    private CompletableFuture<Void> setRoomTickerOperation(
-            String roomName, String message, CancellationSignal cancellationSignal) {
-        requireText(roomName, "roomName");
-        requireNonEmpty(message, "message");
-        requireLoggedIn("set chat room tickers");
-        return writeServerAsync(
-                new SetRoomTickerCommand(roomName, message),
-                cancellationSignal,
-                "Failed to set chat room ticker in room " + roomName + ": ");
     }
 
     private CompletableFuture<Void> setSharedCountsOperation(int directories, int files) {
@@ -3078,26 +2855,11 @@ final class DefaultSoulseekClient
         }
     }
 
-    private static String failureMessage(Throwable failure) {
-        return failure.getMessage() == null ? "" : failure.getMessage();
-    }
-
-    private void requireLoggedIn(String operation) {
+    @Override
+    public void requireLoggedIn(String operation) {
         if (!state.contains(SoulseekClientState.CONNECTED) || !state.contains(SoulseekClientState.LOGGED_IN)) {
             throw new IllegalStateException("The server connection must be connected and logged in to " + operation
                     + " (currently: " + state + ")");
-        }
-    }
-
-    private static void requireText(String value, String name) {
-        if (CommonUtils.isNullOrWhiteSpace(value)) {
-            throw new IllegalArgumentException(name + " must not be null, empty, or whitespace");
-        }
-    }
-
-    private static void requireNonEmpty(String value, String name) {
-        if (value == null || value.isEmpty()) {
-            throw new IllegalArgumentException(name + " must not be null or empty");
         }
     }
 
@@ -4822,6 +4584,42 @@ final class DefaultSoulseekClient
                 request.getCancellationSignal()));
     }
 
+    // ---- ClientContext, the seam the components delegate through ----------
+
+    @Override
+    public SoulseekClientOptions getClientOptions() {
+        return options;
+    }
+
+    @Override
+    public DiagnosticSink getDiagnostic() {
+        return diagnostic;
+    }
+
+    @Override
+    public CompletableFuture<Void> writeToServer(OutgoingMessage message, CancellationSignal cancellationSignal) {
+        return invokeServerWrite(message, cancellationSignal);
+    }
+
+    @Override
+    public CompletableFuture<Void> executeCorrelatedCommand(
+            OutgoingMessage message, WaitKey waitKey, CancellationSignal cancellationSignal, String failurePrefix) {
+        return executeCorrelatedServerCommand(message, waitKey, cancellationSignal, failurePrefix);
+    }
+
+    @Override
+    @SafeVarargs
+    public final <T> CompletableFuture<T> executeCorrelatedRequest(
+            OutgoingMessage message,
+            WaitKey waitKey,
+            Class<T> resultType,
+            CancellationSignal cancellationSignal,
+            String failurePrefix,
+            Class<? extends Throwable>... preservedFailures) {
+        return executeCorrelatedServerRequest(
+                message, waitKey, resultType, cancellationSignal, failurePrefix, preservedFailures);
+    }
+
     // ---- Blocking public API ----------------------------------------------
     // Each of these presents one internal operation. The operations are still
     // future-shaped inside; Phase 6 inlines them as the client is decomposed.
@@ -4848,22 +4646,22 @@ final class DefaultSoulseekClient
 
     @Override
     public void addPrivateRoomMember(String roomName, String username) {
-        unwrapped(addPrivateRoomMemberOperation(roomName, username));
+        unwrapped(rooms.addPrivateRoomMember(roomName, username));
     }
 
     @Override
     public void addPrivateRoomMember(String roomName, String username, CancellationSignal cancellationSignal) {
-        unwrapped(addPrivateRoomMemberOperation(roomName, username, cancellationSignal));
+        unwrapped(rooms.addPrivateRoomMember(roomName, username, cancellationSignal));
     }
 
     @Override
     public void addPrivateRoomModerator(String roomName, String username) {
-        unwrapped(addPrivateRoomModeratorOperation(roomName, username));
+        unwrapped(rooms.addPrivateRoomModerator(roomName, username));
     }
 
     @Override
     public void addPrivateRoomModerator(String roomName, String username, CancellationSignal cancellationSignal) {
-        unwrapped(addPrivateRoomModeratorOperation(roomName, username, cancellationSignal));
+        unwrapped(rooms.addPrivateRoomModerator(roomName, username, cancellationSignal));
     }
 
     @Override
@@ -4939,22 +4737,22 @@ final class DefaultSoulseekClient
 
     @Override
     public void dropPrivateRoomMembership(String roomName) {
-        unwrapped(dropPrivateRoomMembershipOperation(roomName));
+        unwrapped(rooms.dropPrivateRoomMembership(roomName));
     }
 
     @Override
     public void dropPrivateRoomMembership(String roomName, CancellationSignal cancellationSignal) {
-        unwrapped(dropPrivateRoomMembershipOperation(roomName, cancellationSignal));
+        unwrapped(rooms.dropPrivateRoomMembership(roomName, cancellationSignal));
     }
 
     @Override
     public void dropPrivateRoomOwnership(String roomName) {
-        unwrapped(dropPrivateRoomOwnershipOperation(roomName));
+        unwrapped(rooms.dropPrivateRoomOwnership(roomName));
     }
 
     @Override
     public void dropPrivateRoomOwnership(String roomName, CancellationSignal cancellationSignal) {
-        unwrapped(dropPrivateRoomOwnershipOperation(roomName, cancellationSignal));
+        unwrapped(rooms.dropPrivateRoomOwnership(roomName, cancellationSignal));
     }
 
     @Override
@@ -5001,12 +4799,12 @@ final class DefaultSoulseekClient
 
     @Override
     public RoomList getRoomList() {
-        return unwrapped(getRoomListOperation());
+        return unwrapped(rooms.getRoomList());
     }
 
     @Override
     public RoomList getRoomList(CancellationSignal cancellationSignal) {
-        return unwrapped(getRoomListOperation(cancellationSignal));
+        return unwrapped(rooms.getRoomList(cancellationSignal));
     }
 
     @Override
@@ -5071,32 +4869,32 @@ final class DefaultSoulseekClient
 
     @Override
     public RoomData joinRoom(String roomName) {
-        return unwrapped(joinRoomOperation(roomName));
+        return unwrapped(rooms.joinRoom(roomName));
     }
 
     @Override
     public RoomData joinRoom(String roomName, boolean isPrivate) {
-        return unwrapped(joinRoomOperation(roomName, isPrivate));
+        return unwrapped(rooms.joinRoom(roomName, isPrivate));
     }
 
     @Override
     public RoomData joinRoom(String roomName, CancellationSignal cancellationSignal) {
-        return unwrapped(joinRoomOperation(roomName, cancellationSignal));
+        return unwrapped(rooms.joinRoom(roomName, cancellationSignal));
     }
 
     @Override
     public RoomData joinRoom(String roomName, boolean isPrivate, CancellationSignal cancellationSignal) {
-        return unwrapped(joinRoomOperation(roomName, isPrivate, cancellationSignal));
+        return unwrapped(rooms.joinRoom(roomName, isPrivate, cancellationSignal));
     }
 
     @Override
     public void leaveRoom(String roomName) {
-        unwrapped(leaveRoomOperation(roomName));
+        unwrapped(rooms.leaveRoom(roomName));
     }
 
     @Override
     public void leaveRoom(String roomName, CancellationSignal cancellationSignal) {
-        unwrapped(leaveRoomOperation(roomName, cancellationSignal));
+        unwrapped(rooms.leaveRoom(roomName, cancellationSignal));
     }
 
     @Override
@@ -5121,22 +4919,22 @@ final class DefaultSoulseekClient
 
     @Override
     public void removePrivateRoomMember(String roomName, String username) {
-        unwrapped(removePrivateRoomMemberOperation(roomName, username));
+        unwrapped(rooms.removePrivateRoomMember(roomName, username));
     }
 
     @Override
     public void removePrivateRoomMember(String roomName, String username, CancellationSignal cancellationSignal) {
-        unwrapped(removePrivateRoomMemberOperation(roomName, username, cancellationSignal));
+        unwrapped(rooms.removePrivateRoomMember(roomName, username, cancellationSignal));
     }
 
     @Override
     public void removePrivateRoomModerator(String roomName, String username) {
-        unwrapped(removePrivateRoomModeratorOperation(roomName, username));
+        unwrapped(rooms.removePrivateRoomModerator(roomName, username));
     }
 
     @Override
     public void removePrivateRoomModerator(String roomName, String username, CancellationSignal cancellationSignal) {
-        unwrapped(removePrivateRoomModeratorOperation(roomName, username, cancellationSignal));
+        unwrapped(rooms.removePrivateRoomModerator(roomName, username, cancellationSignal));
     }
 
     @Override
@@ -5151,12 +4949,12 @@ final class DefaultSoulseekClient
 
     @Override
     public void sendRoomMessage(String roomName, String message) {
-        unwrapped(sendRoomMessageOperation(roomName, message));
+        unwrapped(rooms.sendRoomMessage(roomName, message));
     }
 
     @Override
     public void sendRoomMessage(String roomName, String message, CancellationSignal cancellationSignal) {
-        unwrapped(sendRoomMessageOperation(roomName, message, cancellationSignal));
+        unwrapped(rooms.sendRoomMessage(roomName, message, cancellationSignal));
     }
 
     @Override
@@ -5171,12 +4969,12 @@ final class DefaultSoulseekClient
 
     @Override
     public void setRoomTicker(String roomName, String message) {
-        unwrapped(setRoomTickerOperation(roomName, message));
+        unwrapped(rooms.setRoomTicker(roomName, message));
     }
 
     @Override
     public void setRoomTicker(String roomName, String message, CancellationSignal cancellationSignal) {
-        unwrapped(setRoomTickerOperation(roomName, message, cancellationSignal));
+        unwrapped(rooms.setRoomTicker(roomName, message, cancellationSignal));
     }
 
     @Override
@@ -5431,7 +5229,8 @@ final class DefaultSoulseekClient
             MessageConnection connection, OutgoingMessage message, CancellationSignal cancellationSignal) {
         CompletableFuture<Void> operation;
         try {
-            operation = connection.writeAsync(message, defaultToken(cancellationSignal));
+            operation = connection.writeAsync(
+                    message, cancellationSignal == null ? CancellationSignal.none() : cancellationSignal);
         } catch (Throwable failure) {
             operation = CompletableFuture.failedFuture(failure);
         }
@@ -5502,35 +5301,9 @@ final class DefaultSoulseekClient
         }
     }
 
-    private static CancellationSignal defaultToken(CancellationSignal token) {
+    @Override
+    public CancellationSignal defaultToken(CancellationSignal token) {
         return token == null ? CancellationSignal.none() : token;
-    }
-
-    private static <T> CompletableFuture<T> mapClientFailure(
-            CompletableFuture<T> operation, String prefix, Class<? extends Throwable>... preservedFailures) {
-        return operation.handle((result, failure) -> {
-            if (failure == null) {
-                return result;
-            }
-            Throwable cause = unwrap(failure);
-            if (cause instanceof CancellationException || cause instanceof TimeoutException) {
-                throw new CompletionException(cause);
-            }
-            for (Class<? extends Throwable> preserved : preservedFailures) {
-                if (preserved.isInstance(cause)) {
-                    throw new CompletionException(cause);
-                }
-            }
-            throw new CompletionException(new SoulseekClientException(prefix + failureMessage(cause), cause));
-        });
-    }
-
-    private static Throwable unwrap(Throwable failure) {
-        Throwable current = failure;
-        while (current instanceof CompletionException && current.getCause() != null) {
-            current = current.getCause();
-        }
-        return current;
     }
 
     private record SearchInvocation(SearchQuery query, SearchScope scope, int token, SearchOptions options) {}

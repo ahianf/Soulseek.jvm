@@ -1,0 +1,96 @@
+// SPDX-FileCopyrightText: 2026 Ahian Fernandez
+// SPDX-License-Identifier: GPL-3.0-only
+
+package dev.slsk;
+
+import dev.slsk.common.WaitKey;
+import dev.slsk.common.Waiter;
+import dev.slsk.diagnostics.DiagnosticSink;
+import dev.slsk.messaging.messages.OutgoingMessage;
+import dev.slsk.options.SoulseekClientOptions;
+import java.util.concurrent.CompletableFuture;
+
+/**
+ * The seam between the client and the components it delegates to.
+ *
+ * <p>{@code DefaultSoulseekClient} was one class of five thousand lines owning
+ * connection lifecycle, the server protocol, searches, transfers, user queries,
+ * rooms and semaphore garbage collection at once. Splitting it needs somewhere
+ * for the parts each component genuinely shares — the server write path, the
+ * response correlator, login state — to live without handing every component a
+ * reference to the whole client.
+ *
+ * <p>Deliberately small. A component that needs more than this is a sign the
+ * split is in the wrong place, not that the interface should grow.
+ */
+interface ClientContext {
+
+    /** Returns the response correlator. */
+    Waiter getWaiter();
+
+    /** Returns the client's options. */
+    SoulseekClientOptions getClientOptions();
+
+    /** Returns the diagnostic sink. */
+    DiagnosticSink getDiagnostic();
+
+    /**
+     * Throws unless the client is connected and logged in.
+     *
+     * @param operation what the caller is trying to do, for the message
+     */
+    void requireLoggedIn(String operation);
+
+    /**
+     * Substitutes the client's default signal when the caller supplied none.
+     *
+     * @param cancellationSignal the caller's signal, possibly {@code null}
+     * @return a signal, never {@code null}
+     */
+    CancellationSignal defaultToken(CancellationSignal cancellationSignal);
+
+    /**
+     * Sends a command and waits for the server's acknowledgement.
+     *
+     * <p>The dominant shape of a server operation: register a correlated wait,
+     * write, translate the failure. Shared here so each component does not
+     * reimplement it.
+     *
+     * @param message the command to send
+     * @param waitKey correlates the acknowledgement
+     * @param cancellationSignal the cancellation signal
+     * @param failurePrefix prefixes any wrapped failure
+     * @return a future completing when the server acknowledges
+     */
+    CompletableFuture<Void> executeCorrelatedCommand(
+            OutgoingMessage message, WaitKey waitKey, CancellationSignal cancellationSignal, String failurePrefix);
+
+    /**
+     * Sends a request and waits for a typed response.
+     *
+     * @param message the request to send
+     * @param waitKey correlates the response
+     * @param resultType the expected response type
+     * @param cancellationSignal the cancellation signal
+     * @param failurePrefix prefixes any wrapped failure
+     * @param preservedFailures failure types to pass through untranslated
+     * @param <T> the response type
+     * @return a future containing the response
+     */
+    <T> CompletableFuture<T> executeCorrelatedRequest(
+            OutgoingMessage message,
+            WaitKey waitKey,
+            Class<T> resultType,
+            CancellationSignal cancellationSignal,
+            String failurePrefix,
+            Class<? extends Throwable>... preservedFailures);
+
+    /**
+     * Writes a message to the server connection.
+     *
+     * @param message the message to send
+     * @param cancellationSignal the cancellation signal
+     * @return a future completing when the write lands
+     */
+    CompletableFuture<Void> writeToServer(OutgoingMessage message, CancellationSignal cancellationSignal);
+}

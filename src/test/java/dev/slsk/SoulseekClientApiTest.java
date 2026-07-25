@@ -52,6 +52,15 @@ class SoulseekClientApiTest {
                 // Future-shaped operations the internal collaborator interfaces
                 // still call directly. The public API in front of them is
                 // blocking; these disappear when the client is decomposed.
+                // ClientContext, the seam the extracted components delegate
+                // through (Phase 6). Not part of the public surface.
+                "requireLoggedIn",
+                "defaultToken",
+                "getClientOptions",
+                "getDiagnostic",
+                "writeToServer",
+                "executeCorrelatedCommand",
+                "executeCorrelatedRequest",
                 "acknowledgePrivateMessageOperation",
                 "acknowledgePrivilegeNotificationOperation",
                 "getUserEndpointOperation");
