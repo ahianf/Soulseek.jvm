@@ -9,7 +9,7 @@
 
   <groupId>dev.slsk</groupId>
   <artifactId>slsk-jvm</artifactId>
-  <version>0.13.7</version>
+  <version>0.13.8</version>
   <name>Soulseek.jvm</name>
   <description>A Java library for the Soulseek network.</description>
   <url>https://github.com/ahianf/Soulseek.jvm</url>
@@ -35,8 +35,10 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <project.build.outputTimestamp>2026-07-05T02:28:40Z</project.build.outputTimestamp>
-    <maven.compiler.release>21</maven.compiler.release>
+    <maven.compiler.release>25</maven.compiler.release>
     <junit.version>5.14.3</junit.version>
+    <jmh.version>1.37</jmh.version>
+    <exec.plugin.version>3.5.0</exec.plugin.version>
     <build.helper.version>3.6.1</build.helper.version>
     <maven.clean.version>3.2.0</maven.clean.version>
     <maven.compiler.version>3.15.0</maven.compiler.version>
@@ -128,11 +130,24 @@
             <configuration>
               <rules>
                 <requireJavaVersion>
-                  <version>[21,)</version>
+                  <version>[25,)</version>
                 </requireJavaVersion>
                 <requireMavenVersion>
                   <version>[3.9,)</version>
                 </requireMavenVersion>
+                <!--
+                  The runtime artifact is dependency-free by policy. The soak
+                  harness and the JMH benchmarks add test-scoped dependencies
+                  only; this rule is what stops one of them leaking into the
+                  shipped jar.
+                -->
+                <bannedDependencies>
+                  <searchTransitive>true</searchTransitive>
+                  <excludes>
+                    <exclude>*:*:*:*:compile</exclude>
+                    <exclude>*:*:*:*:runtime</exclude>
+                  </excludes>
+                </bannedDependencies>
               </rules>
             </configuration>
           </execution>
@@ -269,6 +284,214 @@
                 </goals>
               </execution>
             </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <!--
+      Opt-in soak harness. Loopback sockets only: no network, no credentials.
+      Asserts the threading, scheduling and allocation properties that the
+      single-threaded unit suite cannot see. See JAVA_FORK_ARCHITECTURE_GOAL.md.
+    -->
+    <profile>
+      <id>soak</id>
+      <build>
+        <plugins>
+          <!--
+            The harness measures threads, heap and CPU through the platform
+            MXBeans. Test sources are patched into dev.slsk.soulseek, which
+            does not (and must not) require java.management, so the reads edge
+            is added for test compilation only. Failsafe already runs with
+            useModulePath=false, so this affects compilation alone.
+          -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <version>${maven.compiler.version}</version>
+            <executions>
+              <execution>
+                <id>default-testCompile</id>
+                <goals>
+                  <goal>testCompile</goal>
+                </goals>
+                <configuration>
+                  <compilerArgs>
+                    <arg>--add-modules</arg>
+                    <arg>java.management,jdk.management</arg>
+                    <arg>--add-reads</arg>
+                    <arg>dev.slsk.soulseek=java.management,jdk.management</arg>
+                  </compilerArgs>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>build-helper-maven-plugin</artifactId>
+            <version>${build.helper.version}</version>
+            <executions>
+              <execution>
+                <id>add-soak-test-source</id>
+                <phase>generate-test-sources</phase>
+                <goals>
+                  <goal>add-test-source</goal>
+                </goals>
+                <configuration>
+                  <sources>
+                    <source>src/soakTest/java</source>
+                  </sources>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-failsafe-plugin</artifactId>
+            <version>${maven.failsafe.version}</version>
+            <configuration>
+              <useModulePath>false</useModulePath>
+              <includes>
+                <include>**/*Soak.java</include>
+              </includes>
+            </configuration>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>integration-test</goal>
+                  <goal>verify</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <!--
+      Opt-in JMH microbenchmarks for the pure-CPU hot spots the soak harness
+      cannot isolate. Dependencies are test-scoped; the enforcer's
+      banDependencies rule keeps them out of the shipped artifact.
+
+      Run: mvn -Pbench test-compile exec:exec
+    -->
+    <profile>
+      <id>bench</id>
+      <dependencies>
+        <dependency>
+          <groupId>org.openjdk.jmh</groupId>
+          <artifactId>jmh-core</artifactId>
+          <version>${jmh.version}</version>
+          <scope>test</scope>
+        </dependency>
+        <dependency>
+          <groupId>org.openjdk.jmh</groupId>
+          <artifactId>jmh-generator-annprocess</artifactId>
+          <version>${jmh.version}</version>
+          <scope>test</scope>
+        </dependency>
+      </dependencies>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <version>${maven.compiler.version}</version>
+            <executions>
+              <execution>
+                <id>default-testCompile</id>
+                <goals>
+                  <goal>testCompile</goal>
+                </goals>
+                <configuration>
+                  <compilerArgs>
+                    <arg>--add-modules</arg>
+                    <arg>java.management,jdk.management</arg>
+                    <arg>--add-reads</arg>
+                    <arg>dev.slsk.soulseek=java.management,jdk.management</arg>
+                  </compilerArgs>
+                  <!--
+                    JMH generates /META-INF/BenchmarkList from an annotation
+                    processor. Java 23 stopped auto-discovering processors on
+                    the classpath, so the path is declared explicitly.
+                  -->
+                  <annotationProcessorPaths>
+                    <path>
+                      <groupId>org.openjdk.jmh</groupId>
+                      <artifactId>jmh-generator-annprocess</artifactId>
+                      <version>${jmh.version}</version>
+                    </path>
+                  </annotationProcessorPaths>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>build-helper-maven-plugin</artifactId>
+            <version>${build.helper.version}</version>
+            <executions>
+              <execution>
+                <id>add-jmh-source</id>
+                <phase>generate-test-sources</phase>
+                <goals>
+                  <goal>add-test-source</goal>
+                </goals>
+                <configuration>
+                  <sources>
+                    <source>src/jmh/java</source>
+                  </sources>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <version>${maven.surefire.version}</version>
+            <configuration>
+              <skipTests>true</skipTests>
+            </configuration>
+          </plugin>
+
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <version>${exec.plugin.version}</version>
+            <configuration>
+              <!--
+                Must be the JVM Maven itself is running on. A bare "java"
+                resolves through PATH, which can be an older JDK than the one
+                that compiled the benchmarks; JMH then forks and every run dies
+                with UnsupportedClassVersionError while the summary table just
+                comes out empty.
+              -->
+              <executable>${java.home}/bin/java</executable>
+              <classpathScope>test</classpathScope>
+              <!--
+                JMH discovers benchmarks through /META-INF/BenchmarkList, which
+                the annotation processor writes into test-classes. Naming the
+                output directories explicitly keeps discovery working
+                regardless of how <classpath/> resolves them.
+              -->
+              <additionalClasspathElements>
+                <additionalClasspathElement>${project.build.testOutputDirectory}</additionalClasspathElement>
+                <additionalClasspathElement>${project.build.outputDirectory}</additionalClasspathElement>
+              </additionalClasspathElements>
+              <arguments>
+                <argument>-classpath</argument>
+                <classpath/>
+                <argument>org.openjdk.jmh.Main</argument>
+                <argument>-rf</argument>
+                <argument>json</argument>
+                <argument>-rff</argument>
+                <argument>${project.build.directory}/jmh-result.json</argument>
+              </arguments>
+            </configuration>
           </plugin>
         </plugins>
       </build>
