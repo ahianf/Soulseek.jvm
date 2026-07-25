@@ -20,6 +20,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
+import java.net.SocketTimeoutException;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
@@ -56,6 +57,21 @@ public class SocketConnection implements Connection {
 
     /** Slowest monitor tick, matching the original watchdog cadence. */
     private static final int MAX_MONITOR_INTERVAL_MILLIS = 250;
+
+    /**
+     * How often a blocked read returns so the loop can check cancellation.
+     *
+     * <p>Set as {@code SO_TIMEOUT}. A timeout expiry leaves the socket usable
+     * and loses no bytes, which is what lets a transfer be cancelled without
+     * tearing down the connection carrying it. Interrupting the reader cannot
+     * do this: the JDK closes the socket when a virtual thread blocked in
+     * {@code Socket} read is interrupted.
+     *
+     * <p>This is no longer tied to the inactivity timeout. Since the periodic
+     * monitor took over inactivity detection, the socket timeout is free to be
+     * purely a cancellation poll interval.
+     */
+    private static final int CANCELLATION_POLL_MILLIS = 250;
 
     private final UUID id = UUID.randomUUID();
     private final CopyOnWriteArrayList<ConnectionEventListener<Void>> connectedListeners = new CopyOnWriteArrayList<>();
@@ -102,7 +118,7 @@ public class SocketConnection implements Connection {
 
         try {
             this.options.getConfigureSocket().configure(this.tcpClient.getClient());
-            setSocketTimeout(this.options.getInactivityTimeout());
+            setSocketTimeout(CANCELLATION_POLL_MILLIS);
 
             if (this.tcpClient.isConnected()) {
                 state = ConnectionState.CONNECTED;
@@ -540,7 +556,22 @@ public class SocketConnection implements Connection {
                 long bytesRemaining = length - totalBytesRead;
                 int bytesToRead = bytesRemaining >= buffer.length ? buffer.length : (int) bytesRemaining;
                 int bytesGranted = Math.min(bytesToRead, await(governor.grantAsync(bytesToRead, cancellationSignal)));
-                int bytesRead = await(stream.readAsync(buffer, 0, bytesGranted, cancellationSignal));
+
+                int bytesRead;
+                try {
+                    bytesRead = await(stream.readAsync(buffer, 0, bytesGranted, cancellationSignal));
+                } catch (SocketTimeoutException timeout) {
+                    // No data inside the poll window. This is the cancellation
+                    // check point: the socket is untouched and no bytes were
+                    // lost, so the loop can simply go round again. Report a
+                    // zero transfer first so the caller returns the rate-limit
+                    // tokens it granted for an attempt that moved nothing.
+                    if (reporter != null) {
+                        reporter.report(bytesToRead, bytesGranted, 0);
+                    }
+                    continue;
+                }
+
                 if (bytesRead == 0) {
                     throw new ConnectionException("Remote connection closed");
                 }
@@ -651,11 +682,15 @@ public class SocketConnection implements Connection {
     }
 
     private void setSocketTimeout(int timeout) throws IOException {
-        tcpClient.getClient().setSoTimeout(timeout <= 0 ? 0 : timeout);
+        tcpClient.getClient().setSoTimeout(timeout);
     }
 
     private void setStreamTimeouts() throws IOException {
-        stream.setReadTimeout(options.getInactivityTimeout());
+        // The read timeout is the cancellation poll interval, not the
+        // inactivity budget; the periodic monitor owns inactivity now.
+        stream.setReadTimeout(CANCELLATION_POLL_MILLIS);
+        // SO_TIMEOUT does not apply to writes in Java, so this stays
+        // informational; write cancellation is checked between chunks.
         stream.setWriteTimeout(options.getInactivityTimeout());
     }
 

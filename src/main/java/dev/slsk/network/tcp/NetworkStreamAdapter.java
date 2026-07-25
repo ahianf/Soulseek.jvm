@@ -109,26 +109,29 @@ final class NetworkStreamAdapter implements NetworkStream {
         }
     }
 
+    /**
+     * Observes cancellation without touching the socket.
+     *
+     * <p>This used to close the socket, because a blocking stream call cannot
+     * be aborted from another thread and the port needed cancellation to take
+     * effect promptly. The cost was that cancelling one transfer tore down the
+     * connection carrying it.
+     *
+     * <p>Interrupting the reader is not an alternative: interrupting a virtual
+     * thread blocked in {@code java.net.Socket} read closes the socket too — the
+     * JDK throws {@code SocketException: Closed by interrupt} and the socket is
+     * unusable afterwards. Measured, not assumed.
+     *
+     * <p>What does work is a bounded {@code SO_TIMEOUT}. The read returns
+     * {@link java.net.SocketTimeoutException} periodically with the socket
+     * intact and no bytes lost, and {@code SocketConnection.readInternal} uses
+     * that as its cancellation check point. So this method now only marks the
+     * future; the loop above it does the aborting.
+     */
     private <T> CompletableFuture<T> observeCancellation(CompletableFuture<T> operation, CancellationSignal token) {
-        // A blocking InputStream/OutputStream call cannot be interrupted; cancelling the
-        // future alone leaves the socket read parked until some other layer closes it.
-        // Close the socket here so cancellation aborts the in-flight I/O on its own. This
-        // matches the port's model in which a cancelled transfer/message read tears the
-        // connection down; close() is idempotent with the owning connection's disconnect.
-        CancellationSubscription registration = token.register(() -> {
-            operation.cancel(false);
-            closeQuietly();
-        });
+        CancellationSubscription registration = token.register(() -> operation.cancel(false));
         operation.whenComplete((ignored, exception) -> registration.close());
         return operation;
-    }
-
-    private void closeQuietly() {
-        try {
-            socket.close();
-        } catch (IOException ignored) {
-            // Best-effort abort of the blocked read/write.
-        }
     }
 
     private static <T> CompletableFuture<T> cancelledFuture() {

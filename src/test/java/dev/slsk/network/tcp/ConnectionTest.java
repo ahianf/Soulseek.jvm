@@ -76,8 +76,12 @@ class ConnectionTest {
 
         try (SocketConnection connection = new SocketConnection(ENDPOINT, options, client)) {
             assertSame(client.socket, configured.get());
-            assertEquals(1_000, client.socket.getSoTimeout());
-            assertEquals(1_000, stream.readTimeout);
+            // The read timeout is the cancellation poll interval, deliberately
+            // decoupled from the inactivity timeout (1_000 here): the periodic
+            // monitor owns inactivity, and a bounded SO_TIMEOUT is what lets a
+            // read be abandoned without closing the socket. See goal 2.2.
+            assertEquals(250, client.socket.getSoTimeout());
+            assertEquals(250, stream.readTimeout);
             assertEquals(1_000, stream.writeTimeout);
             assertEquals(ConnectionState.CONNECTED, connection.getState());
             assertSame(options, connection.getOptions());
@@ -133,7 +137,9 @@ class ConnectionTest {
         assertEquals(List.of(ConnectionState.CONNECTING, ConnectionState.CONNECTED), states);
         assertEquals(1, connected.get());
         assertEquals(ConnectionState.CONNECTED, connection.getState());
-        assertEquals(-1, stream.readTimeout);
+        // Read timeout is the cancellation poll interval regardless of the
+        // connection's inactivity setting (-1, disabled, for this connection).
+        assertEquals(250, stream.readTimeout);
         assertEquals(-1, stream.writeTimeout);
         connection.close();
     }
