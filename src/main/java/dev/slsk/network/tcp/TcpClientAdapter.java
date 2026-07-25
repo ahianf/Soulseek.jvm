@@ -129,7 +129,9 @@ final class TcpClientAdapter implements TcpClient {
         byte[] buffer = new byte[1024];
 
         try {
-            await(connectAsync(proxyAddress, proxyPort));
+            // The proxy handshake already runs on its own virtual thread, so
+            // it connects directly rather than dispatching and blocking.
+            socket.connect(new InetSocketAddress(proxyAddress, proxyPort));
             NetworkStream stream = getStream();
 
             byte[] auth = usingCredentials
@@ -248,19 +250,19 @@ final class TcpClientAdapter implements TcpClient {
         }
     }
 
-    private static byte[] read(NetworkStream stream, byte[] buffer, int length, CancellationSignal cancellationSignal) {
-        int bytesRead = await(stream.readAsync(buffer, 0, length, cancellationSignal));
+    private static byte[] read(NetworkStream stream, byte[] buffer, int length, CancellationSignal cancellationSignal)
+            throws IOException {
+        cancellationSignal.throwIfCancellationRequested();
+        int bytesRead = stream.read(buffer, 0, length);
         byte[] result = new byte[bytesRead];
         System.arraycopy(buffer, 0, result, 0, bytesRead);
         return result;
     }
 
-    private static void write(NetworkStream stream, byte[] data, CancellationSignal cancellationSignal) {
-        await(stream.writeAsync(data, 0, data.length, cancellationSignal));
-    }
-
-    private static <T> T await(CompletableFuture<T> future) {
-        return future.join();
+    private static void write(NetworkStream stream, byte[] data, CancellationSignal cancellationSignal)
+            throws IOException {
+        cancellationSignal.throwIfCancellationRequested();
+        stream.write(data, 0, data.length);
     }
 
     private static void addAll(List<Byte> list, byte[] bytes) {

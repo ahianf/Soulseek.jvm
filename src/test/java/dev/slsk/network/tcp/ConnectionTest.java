@@ -299,8 +299,13 @@ class ConnectionTest {
     @DisplayName("Read failures disconnect and preserve timeout/cancellation")
     void readMapsFailures() throws Exception {
         assertReadFailure(new IOException("broken"), ConnectionReadException.class);
-        assertReadFailure(new TimeoutException("late"), TimeoutException.class);
         assertReadFailure(new CancellationException("cancelled"), CancellationException.class);
+        // A TimeoutException can no longer originate in the stream: a blocking
+        // read reports a lapsed deadline as SocketTimeoutException, which the
+        // read loop treats as its cancellation check point rather than a
+        // failure. The governor is the remaining source, and readInternal must
+        // still pass it through untranslated.
+        assertGovernorFailurePassesThrough(new TimeoutException("late"), TimeoutException.class);
 
         FakeStream eof = new FakeStream();
         eof.readCounts.add(0);
@@ -370,7 +375,6 @@ class ConnectionTest {
     @DisplayName("Write failures disconnect and preserve timeout/cancellation")
     void writeMapsFailures() throws Exception {
         assertWriteFailure(new IOException("broken"), ConnectionWriteException.class);
-        assertWriteFailure(new TimeoutException("late"), TimeoutException.class);
         assertWriteFailure(new CancellationException("cancelled"), CancellationException.class);
     }
 
@@ -432,6 +436,24 @@ class ConnectionTest {
         if (failure instanceof ConnectionReadException) {
             assertSame(cause, failure.getCause());
         }
+        assertEquals(ConnectionState.DISCONNECTED, connection.getState());
+        connection.close();
+    }
+
+    private static void assertGovernorFailurePassesThrough(Exception cause, Class<? extends Throwable> expected)
+            throws Exception {
+        FakeStream stream = new FakeStream();
+        stream.readBytes = new byte[] {1, 2, 3};
+        SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), new FakeTcpClient(stream, true));
+
+        Throwable failure = futureFailure(connection.readAsync(
+                3,
+                java.io.OutputStream.nullOutputStream(),
+                (requestedBytes, token) -> CompletableFuture.failedFuture(cause),
+                null,
+                null));
+
+        assertTrue(expected.isInstance(failure), "expected " + expected + " but got " + failure);
         assertEquals(ConnectionState.DISCONNECTED, connection.getState());
         connection.close();
     }
@@ -640,32 +662,46 @@ class ConnectionTest {
         }
 
         @Override
-        public CompletableFuture<Integer> readAsync(
-                byte[] buffer, int offset, int size, CancellationSignal cancellationSignal) {
+        public int read(byte[] buffer, int offset, int size) throws IOException {
             readSizes.add(size);
             if (readFailure != null) {
-                return CompletableFuture.failedFuture(readFailure);
+                throw asIoException(readFailure);
             }
             int available = readBytes.length - readPosition;
             int count = readCounts.isEmpty() ? Math.min(size, available) : readCounts.remove();
             count = Math.min(count, Math.min(size, available));
             System.arraycopy(readBytes, readPosition, buffer, offset, count);
             readPosition += count;
-            return CompletableFuture.completedFuture(count);
+            return count;
         }
 
         @Override
-        public CompletableFuture<Void> writeAsync(
-                byte[] buffer, int offset, int size, CancellationSignal cancellationSignal) {
+        public void write(byte[] buffer, int offset, int size) throws IOException {
             if (writeFailure != null) {
-                return CompletableFuture.failedFuture(writeFailure);
+                throw asIoException(writeFailure);
             }
             List<Byte> bytes = new ArrayList<>();
             for (byte value : Arrays.copyOfRange(buffer, offset, offset + size)) {
                 bytes.add(value);
             }
             writes.add(bytes);
-            return writeFutures.isEmpty() ? CompletableFuture.completedFuture(null) : writeFutures.remove();
+            if (!writeFutures.isEmpty()) {
+                // Preserved so tests can still stall or fail a write; the
+                // future is now awaited here rather than handed upward.
+                writeFutures.remove().join();
+            }
+        }
+
+        /**
+         * Rethrows unchecked failures unchanged so tests can assert on their
+         * type, and wraps checked non-IO ones, since the blocking contract only
+         * permits IOException.
+         */
+        private static IOException asIoException(Exception failure) {
+            if (failure instanceof RuntimeException unchecked) {
+                throw unchecked;
+            }
+            return failure instanceof IOException io ? io : new IOException(failure);
         }
 
         @Override

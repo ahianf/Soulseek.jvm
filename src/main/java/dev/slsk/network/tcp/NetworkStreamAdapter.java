@@ -4,16 +4,11 @@
 
 package dev.slsk.network.tcp;
 
-import dev.slsk.CancellationSignal;
-import dev.slsk.CancellationSubscription;
-import dev.slsk.common.NetworkExecutor;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 
 /**
  * Pass-through implementation of {@link NetworkStream} over a socket.
@@ -54,48 +49,18 @@ final class NetworkStreamAdapter implements NetworkStream {
     }
 
     @Override
-    public CompletableFuture<Integer> readAsync(
-            byte[] buffer, int offset, int size, CancellationSignal cancellationSignal) {
+    public int read(byte[] buffer, int offset, int size) throws IOException {
         Objects.requireNonNull(buffer, "buffer");
         Objects.checkFromIndexSize(offset, size, buffer.length);
-        CancellationSignal token = Objects.requireNonNull(cancellationSignal, "cancellationSignal");
-        if (token.isCancellationRequested()) {
-            return cancelledFuture();
-        }
-        return observeCancellation(
-                NetworkExecutor.supplyAsync(() -> {
-                    token.throwIfCancellationRequested();
-                    try {
-                        int bytesRead = inputStream.read(buffer, offset, size);
-                        token.throwIfCancellationRequested();
-                        return bytesRead < 0 ? 0 : bytesRead;
-                    } catch (IOException exception) {
-                        throw new CompletionException(exception);
-                    }
-                }),
-                token);
+        int bytesRead = inputStream.read(buffer, offset, size);
+        return bytesRead < 0 ? 0 : bytesRead;
     }
 
     @Override
-    public CompletableFuture<Void> writeAsync(
-            byte[] buffer, int offset, int size, CancellationSignal cancellationSignal) {
+    public void write(byte[] buffer, int offset, int size) throws IOException {
         Objects.requireNonNull(buffer, "buffer");
         Objects.checkFromIndexSize(offset, size, buffer.length);
-        CancellationSignal token = Objects.requireNonNull(cancellationSignal, "cancellationSignal");
-        if (token.isCancellationRequested()) {
-            return cancelledFuture();
-        }
-        return observeCancellation(
-                NetworkExecutor.runAsync(() -> {
-                    token.throwIfCancellationRequested();
-                    try {
-                        outputStream.write(buffer, offset, size);
-                        token.throwIfCancellationRequested();
-                    } catch (IOException exception) {
-                        throw new CompletionException(exception);
-                    }
-                }),
-                token);
+        outputStream.write(buffer, offset, size);
     }
 
     @Override
@@ -107,36 +72,5 @@ final class NetworkStreamAdapter implements NetworkStream {
         if (timeout <= 0 && timeout != -1) {
             throw new IllegalArgumentException("Timeout must be positive or -1");
         }
-    }
-
-    /**
-     * Observes cancellation without touching the socket.
-     *
-     * <p>This used to close the socket, because a blocking stream call cannot
-     * be aborted from another thread and the port needed cancellation to take
-     * effect promptly. The cost was that cancelling one transfer tore down the
-     * connection carrying it.
-     *
-     * <p>Interrupting the reader is not an alternative: interrupting a virtual
-     * thread blocked in {@code java.net.Socket} read closes the socket too — the
-     * JDK throws {@code SocketException: Closed by interrupt} and the socket is
-     * unusable afterwards. Measured, not assumed.
-     *
-     * <p>What does work is a bounded {@code SO_TIMEOUT}. The read returns
-     * {@link java.net.SocketTimeoutException} periodically with the socket
-     * intact and no bytes lost, and {@code SocketConnection.readInternal} uses
-     * that as its cancellation check point. So this method now only marks the
-     * future; the loop above it does the aborting.
-     */
-    private <T> CompletableFuture<T> observeCancellation(CompletableFuture<T> operation, CancellationSignal token) {
-        CancellationSubscription registration = token.register(() -> operation.cancel(false));
-        operation.whenComplete((ignored, exception) -> registration.close());
-        return operation;
-    }
-
-    private static <T> CompletableFuture<T> cancelledFuture() {
-        CompletableFuture<T> future = new CompletableFuture<>();
-        future.cancel(false);
-        return future;
     }
 }

@@ -559,7 +559,11 @@ public class SocketConnection implements Connection {
 
                 int bytesRead;
                 try {
-                    bytesRead = await(stream.readAsync(buffer, 0, bytesGranted, cancellationSignal));
+                    // Called directly on this thread. It used to be dispatched
+                    // onto a second virtual thread that this one then blocked
+                    // on, which bought nothing: both threads were doing the
+                    // same read.
+                    bytesRead = stream.read(buffer, 0, bytesGranted);
                 } catch (SocketTimeoutException timeout) {
                     // No data inside the poll window. This is the cancellation
                     // check point: the socket is untouched and no bytes were
@@ -635,7 +639,7 @@ public class SocketConnection implements Connection {
                 if (bytesRead < 0) {
                     bytesRead = 0;
                 }
-                await(stream.writeAsync(buffer, 0, bytesRead, cancellationSignal));
+                stream.write(buffer, 0, bytesRead);
                 totalBytesWritten += bytesRead;
                 if (reporter != null) {
                     reporter.report(bytesToRead, bytesGranted, bytesRead);

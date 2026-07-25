@@ -390,34 +390,42 @@ class MessageConnectionTest {
         public void setWriteTimeout(int timeout) {}
 
         @Override
-        public synchronized CompletableFuture<Integer> readAsync(
-                byte[] buffer, int offset, int size, CancellationSignal cancellationSignal) {
-            if (blockReads) {
+        public int read(byte[] buffer, int offset, int size) throws IOException {
+            CompletableFuture<Integer> gate;
+            synchronized (this) {
+                if (!blockReads) {
+                    int count = Math.min(Math.min(size, maxRead), input.length - position);
+                    if (count <= 0) {
+                        return 0;
+                    }
+                    System.arraycopy(input, position, buffer, offset, count);
+                    position += count;
+                    return count;
+                }
                 blockedRead = new CompletableFuture<>();
-                return blockedRead;
+                gate = blockedRead;
             }
-            int count = Math.min(Math.min(size, maxRead), input.length - position);
-            if (count <= 0) {
-                return CompletableFuture.completedFuture(0);
+            // Blocked outside the monitor so close() can release it. A blocking
+            // read models a stalled peer directly now, where the async fake
+            // returned a never-completing future.
+            try {
+                return gate.join();
+            } catch (RuntimeException closed) {
+                throw new IOException("stream closed", closed);
             }
-            System.arraycopy(input, position, buffer, offset, count);
-            position += count;
-            return CompletableFuture.completedFuture(count);
         }
 
         @Override
-        public synchronized CompletableFuture<Void> writeAsync(
-                byte[] buffer, int offset, int size, CancellationSignal cancellationSignal) {
+        public synchronized void write(byte[] buffer, int offset, int size) throws IOException {
             if (tokenSeen != null) {
-                tokenSeen.set(cancellationSignal);
+                tokenSeen.set(CancellationSignal.none());
             }
             if (writeFailure != null) {
-                return CompletableFuture.failedFuture(writeFailure);
+                throw writeFailure instanceof IOException io ? io : new IOException(writeFailure);
             }
             for (byte value : Arrays.copyOfRange(buffer, offset, offset + size)) {
                 written.add(value);
             }
-            return CompletableFuture.completedFuture(null);
         }
 
         private byte[] writtenBytes() {

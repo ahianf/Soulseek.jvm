@@ -209,25 +209,31 @@ class ConnectionFactoryTest {
         public void setWriteTimeout(int timeout) {}
 
         @Override
-        public synchronized CompletableFuture<Integer> readAsync(
-                byte[] buffer, int offset, int size, CancellationSignal cancellationSignal) {
-            int count = Math.min(size, input.length - position);
-            if (count == 0) {
+        public int read(byte[] buffer, int offset, int size) throws java.io.IOException {
+            CompletableFuture<Integer> gate;
+            synchronized (this) {
+                int count = Math.min(size, input.length - position);
+                if (count != 0) {
+                    System.arraycopy(input, position, buffer, offset, count);
+                    position += count;
+                    return count;
+                }
                 pendingRead = new CompletableFuture<>();
-                return pendingRead;
+                gate = pendingRead;
             }
-            System.arraycopy(input, position, buffer, offset, count);
-            position += count;
-            return CompletableFuture.completedFuture(count);
+            // Blocked outside the monitor so close() can release it.
+            try {
+                return gate.join();
+            } catch (RuntimeException closed) {
+                throw new java.io.IOException("stream closed", closed);
+            }
         }
 
         @Override
-        public synchronized CompletableFuture<Void> writeAsync(
-                byte[] buffer, int offset, int size, CancellationSignal cancellationSignal) {
+        public synchronized void write(byte[] buffer, int offset, int size) {
             for (byte value : Arrays.copyOfRange(buffer, offset, offset + size)) {
                 written.add(value);
             }
-            return CompletableFuture.completedFuture(null);
         }
 
         @Override

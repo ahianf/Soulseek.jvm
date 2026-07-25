@@ -10,7 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationController;
 import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.ProxyException;
 import java.io.InputStream;
@@ -158,19 +157,14 @@ class TcpAdapterTest {
                 assertThrows(IllegalArgumentException.class, () -> stream.setWriteTimeout(-2));
 
                 byte[] received = new byte[3];
-                assertEquals(
-                        3,
-                        stream.readAsync(received, 0, received.length, CancellationSignal.none())
-                                .get(3, TimeUnit.SECONDS));
+                assertEquals(3, stream.read(received, 0, received.length));
                 assertArrayEquals(new byte[] {1, 2, 3}, received);
-                stream.writeAsync(new byte[] {4, 5}, 0, 2, CancellationSignal.none())
-                        .get(3, TimeUnit.SECONDS);
+                stream.write(new byte[] {4, 5}, 0, 2);
 
-                try (CancellationController source = new CancellationController()) {
-                    source.cancel();
-                    CompletableFuture<Integer> cancelled = stream.readAsync(new byte[1], 0, 1, source.getSignal());
-                    assertTrue(cancelled.isCancelled());
-                }
+                // The stream no longer observes cancellation itself: it blocks,
+                // and SocketConnection.readInternal owns the cancellation loop
+                // using the read timeout as its check point.
+                stream.setReadTimeout(50);
             }
             peer.get(3, TimeUnit.SECONDS);
         }
