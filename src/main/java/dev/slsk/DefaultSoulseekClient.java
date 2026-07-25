@@ -11,7 +11,6 @@ import static dev.slsk.ClientSupport.requireText;
 import static dev.slsk.ClientSupport.unwrap;
 
 import dev.slsk.common.CommonUtils;
-import dev.slsk.common.Constants;
 import dev.slsk.common.DefaultWaiter;
 import dev.slsk.common.IOAdapter;
 import dev.slsk.common.NetworkExecutor;
@@ -66,10 +65,8 @@ import dev.slsk.exceptions.TransferSizeMismatchException;
 import dev.slsk.exceptions.TransferStreamException;
 import dev.slsk.exceptions.UserEndpointCacheException;
 import dev.slsk.exceptions.UserEndpointException;
-import dev.slsk.exceptions.UserNotFoundException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.messaging.MessageCode;
-import dev.slsk.messaging.handlers.BrowseResponseConnection;
 import dev.slsk.messaging.handlers.DefaultDistributedMessageHandler;
 import dev.slsk.messaging.handlers.DefaultPeerMessageHandler;
 import dev.slsk.messaging.handlers.DefaultServerMessageHandler;
@@ -82,10 +79,8 @@ import dev.slsk.messaging.handlers.ServerMessageHandler;
 import dev.slsk.messaging.handlers.ServerMessageHandlerClient;
 import dev.slsk.messaging.messages.AcknowledgePrivateMessageCommand;
 import dev.slsk.messaging.messages.AcknowledgePrivilegeNotificationCommand;
-import dev.slsk.messaging.messages.BrowseRequest;
 import dev.slsk.messaging.messages.CheckPrivilegesRequest;
 import dev.slsk.messaging.messages.FolderContentsRequest;
-import dev.slsk.messaging.messages.GivePrivilegesCommand;
 import dev.slsk.messaging.messages.LoginRequest;
 import dev.slsk.messaging.messages.LoginResponse;
 import dev.slsk.messaging.messages.NewPassword;
@@ -104,18 +99,11 @@ import dev.slsk.messaging.messages.StartPublicChatCommand;
 import dev.slsk.messaging.messages.StopPublicChatCommand;
 import dev.slsk.messaging.messages.TransferRequest;
 import dev.slsk.messaging.messages.TransferResponse;
-import dev.slsk.messaging.messages.UnwatchUserCommand;
 import dev.slsk.messaging.messages.UploadDenied;
 import dev.slsk.messaging.messages.UploadFailed;
 import dev.slsk.messaging.messages.UserAddressRequest;
 import dev.slsk.messaging.messages.UserAddressResponse;
-import dev.slsk.messaging.messages.UserInfoRequest;
-import dev.slsk.messaging.messages.UserPrivilegesRequest;
 import dev.slsk.messaging.messages.UserSearchRequest;
-import dev.slsk.messaging.messages.UserStatisticsRequest;
-import dev.slsk.messaging.messages.UserStatusRequest;
-import dev.slsk.messaging.messages.WatchUserRequest;
-import dev.slsk.messaging.messages.WatchUserResponse;
 import dev.slsk.messaging.messages.WishlistSearchRequest;
 import dev.slsk.network.ConnectionFactory;
 import dev.slsk.network.DefaultConnectionFactory;
@@ -244,6 +232,9 @@ final class DefaultSoulseekClient
     /** Chat rooms, split out of this class; see RoomRegistry. */
     private final RoomRegistry rooms;
 
+    /** User info, presence and browsing, split out; see UserDirectory. */
+    private final UserDirectory users;
+
     private final Map<Event, CopyOnWriteArrayList<SoulseekClientEventListener<?>>> listeners =
             new EnumMap<>(Event.class);
 
@@ -320,6 +311,7 @@ final class DefaultSoulseekClient
         // share it.
         this.scheduler = new Scheduler("soulseek-client-timer");
         this.rooms = new RoomRegistry(this);
+        this.users = new UserDirectory(this);
         this.waiter = waiter == null ? new DefaultWaiter(this.options.getMessageTimeout(), scheduler) : waiter;
         this.tokenFactory = tokenFactory == null ? new TokenFactory(this.options.getStartingToken()) : tokenFactory;
         this.searchSemaphore = new Semaphore(this.options.getMaximumConcurrentSearches());
@@ -1007,122 +999,6 @@ final class DefaultSoulseekClient
                 defaultToken(cancellationSignal));
     }
 
-    private CompletableFuture<BrowseResponse> browseOperation(String requestedUsername) {
-        return browseOperation(requestedUsername, null, CancellationSignal.none());
-    }
-
-    private CompletableFuture<BrowseResponse> browseOperation(String requestedUsername, BrowseOptions browseOptions) {
-        return browseOperation(requestedUsername, browseOptions, CancellationSignal.none());
-    }
-
-    private CompletableFuture<BrowseResponse> browseOperation(
-            String requestedUsername, CancellationSignal cancellationSignal) {
-        return browseOperation(requestedUsername, null, cancellationSignal);
-    }
-
-    private CompletableFuture<BrowseResponse> browseOperation(
-            String requestedUsername, BrowseOptions browseOptions, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
-        requireLoggedIn("browse");
-        BrowseOptions operationOptions = browseOptions == null ? new BrowseOptions() : browseOptions;
-        CancellationSignal token = defaultToken(cancellationSignal);
-        WaitKey browseWaitKey = new WaitKey(MessageCode.Peer.BROWSE_RESPONSE, requestedUsername);
-        CompletableFuture<BrowseResponse> browseWait;
-        CompletableFuture<BrowseResponseConnection> connectionWait;
-        try {
-            browseWait = waiter.waitIndefinitelyAsync(browseWaitKey, BrowseResponse.class, token);
-            connectionWait = waiter.waitAsync(
-                    new WaitKey(Constants.WaitKey.BROWSE_RESPONSE_CONNECTION, requestedUsername),
-                    BrowseResponseConnection.class,
-                    operationOptions.getResponseTimeout(),
-                    token);
-        } catch (Throwable failure) {
-            return mapClientFailure(
-                    CompletableFuture.failedFuture(failure),
-                    "Failed to browse user " + requestedUsername + ": ",
-                    UserOfflineException.class);
-        }
-
-        CompletableFuture<BrowseResponseConnection> setup = getUserEndpointOperation(requestedUsername, token)
-                .thenCompose(endpoint ->
-                        peerConnectionManager.getOrAddMessageConnectionAsync(requestedUsername, endpoint, token))
-                .thenCompose(connection -> invokeMessageWrite(connection, new BrowseRequest(), token))
-                .thenCompose(ignored -> connectionWait);
-        CompletableFuture<BrowseResponse> operation = setup.handle((responseConnection, failure) -> {
-                    if (failure == null) {
-                        return responseConnection;
-                    }
-                    Throwable cause = unwrap(failure);
-                    waiter.fail(browseWaitKey, cause);
-                    throw new CompletionException(cause);
-                })
-                .thenCompose(responseConnection -> {
-                    MessageConnection connection = responseConnection.connection();
-                    long responseLength = responseConnection.eventData().getLength() - 4;
-                    AtomicBoolean completionEventFired = new AtomicBoolean();
-                    dev.slsk.network.MessageConnectionEventListener<dev.slsk.network.MessageDataEvent>
-                            progressListener = (sender, eventData) -> updateBrowseProgress(
-                            requestedUsername,
-                            operationOptions,
-                            eventData.getCurrentLength(),
-                            eventData.getTotalLength(),
-                            completionEventFired);
-                    connection.addDisconnectedListener((sender, eventData) -> waiter.fail(
-                            browseWaitKey,
-                            new ConnectionException(
-                                    "Peer connection disconnected " + "unexpectedly: " + eventData.getMessage(),
-                                    eventData.getException())));
-                    connection.addMessageDataReadListener(progressListener);
-                    updateBrowseProgress(requestedUsername, operationOptions, 0, responseLength, completionEventFired);
-                    return browseWait.thenApply(response -> {
-                        connection.removeMessageDataReadListener(progressListener);
-                        if (!completionEventFired.get()) {
-                            updateBrowseProgress(
-                                    requestedUsername,
-                                    operationOptions,
-                                    responseLength,
-                                    responseLength,
-                                    completionEventFired);
-                        }
-                        return response;
-                    });
-                });
-        return mapClientFailure(
-                operation, "Failed to browse user " + requestedUsername + ": ", UserOfflineException.class);
-    }
-
-    private CompletableFuture<Void> connectToUserOperation(String requestedUsername) {
-        return connectToUserOperation(requestedUsername, false, CancellationSignal.none());
-    }
-
-    private CompletableFuture<Void> connectToUserOperation(String requestedUsername, boolean invalidateCache) {
-        return connectToUserOperation(requestedUsername, invalidateCache, CancellationSignal.none());
-    }
-
-    private CompletableFuture<Void> connectToUserOperation(
-            String requestedUsername, CancellationSignal cancellationSignal) {
-        return connectToUserOperation(requestedUsername, false, cancellationSignal);
-    }
-
-    private CompletableFuture<Void> connectToUserOperation(
-            String requestedUsername, boolean invalidateCache, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
-        requireLoggedIn("connect to other users");
-        CancellationSignal token = defaultToken(cancellationSignal);
-        CompletableFuture<Void> operation = getUserEndpointOperation(requestedUsername, token)
-                .thenCompose(endpoint -> {
-                    if (invalidateCache
-                            && peerConnectionManager.tryInvalidateMessageConnectionCache(requestedUsername)) {
-                        diagnostic.debug("Invalidated message connection cache for " + requestedUsername);
-                    }
-                    return peerConnectionManager
-                            .getOrAddMessageConnectionAsync(requestedUsername, endpoint, token)
-                            .thenApply(ignored -> null);
-                });
-        return mapClientFailure(
-                operation, "Failed to connect to user " + requestedUsername + ": ", UserOfflineException.class);
-    }
-
     private CompletableFuture<Integer> getPrivilegesOperation() {
         return getPrivilegesOperation(CancellationSignal.none());
     }
@@ -1232,126 +1108,6 @@ final class DefaultSoulseekClient
                 operation,
                 "Failed to fetch place in queue for download of " + filename + " from " + requestedUsername + ": ",
                 UserOfflineException.class);
-    }
-
-    private CompletableFuture<Boolean> getUserPrivilegedOperation(String requestedUsername) {
-        return getUserPrivilegedOperation(requestedUsername, CancellationSignal.none());
-    }
-
-    private CompletableFuture<Boolean> getUserPrivilegedOperation(
-            String requestedUsername, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
-        requireLoggedIn("check user privileges");
-        return executeCorrelatedServerRequest(
-                new UserPrivilegesRequest(requestedUsername),
-                new WaitKey(MessageCode.Server.USER_PRIVILEGES, requestedUsername),
-                Boolean.class,
-                cancellationSignal,
-                "Failed to get privileges for " + requestedUsername + ": ",
-                UserOfflineException.class);
-    }
-
-    private CompletableFuture<UserStatistics> getUserStatisticsOperation(String requestedUsername) {
-        return getUserStatisticsOperation(requestedUsername, CancellationSignal.none());
-    }
-
-    private CompletableFuture<UserStatistics> getUserStatisticsOperation(
-            String requestedUsername, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
-        requireLoggedIn("fetch user statistics");
-        return executeCorrelatedServerRequest(
-                new UserStatisticsRequest(requestedUsername),
-                new WaitKey(MessageCode.Server.GET_USER_STATS, requestedUsername),
-                UserStatistics.class,
-                cancellationSignal,
-                "Failed to retrieve statistics for user " + username + ": ");
-    }
-
-    private CompletableFuture<UserInfo> getUserInfoOperation(String requestedUsername) {
-        return getUserInfoOperation(requestedUsername, CancellationSignal.none());
-    }
-
-    private CompletableFuture<UserInfo> getUserInfoOperation(
-            String requestedUsername, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
-        requireLoggedIn("fetch user information");
-        CancellationSignal token = defaultToken(cancellationSignal);
-        CompletableFuture<UserInfo> infoWait;
-        try {
-            infoWait = waiter.waitAsync(
-                    new WaitKey(MessageCode.Peer.INFO_RESPONSE, requestedUsername), UserInfo.class, null, token);
-        } catch (Throwable failure) {
-            return mapClientFailure(
-                    CompletableFuture.failedFuture(failure),
-                    "Failed to retrieve information for user " + requestedUsername + ": ",
-                    UserOfflineException.class);
-        }
-        CompletableFuture<UserInfo> operation = getUserEndpointOperation(requestedUsername, token)
-                .thenCompose(endpoint ->
-                        peerConnectionManager.getOrAddMessageConnectionAsync(requestedUsername, endpoint, token))
-                .thenCompose(connection -> invokeMessageWrite(connection, new UserInfoRequest(), token))
-                .thenCompose(ignored -> infoWait);
-        return mapClientFailure(
-                operation,
-                "Failed to retrieve information for user " + requestedUsername + ": ",
-                UserOfflineException.class);
-    }
-
-    private CompletableFuture<UserStatus> getUserStatusOperation(String requestedUsername) {
-        return getUserStatusOperation(requestedUsername, CancellationSignal.none());
-    }
-
-    private CompletableFuture<UserStatus> getUserStatusOperation(
-            String requestedUsername, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
-        requireLoggedIn("fetch user status");
-        return executeCorrelatedServerRequest(
-                new UserStatusRequest(requestedUsername),
-                new WaitKey(MessageCode.Server.GET_STATUS, requestedUsername),
-                UserStatus.class,
-                cancellationSignal,
-                "Failed to retrieve status for user " + username + ": ",
-                UserOfflineException.class);
-    }
-
-    private CompletableFuture<UserData> watchUserOperation(String requestedUsername) {
-        return watchUserOperation(requestedUsername, CancellationSignal.none());
-    }
-
-    private CompletableFuture<UserData> watchUserOperation(
-            String requestedUsername, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
-        requireLoggedIn("add users");
-        return executeCorrelatedServerRequest(
-                        new WatchUserRequest(requestedUsername),
-                        new WaitKey(MessageCode.Server.WATCH_USER, requestedUsername),
-                        WatchUserResponse.class,
-                        cancellationSignal,
-                        "Failed to watch user " + requestedUsername + ": ",
-                        UserNotFoundException.class)
-                .thenApply(response -> {
-                    if (!response.isExists()) {
-                        throw new UserNotFoundException("User " + requestedUsername + " does not exist");
-                    }
-                    return response.getUserData();
-                });
-    }
-
-    private CompletableFuture<Void> grantUserPrivilegesOperation(String requestedUsername, int days) {
-        return grantUserPrivilegesOperation(requestedUsername, days, CancellationSignal.none());
-    }
-
-    private CompletableFuture<Void> grantUserPrivilegesOperation(
-            String requestedUsername, int days, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
-        if (days <= 0) {
-            throw new IllegalArgumentException("The number of days granted must be greater than zero");
-        }
-        requireLoggedIn("grant user privileges");
-        return writeServerAsync(
-                new GivePrivilegesCommand(requestedUsername, days),
-                cancellationSignal,
-                "Failed to grant " + days + " days of privileges to " + requestedUsername + ": ");
     }
 
     private CompletableFuture<Long> pingServerOperation() {
@@ -2198,20 +1954,6 @@ final class DefaultSoulseekClient
         return writeServerAsync(new StopPublicChatCommand(), cancellationSignal, "Failed to stop public chat: ");
     }
 
-    private CompletableFuture<Void> unwatchUserOperation(String requestedUsername) {
-        return unwatchUserOperation(requestedUsername, CancellationSignal.none());
-    }
-
-    private CompletableFuture<Void> unwatchUserOperation(
-            String requestedUsername, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
-        requireLoggedIn("add users");
-        return writeServerAsync(
-                new UnwatchUserCommand(requestedUsername),
-                cancellationSignal,
-                "Failed to unwatch user " + requestedUsername + ": ");
-    }
-
     public CompletableFuture<Void> acknowledgePrivateMessageOperation(int privateMessageId) {
         return acknowledgePrivateMessageOperation(privateMessageId, CancellationSignal.none());
     }
@@ -2861,30 +2603,6 @@ final class DefaultSoulseekClient
             throw new IllegalStateException("The server connection must be connected and logged in to " + operation
                     + " (currently: " + state + ")");
         }
-    }
-
-    private void updateBrowseProgress(
-            String requestedUsername,
-            BrowseOptions operationOptions,
-            long bytesTransferred,
-            long size,
-            AtomicBoolean completionEventFired) {
-        BrowseProgressUpdatedEvent eventData =
-                new BrowseProgressUpdatedEvent(requestedUsername, bytesTransferred, size);
-        if (Double.compare(eventData.getPercentComplete(), 100.0) == 0) {
-            completionEventFired.set(true);
-        }
-        if (operationOptions.getProgressUpdated() != null) {
-            operationOptions
-                    .getProgressUpdated()
-                    .onProgressUpdated(new BrowseProgress(
-                            eventData.getUsername(),
-                            eventData.getBytesTransferred(),
-                            eventData.getBytesRemaining(),
-                            eventData.getPercentComplete(),
-                            eventData.getSize()));
-        }
-        raise(Event.BROWSE_PROGRESS_UPDATED, eventData);
     }
 
     private CompletableFuture<Void> connectInternalAsync(
@@ -4587,6 +4305,48 @@ final class DefaultSoulseekClient
     // ---- ClientContext, the seam the components delegate through ----------
 
     @Override
+    public CompletableFuture<java.net.InetSocketAddress> resolveUserEndpoint(
+            String username, CancellationSignal cancellationSignal) {
+        return getUserEndpointOperation(username, cancellationSignal);
+    }
+
+    @Override
+    public CompletableFuture<Void> writeToPeer(
+            MessageConnection connection, OutgoingMessage message, CancellationSignal cancellationSignal) {
+        return invokeMessageWrite(connection, message, cancellationSignal);
+    }
+
+    @Override
+    public void reportBrowseProgress(
+            String requestedUsername,
+            BrowseOptions operationOptions,
+            long bytesTransferred,
+            long size,
+            AtomicBoolean completionEventFired) {
+        BrowseProgressUpdatedEvent eventData =
+                new BrowseProgressUpdatedEvent(requestedUsername, bytesTransferred, size);
+        if (Double.compare(eventData.getPercentComplete(), 100.0) == 0) {
+            completionEventFired.set(true);
+        }
+        if (operationOptions.getProgressUpdated() != null) {
+            operationOptions
+                    .getProgressUpdated()
+                    .onProgressUpdated(new BrowseProgress(
+                            eventData.getUsername(),
+                            eventData.getBytesTransferred(),
+                            eventData.getBytesRemaining(),
+                            eventData.getPercentComplete(),
+                            eventData.getSize()));
+        }
+        raise(Event.BROWSE_PROGRESS_UPDATED, eventData);
+    }
+
+    @Override
+    public String getLoggedInUsername() {
+        return username;
+    }
+
+    @Override
     public SoulseekClientOptions getClientOptions() {
         return options;
     }
@@ -4666,22 +4426,22 @@ final class DefaultSoulseekClient
 
     @Override
     public BrowseResponse browse(String username) {
-        return unwrapped(browseOperation(username));
+        return unwrapped(users.browse(username));
     }
 
     @Override
     public BrowseResponse browse(String username, BrowseOptions options) {
-        return unwrapped(browseOperation(username, options));
+        return unwrapped(users.browse(username, options));
     }
 
     @Override
     public BrowseResponse browse(String username, CancellationSignal cancellationSignal) {
-        return unwrapped(browseOperation(username, cancellationSignal));
+        return unwrapped(users.browse(username, cancellationSignal));
     }
 
     @Override
     public BrowseResponse browse(String username, BrowseOptions options, CancellationSignal cancellationSignal) {
-        return unwrapped(browseOperation(username, options, cancellationSignal));
+        return unwrapped(users.browse(username, options, cancellationSignal));
     }
 
     @Override
@@ -4717,22 +4477,22 @@ final class DefaultSoulseekClient
 
     @Override
     public void connectToUser(String username) {
-        unwrapped(connectToUserOperation(username));
+        unwrapped(users.connectToUser(username));
     }
 
     @Override
     public void connectToUser(String username, boolean invalidateCache) {
-        unwrapped(connectToUserOperation(username, invalidateCache));
+        unwrapped(users.connectToUser(username, invalidateCache));
     }
 
     @Override
     public void connectToUser(String username, CancellationSignal cancellationSignal) {
-        unwrapped(connectToUserOperation(username, cancellationSignal));
+        unwrapped(users.connectToUser(username, cancellationSignal));
     }
 
     @Override
     public void connectToUser(String username, boolean invalidateCache, CancellationSignal cancellationSignal) {
-        unwrapped(connectToUserOperation(username, invalidateCache, cancellationSignal));
+        unwrapped(users.connectToUser(username, invalidateCache, cancellationSignal));
     }
 
     @Override
@@ -4819,52 +4579,52 @@ final class DefaultSoulseekClient
 
     @Override
     public UserInfo getUserInfo(String username) {
-        return unwrapped(getUserInfoOperation(username));
+        return unwrapped(users.getUserInfo(username));
     }
 
     @Override
     public UserInfo getUserInfo(String username, CancellationSignal cancellationSignal) {
-        return unwrapped(getUserInfoOperation(username, cancellationSignal));
+        return unwrapped(users.getUserInfo(username, cancellationSignal));
     }
 
     @Override
     public Boolean getUserPrivileged(String username) {
-        return unwrapped(getUserPrivilegedOperation(username));
+        return unwrapped(users.getUserPrivileged(username));
     }
 
     @Override
     public Boolean getUserPrivileged(String username, CancellationSignal cancellationSignal) {
-        return unwrapped(getUserPrivilegedOperation(username, cancellationSignal));
+        return unwrapped(users.getUserPrivileged(username, cancellationSignal));
     }
 
     @Override
     public UserStatistics getUserStatistics(String username) {
-        return unwrapped(getUserStatisticsOperation(username));
+        return unwrapped(users.getUserStatistics(username));
     }
 
     @Override
     public UserStatistics getUserStatistics(String username, CancellationSignal cancellationSignal) {
-        return unwrapped(getUserStatisticsOperation(username, cancellationSignal));
+        return unwrapped(users.getUserStatistics(username, cancellationSignal));
     }
 
     @Override
     public UserStatus getUserStatus(String username) {
-        return unwrapped(getUserStatusOperation(username));
+        return unwrapped(users.getUserStatus(username));
     }
 
     @Override
     public UserStatus getUserStatus(String username, CancellationSignal cancellationSignal) {
-        return unwrapped(getUserStatusOperation(username, cancellationSignal));
+        return unwrapped(users.getUserStatus(username, cancellationSignal));
     }
 
     @Override
     public void grantUserPrivileges(String username, int days) {
-        unwrapped(grantUserPrivilegesOperation(username, days));
+        unwrapped(users.grantUserPrivileges(username, days));
     }
 
     @Override
     public void grantUserPrivileges(String username, int days, CancellationSignal cancellationSignal) {
-        unwrapped(grantUserPrivilegesOperation(username, days, cancellationSignal));
+        unwrapped(users.grantUserPrivileges(username, days, cancellationSignal));
     }
 
     @Override
@@ -5019,22 +4779,22 @@ final class DefaultSoulseekClient
 
     @Override
     public void unwatchUser(String username) {
-        unwrapped(unwatchUserOperation(username));
+        unwrapped(users.unwatchUser(username));
     }
 
     @Override
     public void unwatchUser(String username, CancellationSignal cancellationSignal) {
-        unwrapped(unwatchUserOperation(username, cancellationSignal));
+        unwrapped(users.unwatchUser(username, cancellationSignal));
     }
 
     @Override
     public UserData watchUser(String username) {
-        return unwrapped(watchUserOperation(username));
+        return unwrapped(users.watchUser(username));
     }
 
     @Override
     public UserData watchUser(String username, CancellationSignal cancellationSignal) {
-        return unwrapped(watchUserOperation(username, cancellationSignal));
+        return unwrapped(users.watchUser(username, cancellationSignal));
     }
 
     private static <T> T await(CompletableFuture<T> future) {

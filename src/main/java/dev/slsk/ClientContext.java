@@ -86,6 +86,64 @@ interface ClientContext {
             Class<? extends Throwable>... preservedFailures);
 
     /**
+     * Returns this client's own logged-in username, or {@code null}.
+     *
+     * <p>Needed because several failure messages name the logged-in user rather
+     * than the user the request was about — {@code "Failed to retrieve
+     * statistics for user <me>"}. That reads like a bug and is not: upstream
+     * interpolates {@code Username} at exactly these sites, so behavioural
+     * parity means keeping it.
+     *
+     * @return the logged-in username
+     */
+    String getLoggedInUsername();
+
+    /** Returns the peer connection manager. */
+    dev.slsk.network.PeerConnectionManager getPeerConnectionManager();
+
+    /**
+     * Resolves a user's endpoint, honouring the endpoint cache.
+     *
+     * @param username the user to resolve
+     * @param cancellationSignal the cancellation signal
+     * @return a future containing the endpoint
+     */
+    CompletableFuture<java.net.InetSocketAddress> resolveUserEndpoint(
+            String username, CancellationSignal cancellationSignal);
+
+    /**
+     * Raises a browse-progress event.
+     *
+     * <p>Event listener lists belong to the client, so a component reports
+     * progress rather than raising it directly.
+     *
+     * @param username the user being browsed
+     * @param options the browse options in force
+     * @param currentBytes bytes received so far
+     * @param totalBytes bytes expected
+     * @param completed set once the browse has finished
+     */
+    void reportBrowseProgress(
+            String username,
+            dev.slsk.options.BrowseOptions options,
+            long currentBytes,
+            long totalBytes,
+            java.util.concurrent.atomic.AtomicBoolean completed);
+
+    /**
+     * Writes a message to an arbitrary peer connection.
+     *
+     * @param connection the connection to write to
+     * @param message the message to send
+     * @param cancellationSignal the cancellation signal
+     * @return a future completing when the write lands
+     */
+    CompletableFuture<Void> writeToPeer(
+            dev.slsk.network.MessageConnection connection,
+            OutgoingMessage message,
+            CancellationSignal cancellationSignal);
+
+    /**
      * Writes a message to the server connection.
      *
      * @param message the message to send

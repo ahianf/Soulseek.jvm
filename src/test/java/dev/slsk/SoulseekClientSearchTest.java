@@ -295,7 +295,11 @@ class SoulseekClientSearchTest {
                         .cancellation(thirdSource.getSignal())
                         .build()));
 
-        waitUntil(() -> fixture.client.getSearches().get(53) != null);
+        // Registration and the QUEUED transition are separate steps, and the
+        // caller is on its own thread, so wait for the state rather than for
+        // the entry to appear.
+        waitUntil(() -> fixture.client.getSearches().get(53) != null
+                && fixture.client.getSearches().get(53).getState() == SearchState.QUEUED);
         assertEquals(SearchState.QUEUED, fixture.client.getSearches().get(53).getState());
         firstSource.cancel();
         assertInstanceOf(CancellationException.class, completionCause(() -> first.join()));

@@ -61,6 +61,10 @@ class SoulseekClientApiTest {
                 "writeToServer",
                 "executeCorrelatedCommand",
                 "executeCorrelatedRequest",
+                "writeToPeer",
+                "resolveUserEndpoint",
+                "reportBrowseProgress",
+                "getLoggedInUsername",
                 "acknowledgePrivateMessageOperation",
                 "acknowledgePrivilegeNotificationOperation",
                 "getUserEndpointOperation");
