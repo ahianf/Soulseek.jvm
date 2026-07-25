@@ -415,7 +415,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         if (!client.getOptions().isAutoAcknowledgePrivilegeNotifications()) {
             return completed();
         }
-        return client.acknowledgePrivilegeNotificationAsync(notification.getId(), CancellationSignal.none());
+        return client.acknowledgePrivilegeNotificationOperation(notification.getId(), CancellationSignal.none());
     }
 
     private CompletableFuture<Void> handlePrivateMessage(byte[] message) {
@@ -424,7 +424,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         if (!client.getOptions().isAutoAcknowledgePrivateMessages()) {
             return completed();
         }
-        return client.acknowledgePrivateMessageAsync(notification.getId(), CancellationSignal.none());
+        return client.acknowledgePrivateMessageOperation(notification.getId(), CancellationSignal.none());
     }
 
     private CompletableFuture<Void> handleNetInfo(byte[] message) {

@@ -5,7 +5,6 @@
 package dev.slsk;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -13,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import dev.slsk.common.WaitKey;
 import dev.slsk.common.Waiter;
 import dev.slsk.diagnostics.DiagnosticLevel;
+import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.UserEndpointCacheException;
 import dev.slsk.exceptions.UserEndpointException;
 import dev.slsk.exceptions.UserOfflineException;
@@ -28,8 +28,8 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class SoulseekClientEndpointTest {
@@ -39,10 +39,10 @@ class SoulseekClientEndpointTest {
     void validatesArgumentsAndLoginState() {
         Fixture fixture = new Fixture(null);
         for (String bad : new String[] {null, "", " ", "\t"}) {
-            assertThrows(IllegalArgumentException.class, () -> fixture.client.getUserEndpointAsync(bad));
+            assertThrows(IllegalArgumentException.class, () -> fixture.client.getUserEndpoint(bad));
         }
         fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
-        assertThrows(IllegalStateException.class, () -> fixture.client.getUserEndpointAsync("alice"));
+        assertThrows(IllegalStateException.class, () -> fixture.client.getUserEndpoint("alice"));
         fixture.close();
     }
 
@@ -53,8 +53,7 @@ class SoulseekClientEndpointTest {
         CancellationController source = new CancellationController();
         CancellationSignal token = source.getSignal();
 
-        InetSocketAddress actual =
-                fixture.client.getUserEndpointAsync("alice", token).join();
+        InetSocketAddress actual = fixture.client.getUserEndpoint("alice", token);
 
         assertEquals(ENDPOINT, actual);
         assertEquals(new WaitKey(MessageCode.Server.GET_PEER_ADDRESS, "alice"), fixture.waiter.key);
@@ -74,20 +73,23 @@ class SoulseekClientEndpointTest {
         UserOfflineException offline = new UserOfflineException("offline");
         fixture.waiter.result = CompletableFuture.completedFuture(
                 new UserAddressResponse("alice", new InetSocketAddress("0.0.0.0", 0)));
-        assertInstanceOf(UserOfflineException.class, failureOf(fixture.client.getUserEndpointAsync("alice")));
+        assertInstanceOf(UserOfflineException.class, failureOf(() -> fixture.client.getUserEndpoint("alice")));
 
         TimeoutException timeout = new TimeoutException("timed out");
         fixture.waiter.result = CompletableFuture.failedFuture(timeout);
-        assertSame(timeout, failureOf(fixture.client.getUserEndpointAsync("bob")));
+        assertSame(
+                timeout,
+                assertInstanceOf(NoResponseException.class, failureOf(() -> fixture.client.getUserEndpoint("bob")))
+                        .getCause());
 
         CancellationException cancellation = new CancellationException("cancelled");
         fixture.waiter.result = CompletableFuture.failedFuture(cancellation);
-        assertSame(cancellation, failureOf(fixture.client.getUserEndpointAsync("carol")));
+        assertSame(cancellation, failureOf(() -> fixture.client.getUserEndpoint("carol")));
 
         RuntimeException expected = new RuntimeException("wait failed");
         fixture.waiter.synchronousFailure = expected;
         UserEndpointException mapped =
-                assertInstanceOf(UserEndpointException.class, failureOf(fixture.client.getUserEndpointAsync("dave")));
+                assertInstanceOf(UserEndpointException.class, failureOf(() -> fixture.client.getUserEndpoint("dave")));
         assertSame(expected, mapped.getCause());
         fixture.close();
     }
@@ -98,14 +100,14 @@ class SoulseekClientEndpointTest {
         cache.value = CacheLookupResult.found(ENDPOINT);
         Fixture fixture = new Fixture(cache);
 
-        assertEquals(ENDPOINT, fixture.client.getUserEndpointAsync("alice").join());
+        assertEquals(ENDPOINT, fixture.client.getUserEndpoint("alice"));
         assertEquals(0, fixture.connection.writes);
         assertEquals(0, fixture.waiter.registrations);
 
         cache.value = CacheLookupResult.notFound();
         InetSocketAddress second = new InetSocketAddress(InetAddress.getLoopbackAddress(), 46002);
         fixture.waiter.result = CompletableFuture.completedFuture(new UserAddressResponse("bob", second));
-        assertEquals(second, fixture.client.getUserEndpointAsync("bob").join());
+        assertEquals(second, fixture.client.getUserEndpoint("bob"));
         assertEquals("bob", cache.updatedUsername);
         assertEquals(second, cache.updatedEndpoint);
         fixture.close();
@@ -118,7 +120,7 @@ class SoulseekClientEndpointTest {
         readCache.readFailure = readFailure;
         Fixture readFixture = new Fixture(readCache);
         UserEndpointCacheException readMapped =
-                assertThrows(UserEndpointCacheException.class, () -> readFixture.client.getUserEndpointAsync("alice"));
+                assertThrows(UserEndpointCacheException.class, () -> readFixture.client.getUserEndpoint("alice"));
         assertSame(readFailure, readMapped.getCause());
         readFixture.close();
 
@@ -129,7 +131,7 @@ class SoulseekClientEndpointTest {
         Fixture updateFixture = new Fixture(updateCache);
         updateFixture.waiter.result = CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT));
         UserEndpointCacheException updateMapped = assertInstanceOf(
-                UserEndpointCacheException.class, failureOf(updateFixture.client.getUserEndpointAsync("alice")));
+                UserEndpointCacheException.class, failureOf(() -> updateFixture.client.getUserEndpoint("alice")));
         assertSame(updateFailure, updateMapped.getCause());
         updateFixture.close();
     }
@@ -142,16 +144,24 @@ class SoulseekClientEndpointTest {
         CompletableFuture<UserAddressResponse> response = new CompletableFuture<>();
         fixture.waiter.result = response;
 
-        CompletableFuture<InetSocketAddress> first = fixture.client.getUserEndpointAsync("alice");
-        CompletableFuture<InetSocketAddress> second = fixture.client.getUserEndpointAsync("alice");
+        // Blocking calls, so the two callers need threads of their own to be
+        // in flight at the same time. What is being asserted is unchanged: two
+        // independent requests, two registrations, both satisfied by one
+        // response.
+        java.util.concurrent.atomic.AtomicReference<InetSocketAddress> first = new AtomicReference<>();
+        java.util.concurrent.atomic.AtomicReference<InetSocketAddress> second = new AtomicReference<>();
+        Thread firstCaller = Thread.ofVirtual().start(() -> first.set(fixture.client.getUserEndpoint("alice")));
+        Thread secondCaller = Thread.ofVirtual().start(() -> second.set(fixture.client.getUserEndpoint("alice")));
 
-        assertFalse(first.isDone());
-        assertFalse(second.isDone());
+        awaitValue(() -> fixture.waiter.registrations == 2);
         assertEquals(2, fixture.connection.writes);
         assertEquals(2, fixture.waiter.registrations);
+
         response.complete(new UserAddressResponse("alice", ENDPOINT));
-        assertEquals(ENDPOINT, first.join());
-        assertEquals(ENDPOINT, second.join());
+        join(firstCaller);
+        join(secondCaller);
+        assertEquals(ENDPOINT, first.get());
+        assertEquals(ENDPOINT, second.get());
         fixture.close();
     }
 
@@ -162,12 +172,12 @@ class SoulseekClientEndpointTest {
         Fixture fixture = new Fixture(cache);
         fixture.waiter.result = CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT));
 
-        assertEquals(ENDPOINT, fixture.client.getUserEndpointAsync("alice").join());
+        assertEquals(ENDPOINT, fixture.client.getUserEndpoint("alice"));
         assertEquals(1, fixture.connection.writes);
 
         // The second caller reads the value the first stored rather than repeating the request.
         cache.value = CacheLookupResult.found(ENDPOINT);
-        assertEquals(ENDPOINT, fixture.client.getUserEndpointAsync("alice").join());
+        assertEquals(ENDPOINT, fixture.client.getUserEndpoint("alice"));
         assertEquals(1, fixture.connection.writes);
 
         // The idle per-user semaphore is reclaimed, matching the source's periodic sweep.
@@ -183,27 +193,59 @@ class SoulseekClientEndpointTest {
         fixture.waiter.result = response;
         CancellationController firstSource = new CancellationController();
 
-        CompletableFuture<InetSocketAddress> first =
-                fixture.client.getUserEndpointAsync("alice", firstSource.getSignal());
-        CompletableFuture<InetSocketAddress> second =
-                fixture.client.getUserEndpointAsync("alice", CancellationSignal.none());
+        java.util.concurrent.atomic.AtomicReference<InetSocketAddress> second = new AtomicReference<>();
+        Thread firstCaller = Thread.ofVirtual().start(() -> {
+            try {
+                fixture.client.getUserEndpoint("alice", firstSource.getSignal());
+            } catch (RuntimeException cancelled) {
+                // Expected; this caller is the one being cancelled.
+            }
+        });
+        Thread secondCaller = Thread.ofVirtual()
+                .start(() -> second.set(fixture.client.getUserEndpoint("alice", CancellationSignal.none())));
 
+        awaitValue(() -> fixture.waiter.registrations == 2);
         firstSource.cancel();
         response.complete(new UserAddressResponse("alice", ENDPOINT));
 
-        assertEquals(ENDPOINT, second.join(), "an uncancelled caller must not inherit another caller's cancellation");
+        join(firstCaller);
+        join(secondCaller);
+        assertEquals(ENDPOINT, second.get(), "an uncancelled caller must not inherit another caller's cancellation");
         fixture.close();
     }
 
-    private static Throwable failureOf(CompletableFuture<?> future) {
-        try {
-            future.join();
-            throw new AssertionError("Expected operation to fail");
-        } catch (CompletionException exception) {
-            return exception.getCause();
-        } catch (CancellationException exception) {
-            return exception;
+    /** Waits for a condition the other caller thread will satisfy. */
+    private static void awaitValue(java.util.function.BooleanSupplier condition) {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+        while (!condition.getAsBoolean() && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
         }
+    }
+
+    private static void join(Thread thread) {
+        try {
+            thread.join(java.util.concurrent.TimeUnit.SECONDS.toMillis(5));
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("interrupted while awaiting a caller", interrupted);
+        }
+    }
+
+    /**
+     * Returns the failure a blocking call produced.
+     *
+     * <p>Took a future before the API became blocking; the calls now throw
+     * directly, so it takes the call itself.
+     */
+    private static Throwable failureOf(org.junit.jupiter.api.function.Executable body) {
+        try {
+            body.execute();
+        } catch (java.util.concurrent.CompletionException wrapped) {
+            return wrapped.getCause() == null ? wrapped : wrapped.getCause();
+        } catch (Throwable failure) {
+            return failure;
+        }
+        throw new AssertionError("Expected operation to fail");
     }
 
     private static SoulseekClientOptions options(UserEndpointCache cache) {

@@ -868,11 +868,11 @@ final class DefaultSoulseekClient
         return tokenFactory.nextToken();
     }
 
-    public CompletableFuture<Void> sendPrivateMessageAsync(String requestedUsername, String message) {
-        return sendPrivateMessageAsync(requestedUsername, message, CancellationSignal.none());
+    private CompletableFuture<Void> sendPrivateMessageOperation(String requestedUsername, String message) {
+        return sendPrivateMessageOperation(requestedUsername, message, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> sendPrivateMessageAsync(
+    private CompletableFuture<Void> sendPrivateMessageOperation(
             String requestedUsername, String message, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireNonEmpty(message, "message");
@@ -883,11 +883,11 @@ final class DefaultSoulseekClient
                 "Failed to send private message to user " + requestedUsername + ": ");
     }
 
-    public CompletableFuture<Void> addPrivateRoomMemberAsync(String roomName, String requestedUsername) {
-        return addPrivateRoomMemberAsync(roomName, requestedUsername, CancellationSignal.none());
+    private CompletableFuture<Void> addPrivateRoomMemberOperation(String roomName, String requestedUsername) {
+        return addPrivateRoomMemberOperation(roomName, requestedUsername, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> addPrivateRoomMemberAsync(
+    private CompletableFuture<Void> addPrivateRoomMemberOperation(
             String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(roomName, "roomName");
         requireText(requestedUsername, "username");
@@ -899,11 +899,11 @@ final class DefaultSoulseekClient
                 "Failed to add user " + requestedUsername + " as member of private room " + roomName + ": ");
     }
 
-    public CompletableFuture<Void> changePasswordAsync(String password) {
-        return changePasswordAsync(password, CancellationSignal.none());
+    private CompletableFuture<Void> changePasswordOperation(String password) {
+        return changePasswordOperation(password, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> changePasswordAsync(String password, CancellationSignal cancellationSignal) {
+    private CompletableFuture<Void> changePasswordOperation(String password, CancellationSignal cancellationSignal) {
         requireText(password, "password");
         requireLoggedIn("change a password");
         return executeCorrelatedServerRequest(
@@ -929,8 +929,8 @@ final class DefaultSoulseekClient
      * @param password the login password
      * @return the connection operation
      */
-    public CompletableFuture<Void> connectAsync(String requestedUsername, String password) {
-        return connectAsync(DEFAULT_ADDRESS, DEFAULT_PORT, requestedUsername, password, CancellationSignal.none());
+    private CompletableFuture<Void> connectOperation(String requestedUsername, String password) {
+        return connectOperation(DEFAULT_ADDRESS, DEFAULT_PORT, requestedUsername, password, CancellationSignal.none());
     }
 
     /**
@@ -941,9 +941,9 @@ final class DefaultSoulseekClient
      * @param cancellationSignal the cancellation signal
      * @return the connection operation
      */
-    public CompletableFuture<Void> connectAsync(
+    private CompletableFuture<Void> connectOperation(
             String requestedUsername, String password, CancellationSignal cancellationSignal) {
-        return connectAsync(DEFAULT_ADDRESS, DEFAULT_PORT, requestedUsername, password, cancellationSignal);
+        return connectOperation(DEFAULT_ADDRESS, DEFAULT_PORT, requestedUsername, password, cancellationSignal);
     }
 
     /**
@@ -955,9 +955,10 @@ final class DefaultSoulseekClient
      * @param password the login password
      * @return the connection operation
      */
-    public CompletableFuture<Void> connectAsync(
+    private CompletableFuture<Void> connectOperation(
             String requestedAddress, int requestedPort, String requestedUsername, String password) {
-        return connectAsync(requestedAddress, requestedPort, requestedUsername, password, CancellationSignal.none());
+        return connectOperation(
+                requestedAddress, requestedPort, requestedUsername, password, CancellationSignal.none());
     }
 
     /**
@@ -970,7 +971,7 @@ final class DefaultSoulseekClient
      * @param cancellationSignal the cancellation signal
      * @return the connection operation
      */
-    public CompletableFuture<Void> connectAsync(
+    private CompletableFuture<Void> connectOperation(
             String requestedAddress,
             int requestedPort,
             String requestedUsername,
@@ -1024,20 +1025,20 @@ final class DefaultSoulseekClient
                 defaultToken(cancellationSignal));
     }
 
-    public CompletableFuture<BrowseResponse> browseAsync(String requestedUsername) {
-        return browseAsync(requestedUsername, null, CancellationSignal.none());
+    private CompletableFuture<BrowseResponse> browseOperation(String requestedUsername) {
+        return browseOperation(requestedUsername, null, CancellationSignal.none());
     }
 
-    public CompletableFuture<BrowseResponse> browseAsync(String requestedUsername, BrowseOptions browseOptions) {
-        return browseAsync(requestedUsername, browseOptions, CancellationSignal.none());
+    private CompletableFuture<BrowseResponse> browseOperation(String requestedUsername, BrowseOptions browseOptions) {
+        return browseOperation(requestedUsername, browseOptions, CancellationSignal.none());
     }
 
-    public CompletableFuture<BrowseResponse> browseAsync(
+    private CompletableFuture<BrowseResponse> browseOperation(
             String requestedUsername, CancellationSignal cancellationSignal) {
-        return browseAsync(requestedUsername, null, cancellationSignal);
+        return browseOperation(requestedUsername, null, cancellationSignal);
     }
 
-    public CompletableFuture<BrowseResponse> browseAsync(
+    private CompletableFuture<BrowseResponse> browseOperation(
             String requestedUsername, BrowseOptions browseOptions, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireLoggedIn("browse");
@@ -1060,7 +1061,7 @@ final class DefaultSoulseekClient
                     UserOfflineException.class);
         }
 
-        CompletableFuture<BrowseResponseConnection> setup = getUserEndpointAsync(requestedUsername, token)
+        CompletableFuture<BrowseResponseConnection> setup = getUserEndpointOperation(requestedUsername, token)
                 .thenCompose(endpoint ->
                         peerConnectionManager.getOrAddMessageConnectionAsync(requestedUsername, endpoint, token))
                 .thenCompose(connection -> invokeMessageWrite(connection, new BrowseRequest(), token))
@@ -1108,24 +1109,25 @@ final class DefaultSoulseekClient
                 operation, "Failed to browse user " + requestedUsername + ": ", UserOfflineException.class);
     }
 
-    public CompletableFuture<Void> connectToUserAsync(String requestedUsername) {
-        return connectToUserAsync(requestedUsername, false, CancellationSignal.none());
+    private CompletableFuture<Void> connectToUserOperation(String requestedUsername) {
+        return connectToUserOperation(requestedUsername, false, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> connectToUserAsync(String requestedUsername, boolean invalidateCache) {
-        return connectToUserAsync(requestedUsername, invalidateCache, CancellationSignal.none());
+    private CompletableFuture<Void> connectToUserOperation(String requestedUsername, boolean invalidateCache) {
+        return connectToUserOperation(requestedUsername, invalidateCache, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> connectToUserAsync(String requestedUsername, CancellationSignal cancellationSignal) {
-        return connectToUserAsync(requestedUsername, false, cancellationSignal);
+    private CompletableFuture<Void> connectToUserOperation(
+            String requestedUsername, CancellationSignal cancellationSignal) {
+        return connectToUserOperation(requestedUsername, false, cancellationSignal);
     }
 
-    public CompletableFuture<Void> connectToUserAsync(
+    private CompletableFuture<Void> connectToUserOperation(
             String requestedUsername, boolean invalidateCache, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireLoggedIn("connect to other users");
         CancellationSignal token = defaultToken(cancellationSignal);
-        CompletableFuture<Void> operation = getUserEndpointAsync(requestedUsername, token)
+        CompletableFuture<Void> operation = getUserEndpointOperation(requestedUsername, token)
                 .thenCompose(endpoint -> {
                     if (invalidateCache
                             && peerConnectionManager.tryInvalidateMessageConnectionCache(requestedUsername)) {
@@ -1139,11 +1141,11 @@ final class DefaultSoulseekClient
                 operation, "Failed to connect to user " + requestedUsername + ": ", UserOfflineException.class);
     }
 
-    public CompletableFuture<Integer> getPrivilegesAsync() {
-        return getPrivilegesAsync(CancellationSignal.none());
+    private CompletableFuture<Integer> getPrivilegesOperation() {
+        return getPrivilegesOperation(CancellationSignal.none());
     }
 
-    public CompletableFuture<Integer> getPrivilegesAsync(CancellationSignal cancellationSignal) {
+    private CompletableFuture<Integer> getPrivilegesOperation(CancellationSignal cancellationSignal) {
         requireLoggedIn("check privileges");
         return executeCorrelatedServerRequest(
                 new CheckPrivilegesRequest(),
@@ -1153,11 +1155,11 @@ final class DefaultSoulseekClient
                 "Failed to get privileges: ");
     }
 
-    public CompletableFuture<RoomList> getRoomListAsync() {
-        return getRoomListAsync(CancellationSignal.none());
+    private CompletableFuture<RoomList> getRoomListOperation() {
+        return getRoomListOperation(CancellationSignal.none());
     }
 
-    public CompletableFuture<RoomList> getRoomListAsync(CancellationSignal cancellationSignal) {
+    private CompletableFuture<RoomList> getRoomListOperation(CancellationSignal cancellationSignal) {
         requireLoggedIn("fetch the list of chat rooms");
         return executeCorrelatedServerRequest(
                 new RoomListRequest(),
@@ -1167,22 +1169,23 @@ final class DefaultSoulseekClient
                 "Failed to fetch the list of chat rooms from the server: ");
     }
 
-    public CompletableFuture<List<Directory>> getDirectoryContentsAsync(
+    private CompletableFuture<List<Directory>> getDirectoryContentsOperation(
             String requestedUsername, String directoryName) {
-        return getDirectoryContentsAsync(requestedUsername, directoryName, null, CancellationSignal.none());
+        return getDirectoryContentsOperation(requestedUsername, directoryName, null, CancellationSignal.none());
     }
 
-    public CompletableFuture<List<Directory>> getDirectoryContentsAsync(
+    private CompletableFuture<List<Directory>> getDirectoryContentsOperation(
             String requestedUsername, String directoryName, int operationToken) {
-        return getDirectoryContentsAsync(requestedUsername, directoryName, operationToken, CancellationSignal.none());
+        return getDirectoryContentsOperation(
+                requestedUsername, directoryName, operationToken, CancellationSignal.none());
     }
 
-    public CompletableFuture<List<Directory>> getDirectoryContentsAsync(
+    private CompletableFuture<List<Directory>> getDirectoryContentsOperation(
             String requestedUsername, String directoryName, CancellationSignal cancellationSignal) {
-        return getDirectoryContentsAsync(requestedUsername, directoryName, null, cancellationSignal);
+        return getDirectoryContentsOperation(requestedUsername, directoryName, null, cancellationSignal);
     }
 
-    public CompletableFuture<List<Directory>> getDirectoryContentsAsync(
+    private CompletableFuture<List<Directory>> getDirectoryContentsOperation(
             String requestedUsername,
             String directoryName,
             Integer operationToken,
@@ -1208,7 +1211,7 @@ final class DefaultSoulseekClient
                     "Failed to retrieve directory contents for " + directoryName + " from " + requestedUsername + ": ",
                     UserOfflineException.class);
         }
-        CompletableFuture<List<Directory>> operation = getUserEndpointAsync(requestedUsername, token)
+        CompletableFuture<List<Directory>> operation = getUserEndpointOperation(requestedUsername, token)
                 .thenCompose(endpoint ->
                         peerConnectionManager.getOrAddMessageConnectionAsync(requestedUsername, endpoint, token))
                 .thenCompose(connection ->
@@ -1221,11 +1224,11 @@ final class DefaultSoulseekClient
                 UserOfflineException.class);
     }
 
-    public CompletableFuture<Integer> getDownloadPlaceInQueueAsync(String requestedUsername, String filename) {
-        return getDownloadPlaceInQueueAsync(requestedUsername, filename, CancellationSignal.none());
+    private CompletableFuture<Integer> getDownloadPlaceInQueueOperation(String requestedUsername, String filename) {
+        return getDownloadPlaceInQueueOperation(requestedUsername, filename, CancellationSignal.none());
     }
 
-    public CompletableFuture<Integer> getDownloadPlaceInQueueAsync(
+    private CompletableFuture<Integer> getDownloadPlaceInQueueOperation(
             String requestedUsername, String filename, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireText(filename, "filename");
@@ -1251,7 +1254,7 @@ final class DefaultSoulseekClient
                     "Failed to fetch place in queue for download of " + filename + " from " + requestedUsername + ": ",
                     UserOfflineException.class);
         }
-        CompletableFuture<Integer> operation = getUserEndpointAsync(requestedUsername, token)
+        CompletableFuture<Integer> operation = getUserEndpointOperation(requestedUsername, token)
                 .thenCompose(endpoint ->
                         peerConnectionManager.getOrAddMessageConnectionAsync(requestedUsername, endpoint, token))
                 .thenCompose(connection -> invokeMessageWrite(connection, new PlaceInQueueRequest(filename), token))
@@ -1263,19 +1266,19 @@ final class DefaultSoulseekClient
                 UserOfflineException.class);
     }
 
-    public CompletableFuture<RoomData> joinRoomAsync(String roomName) {
-        return joinRoomAsync(roomName, false, CancellationSignal.none());
+    private CompletableFuture<RoomData> joinRoomOperation(String roomName) {
+        return joinRoomOperation(roomName, false, CancellationSignal.none());
     }
 
-    public CompletableFuture<RoomData> joinRoomAsync(String roomName, boolean isPrivate) {
-        return joinRoomAsync(roomName, isPrivate, CancellationSignal.none());
+    private CompletableFuture<RoomData> joinRoomOperation(String roomName, boolean isPrivate) {
+        return joinRoomOperation(roomName, isPrivate, CancellationSignal.none());
     }
 
-    public CompletableFuture<RoomData> joinRoomAsync(String roomName, CancellationSignal cancellationSignal) {
-        return joinRoomAsync(roomName, false, cancellationSignal);
+    private CompletableFuture<RoomData> joinRoomOperation(String roomName, CancellationSignal cancellationSignal) {
+        return joinRoomOperation(roomName, false, cancellationSignal);
     }
 
-    public CompletableFuture<RoomData> joinRoomAsync(
+    private CompletableFuture<RoomData> joinRoomOperation(
             String roomName, boolean isPrivate, CancellationSignal cancellationSignal) {
         requireText(roomName, "roomName");
         requireLoggedIn("join a chat room");
@@ -1312,11 +1315,11 @@ final class DefaultSoulseekClient
                 NoResponseException.class);
     }
 
-    public CompletableFuture<Void> leaveRoomAsync(String roomName) {
-        return leaveRoomAsync(roomName, CancellationSignal.none());
+    private CompletableFuture<Void> leaveRoomOperation(String roomName) {
+        return leaveRoomOperation(roomName, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> leaveRoomAsync(String roomName, CancellationSignal cancellationSignal) {
+    private CompletableFuture<Void> leaveRoomOperation(String roomName, CancellationSignal cancellationSignal) {
         requireText(roomName, "roomName");
         requireLoggedIn("leave a chat room");
         CancellationSignal token = defaultToken(cancellationSignal);
@@ -1347,11 +1350,11 @@ final class DefaultSoulseekClient
         return mapClientFailure(operation, "Failed to leave chat room " + roomName + ": ", NoResponseException.class);
     }
 
-    public CompletableFuture<Boolean> getUserPrivilegedAsync(String requestedUsername) {
-        return getUserPrivilegedAsync(requestedUsername, CancellationSignal.none());
+    private CompletableFuture<Boolean> getUserPrivilegedOperation(String requestedUsername) {
+        return getUserPrivilegedOperation(requestedUsername, CancellationSignal.none());
     }
 
-    public CompletableFuture<Boolean> getUserPrivilegedAsync(
+    private CompletableFuture<Boolean> getUserPrivilegedOperation(
             String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireLoggedIn("check user privileges");
@@ -1364,11 +1367,11 @@ final class DefaultSoulseekClient
                 UserOfflineException.class);
     }
 
-    public CompletableFuture<UserStatistics> getUserStatisticsAsync(String requestedUsername) {
-        return getUserStatisticsAsync(requestedUsername, CancellationSignal.none());
+    private CompletableFuture<UserStatistics> getUserStatisticsOperation(String requestedUsername) {
+        return getUserStatisticsOperation(requestedUsername, CancellationSignal.none());
     }
 
-    public CompletableFuture<UserStatistics> getUserStatisticsAsync(
+    private CompletableFuture<UserStatistics> getUserStatisticsOperation(
             String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireLoggedIn("fetch user statistics");
@@ -1380,11 +1383,11 @@ final class DefaultSoulseekClient
                 "Failed to retrieve statistics for user " + username + ": ");
     }
 
-    public CompletableFuture<UserInfo> getUserInfoAsync(String requestedUsername) {
-        return getUserInfoAsync(requestedUsername, CancellationSignal.none());
+    private CompletableFuture<UserInfo> getUserInfoOperation(String requestedUsername) {
+        return getUserInfoOperation(requestedUsername, CancellationSignal.none());
     }
 
-    public CompletableFuture<UserInfo> getUserInfoAsync(
+    private CompletableFuture<UserInfo> getUserInfoOperation(
             String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireLoggedIn("fetch user information");
@@ -1399,7 +1402,7 @@ final class DefaultSoulseekClient
                     "Failed to retrieve information for user " + requestedUsername + ": ",
                     UserOfflineException.class);
         }
-        CompletableFuture<UserInfo> operation = getUserEndpointAsync(requestedUsername, token)
+        CompletableFuture<UserInfo> operation = getUserEndpointOperation(requestedUsername, token)
                 .thenCompose(endpoint ->
                         peerConnectionManager.getOrAddMessageConnectionAsync(requestedUsername, endpoint, token))
                 .thenCompose(connection -> invokeMessageWrite(connection, new UserInfoRequest(), token))
@@ -1410,11 +1413,11 @@ final class DefaultSoulseekClient
                 UserOfflineException.class);
     }
 
-    public CompletableFuture<UserStatus> getUserStatusAsync(String requestedUsername) {
-        return getUserStatusAsync(requestedUsername, CancellationSignal.none());
+    private CompletableFuture<UserStatus> getUserStatusOperation(String requestedUsername) {
+        return getUserStatusOperation(requestedUsername, CancellationSignal.none());
     }
 
-    public CompletableFuture<UserStatus> getUserStatusAsync(
+    private CompletableFuture<UserStatus> getUserStatusOperation(
             String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireLoggedIn("fetch user status");
@@ -1427,11 +1430,12 @@ final class DefaultSoulseekClient
                 UserOfflineException.class);
     }
 
-    public CompletableFuture<UserData> watchUserAsync(String requestedUsername) {
-        return watchUserAsync(requestedUsername, CancellationSignal.none());
+    private CompletableFuture<UserData> watchUserOperation(String requestedUsername) {
+        return watchUserOperation(requestedUsername, CancellationSignal.none());
     }
 
-    public CompletableFuture<UserData> watchUserAsync(String requestedUsername, CancellationSignal cancellationSignal) {
+    private CompletableFuture<UserData> watchUserOperation(
+            String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireLoggedIn("add users");
         return executeCorrelatedServerRequest(
@@ -1449,11 +1453,11 @@ final class DefaultSoulseekClient
                 });
     }
 
-    public CompletableFuture<Void> grantUserPrivilegesAsync(String requestedUsername, int days) {
-        return grantUserPrivilegesAsync(requestedUsername, days, CancellationSignal.none());
+    private CompletableFuture<Void> grantUserPrivilegesOperation(String requestedUsername, int days) {
+        return grantUserPrivilegesOperation(requestedUsername, days, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> grantUserPrivilegesAsync(
+    private CompletableFuture<Void> grantUserPrivilegesOperation(
             String requestedUsername, int days, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         if (days <= 0) {
@@ -1466,11 +1470,11 @@ final class DefaultSoulseekClient
                 "Failed to grant " + days + " days of privileges to " + requestedUsername + ": ");
     }
 
-    public CompletableFuture<Long> pingServerAsync() {
-        return pingServerAsync(CancellationSignal.none());
+    private CompletableFuture<Long> pingServerOperation() {
+        return pingServerOperation(CancellationSignal.none());
     }
 
-    public CompletableFuture<Long> pingServerAsync(CancellationSignal cancellationSignal) {
+    private CompletableFuture<Long> pingServerOperation(CancellationSignal cancellationSignal) {
         requireLoggedIn("send a ping");
         CancellationSignal token = defaultToken(cancellationSignal);
         CompletableFuture<Void> wait;
@@ -1493,8 +1497,8 @@ final class DefaultSoulseekClient
      * @param patch the option substitutions
      * @return whether reconnecting is required for full effect
      */
-    public CompletableFuture<Boolean> reconfigureOptionsAsync(SoulseekClientOptionsPatch patch) {
-        return reconfigureOptionsAsync(patch, CancellationSignal.none());
+    private CompletableFuture<Boolean> reconfigureOptionsOperation(SoulseekClientOptionsPatch patch) {
+        return reconfigureOptionsOperation(patch, CancellationSignal.none());
     }
 
     /**
@@ -1504,7 +1508,7 @@ final class DefaultSoulseekClient
      * @param cancellationSignal the cancellation signal
      * @return whether reconnecting is required for full effect
      */
-    public CompletableFuture<Boolean> reconfigureOptionsAsync(
+    private CompletableFuture<Boolean> reconfigureOptionsOperation(
             SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
         Objects.requireNonNull(patch, "patch");
         boolean addressChanged = patch.getListenIpAddress() != null
@@ -1533,32 +1537,33 @@ final class DefaultSoulseekClient
     }
 
     /** Downloads a remote file to a local file. */
-    public CompletableFuture<Transfer> downloadAsync(
+    private CompletableFuture<Transfer> downloadOperation(
             String requestedUsername, String remoteFilename, String localFilename) {
-        return downloadAsync(
+        return downloadOperation(
                 requestedUsername, remoteFilename, localFilename, null, 0, null, null, CancellationSignal.none());
     }
 
     /** Downloads a remote file with an expected size. */
-    public CompletableFuture<Transfer> downloadAsync(
+    private CompletableFuture<Transfer> downloadOperation(
             String requestedUsername, String remoteFilename, String localFilename, Long size) {
-        return downloadAsync(
+        return downloadOperation(
                 requestedUsername, remoteFilename, localFilename, size, 0, null, null, CancellationSignal.none());
     }
 
     /** Downloads a remote file with cancellation. */
-    public CompletableFuture<Transfer> downloadAsync(
+    private CompletableFuture<Transfer> downloadOperation(
             String requestedUsername,
             String remoteFilename,
             String localFilename,
             CancellationSignal cancellationSignal) {
-        return downloadAsync(requestedUsername, remoteFilename, localFilename, null, 0, null, null, cancellationSignal);
+        return downloadOperation(
+                requestedUsername, remoteFilename, localFilename, null, 0, null, null, cancellationSignal);
     }
 
     /** Downloads a remote file from a resume offset. */
-    public CompletableFuture<Transfer> downloadAsync(
+    private CompletableFuture<Transfer> downloadOperation(
             String requestedUsername, String remoteFilename, String localFilename, Long size, long startOffset) {
-        return downloadAsync(
+        return downloadOperation(
                 requestedUsername,
                 remoteFilename,
                 localFilename,
@@ -1570,14 +1575,14 @@ final class DefaultSoulseekClient
     }
 
     /** Downloads a remote file with a specific token. */
-    public CompletableFuture<Transfer> downloadAsync(
+    private CompletableFuture<Transfer> downloadOperation(
             String requestedUsername,
             String remoteFilename,
             String localFilename,
             Long size,
             long startOffset,
             Integer token) {
-        return downloadAsync(
+        return downloadOperation(
                 requestedUsername,
                 remoteFilename,
                 localFilename,
@@ -1589,7 +1594,7 @@ final class DefaultSoulseekClient
     }
 
     /** Downloads a remote file using supplied transfer options. */
-    public CompletableFuture<Transfer> downloadAsync(
+    private CompletableFuture<Transfer> downloadOperation(
             String requestedUsername,
             String remoteFilename,
             String localFilename,
@@ -1597,7 +1602,7 @@ final class DefaultSoulseekClient
             long startOffset,
             Integer token,
             TransferOptions transferOptions) {
-        return downloadAsync(
+        return downloadOperation(
                 requestedUsername,
                 remoteFilename,
                 localFilename,
@@ -1609,7 +1614,7 @@ final class DefaultSoulseekClient
     }
 
     /** Downloads a remote file to a local file. */
-    public CompletableFuture<Transfer> downloadAsync(
+    private CompletableFuture<Transfer> downloadOperation(
             String requestedUsername,
             String remoteFilename,
             String localFilename,
@@ -1646,37 +1651,37 @@ final class DefaultSoulseekClient
     }
 
     /** Downloads data to a stream created by a factory. */
-    public CompletableFuture<Transfer> downloadAsync(
+    private CompletableFuture<Transfer> downloadOperation(
             String requestedUsername, String remoteFilename, DownloadStreamFactory outputStreamFactory) {
-        return downloadAsync(
+        return downloadOperation(
                 requestedUsername, remoteFilename, outputStreamFactory, null, 0, null, null, CancellationSignal.none());
     }
 
     /** Downloads stream data with an expected size. */
-    public CompletableFuture<Transfer> downloadAsync(
+    private CompletableFuture<Transfer> downloadOperation(
             String requestedUsername, String remoteFilename, DownloadStreamFactory outputStreamFactory, Long size) {
-        return downloadAsync(
+        return downloadOperation(
                 requestedUsername, remoteFilename, outputStreamFactory, size, 0, null, null, CancellationSignal.none());
     }
 
     /** Downloads stream data with cancellation. */
-    public CompletableFuture<Transfer> downloadAsync(
+    private CompletableFuture<Transfer> downloadOperation(
             String requestedUsername,
             String remoteFilename,
             DownloadStreamFactory outputStreamFactory,
             CancellationSignal cancellationSignal) {
-        return downloadAsync(
+        return downloadOperation(
                 requestedUsername, remoteFilename, outputStreamFactory, null, 0, null, null, cancellationSignal);
     }
 
     /** Downloads stream data from a resume offset. */
-    public CompletableFuture<Transfer> downloadAsync(
+    private CompletableFuture<Transfer> downloadOperation(
             String requestedUsername,
             String remoteFilename,
             DownloadStreamFactory outputStreamFactory,
             Long size,
             long startOffset) {
-        return downloadAsync(
+        return downloadOperation(
                 requestedUsername,
                 remoteFilename,
                 outputStreamFactory,
@@ -1688,14 +1693,14 @@ final class DefaultSoulseekClient
     }
 
     /** Downloads stream data with a specific token. */
-    public CompletableFuture<Transfer> downloadAsync(
+    private CompletableFuture<Transfer> downloadOperation(
             String requestedUsername,
             String remoteFilename,
             DownloadStreamFactory outputStreamFactory,
             Long size,
             long startOffset,
             Integer token) {
-        return downloadAsync(
+        return downloadOperation(
                 requestedUsername,
                 remoteFilename,
                 outputStreamFactory,
@@ -1707,7 +1712,7 @@ final class DefaultSoulseekClient
     }
 
     /** Downloads stream data using supplied transfer options. */
-    public CompletableFuture<Transfer> downloadAsync(
+    private CompletableFuture<Transfer> downloadOperation(
             String requestedUsername,
             String remoteFilename,
             DownloadStreamFactory outputStreamFactory,
@@ -1715,7 +1720,7 @@ final class DefaultSoulseekClient
             long startOffset,
             Integer token,
             TransferOptions transferOptions) {
-        return downloadAsync(
+        return downloadOperation(
                 requestedUsername,
                 remoteFilename,
                 outputStreamFactory,
@@ -1727,7 +1732,7 @@ final class DefaultSoulseekClient
     }
 
     /** Downloads data to a stream created by a factory. */
-    public CompletableFuture<Transfer> downloadAsync(
+    private CompletableFuture<Transfer> downloadOperation(
             String requestedUsername,
             String remoteFilename,
             DownloadStreamFactory outputStreamFactory,
@@ -1755,23 +1760,23 @@ final class DefaultSoulseekClient
     }
 
     /** Enqueues a local-file download. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadOperation(
             String requestedUsername, String remoteFilename, String localFilename) {
-        return enqueueDownloadAsync(
+        return enqueueDownloadOperation(
                 requestedUsername, remoteFilename, localFilename, null, 0, null, null, CancellationSignal.none());
     }
 
     /** Enqueues a local-file download with an expected size. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadOperation(
             String requestedUsername, String remoteFilename, String localFilename, Long size) {
-        return enqueueDownloadAsync(
+        return enqueueDownloadOperation(
                 requestedUsername, remoteFilename, localFilename, size, 0, null, null, CancellationSignal.none());
     }
 
     /** Enqueues a local-file download from a resume offset. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadOperation(
             String requestedUsername, String remoteFilename, String localFilename, Long size, long startOffset) {
-        return enqueueDownloadAsync(
+        return enqueueDownloadOperation(
                 requestedUsername,
                 remoteFilename,
                 localFilename,
@@ -1783,14 +1788,14 @@ final class DefaultSoulseekClient
     }
 
     /** Enqueues a local-file download with a specific token. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadOperation(
             String requestedUsername,
             String remoteFilename,
             String localFilename,
             Long size,
             long startOffset,
             Integer token) {
-        return enqueueDownloadAsync(
+        return enqueueDownloadOperation(
                 requestedUsername,
                 remoteFilename,
                 localFilename,
@@ -1802,7 +1807,7 @@ final class DefaultSoulseekClient
     }
 
     /** Enqueues a local-file download using supplied options. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadOperation(
             String requestedUsername,
             String remoteFilename,
             String localFilename,
@@ -1810,7 +1815,7 @@ final class DefaultSoulseekClient
             long startOffset,
             Integer token,
             TransferOptions transferOptions) {
-        return enqueueDownloadAsync(
+        return enqueueDownloadOperation(
                 requestedUsername,
                 remoteFilename,
                 localFilename,
@@ -1822,7 +1827,7 @@ final class DefaultSoulseekClient
     }
 
     /** Enqueues a local-file download. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadOperation(
             String requestedUsername,
             String remoteFilename,
             String localFilename,
@@ -1835,7 +1840,7 @@ final class DefaultSoulseekClient
         TransferOptions options = (transferOptions == null ? new TransferOptions() : transferOptions)
                 .withAdditionalStateChanged(change ->
                         completeDownloadEnqueue(enqueued, change.transfer().getState()));
-        CompletableFuture<Transfer> download = downloadAsync(
+        CompletableFuture<Transfer> download = downloadOperation(
                 requestedUsername,
                 remoteFilename,
                 localFilename,
@@ -1848,27 +1853,27 @@ final class DefaultSoulseekClient
     }
 
     /** Enqueues a stream-factory download. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadOperation(
             String requestedUsername, String remoteFilename, DownloadStreamFactory outputStreamFactory) {
-        return enqueueDownloadAsync(
+        return enqueueDownloadOperation(
                 requestedUsername, remoteFilename, outputStreamFactory, null, 0, null, null, CancellationSignal.none());
     }
 
     /** Enqueues a stream-factory download with an expected size. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadOperation(
             String requestedUsername, String remoteFilename, DownloadStreamFactory outputStreamFactory, Long size) {
-        return enqueueDownloadAsync(
+        return enqueueDownloadOperation(
                 requestedUsername, remoteFilename, outputStreamFactory, size, 0, null, null, CancellationSignal.none());
     }
 
     /** Enqueues a stream-factory download from a resume offset. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadOperation(
             String requestedUsername,
             String remoteFilename,
             DownloadStreamFactory outputStreamFactory,
             Long size,
             long startOffset) {
-        return enqueueDownloadAsync(
+        return enqueueDownloadOperation(
                 requestedUsername,
                 remoteFilename,
                 outputStreamFactory,
@@ -1880,14 +1885,14 @@ final class DefaultSoulseekClient
     }
 
     /** Enqueues a stream-factory download with a specific token. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadOperation(
             String requestedUsername,
             String remoteFilename,
             DownloadStreamFactory outputStreamFactory,
             Long size,
             long startOffset,
             Integer token) {
-        return enqueueDownloadAsync(
+        return enqueueDownloadOperation(
                 requestedUsername,
                 remoteFilename,
                 outputStreamFactory,
@@ -1899,7 +1904,7 @@ final class DefaultSoulseekClient
     }
 
     /** Enqueues a stream-factory download using supplied options. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadOperation(
             String requestedUsername,
             String remoteFilename,
             DownloadStreamFactory outputStreamFactory,
@@ -1907,7 +1912,7 @@ final class DefaultSoulseekClient
             long startOffset,
             Integer token,
             TransferOptions transferOptions) {
-        return enqueueDownloadAsync(
+        return enqueueDownloadOperation(
                 requestedUsername,
                 remoteFilename,
                 outputStreamFactory,
@@ -1919,7 +1924,7 @@ final class DefaultSoulseekClient
     }
 
     /** Enqueues a stream-factory download. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadOperation(
             String requestedUsername,
             String remoteFilename,
             DownloadStreamFactory outputStreamFactory,
@@ -1932,7 +1937,7 @@ final class DefaultSoulseekClient
         TransferOptions options = (transferOptions == null ? new TransferOptions() : transferOptions)
                 .withAdditionalStateChanged(change ->
                         completeDownloadEnqueue(enqueued, change.transfer().getState()));
-        CompletableFuture<Transfer> download = downloadAsync(
+        CompletableFuture<Transfer> download = downloadOperation(
                 requestedUsername,
                 remoteFilename,
                 outputStreamFactory,
@@ -1945,46 +1950,47 @@ final class DefaultSoulseekClient
     }
 
     /** Uploads a local file to a peer. */
-    public CompletableFuture<Transfer> uploadAsync(
+    private CompletableFuture<Transfer> uploadOperation(
             String requestedUsername, String remoteFilename, String localFilename) {
-        return uploadAsync(requestedUsername, remoteFilename, localFilename, null, null, CancellationSignal.none());
+        return uploadOperation(requestedUsername, remoteFilename, localFilename, null, null, CancellationSignal.none());
     }
 
     /** Uploads a local file to a peer with a specific token. */
-    public CompletableFuture<Transfer> uploadAsync(
+    private CompletableFuture<Transfer> uploadOperation(
             String requestedUsername, String remoteFilename, String localFilename, Integer token) {
-        return uploadAsync(requestedUsername, remoteFilename, localFilename, token, null, CancellationSignal.none());
+        return uploadOperation(
+                requestedUsername, remoteFilename, localFilename, token, null, CancellationSignal.none());
     }
 
     /** Uploads a local file with cancellation. */
-    public CompletableFuture<Transfer> uploadAsync(
+    private CompletableFuture<Transfer> uploadOperation(
             String requestedUsername,
             String remoteFilename,
             String localFilename,
             CancellationSignal cancellationSignal) {
-        return uploadAsync(requestedUsername, remoteFilename, localFilename, null, null, cancellationSignal);
+        return uploadOperation(requestedUsername, remoteFilename, localFilename, null, null, cancellationSignal);
     }
 
     /** Uploads a local file using the supplied options. */
-    public CompletableFuture<Transfer> uploadAsync(
+    private CompletableFuture<Transfer> uploadOperation(
             String requestedUsername, String remoteFilename, String localFilename, TransferOptions transferOptions) {
-        return uploadAsync(
+        return uploadOperation(
                 requestedUsername, remoteFilename, localFilename, null, transferOptions, CancellationSignal.none());
     }
 
     /** Uploads a local file to a peer using the supplied options. */
-    public CompletableFuture<Transfer> uploadAsync(
+    private CompletableFuture<Transfer> uploadOperation(
             String requestedUsername,
             String remoteFilename,
             String localFilename,
             Integer token,
             TransferOptions transferOptions) {
-        return uploadAsync(
+        return uploadOperation(
                 requestedUsername, remoteFilename, localFilename, token, transferOptions, CancellationSignal.none());
     }
 
     /** Uploads a local file to a peer. */
-    public CompletableFuture<Transfer> uploadAsync(
+    private CompletableFuture<Transfer> uploadOperation(
             String requestedUsername,
             String remoteFilename,
             String localFilename,
@@ -2034,41 +2040,42 @@ final class DefaultSoulseekClient
     }
 
     /** Uploads data supplied by an asynchronous stream factory. */
-    public CompletableFuture<Transfer> uploadAsync(
+    private CompletableFuture<Transfer> uploadOperation(
             String requestedUsername, String remoteFilename, long size, UploadStreamFactory inputStreamFactory) {
-        return uploadAsync(
+        return uploadOperation(
                 requestedUsername, remoteFilename, size, inputStreamFactory, null, null, CancellationSignal.none());
     }
 
     /** Uploads stream data with a specific transfer token. */
-    public CompletableFuture<Transfer> uploadAsync(
+    private CompletableFuture<Transfer> uploadOperation(
             String requestedUsername,
             String remoteFilename,
             long size,
             UploadStreamFactory inputStreamFactory,
             Integer token) {
-        return uploadAsync(
+        return uploadOperation(
                 requestedUsername, remoteFilename, size, inputStreamFactory, token, null, CancellationSignal.none());
     }
 
     /** Uploads stream data with cancellation. */
-    public CompletableFuture<Transfer> uploadAsync(
+    private CompletableFuture<Transfer> uploadOperation(
             String requestedUsername,
             String remoteFilename,
             long size,
             UploadStreamFactory inputStreamFactory,
             CancellationSignal cancellationSignal) {
-        return uploadAsync(requestedUsername, remoteFilename, size, inputStreamFactory, null, null, cancellationSignal);
+        return uploadOperation(
+                requestedUsername, remoteFilename, size, inputStreamFactory, null, null, cancellationSignal);
     }
 
     /** Uploads stream data using the supplied options. */
-    public CompletableFuture<Transfer> uploadAsync(
+    private CompletableFuture<Transfer> uploadOperation(
             String requestedUsername,
             String remoteFilename,
             long size,
             UploadStreamFactory inputStreamFactory,
             TransferOptions transferOptions) {
-        return uploadAsync(
+        return uploadOperation(
                 requestedUsername,
                 remoteFilename,
                 size,
@@ -2079,14 +2086,14 @@ final class DefaultSoulseekClient
     }
 
     /** Uploads stream data using the supplied transfer options. */
-    public CompletableFuture<Transfer> uploadAsync(
+    private CompletableFuture<Transfer> uploadOperation(
             String requestedUsername,
             String remoteFilename,
             long size,
             UploadStreamFactory inputStreamFactory,
             Integer token,
             TransferOptions transferOptions) {
-        return uploadAsync(
+        return uploadOperation(
                 requestedUsername,
                 remoteFilename,
                 size,
@@ -2097,7 +2104,7 @@ final class DefaultSoulseekClient
     }
 
     /** Uploads data supplied by an asynchronous stream factory. */
-    public CompletableFuture<Transfer> uploadAsync(
+    private CompletableFuture<Transfer> uploadOperation(
             String requestedUsername,
             String remoteFilename,
             long size,
@@ -2125,41 +2132,41 @@ final class DefaultSoulseekClient
     }
 
     /** Enqueues a local-file upload and returns its nested completion future. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueUploadOperation(
             String requestedUsername, String remoteFilename, String localFilename) {
-        return enqueueUploadAsync(
+        return enqueueUploadOperation(
                 requestedUsername, remoteFilename, localFilename, null, null, CancellationSignal.none());
     }
 
     /** Enqueues a local-file upload with a specific token. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueUploadOperation(
             String requestedUsername, String remoteFilename, String localFilename, Integer token) {
-        return enqueueUploadAsync(
+        return enqueueUploadOperation(
                 requestedUsername, remoteFilename, localFilename, token, null, CancellationSignal.none());
     }
 
     /** Enqueues a local-file upload with cancellation. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueUploadOperation(
             String requestedUsername,
             String remoteFilename,
             String localFilename,
             CancellationSignal cancellationSignal) {
-        return enqueueUploadAsync(requestedUsername, remoteFilename, localFilename, null, null, cancellationSignal);
+        return enqueueUploadOperation(requestedUsername, remoteFilename, localFilename, null, null, cancellationSignal);
     }
 
     /** Enqueues a local-file upload using supplied options. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueUploadOperation(
             String requestedUsername,
             String remoteFilename,
             String localFilename,
             Integer token,
             TransferOptions transferOptions) {
-        return enqueueUploadAsync(
+        return enqueueUploadOperation(
                 requestedUsername, remoteFilename, localFilename, token, transferOptions, CancellationSignal.none());
     }
 
     /** Enqueues a local-file upload. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueUploadOperation(
             String requestedUsername,
             String remoteFilename,
             String localFilename,
@@ -2174,48 +2181,48 @@ final class DefaultSoulseekClient
                     }
                 });
         CompletableFuture<Transfer> upload =
-                uploadAsync(requestedUsername, remoteFilename, localFilename, token, options, cancellationSignal);
+                uploadOperation(requestedUsername, remoteFilename, localFilename, token, options, cancellationSignal);
         return enqueued.thenApply(ignored -> upload);
     }
 
     /** Enqueues a stream-factory upload. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueUploadOperation(
             String requestedUsername, String remoteFilename, long size, UploadStreamFactory inputStreamFactory) {
-        return enqueueUploadAsync(
+        return enqueueUploadOperation(
                 requestedUsername, remoteFilename, size, inputStreamFactory, null, null, CancellationSignal.none());
     }
 
     /** Enqueues a stream-factory upload with a specific token. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueUploadOperation(
             String requestedUsername,
             String remoteFilename,
             long size,
             UploadStreamFactory inputStreamFactory,
             Integer token) {
-        return enqueueUploadAsync(
+        return enqueueUploadOperation(
                 requestedUsername, remoteFilename, size, inputStreamFactory, token, null, CancellationSignal.none());
     }
 
     /** Enqueues a stream-factory upload with cancellation. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueUploadOperation(
             String requestedUsername,
             String remoteFilename,
             long size,
             UploadStreamFactory inputStreamFactory,
             CancellationSignal cancellationSignal) {
-        return enqueueUploadAsync(
+        return enqueueUploadOperation(
                 requestedUsername, remoteFilename, size, inputStreamFactory, null, null, cancellationSignal);
     }
 
     /** Enqueues a stream-factory upload using supplied options. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueUploadOperation(
             String requestedUsername,
             String remoteFilename,
             long size,
             UploadStreamFactory inputStreamFactory,
             Integer token,
             TransferOptions transferOptions) {
-        return enqueueUploadAsync(
+        return enqueueUploadOperation(
                 requestedUsername,
                 remoteFilename,
                 size,
@@ -2226,7 +2233,7 @@ final class DefaultSoulseekClient
     }
 
     /** Enqueues a stream-factory upload. */
-    public CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+    private CompletableFuture<CompletableFuture<Transfer>> enqueueUploadOperation(
             String requestedUsername,
             String remoteFilename,
             long size,
@@ -2241,16 +2248,16 @@ final class DefaultSoulseekClient
                         enqueued.complete(true);
                     }
                 });
-        CompletableFuture<Transfer> upload = uploadAsync(
+        CompletableFuture<Transfer> upload = uploadOperation(
                 requestedUsername, remoteFilename, size, inputStreamFactory, token, options, cancellationSignal);
         return enqueued.thenApply(ignored -> upload);
     }
 
-    public CompletableFuture<Void> addPrivateRoomModeratorAsync(String roomName, String requestedUsername) {
-        return addPrivateRoomModeratorAsync(roomName, requestedUsername, CancellationSignal.none());
+    private CompletableFuture<Void> addPrivateRoomModeratorOperation(String roomName, String requestedUsername) {
+        return addPrivateRoomModeratorOperation(roomName, requestedUsername, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> addPrivateRoomModeratorAsync(
+    private CompletableFuture<Void> addPrivateRoomModeratorOperation(
             String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(roomName, "roomName");
         requireText(requestedUsername, "username");
@@ -2262,11 +2269,11 @@ final class DefaultSoulseekClient
                 "Failed to add user " + requestedUsername + " as moderator of private room " + roomName + ": ");
     }
 
-    public CompletableFuture<Void> removePrivateRoomMemberAsync(String roomName, String requestedUsername) {
-        return removePrivateRoomMemberAsync(roomName, requestedUsername, CancellationSignal.none());
+    private CompletableFuture<Void> removePrivateRoomMemberOperation(String roomName, String requestedUsername) {
+        return removePrivateRoomMemberOperation(roomName, requestedUsername, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> removePrivateRoomMemberAsync(
+    private CompletableFuture<Void> removePrivateRoomMemberOperation(
             String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(roomName, "roomName");
         requireText(requestedUsername, "username");
@@ -2278,11 +2285,11 @@ final class DefaultSoulseekClient
                 "Failed to remove user " + requestedUsername + " as member of private room " + roomName + ": ");
     }
 
-    public CompletableFuture<Void> removePrivateRoomModeratorAsync(String roomName, String requestedUsername) {
-        return removePrivateRoomModeratorAsync(roomName, requestedUsername, CancellationSignal.none());
+    private CompletableFuture<Void> removePrivateRoomModeratorOperation(String roomName, String requestedUsername) {
+        return removePrivateRoomModeratorOperation(roomName, requestedUsername, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> removePrivateRoomModeratorAsync(
+    private CompletableFuture<Void> removePrivateRoomModeratorOperation(
             String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(roomName, "roomName");
         requireText(requestedUsername, "username");
@@ -2294,11 +2301,11 @@ final class DefaultSoulseekClient
                 "Failed to remove user " + requestedUsername + " as moderator of private room " + roomName + ": ");
     }
 
-    public CompletableFuture<Void> dropPrivateRoomMembershipAsync(String roomName) {
-        return dropPrivateRoomMembershipAsync(roomName, CancellationSignal.none());
+    private CompletableFuture<Void> dropPrivateRoomMembershipOperation(String roomName) {
+        return dropPrivateRoomMembershipOperation(roomName, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> dropPrivateRoomMembershipAsync(
+    private CompletableFuture<Void> dropPrivateRoomMembershipOperation(
             String roomName, CancellationSignal cancellationSignal) {
         requireText(roomName, "roomName");
         requireLoggedIn("drop private room membership");
@@ -2309,11 +2316,11 @@ final class DefaultSoulseekClient
                 "Failed to drop membership of private room " + roomName + ": ");
     }
 
-    public CompletableFuture<Void> dropPrivateRoomOwnershipAsync(String roomName) {
-        return dropPrivateRoomOwnershipAsync(roomName, CancellationSignal.none());
+    private CompletableFuture<Void> dropPrivateRoomOwnershipOperation(String roomName) {
+        return dropPrivateRoomOwnershipOperation(roomName, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> dropPrivateRoomOwnershipAsync(
+    private CompletableFuture<Void> dropPrivateRoomOwnershipOperation(
             String roomName, CancellationSignal cancellationSignal) {
         requireText(roomName, "roomName");
         requireLoggedIn("drop private room ownership");
@@ -2324,11 +2331,11 @@ final class DefaultSoulseekClient
                 "Failed to drop ownership of private room " + roomName + ": ");
     }
 
-    public CompletableFuture<Void> sendRoomMessageAsync(String roomName, String message) {
-        return sendRoomMessageAsync(roomName, message, CancellationSignal.none());
+    private CompletableFuture<Void> sendRoomMessageOperation(String roomName, String message) {
+        return sendRoomMessageOperation(roomName, message, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> sendRoomMessageAsync(
+    private CompletableFuture<Void> sendRoomMessageOperation(
             String roomName, String message, CancellationSignal cancellationSignal) {
         requireText(roomName, "roomName");
         requireNonEmpty(message, "message");
@@ -2339,11 +2346,11 @@ final class DefaultSoulseekClient
                 "Failed to send message to room " + roomName + ": ");
     }
 
-    public CompletableFuture<Void> sendUploadSpeedAsync(int speed) {
-        return sendUploadSpeedAsync(speed, CancellationSignal.none());
+    private CompletableFuture<Void> sendUploadSpeedOperation(int speed) {
+        return sendUploadSpeedOperation(speed, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> sendUploadSpeedAsync(int speed, CancellationSignal cancellationSignal) {
+    private CompletableFuture<Void> sendUploadSpeedOperation(int speed, CancellationSignal cancellationSignal) {
         requireLoggedIn("set upload speed");
         if (speed <= 0) {
             throw new IllegalArgumentException("The upload speed must be greater than zero");
@@ -2351,11 +2358,11 @@ final class DefaultSoulseekClient
         return writeServerAsync(new SendUploadSpeedCommand(speed), cancellationSignal, "Failed to set upload speed: ");
     }
 
-    public CompletableFuture<Void> setRoomTickerAsync(String roomName, String message) {
-        return setRoomTickerAsync(roomName, message, CancellationSignal.none());
+    private CompletableFuture<Void> setRoomTickerOperation(String roomName, String message) {
+        return setRoomTickerOperation(roomName, message, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> setRoomTickerAsync(
+    private CompletableFuture<Void> setRoomTickerOperation(
             String roomName, String message, CancellationSignal cancellationSignal) {
         requireText(roomName, "roomName");
         requireNonEmpty(message, "message");
@@ -2366,11 +2373,11 @@ final class DefaultSoulseekClient
                 "Failed to set chat room ticker in room " + roomName + ": ");
     }
 
-    public CompletableFuture<Void> setSharedCountsAsync(int directories, int files) {
-        return setSharedCountsAsync(directories, files, CancellationSignal.none());
+    private CompletableFuture<Void> setSharedCountsOperation(int directories, int files) {
+        return setSharedCountsOperation(directories, files, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> setSharedCountsAsync(
+    private CompletableFuture<Void> setSharedCountsOperation(
             int directories, int files, CancellationSignal cancellationSignal) {
         if (directories < 0) {
             throw new IllegalArgumentException("The directory count must be equal to or greater than zero");
@@ -2385,11 +2392,11 @@ final class DefaultSoulseekClient
                 "Failed to set shared counts to " + directories + " directories and " + files + " files: ");
     }
 
-    public CompletableFuture<Void> setStatusAsync(UserPresence status) {
-        return setStatusAsync(status, CancellationSignal.none());
+    private CompletableFuture<Void> setStatusOperation(UserPresence status) {
+        return setStatusOperation(status, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> setStatusAsync(UserPresence status, CancellationSignal cancellationSignal) {
+    private CompletableFuture<Void> setStatusOperation(UserPresence status, CancellationSignal cancellationSignal) {
         requireLoggedIn("set online status");
         return writeServerAsync(
                 new SetOnlineStatusCommand(status),
@@ -2397,29 +2404,30 @@ final class DefaultSoulseekClient
                 "Failed to set user status to " + status + ": ");
     }
 
-    public CompletableFuture<Void> startPublicChatAsync() {
-        return startPublicChatAsync(CancellationSignal.none());
+    private CompletableFuture<Void> startPublicChatOperation() {
+        return startPublicChatOperation(CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> startPublicChatAsync(CancellationSignal cancellationSignal) {
+    private CompletableFuture<Void> startPublicChatOperation(CancellationSignal cancellationSignal) {
         requireLoggedIn("start public chat");
         return writeServerAsync(new StartPublicChatCommand(), cancellationSignal, "Failed to start public chat: ");
     }
 
-    public CompletableFuture<Void> stopPublicChatAsync() {
-        return stopPublicChatAsync(CancellationSignal.none());
+    private CompletableFuture<Void> stopPublicChatOperation() {
+        return stopPublicChatOperation(CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> stopPublicChatAsync(CancellationSignal cancellationSignal) {
+    private CompletableFuture<Void> stopPublicChatOperation(CancellationSignal cancellationSignal) {
         requireLoggedIn("stop public chat");
         return writeServerAsync(new StopPublicChatCommand(), cancellationSignal, "Failed to stop public chat: ");
     }
 
-    public CompletableFuture<Void> unwatchUserAsync(String requestedUsername) {
-        return unwatchUserAsync(requestedUsername, CancellationSignal.none());
+    private CompletableFuture<Void> unwatchUserOperation(String requestedUsername) {
+        return unwatchUserOperation(requestedUsername, CancellationSignal.none());
     }
 
-    public CompletableFuture<Void> unwatchUserAsync(String requestedUsername, CancellationSignal cancellationSignal) {
+    private CompletableFuture<Void> unwatchUserOperation(
+            String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireLoggedIn("add users");
         return writeServerAsync(
@@ -2428,12 +2436,11 @@ final class DefaultSoulseekClient
                 "Failed to unwatch user " + requestedUsername + ": ");
     }
 
-    public CompletableFuture<Void> acknowledgePrivateMessageAsync(int privateMessageId) {
-        return acknowledgePrivateMessageAsync(privateMessageId, CancellationSignal.none());
+    public CompletableFuture<Void> acknowledgePrivateMessageOperation(int privateMessageId) {
+        return acknowledgePrivateMessageOperation(privateMessageId, CancellationSignal.none());
     }
 
-    @Override
-    public CompletableFuture<Void> acknowledgePrivateMessageAsync(
+    public CompletableFuture<Void> acknowledgePrivateMessageOperation(
             int privateMessageId, CancellationSignal cancellationSignal) {
         if (privateMessageId < 0) {
             throw new IllegalArgumentException("The private message ID must be greater than zero");
@@ -2446,12 +2453,11 @@ final class DefaultSoulseekClient
         return write.thenRun(() -> diagnostic.debug("Acknowledged private message ID " + privateMessageId));
     }
 
-    public CompletableFuture<Void> acknowledgePrivilegeNotificationAsync(int privilegeNotificationId) {
-        return acknowledgePrivilegeNotificationAsync(privilegeNotificationId, CancellationSignal.none());
+    public CompletableFuture<Void> acknowledgePrivilegeNotificationOperation(int privilegeNotificationId) {
+        return acknowledgePrivilegeNotificationOperation(privilegeNotificationId, CancellationSignal.none());
     }
 
-    @Override
-    public CompletableFuture<Void> acknowledgePrivilegeNotificationAsync(
+    public CompletableFuture<Void> acknowledgePrivilegeNotificationOperation(
             int privilegeNotificationId, CancellationSignal cancellationSignal) {
         if (privilegeNotificationId < 0) {
             throw new IllegalArgumentException("The privilege notification ID must be greater than zero");
@@ -2463,12 +2469,11 @@ final class DefaultSoulseekClient
                 "Failed to acknowledge privilege notification with ID " + privilegeNotificationId + ": ");
     }
 
-    public CompletableFuture<InetSocketAddress> getUserEndpointAsync(String requestedUsername) {
-        return getUserEndpointAsync(requestedUsername, CancellationSignal.none());
+    public CompletableFuture<InetSocketAddress> getUserEndpointOperation(String requestedUsername) {
+        return getUserEndpointOperation(requestedUsername, CancellationSignal.none());
     }
 
-    @Override
-    public CompletableFuture<InetSocketAddress> getUserEndpointAsync(
+    public CompletableFuture<InetSocketAddress> getUserEndpointOperation(
             String requestedUsername, CancellationSignal cancellationSignal) {
         requireText(requestedUsername, "username");
         requireLoggedIn("fetch user endpoint");
@@ -2554,8 +2559,8 @@ final class DefaultSoulseekClient
      * @param query the search query
      * @return the completed search and collected responses
      */
-    public CompletableFuture<SearchResult> searchAsync(SearchQuery query) {
-        return searchAsync(query, null, null, null, CancellationSignal.none());
+    private CompletableFuture<SearchResult> searchOperation(SearchQuery query) {
+        return searchOperation(query, null, null, null, CancellationSignal.none());
     }
 
     /**
@@ -2565,8 +2570,8 @@ final class DefaultSoulseekClient
      * @param cancellationSignal the cancellation signal
      * @return the completed search and collected responses
      */
-    public CompletableFuture<SearchResult> searchAsync(SearchQuery query, CancellationSignal cancellationSignal) {
-        return searchAsync(query, null, null, null, cancellationSignal);
+    private CompletableFuture<SearchResult> searchOperation(SearchQuery query, CancellationSignal cancellationSignal) {
+        return searchOperation(query, null, null, null, cancellationSignal);
     }
 
     /**
@@ -2576,8 +2581,8 @@ final class DefaultSoulseekClient
      * @param scope the search scope
      * @return the completed search and collected responses
      */
-    public CompletableFuture<SearchResult> searchAsync(SearchQuery query, SearchScope scope) {
-        return searchAsync(query, scope, null, null, CancellationSignal.none());
+    private CompletableFuture<SearchResult> searchOperation(SearchQuery query, SearchScope scope) {
+        return searchOperation(query, scope, null, null, CancellationSignal.none());
     }
 
     /**
@@ -2588,8 +2593,8 @@ final class DefaultSoulseekClient
      * @param token the unique token
      * @return the completed search and collected responses
      */
-    public CompletableFuture<SearchResult> searchAsync(SearchQuery query, SearchScope scope, Integer token) {
-        return searchAsync(query, scope, token, null, CancellationSignal.none());
+    private CompletableFuture<SearchResult> searchOperation(SearchQuery query, SearchScope scope, Integer token) {
+        return searchOperation(query, scope, token, null, CancellationSignal.none());
     }
 
     /**
@@ -2601,9 +2606,9 @@ final class DefaultSoulseekClient
      * @param searchOptions the search options
      * @return the completed search and collected responses
      */
-    public CompletableFuture<SearchResult> searchAsync(
+    private CompletableFuture<SearchResult> searchOperation(
             SearchQuery query, SearchScope scope, Integer token, SearchOptions searchOptions) {
-        return searchAsync(query, scope, token, searchOptions, CancellationSignal.none());
+        return searchOperation(query, scope, token, searchOptions, CancellationSignal.none());
     }
 
     /**
@@ -2616,7 +2621,7 @@ final class DefaultSoulseekClient
      * @param cancellationSignal the cancellation signal
      * @return the completed search and collected responses
      */
-    public CompletableFuture<SearchResult> searchAsync(
+    private CompletableFuture<SearchResult> searchOperation(
             SearchQuery query,
             SearchScope scope,
             Integer token,
@@ -2639,8 +2644,8 @@ final class DefaultSoulseekClient
      * @param responseHandler the response handler
      * @return the completed search
      */
-    public CompletableFuture<Search> searchAsync(SearchQuery query, Consumer<SearchResponse> responseHandler) {
-        return searchAsync(query, responseHandler, null, null, null, CancellationSignal.none());
+    private CompletableFuture<Search> searchOperation(SearchQuery query, Consumer<SearchResponse> responseHandler) {
+        return searchOperation(query, responseHandler, null, null, null, CancellationSignal.none());
     }
 
     /**
@@ -2651,9 +2656,9 @@ final class DefaultSoulseekClient
      * @param cancellationSignal the cancellation signal
      * @return the completed search
      */
-    public CompletableFuture<Search> searchAsync(
+    private CompletableFuture<Search> searchOperation(
             SearchQuery query, Consumer<SearchResponse> responseHandler, CancellationSignal cancellationSignal) {
-        return searchAsync(query, responseHandler, null, null, null, cancellationSignal);
+        return searchOperation(query, responseHandler, null, null, null, cancellationSignal);
     }
 
     /**
@@ -2664,9 +2669,9 @@ final class DefaultSoulseekClient
      * @param scope the search scope
      * @return the completed search
      */
-    public CompletableFuture<Search> searchAsync(
+    private CompletableFuture<Search> searchOperation(
             SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope) {
-        return searchAsync(query, responseHandler, scope, null, null, CancellationSignal.none());
+        return searchOperation(query, responseHandler, scope, null, null, CancellationSignal.none());
     }
 
     /**
@@ -2678,9 +2683,9 @@ final class DefaultSoulseekClient
      * @param token the unique token
      * @return the completed search
      */
-    public CompletableFuture<Search> searchAsync(
+    private CompletableFuture<Search> searchOperation(
             SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope, Integer token) {
-        return searchAsync(query, responseHandler, scope, token, null, CancellationSignal.none());
+        return searchOperation(query, responseHandler, scope, token, null, CancellationSignal.none());
     }
 
     /**
@@ -2693,13 +2698,13 @@ final class DefaultSoulseekClient
      * @param searchOptions the search options
      * @return the completed search
      */
-    public CompletableFuture<Search> searchAsync(
+    private CompletableFuture<Search> searchOperation(
             SearchQuery query,
             Consumer<SearchResponse> responseHandler,
             SearchScope scope,
             Integer token,
             SearchOptions searchOptions) {
-        return searchAsync(query, responseHandler, scope, token, searchOptions, CancellationSignal.none());
+        return searchOperation(query, responseHandler, scope, token, searchOptions, CancellationSignal.none());
     }
 
     /**
@@ -2714,7 +2719,7 @@ final class DefaultSoulseekClient
      * @param cancellationSignal the cancellation signal
      * @return the completed search
      */
-    public CompletableFuture<Search> searchAsync(
+    private CompletableFuture<Search> searchOperation(
             SearchQuery query,
             Consumer<SearchResponse> responseHandler,
             SearchScope scope,
@@ -3183,13 +3188,13 @@ final class DefaultSoulseekClient
                     serverMessageHandler::handleMessageWritten,
                     options.getServerConnectionOptions());
 
-            CompletableFuture<Void> connectOperation;
+            CompletableFuture<Void> transportConnect;
             try {
-                connectOperation = serverConnection.connectAsync(cancellationSignal);
+                transportConnect = serverConnection.connectAsync(cancellationSignal);
             } catch (Throwable failure) {
-                connectOperation = CompletableFuture.failedFuture(failure);
+                transportConnect = CompletableFuture.failedFuture(failure);
             }
-            return connectOperation.thenCompose(ignored -> {
+            return transportConnect.thenCompose(ignored -> {
                 address = requestedAddress;
                 ipEndpoint = requestedEndpoint;
                 changeState(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGING_IN), "Logging in", null);
@@ -3656,7 +3661,7 @@ final class DefaultSoulseekClient
                         + filenameOnly(download.getFilename()) + " to "
                         + download.getUsername() + " acquired");
 
-                endpoint = await(getUserEndpointAsync(download.getUsername(), cancellationSignal));
+                endpoint = await(getUserEndpointOperation(download.getUsername(), cancellationSignal));
                 MessageConnection peerConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
                         download.getUsername(), endpoint, cancellationSignal));
                 diagnostic.debug("Fetched peer connection for download of "
@@ -4203,7 +4208,7 @@ final class DefaultSoulseekClient
                         + filenameOnly(upload.getFilename()) + " to "
                         + upload.getUsername() + " acquired");
 
-                endpoint = await(getUserEndpointAsync(upload.getUsername(), cancellationSignal));
+                endpoint = await(getUserEndpointOperation(upload.getUsername(), cancellationSignal));
                 MessageConnection messageConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
                         upload.getUsername(), endpoint, cancellationSignal));
                 diagnostic.debug("Fetched peer connection for upload of "
@@ -4489,7 +4494,7 @@ final class DefaultSoulseekClient
         private void notifyUploadFailure() {
             try {
                 InetSocketAddress currentEndpoint =
-                        await(getUserEndpointAsync(upload.getUsername(), CancellationSignal.none()));
+                        await(getUserEndpointOperation(upload.getUsername(), CancellationSignal.none()));
                 MessageConnection messageConnection = await(peerConnectionManager.getOrAddMessageConnectionAsync(
                         upload.getUsername(), currentEndpoint, CancellationSignal.none()));
                 OutgoingMessage message = upload.getState().contains(TransferState.CANCELLED)
@@ -4663,6 +4668,951 @@ final class DefaultSoulseekClient
         } catch (Throwable ignored) {
             return filename;
         }
+    }
+
+    /**
+     * Waits for an internal operation and presents its failure the way a
+     * blocking API should.
+     *
+     * <p>{@code join()} wraps everything in {@link CompletionException}, which
+     * is an artifact of the async layer and has no business reaching a caller
+     * of a blocking method. This unwraps it and rethrows the real cause.
+     *
+     * <p>A lapsed deadline arrives as the checked
+     * {@link java.util.concurrent.TimeoutException}. Declaring that on every
+     * operation that talks to the server would put a checked exception on most
+     * of the public surface, which is the ceremony this API exists to remove;
+     * the rest of the hierarchy is already unchecked. It is therefore mapped to
+     * {@link NoResponseException}, which already means "an expected response
+     * was not received" and is the semantically correct member of the existing
+     * hierarchy. Recorded as D11 in docs/fork-divergence.md.
+     */
+    private static <T> T unwrapped(CompletableFuture<T> operation) {
+        try {
+            return operation.join();
+        } catch (Throwable failure) {
+            Throwable cause = unwrap(failure);
+            if (cause instanceof TimeoutException) {
+                throw new NoResponseException(cause.getMessage(), cause);
+            }
+            if (cause instanceof RuntimeException runtime) {
+                throw runtime;
+            }
+            if (cause instanceof Error error) {
+                throw error;
+            }
+            throw new SoulseekClientException(cause.getMessage(), cause);
+        }
+    }
+
+    @Override
+    public TransferHandle enqueueDownload(String username, String remoteFilename, String localFilename) {
+        return new TransferHandle(unwrapped(enqueueDownloadOperation(username, remoteFilename, localFilename)));
+    }
+
+    @Override
+    public TransferHandle enqueueDownload(String username, String remoteFilename, String localFilename, Long size) {
+        return new TransferHandle(unwrapped(enqueueDownloadOperation(username, remoteFilename, localFilename, size)));
+    }
+
+    @Override
+    public TransferHandle enqueueDownload(
+            String username, String remoteFilename, String localFilename, Long size, long startOffset) {
+        return new TransferHandle(
+                unwrapped(enqueueDownloadOperation(username, remoteFilename, localFilename, size, startOffset)));
+    }
+
+    @Override
+    public TransferHandle enqueueDownload(
+            String username, String remoteFilename, String localFilename, Long size, long startOffset, Integer token) {
+        return new TransferHandle(
+                unwrapped(enqueueDownloadOperation(username, remoteFilename, localFilename, size, startOffset, token)));
+    }
+
+    @Override
+    public TransferHandle enqueueDownload(
+            String username,
+            String remoteFilename,
+            String localFilename,
+            Long size,
+            long startOffset,
+            Integer token,
+            TransferOptions options) {
+        return new TransferHandle(unwrapped(
+                enqueueDownloadOperation(username, remoteFilename, localFilename, size, startOffset, token, options)));
+    }
+
+    @Override
+    public TransferHandle enqueueDownload(
+            String username,
+            String remoteFilename,
+            String localFilename,
+            Long size,
+            long startOffset,
+            Integer token,
+            TransferOptions options,
+            CancellationSignal cancellationSignal) {
+        return new TransferHandle(unwrapped(enqueueDownloadOperation(
+                username, remoteFilename, localFilename, size, startOffset, token, options, cancellationSignal)));
+    }
+
+    @Override
+    public TransferHandle enqueueDownload(
+            String username, String remoteFilename, DownloadStreamFactory outputStreamFactory) {
+        return new TransferHandle(unwrapped(enqueueDownloadOperation(username, remoteFilename, outputStreamFactory)));
+    }
+
+    @Override
+    public TransferHandle enqueueDownload(
+            String username, String remoteFilename, DownloadStreamFactory outputStreamFactory, Long size) {
+        return new TransferHandle(
+                unwrapped(enqueueDownloadOperation(username, remoteFilename, outputStreamFactory, size)));
+    }
+
+    @Override
+    public TransferHandle enqueueDownload(
+            String username,
+            String remoteFilename,
+            DownloadStreamFactory outputStreamFactory,
+            Long size,
+            long startOffset) {
+        return new TransferHandle(
+                unwrapped(enqueueDownloadOperation(username, remoteFilename, outputStreamFactory, size, startOffset)));
+    }
+
+    @Override
+    public TransferHandle enqueueDownload(
+            String username,
+            String remoteFilename,
+            DownloadStreamFactory outputStreamFactory,
+            Long size,
+            long startOffset,
+            Integer token) {
+        return new TransferHandle(unwrapped(
+                enqueueDownloadOperation(username, remoteFilename, outputStreamFactory, size, startOffset, token)));
+    }
+
+    @Override
+    public TransferHandle enqueueDownload(
+            String username,
+            String remoteFilename,
+            DownloadStreamFactory outputStreamFactory,
+            Long size,
+            long startOffset,
+            Integer token,
+            TransferOptions options) {
+        return new TransferHandle(unwrapped(enqueueDownloadOperation(
+                username, remoteFilename, outputStreamFactory, size, startOffset, token, options)));
+    }
+
+    @Override
+    public TransferHandle enqueueDownload(
+            String username,
+            String remoteFilename,
+            DownloadStreamFactory outputStreamFactory,
+            Long size,
+            long startOffset,
+            Integer token,
+            TransferOptions options,
+            CancellationSignal cancellationSignal) {
+        return new TransferHandle(unwrapped(enqueueDownloadOperation(
+                username, remoteFilename, outputStreamFactory, size, startOffset, token, options, cancellationSignal)));
+    }
+
+    @Override
+    public TransferHandle enqueueUpload(String username, String remoteFilename, String localFilename) {
+        return new TransferHandle(unwrapped(enqueueUploadOperation(username, remoteFilename, localFilename)));
+    }
+
+    @Override
+    public TransferHandle enqueueUpload(String username, String remoteFilename, String localFilename, Integer token) {
+        return new TransferHandle(unwrapped(enqueueUploadOperation(username, remoteFilename, localFilename, token)));
+    }
+
+    @Override
+    public TransferHandle enqueueUpload(
+            String username, String remoteFilename, String localFilename, CancellationSignal cancellationSignal) {
+        return new TransferHandle(
+                unwrapped(enqueueUploadOperation(username, remoteFilename, localFilename, cancellationSignal)));
+    }
+
+    @Override
+    public TransferHandle enqueueUpload(
+            String username, String remoteFilename, String localFilename, Integer token, TransferOptions options) {
+        return new TransferHandle(
+                unwrapped(enqueueUploadOperation(username, remoteFilename, localFilename, token, options)));
+    }
+
+    @Override
+    public TransferHandle enqueueUpload(
+            String username,
+            String remoteFilename,
+            String localFilename,
+            Integer token,
+            TransferOptions options,
+            CancellationSignal cancellationSignal) {
+        return new TransferHandle(unwrapped(
+                enqueueUploadOperation(username, remoteFilename, localFilename, token, options, cancellationSignal)));
+    }
+
+    @Override
+    public TransferHandle enqueueUpload(
+            String username, String remoteFilename, long size, UploadStreamFactory inputStreamFactory) {
+        return new TransferHandle(
+                unwrapped(enqueueUploadOperation(username, remoteFilename, size, inputStreamFactory)));
+    }
+
+    @Override
+    public TransferHandle enqueueUpload(
+            String username, String remoteFilename, long size, UploadStreamFactory inputStreamFactory, Integer token) {
+        return new TransferHandle(
+                unwrapped(enqueueUploadOperation(username, remoteFilename, size, inputStreamFactory, token)));
+    }
+
+    @Override
+    public TransferHandle enqueueUpload(
+            String username,
+            String remoteFilename,
+            long size,
+            UploadStreamFactory inputStreamFactory,
+            CancellationSignal cancellationSignal) {
+        return new TransferHandle(unwrapped(
+                enqueueUploadOperation(username, remoteFilename, size, inputStreamFactory, cancellationSignal)));
+    }
+
+    @Override
+    public TransferHandle enqueueUpload(
+            String username,
+            String remoteFilename,
+            long size,
+            UploadStreamFactory inputStreamFactory,
+            Integer token,
+            TransferOptions options) {
+        return new TransferHandle(
+                unwrapped(enqueueUploadOperation(username, remoteFilename, size, inputStreamFactory, token, options)));
+    }
+
+    @Override
+    public TransferHandle enqueueUpload(
+            String username,
+            String remoteFilename,
+            long size,
+            UploadStreamFactory inputStreamFactory,
+            Integer token,
+            TransferOptions options,
+            CancellationSignal cancellationSignal) {
+        return new TransferHandle(unwrapped(enqueueUploadOperation(
+                username, remoteFilename, size, inputStreamFactory, token, options, cancellationSignal)));
+    }
+
+    // ---- Blocking public API ----------------------------------------------
+    // Each of these presents one internal operation. The operations are still
+    // future-shaped inside; Phase 6 inlines them as the client is decomposed.
+
+    @Override
+    public void acknowledgePrivateMessage(int privateMessageId) {
+        unwrapped(acknowledgePrivateMessageOperation(privateMessageId));
+    }
+
+    @Override
+    public void acknowledgePrivateMessage(int privateMessageId, CancellationSignal cancellationSignal) {
+        unwrapped(acknowledgePrivateMessageOperation(privateMessageId, cancellationSignal));
+    }
+
+    @Override
+    public void acknowledgePrivilegeNotification(int privilegeNotificationId) {
+        unwrapped(acknowledgePrivilegeNotificationOperation(privilegeNotificationId));
+    }
+
+    @Override
+    public void acknowledgePrivilegeNotification(int privilegeNotificationId, CancellationSignal cancellationSignal) {
+        unwrapped(acknowledgePrivilegeNotificationOperation(privilegeNotificationId, cancellationSignal));
+    }
+
+    @Override
+    public void addPrivateRoomMember(String roomName, String username) {
+        unwrapped(addPrivateRoomMemberOperation(roomName, username));
+    }
+
+    @Override
+    public void addPrivateRoomMember(String roomName, String username, CancellationSignal cancellationSignal) {
+        unwrapped(addPrivateRoomMemberOperation(roomName, username, cancellationSignal));
+    }
+
+    @Override
+    public void addPrivateRoomModerator(String roomName, String username) {
+        unwrapped(addPrivateRoomModeratorOperation(roomName, username));
+    }
+
+    @Override
+    public void addPrivateRoomModerator(String roomName, String username, CancellationSignal cancellationSignal) {
+        unwrapped(addPrivateRoomModeratorOperation(roomName, username, cancellationSignal));
+    }
+
+    @Override
+    public BrowseResponse browse(String username) {
+        return unwrapped(browseOperation(username));
+    }
+
+    @Override
+    public BrowseResponse browse(String username, BrowseOptions options) {
+        return unwrapped(browseOperation(username, options));
+    }
+
+    @Override
+    public BrowseResponse browse(String username, CancellationSignal cancellationSignal) {
+        return unwrapped(browseOperation(username, cancellationSignal));
+    }
+
+    @Override
+    public BrowseResponse browse(String username, BrowseOptions options, CancellationSignal cancellationSignal) {
+        return unwrapped(browseOperation(username, options, cancellationSignal));
+    }
+
+    @Override
+    public void changePassword(String password) {
+        unwrapped(changePasswordOperation(password));
+    }
+
+    @Override
+    public void changePassword(String password, CancellationSignal cancellationSignal) {
+        unwrapped(changePasswordOperation(password, cancellationSignal));
+    }
+
+    @Override
+    public void connect(String username, String password) {
+        unwrapped(connectOperation(username, password));
+    }
+
+    @Override
+    public void connect(String username, String password, CancellationSignal cancellationSignal) {
+        unwrapped(connectOperation(username, password, cancellationSignal));
+    }
+
+    @Override
+    public void connect(String address, int port, String username, String password) {
+        unwrapped(connectOperation(address, port, username, password));
+    }
+
+    @Override
+    public void connect(
+            String address, int port, String username, String password, CancellationSignal cancellationSignal) {
+        unwrapped(connectOperation(address, port, username, password, cancellationSignal));
+    }
+
+    @Override
+    public void connectToUser(String username) {
+        unwrapped(connectToUserOperation(username));
+    }
+
+    @Override
+    public void connectToUser(String username, boolean invalidateCache) {
+        unwrapped(connectToUserOperation(username, invalidateCache));
+    }
+
+    @Override
+    public void connectToUser(String username, CancellationSignal cancellationSignal) {
+        unwrapped(connectToUserOperation(username, cancellationSignal));
+    }
+
+    @Override
+    public void connectToUser(String username, boolean invalidateCache, CancellationSignal cancellationSignal) {
+        unwrapped(connectToUserOperation(username, invalidateCache, cancellationSignal));
+    }
+
+    @Override
+    public Transfer download(String username, String remoteFilename, String localFilename) {
+        return unwrapped(downloadOperation(username, remoteFilename, localFilename));
+    }
+
+    @Override
+    public Transfer download(String username, String remoteFilename, String localFilename, Long size) {
+        return unwrapped(downloadOperation(username, remoteFilename, localFilename, size));
+    }
+
+    @Override
+    public Transfer download(
+            String username, String remoteFilename, String localFilename, CancellationSignal cancellationSignal) {
+        return unwrapped(downloadOperation(username, remoteFilename, localFilename, cancellationSignal));
+    }
+
+    @Override
+    public Transfer download(
+            String username, String remoteFilename, String localFilename, Long size, long startOffset) {
+        return unwrapped(downloadOperation(username, remoteFilename, localFilename, size, startOffset));
+    }
+
+    @Override
+    public Transfer download(
+            String username, String remoteFilename, String localFilename, Long size, long startOffset, Integer token) {
+        return unwrapped(downloadOperation(username, remoteFilename, localFilename, size, startOffset, token));
+    }
+
+    @Override
+    public Transfer download(
+            String username,
+            String remoteFilename,
+            String localFilename,
+            Long size,
+            long startOffset,
+            Integer token,
+            TransferOptions options) {
+        return unwrapped(downloadOperation(username, remoteFilename, localFilename, size, startOffset, token, options));
+    }
+
+    @Override
+    public Transfer download(
+            String username,
+            String remoteFilename,
+            String localFilename,
+            Long size,
+            long startOffset,
+            Integer token,
+            TransferOptions options,
+            CancellationSignal cancellationSignal) {
+        return unwrapped(downloadOperation(
+                username, remoteFilename, localFilename, size, startOffset, token, options, cancellationSignal));
+    }
+
+    @Override
+    public Transfer download(String username, String remoteFilename, DownloadStreamFactory outputStreamFactory) {
+        return unwrapped(downloadOperation(username, remoteFilename, outputStreamFactory));
+    }
+
+    @Override
+    public Transfer download(
+            String username, String remoteFilename, DownloadStreamFactory outputStreamFactory, Long size) {
+        return unwrapped(downloadOperation(username, remoteFilename, outputStreamFactory, size));
+    }
+
+    @Override
+    public Transfer download(
+            String username,
+            String remoteFilename,
+            DownloadStreamFactory outputStreamFactory,
+            CancellationSignal cancellationSignal) {
+        return unwrapped(downloadOperation(username, remoteFilename, outputStreamFactory, cancellationSignal));
+    }
+
+    @Override
+    public Transfer download(
+            String username,
+            String remoteFilename,
+            DownloadStreamFactory outputStreamFactory,
+            Long size,
+            long startOffset) {
+        return unwrapped(downloadOperation(username, remoteFilename, outputStreamFactory, size, startOffset));
+    }
+
+    @Override
+    public Transfer download(
+            String username,
+            String remoteFilename,
+            DownloadStreamFactory outputStreamFactory,
+            Long size,
+            long startOffset,
+            Integer token) {
+        return unwrapped(downloadOperation(username, remoteFilename, outputStreamFactory, size, startOffset, token));
+    }
+
+    @Override
+    public Transfer download(
+            String username,
+            String remoteFilename,
+            DownloadStreamFactory outputStreamFactory,
+            Long size,
+            long startOffset,
+            Integer token,
+            TransferOptions options) {
+        return unwrapped(
+                downloadOperation(username, remoteFilename, outputStreamFactory, size, startOffset, token, options));
+    }
+
+    @Override
+    public Transfer download(
+            String username,
+            String remoteFilename,
+            DownloadStreamFactory outputStreamFactory,
+            Long size,
+            long startOffset,
+            Integer token,
+            TransferOptions options,
+            CancellationSignal cancellationSignal) {
+        return unwrapped(downloadOperation(
+                username, remoteFilename, outputStreamFactory, size, startOffset, token, options, cancellationSignal));
+    }
+
+    @Override
+    public void dropPrivateRoomMembership(String roomName) {
+        unwrapped(dropPrivateRoomMembershipOperation(roomName));
+    }
+
+    @Override
+    public void dropPrivateRoomMembership(String roomName, CancellationSignal cancellationSignal) {
+        unwrapped(dropPrivateRoomMembershipOperation(roomName, cancellationSignal));
+    }
+
+    @Override
+    public void dropPrivateRoomOwnership(String roomName) {
+        unwrapped(dropPrivateRoomOwnershipOperation(roomName));
+    }
+
+    @Override
+    public void dropPrivateRoomOwnership(String roomName, CancellationSignal cancellationSignal) {
+        unwrapped(dropPrivateRoomOwnershipOperation(roomName, cancellationSignal));
+    }
+
+    @Override
+    public List<Directory> getDirectoryContents(String username, String directoryName) {
+        return unwrapped(getDirectoryContentsOperation(username, directoryName));
+    }
+
+    @Override
+    public List<Directory> getDirectoryContents(String username, String directoryName, int token) {
+        return unwrapped(getDirectoryContentsOperation(username, directoryName, token));
+    }
+
+    @Override
+    public List<Directory> getDirectoryContents(
+            String username, String directoryName, CancellationSignal cancellationSignal) {
+        return unwrapped(getDirectoryContentsOperation(username, directoryName, cancellationSignal));
+    }
+
+    @Override
+    public List<Directory> getDirectoryContents(
+            String username, String directoryName, Integer token, CancellationSignal cancellationSignal) {
+        return unwrapped(getDirectoryContentsOperation(username, directoryName, token, cancellationSignal));
+    }
+
+    @Override
+    public Integer getDownloadPlaceInQueue(String username, String filename) {
+        return unwrapped(getDownloadPlaceInQueueOperation(username, filename));
+    }
+
+    @Override
+    public Integer getDownloadPlaceInQueue(String username, String filename, CancellationSignal cancellationSignal) {
+        return unwrapped(getDownloadPlaceInQueueOperation(username, filename, cancellationSignal));
+    }
+
+    @Override
+    public Integer getPrivileges() {
+        return unwrapped(getPrivilegesOperation());
+    }
+
+    @Override
+    public Integer getPrivileges(CancellationSignal cancellationSignal) {
+        return unwrapped(getPrivilegesOperation(cancellationSignal));
+    }
+
+    @Override
+    public RoomList getRoomList() {
+        return unwrapped(getRoomListOperation());
+    }
+
+    @Override
+    public RoomList getRoomList(CancellationSignal cancellationSignal) {
+        return unwrapped(getRoomListOperation(cancellationSignal));
+    }
+
+    @Override
+    public InetSocketAddress getUserEndpoint(String username) {
+        return unwrapped(getUserEndpointOperation(username));
+    }
+
+    @Override
+    public InetSocketAddress getUserEndpoint(String username, CancellationSignal cancellationSignal) {
+        return unwrapped(getUserEndpointOperation(username, cancellationSignal));
+    }
+
+    @Override
+    public UserInfo getUserInfo(String username) {
+        return unwrapped(getUserInfoOperation(username));
+    }
+
+    @Override
+    public UserInfo getUserInfo(String username, CancellationSignal cancellationSignal) {
+        return unwrapped(getUserInfoOperation(username, cancellationSignal));
+    }
+
+    @Override
+    public Boolean getUserPrivileged(String username) {
+        return unwrapped(getUserPrivilegedOperation(username));
+    }
+
+    @Override
+    public Boolean getUserPrivileged(String username, CancellationSignal cancellationSignal) {
+        return unwrapped(getUserPrivilegedOperation(username, cancellationSignal));
+    }
+
+    @Override
+    public UserStatistics getUserStatistics(String username) {
+        return unwrapped(getUserStatisticsOperation(username));
+    }
+
+    @Override
+    public UserStatistics getUserStatistics(String username, CancellationSignal cancellationSignal) {
+        return unwrapped(getUserStatisticsOperation(username, cancellationSignal));
+    }
+
+    @Override
+    public UserStatus getUserStatus(String username) {
+        return unwrapped(getUserStatusOperation(username));
+    }
+
+    @Override
+    public UserStatus getUserStatus(String username, CancellationSignal cancellationSignal) {
+        return unwrapped(getUserStatusOperation(username, cancellationSignal));
+    }
+
+    @Override
+    public void grantUserPrivileges(String username, int days) {
+        unwrapped(grantUserPrivilegesOperation(username, days));
+    }
+
+    @Override
+    public void grantUserPrivileges(String username, int days, CancellationSignal cancellationSignal) {
+        unwrapped(grantUserPrivilegesOperation(username, days, cancellationSignal));
+    }
+
+    @Override
+    public RoomData joinRoom(String roomName) {
+        return unwrapped(joinRoomOperation(roomName));
+    }
+
+    @Override
+    public RoomData joinRoom(String roomName, boolean isPrivate) {
+        return unwrapped(joinRoomOperation(roomName, isPrivate));
+    }
+
+    @Override
+    public RoomData joinRoom(String roomName, CancellationSignal cancellationSignal) {
+        return unwrapped(joinRoomOperation(roomName, cancellationSignal));
+    }
+
+    @Override
+    public RoomData joinRoom(String roomName, boolean isPrivate, CancellationSignal cancellationSignal) {
+        return unwrapped(joinRoomOperation(roomName, isPrivate, cancellationSignal));
+    }
+
+    @Override
+    public void leaveRoom(String roomName) {
+        unwrapped(leaveRoomOperation(roomName));
+    }
+
+    @Override
+    public void leaveRoom(String roomName, CancellationSignal cancellationSignal) {
+        unwrapped(leaveRoomOperation(roomName, cancellationSignal));
+    }
+
+    @Override
+    public Long pingServer() {
+        return unwrapped(pingServerOperation());
+    }
+
+    @Override
+    public Long pingServer(CancellationSignal cancellationSignal) {
+        return unwrapped(pingServerOperation(cancellationSignal));
+    }
+
+    @Override
+    public Boolean reconfigureOptions(SoulseekClientOptionsPatch patch) {
+        return unwrapped(reconfigureOptionsOperation(patch));
+    }
+
+    @Override
+    public Boolean reconfigureOptions(SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
+        return unwrapped(reconfigureOptionsOperation(patch, cancellationSignal));
+    }
+
+    @Override
+    public void removePrivateRoomMember(String roomName, String username) {
+        unwrapped(removePrivateRoomMemberOperation(roomName, username));
+    }
+
+    @Override
+    public void removePrivateRoomMember(String roomName, String username, CancellationSignal cancellationSignal) {
+        unwrapped(removePrivateRoomMemberOperation(roomName, username, cancellationSignal));
+    }
+
+    @Override
+    public void removePrivateRoomModerator(String roomName, String username) {
+        unwrapped(removePrivateRoomModeratorOperation(roomName, username));
+    }
+
+    @Override
+    public void removePrivateRoomModerator(String roomName, String username, CancellationSignal cancellationSignal) {
+        unwrapped(removePrivateRoomModeratorOperation(roomName, username, cancellationSignal));
+    }
+
+    @Override
+    public SearchResult search(SearchQuery query) {
+        return unwrapped(searchOperation(query));
+    }
+
+    @Override
+    public SearchResult search(SearchQuery query, CancellationSignal cancellationSignal) {
+        return unwrapped(searchOperation(query, cancellationSignal));
+    }
+
+    @Override
+    public SearchResult search(SearchQuery query, SearchScope scope) {
+        return unwrapped(searchOperation(query, scope));
+    }
+
+    @Override
+    public SearchResult search(SearchQuery query, SearchScope scope, Integer token) {
+        return unwrapped(searchOperation(query, scope, token));
+    }
+
+    @Override
+    public SearchResult search(SearchQuery query, SearchScope scope, Integer token, SearchOptions options) {
+        return unwrapped(searchOperation(query, scope, token, options));
+    }
+
+    @Override
+    public SearchResult search(
+            SearchQuery query,
+            SearchScope scope,
+            Integer token,
+            SearchOptions options,
+            CancellationSignal cancellationSignal) {
+        return unwrapped(searchOperation(query, scope, token, options, cancellationSignal));
+    }
+
+    @Override
+    public Search search(SearchQuery query, Consumer<SearchResponse> responseHandler) {
+        return unwrapped(searchOperation(query, responseHandler));
+    }
+
+    @Override
+    public Search search(
+            SearchQuery query, Consumer<SearchResponse> responseHandler, CancellationSignal cancellationSignal) {
+        return unwrapped(searchOperation(query, responseHandler, cancellationSignal));
+    }
+
+    @Override
+    public Search search(SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope) {
+        return unwrapped(searchOperation(query, responseHandler, scope));
+    }
+
+    @Override
+    public Search search(
+            SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope, Integer token) {
+        return unwrapped(searchOperation(query, responseHandler, scope, token));
+    }
+
+    @Override
+    public Search search(
+            SearchQuery query,
+            Consumer<SearchResponse> responseHandler,
+            SearchScope scope,
+            Integer token,
+            SearchOptions options) {
+        return unwrapped(searchOperation(query, responseHandler, scope, token, options));
+    }
+
+    @Override
+    public Search search(
+            SearchQuery query,
+            Consumer<SearchResponse> responseHandler,
+            SearchScope scope,
+            Integer token,
+            SearchOptions options,
+            CancellationSignal cancellationSignal) {
+        return unwrapped(searchOperation(query, responseHandler, scope, token, options, cancellationSignal));
+    }
+
+    @Override
+    public void sendPrivateMessage(String username, String message) {
+        unwrapped(sendPrivateMessageOperation(username, message));
+    }
+
+    @Override
+    public void sendPrivateMessage(String username, String message, CancellationSignal cancellationSignal) {
+        unwrapped(sendPrivateMessageOperation(username, message, cancellationSignal));
+    }
+
+    @Override
+    public void sendRoomMessage(String roomName, String message) {
+        unwrapped(sendRoomMessageOperation(roomName, message));
+    }
+
+    @Override
+    public void sendRoomMessage(String roomName, String message, CancellationSignal cancellationSignal) {
+        unwrapped(sendRoomMessageOperation(roomName, message, cancellationSignal));
+    }
+
+    @Override
+    public void sendUploadSpeed(int speed) {
+        unwrapped(sendUploadSpeedOperation(speed));
+    }
+
+    @Override
+    public void sendUploadSpeed(int speed, CancellationSignal cancellationSignal) {
+        unwrapped(sendUploadSpeedOperation(speed, cancellationSignal));
+    }
+
+    @Override
+    public void setRoomTicker(String roomName, String message) {
+        unwrapped(setRoomTickerOperation(roomName, message));
+    }
+
+    @Override
+    public void setRoomTicker(String roomName, String message, CancellationSignal cancellationSignal) {
+        unwrapped(setRoomTickerOperation(roomName, message, cancellationSignal));
+    }
+
+    @Override
+    public void setSharedCounts(int directories, int files) {
+        unwrapped(setSharedCountsOperation(directories, files));
+    }
+
+    @Override
+    public void setSharedCounts(int directories, int files, CancellationSignal cancellationSignal) {
+        unwrapped(setSharedCountsOperation(directories, files, cancellationSignal));
+    }
+
+    @Override
+    public void setStatus(UserPresence status) {
+        unwrapped(setStatusOperation(status));
+    }
+
+    @Override
+    public void setStatus(UserPresence status, CancellationSignal cancellationSignal) {
+        unwrapped(setStatusOperation(status, cancellationSignal));
+    }
+
+    @Override
+    public void startPublicChat() {
+        unwrapped(startPublicChatOperation());
+    }
+
+    @Override
+    public void startPublicChat(CancellationSignal cancellationSignal) {
+        unwrapped(startPublicChatOperation(cancellationSignal));
+    }
+
+    @Override
+    public void stopPublicChat() {
+        unwrapped(stopPublicChatOperation());
+    }
+
+    @Override
+    public void stopPublicChat(CancellationSignal cancellationSignal) {
+        unwrapped(stopPublicChatOperation(cancellationSignal));
+    }
+
+    @Override
+    public void unwatchUser(String username) {
+        unwrapped(unwatchUserOperation(username));
+    }
+
+    @Override
+    public void unwatchUser(String username, CancellationSignal cancellationSignal) {
+        unwrapped(unwatchUserOperation(username, cancellationSignal));
+    }
+
+    @Override
+    public Transfer upload(String username, String remoteFilename, String localFilename) {
+        return unwrapped(uploadOperation(username, remoteFilename, localFilename));
+    }
+
+    @Override
+    public Transfer upload(String username, String remoteFilename, String localFilename, Integer token) {
+        return unwrapped(uploadOperation(username, remoteFilename, localFilename, token));
+    }
+
+    @Override
+    public Transfer upload(
+            String username, String remoteFilename, String localFilename, CancellationSignal cancellationSignal) {
+        return unwrapped(uploadOperation(username, remoteFilename, localFilename, cancellationSignal));
+    }
+
+    @Override
+    public Transfer upload(String username, String remoteFilename, String localFilename, TransferOptions options) {
+        return unwrapped(uploadOperation(username, remoteFilename, localFilename, options));
+    }
+
+    @Override
+    public Transfer upload(
+            String username, String remoteFilename, String localFilename, Integer token, TransferOptions options) {
+        return unwrapped(uploadOperation(username, remoteFilename, localFilename, token, options));
+    }
+
+    @Override
+    public Transfer upload(
+            String username,
+            String remoteFilename,
+            String localFilename,
+            Integer token,
+            TransferOptions options,
+            CancellationSignal cancellationSignal) {
+        return unwrapped(uploadOperation(username, remoteFilename, localFilename, token, options, cancellationSignal));
+    }
+
+    @Override
+    public Transfer upload(String username, String remoteFilename, long size, UploadStreamFactory inputStreamFactory) {
+        return unwrapped(uploadOperation(username, remoteFilename, size, inputStreamFactory));
+    }
+
+    @Override
+    public Transfer upload(
+            String username, String remoteFilename, long size, UploadStreamFactory inputStreamFactory, Integer token) {
+        return unwrapped(uploadOperation(username, remoteFilename, size, inputStreamFactory, token));
+    }
+
+    @Override
+    public Transfer upload(
+            String username,
+            String remoteFilename,
+            long size,
+            UploadStreamFactory inputStreamFactory,
+            CancellationSignal cancellationSignal) {
+        return unwrapped(uploadOperation(username, remoteFilename, size, inputStreamFactory, cancellationSignal));
+    }
+
+    @Override
+    public Transfer upload(
+            String username,
+            String remoteFilename,
+            long size,
+            UploadStreamFactory inputStreamFactory,
+            TransferOptions options) {
+        return unwrapped(uploadOperation(username, remoteFilename, size, inputStreamFactory, options));
+    }
+
+    @Override
+    public Transfer upload(
+            String username,
+            String remoteFilename,
+            long size,
+            UploadStreamFactory inputStreamFactory,
+            Integer token,
+            TransferOptions options) {
+        return unwrapped(uploadOperation(username, remoteFilename, size, inputStreamFactory, token, options));
+    }
+
+    @Override
+    public Transfer upload(
+            String username,
+            String remoteFilename,
+            long size,
+            UploadStreamFactory inputStreamFactory,
+            Integer token,
+            TransferOptions options,
+            CancellationSignal cancellationSignal) {
+        return unwrapped(uploadOperation(
+                username, remoteFilename, size, inputStreamFactory, token, options, cancellationSignal));
+    }
+
+    @Override
+    public UserData watchUser(String username) {
+        return unwrapped(watchUserOperation(username));
+    }
+
+    @Override
+    public UserData watchUser(String username, CancellationSignal cancellationSignal) {
+        return unwrapped(watchUserOperation(username, cancellationSignal));
     }
 
     private static <T> T await(CompletableFuture<T> future) {

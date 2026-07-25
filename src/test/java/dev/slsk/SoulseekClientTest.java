@@ -161,8 +161,8 @@ class SoulseekClientTest {
         fixture.client.addDownloadFailedListener((sender, eventData) -> failed.set(eventData));
 
         fixture.peer.raiseDenied(new DownloadDeniedEvent("user", "file", "rejected"));
-        assertInstanceOf(TransferRejectedException.class, failure(first.getRemoteTaskCompletionSource()));
-        assertInstanceOf(TransferRejectedException.class, failure(second.getRemoteTaskCompletionSource()));
+        assertInstanceOf(TransferRejectedException.class, failure(first.getRemoteTaskCompletionSource()::join));
+        assertInstanceOf(TransferRejectedException.class, failure(second.getRemoteTaskCompletionSource()::join));
         assertEquals("rejected", denied.get().getMessage());
 
         first = new TransferInternal(TransferDirection.DOWNLOAD, "user", "file", 3);
@@ -171,8 +171,8 @@ class SoulseekClientTest {
                 3, first,
                 4, second)));
         fixture.peer.raiseFailed(new DownloadFailedEvent("user", "file"));
-        assertInstanceOf(TransferReportedFailedException.class, failure(first.getRemoteTaskCompletionSource()));
-        assertInstanceOf(TransferReportedFailedException.class, failure(second.getRemoteTaskCompletionSource()));
+        assertInstanceOf(TransferReportedFailedException.class, failure(first.getRemoteTaskCompletionSource()::join));
+        assertInstanceOf(TransferReportedFailedException.class, failure(second.getRemoteTaskCompletionSource()::join));
         assertEquals("file", failed.get().getFilename());
         fixture.close();
     }
@@ -318,13 +318,21 @@ class SoulseekClientTest {
         return false;
     }
 
-    private static Throwable failure(CompletableFuture<?> future) {
+    /**
+     * Returns the failure a blocking call produced.
+     *
+     * <p>Took a future before the API became blocking; the calls now throw
+     * directly, so it takes the call itself.
+     */
+    private static Throwable failure(org.junit.jupiter.api.function.Executable body) {
         try {
-            future.join();
-            throw new AssertionError("future did not fail");
-        } catch (java.util.concurrent.CompletionException exception) {
-            return exception.getCause();
+            body.execute();
+        } catch (java.util.concurrent.CompletionException wrapped) {
+            return wrapped.getCause() == null ? wrapped : wrapped.getCause();
+        } catch (Throwable failure) {
+            return failure;
         }
+        throw new AssertionError("Expected operation to fail");
     }
 
     private static InetSocketAddress endpoint(int port) {

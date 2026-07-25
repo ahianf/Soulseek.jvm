@@ -326,7 +326,7 @@ class SearchResponderTest {
         }
 
         @Override
-        public CompletableFuture<InetSocketAddress> getUserEndpointAsync(
+        public CompletableFuture<InetSocketAddress> getUserEndpointOperation(
                 String username, CancellationSignal cancellationSignal) {
             if (endpointFailure != null) {
                 return CompletableFuture.failedFuture(endpointFailure);

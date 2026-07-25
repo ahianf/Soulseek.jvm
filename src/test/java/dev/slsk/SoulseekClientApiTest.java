@@ -48,7 +48,13 @@ class SoulseekClientApiTest {
                 "getSearches",
                 "getSearchResponder",
                 "getServerConnection",
-                "getWaiter");
+                "getWaiter",
+                // Future-shaped operations the internal collaborator interfaces
+                // still call directly. The public API in front of them is
+                // blocking; these disappear when the client is decomposed.
+                "acknowledgePrivateMessageOperation",
+                "acknowledgePrivilegeNotificationOperation",
+                "getUserEndpointOperation");
         Set<String> observedHooks = new HashSet<>();
 
         for (Method method : DefaultSoulseekClient.class.getDeclaredMethods()) {

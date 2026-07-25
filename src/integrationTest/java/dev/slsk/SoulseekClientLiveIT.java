@@ -24,7 +24,7 @@ class SoulseekClientLiveIT {
     void clientConnects() {
         LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
         try (SoulseekClient client = SoulseekClient.create(credentials.minorVersion())) {
-            assertDoesNotThrow(() -> client.connectAsync(credentials.username(), credentials.password())
+            assertDoesNotThrow(() -> client.connect(credentials.username(), credentials.password())
                     .join());
             assertEquals(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN), client.getState());
         }
@@ -38,7 +38,7 @@ class SoulseekClientLiveIT {
             List<SoulseekClientStateChangedEvent> events = new ArrayList<>();
             client.addStateChangedListener((sender, event) -> events.add(event));
 
-            assertDoesNotThrow(() -> client.connectAsync(credentials.username(), credentials.password())
+            assertDoesNotThrow(() -> client.connect(credentials.username(), credentials.password())
                     .join());
 
             assertEquals(4, events.size());
@@ -58,7 +58,7 @@ class SoulseekClientLiveIT {
     void clientDisconnects() {
         LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
         try (SoulseekClient client = SoulseekClient.create(credentials.minorVersion())) {
-            client.connectAsync(credentials.username(), credentials.password()).join();
+            client.connect(credentials.username(), credentials.password());
 
             assertDoesNotThrow(() -> client.disconnect());
             assertEquals(SoulseekClientState.DISCONNECTED, client.getState());
@@ -71,7 +71,7 @@ class SoulseekClientLiveIT {
         LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
         AtomicReference<SoulseekClientStateChangedEvent> event = new AtomicReference<>();
         try (SoulseekClient client = SoulseekClient.create(credentials.minorVersion())) {
-            client.connectAsync(credentials.username(), credentials.password()).join();
+            client.connect(credentials.username(), credentials.password());
             client.addStateChangedListener((sender, eventData) -> event.set(eventData));
 
             assertDoesNotThrow(() -> client.disconnect());

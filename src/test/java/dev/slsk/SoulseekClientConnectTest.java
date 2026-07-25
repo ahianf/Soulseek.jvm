@@ -19,6 +19,7 @@ import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.ConnectionWriteException;
 import dev.slsk.exceptions.ListenException;
 import dev.slsk.exceptions.LoginRejectedException;
+import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.messages.LoginRequest;
@@ -43,7 +44,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 
@@ -59,28 +59,21 @@ class SoulseekClientConnectTest {
             {"user", null},
             {"user", ""}
         }) {
-            assertThrows(
-                    IllegalArgumentException.class, () -> fixture.client.connectAsync(credentials[0], credentials[1]));
+            assertThrows(IllegalArgumentException.class, () -> fixture.client.connect(credentials[0], credentials[1]));
         }
         for (String invalid : new String[] {null, "", " ", "\t"}) {
-            assertThrows(
-                    IllegalArgumentException.class, () -> fixture.client.connectAsync(invalid, 1, "user", "password"));
+            assertThrows(IllegalArgumentException.class, () -> fixture.client.connect(invalid, 1, "user", "password"));
         }
+        assertThrows(IllegalArgumentException.class, () -> fixture.client.connect("127.0.0.1", -1, "user", "password"));
         assertThrows(
-                IllegalArgumentException.class, () -> fixture.client.connectAsync("127.0.0.1", -1, "user", "password"));
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> fixture.client.connectAsync("127.0.0.1", 65_536, "user", "password"));
+                IllegalArgumentException.class, () -> fixture.client.connect("127.0.0.1", 65_536, "user", "password"));
 
         fixture.client.setStateForTest(SoulseekClientState.CONNECTING);
-        assertThrows(
-                IllegalStateException.class, () -> fixture.client.connectAsync("127.0.0.1", 1, "user", "password"));
+        assertThrows(IllegalStateException.class, () -> fixture.client.connect("127.0.0.1", 1, "user", "password"));
         fixture.client.setStateForTest(SoulseekClientState.LOGGING_IN);
-        assertThrows(
-                IllegalStateException.class, () -> fixture.client.connectAsync("127.0.0.1", 1, "user", "password"));
+        assertThrows(IllegalStateException.class, () -> fixture.client.connect("127.0.0.1", 1, "user", "password"));
         fixture.client.setStateForTest(SoulseekClientState.CONNECTED);
-        assertThrows(
-                IllegalStateException.class, () -> fixture.client.connectAsync("127.0.0.1", 1, "user", "password"));
+        assertThrows(IllegalStateException.class, () -> fixture.client.connect("127.0.0.1", 1, "user", "password"));
         fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
         fixture.close();
     }
@@ -89,8 +82,7 @@ class SoulseekClientConnectTest {
     void wrapsAddressResolutionFailure() {
         Fixture fixture = new Fixture();
         AddressException failure = assertThrows(
-                AddressException.class,
-                () -> fixture.client.connectAsync("not-a-host.invalid", 2271, "user", "password"));
+                AddressException.class, () -> fixture.client.connect("not-a-host.invalid", 2271, "user", "password"));
         assertInstanceOf(java.net.UnknownHostException.class, failure.getCause());
         fixture.close();
     }
@@ -100,7 +92,7 @@ class SoulseekClientConnectTest {
         InetAddress nonLocalAddress = InetAddress.getByAddress(new byte[] {(byte) 192, 0, 2, 1});
         SoulseekClientOptions options = new SoulseekClientOptions(true, nonLocalAddress, 50_000);
         Fixture fixture = new Fixture(options);
-        assertThrows(ListenException.class, () -> fixture.client.connectAsync("127.0.0.1", 2271, "user", "password"));
+        assertThrows(ListenException.class, () -> fixture.client.connect("127.0.0.1", 2271, "user", "password"));
         assertEquals(0, fixture.connection.connectCount);
         fixture.close();
     }
@@ -114,7 +106,7 @@ class SoulseekClientConnectTest {
         fixture.client.addStateChangedListener((sender, eventData) -> states.add(eventData.getState()));
         fixture.connection.fireConnected = true;
 
-        fixture.client.connectAsync("127.0.0.1", 2271, "alice", "secret", token).join();
+        fixture.client.connect("127.0.0.1", 2271, "alice", "secret", token);
 
         assertEquals(1, fixture.connection.connectCount);
         assertSame(token, fixture.connection.connectToken);
@@ -165,7 +157,7 @@ class SoulseekClientConnectTest {
             }
         });
 
-        fixture.client.connectAsync("127.0.0.1", 2271, "alice", "secret").join();
+        fixture.client.connect("127.0.0.1", 2271, "alice", "secret");
 
         assertEquals(List.of("server-info", "logged-in"), sequence);
         assertTrue(fixture.client.getServerInfo().isSupporter());
@@ -177,8 +169,9 @@ class SoulseekClientConnectTest {
         Fixture fixture = new Fixture();
         fixture.waiter.response = new LoginResponse(false, "denied");
 
-        CompletableFuture<Void> operation = fixture.client.connectAsync("127.0.0.1", 2271, "alice", "secret");
-        LoginRejectedException failure = assertInstanceOf(LoginRejectedException.class, completionCause(operation));
+        LoginRejectedException failure = assertInstanceOf(
+                LoginRejectedException.class,
+                completionCause(() -> fixture.client.connect("127.0.0.1", 2271, "alice", "secret")));
 
         assertTrue(failure.getMessage().contains("denied"));
         assertEquals(SoulseekClientState.DISCONNECTED, fixture.client.getState());
@@ -194,7 +187,7 @@ class SoulseekClientConnectTest {
         fixture.connection.synchronousConnectFailure = connectFailure;
         SoulseekClientException wrapped = assertInstanceOf(
                 SoulseekClientException.class,
-                completionCause(fixture.client.connectAsync("127.0.0.1", 2271, "alice", "secret")));
+                completionCause(() -> fixture.client.connect("127.0.0.1", 2271, "alice", "secret")));
         assertSame(connectFailure, wrapped.getCause());
         assertEquals(SoulseekClientState.DISCONNECTED, fixture.client.getState());
 
@@ -203,7 +196,7 @@ class SoulseekClientConnectTest {
         configurationFixture.connection.messageResult = CompletableFuture.failedFuture(writeFailure);
         SoulseekClientException configurationWrapped = assertInstanceOf(
                 SoulseekClientException.class,
-                completionCause(configurationFixture.client.connectAsync("127.0.0.1", 2271, "alice", "secret")));
+                completionCause(() -> configurationFixture.client.connect("127.0.0.1", 2271, "alice", "secret")));
         assertSame(writeFailure, configurationWrapped.getCause());
         assertEquals(SoulseekClientState.DISCONNECTED, configurationFixture.client.getState());
         fixture.close();
@@ -215,7 +208,12 @@ class SoulseekClientConnectTest {
         Fixture fixture = new Fixture();
         TimeoutException timeout = new TimeoutException("timeout");
         fixture.connection.connectResult = CompletableFuture.failedFuture(timeout);
-        assertSame(timeout, completionCause(fixture.client.connectAsync("127.0.0.1", 2271, "alice", "secret")));
+        assertSame(
+                timeout,
+                assertInstanceOf(
+                                NoResponseException.class,
+                                completionCause(() -> fixture.client.connect("127.0.0.1", 2271, "alice", "secret")))
+                        .getCause());
         assertEquals(SoulseekClientState.DISCONNECTED, fixture.client.getState());
 
         Fixture cancelledFixture = new Fixture();
@@ -223,8 +221,8 @@ class SoulseekClientConnectTest {
         source.cancel();
         assertInstanceOf(
                 CancellationException.class,
-                completionCause(cancelledFixture.client.connectAsync(
-                        "127.0.0.1", 2271, "alice", "secret", source.getSignal())));
+                completionCause(() ->
+                        cancelledFixture.client.connect("127.0.0.1", 2271, "alice", "secret", source.getSignal())));
         assertEquals(0, cancelledFixture.connection.connectCount);
         assertEquals(SoulseekClientState.DISCONNECTED, cancelledFixture.client.getState());
         fixture.close();
@@ -234,7 +232,7 @@ class SoulseekClientConnectTest {
     @Test
     void serverConnectionCallbacksDriveStateAndMessageHandlers() {
         Fixture fixture = new Fixture();
-        fixture.client.connectAsync("127.0.0.1", 2271, "alice", "secret").join();
+        fixture.client.connect("127.0.0.1", 2271, "alice", "secret");
         assertTrue(fixture.factory.connected != null);
         assertTrue(fixture.factory.disconnected != null);
         assertTrue(fixture.factory.messageRead != null);
@@ -251,19 +249,21 @@ class SoulseekClientConnectTest {
         return SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN);
     }
 
-    private static Throwable completionCause(CompletableFuture<?> future) {
+    /**
+     * Returns the failure a blocking call produced.
+     *
+     * <p>Took a future before the API became blocking; the calls now throw
+     * directly, so it takes the call itself.
+     */
+    private static Throwable completionCause(org.junit.jupiter.api.function.Executable body) {
         try {
-            future.join();
-            throw new AssertionError("Expected failure");
-        } catch (CancellationException failure) {
+            body.execute();
+        } catch (java.util.concurrent.CompletionException wrapped) {
+            return wrapped.getCause() == null ? wrapped : wrapped.getCause();
+        } catch (Throwable failure) {
             return failure;
-        } catch (CompletionException failure) {
-            Throwable cause = failure;
-            while (cause instanceof CompletionException && cause.getCause() != null) {
-                cause = cause.getCause();
-            }
-            return cause;
         }
+        throw new AssertionError("expected the operation to fail");
     }
 
     private static Object defaultValue(Class<?> type) {

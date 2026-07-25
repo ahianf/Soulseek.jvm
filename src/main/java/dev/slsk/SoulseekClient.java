@@ -38,7 +38,6 @@ import dev.slsk.options.UploadStreamFactory;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 /**
@@ -304,55 +303,49 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
 
     int getNextToken();
 
-    CompletableFuture<Void> acknowledgePrivateMessageAsync(int privateMessageId);
+    void acknowledgePrivateMessage(int privateMessageId);
 
-    CompletableFuture<Void> acknowledgePrivateMessageAsync(int privateMessageId, CancellationSignal cancellationSignal);
+    void acknowledgePrivateMessage(int privateMessageId, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> acknowledgePrivilegeNotificationAsync(int privilegeNotificationId);
+    void acknowledgePrivilegeNotification(int privilegeNotificationId);
 
-    CompletableFuture<Void> acknowledgePrivilegeNotificationAsync(
-            int privilegeNotificationId, CancellationSignal cancellationSignal);
+    void acknowledgePrivilegeNotification(int privilegeNotificationId, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> addPrivateRoomMemberAsync(String roomName, String username);
+    void addPrivateRoomMember(String roomName, String username);
 
-    CompletableFuture<Void> addPrivateRoomMemberAsync(
-            String roomName, String username, CancellationSignal cancellationSignal);
+    void addPrivateRoomMember(String roomName, String username, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> addPrivateRoomModeratorAsync(String roomName, String username);
+    void addPrivateRoomModerator(String roomName, String username);
 
-    CompletableFuture<Void> addPrivateRoomModeratorAsync(
-            String roomName, String username, CancellationSignal cancellationSignal);
+    void addPrivateRoomModerator(String roomName, String username, CancellationSignal cancellationSignal);
 
-    CompletableFuture<BrowseResponse> browseAsync(String username);
+    BrowseResponse browse(String username);
 
-    CompletableFuture<BrowseResponse> browseAsync(String username, BrowseOptions options);
+    BrowseResponse browse(String username, BrowseOptions options);
 
-    CompletableFuture<BrowseResponse> browseAsync(String username, CancellationSignal cancellationSignal);
+    BrowseResponse browse(String username, CancellationSignal cancellationSignal);
 
-    CompletableFuture<BrowseResponse> browseAsync(
-            String username, BrowseOptions options, CancellationSignal cancellationSignal);
+    BrowseResponse browse(String username, BrowseOptions options, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> changePasswordAsync(String password);
+    void changePassword(String password);
 
-    CompletableFuture<Void> changePasswordAsync(String password, CancellationSignal cancellationSignal);
+    void changePassword(String password, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> connectAsync(String username, String password);
+    void connect(String username, String password);
 
-    CompletableFuture<Void> connectAsync(String username, String password, CancellationSignal cancellationSignal);
+    void connect(String username, String password, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> connectAsync(String address, int port, String username, String password);
+    void connect(String address, int port, String username, String password);
 
-    CompletableFuture<Void> connectAsync(
-            String address, int port, String username, String password, CancellationSignal cancellationSignal);
+    void connect(String address, int port, String username, String password, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> connectToUserAsync(String username);
+    void connectToUser(String username);
 
-    CompletableFuture<Void> connectToUserAsync(String username, boolean invalidateCache);
+    void connectToUser(String username, boolean invalidateCache);
 
-    CompletableFuture<Void> connectToUserAsync(String username, CancellationSignal cancellationSignal);
+    void connectToUser(String username, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> connectToUserAsync(
-            String username, boolean invalidateCache, CancellationSignal cancellationSignal);
+    void connectToUser(String username, boolean invalidateCache, CancellationSignal cancellationSignal);
 
     void disconnect();
 
@@ -360,20 +353,19 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
 
     void disconnect(String message, Exception exception);
 
-    CompletableFuture<Transfer> downloadAsync(String username, String remoteFilename, String localFilename);
+    Transfer download(String username, String remoteFilename, String localFilename);
 
-    CompletableFuture<Transfer> downloadAsync(String username, String remoteFilename, String localFilename, Long size);
+    Transfer download(String username, String remoteFilename, String localFilename, Long size);
 
-    CompletableFuture<Transfer> downloadAsync(
+    Transfer download(
             String username, String remoteFilename, String localFilename, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Transfer> downloadAsync(
-            String username, String remoteFilename, String localFilename, Long size, long startOffset);
+    Transfer download(String username, String remoteFilename, String localFilename, Long size, long startOffset);
 
-    CompletableFuture<Transfer> downloadAsync(
+    Transfer download(
             String username, String remoteFilename, String localFilename, Long size, long startOffset, Integer token);
 
-    CompletableFuture<Transfer> downloadAsync(
+    Transfer download(
             String username,
             String remoteFilename,
             String localFilename,
@@ -382,7 +374,7 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
             Integer token,
             TransferOptions options);
 
-    CompletableFuture<Transfer> downloadAsync(
+    Transfer download(
             String username,
             String remoteFilename,
             String localFilename,
@@ -392,26 +384,24 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
             TransferOptions options,
             CancellationSignal cancellationSignal);
 
-    CompletableFuture<Transfer> downloadAsync(
-            String username, String remoteFilename, DownloadStreamFactory outputStreamFactory);
+    Transfer download(String username, String remoteFilename, DownloadStreamFactory outputStreamFactory);
 
-    CompletableFuture<Transfer> downloadAsync(
-            String username, String remoteFilename, DownloadStreamFactory outputStreamFactory, Long size);
+    Transfer download(String username, String remoteFilename, DownloadStreamFactory outputStreamFactory, Long size);
 
-    CompletableFuture<Transfer> downloadAsync(
+    Transfer download(
             String username,
             String remoteFilename,
             DownloadStreamFactory outputStreamFactory,
             CancellationSignal cancellationSignal);
 
-    CompletableFuture<Transfer> downloadAsync(
+    Transfer download(
             String username,
             String remoteFilename,
             DownloadStreamFactory outputStreamFactory,
             Long size,
             long startOffset);
 
-    CompletableFuture<Transfer> downloadAsync(
+    Transfer download(
             String username,
             String remoteFilename,
             DownloadStreamFactory outputStreamFactory,
@@ -419,7 +409,7 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
             long startOffset,
             Integer token);
 
-    CompletableFuture<Transfer> downloadAsync(
+    Transfer download(
             String username,
             String remoteFilename,
             DownloadStreamFactory outputStreamFactory,
@@ -428,7 +418,7 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
             Integer token,
             TransferOptions options);
 
-    CompletableFuture<Transfer> downloadAsync(
+    Transfer download(
             String username,
             String remoteFilename,
             DownloadStreamFactory outputStreamFactory,
@@ -438,27 +428,25 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
             TransferOptions options,
             CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> dropPrivateRoomMembershipAsync(String roomName);
+    void dropPrivateRoomMembership(String roomName);
 
-    CompletableFuture<Void> dropPrivateRoomMembershipAsync(String roomName, CancellationSignal cancellationSignal);
+    void dropPrivateRoomMembership(String roomName, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> dropPrivateRoomOwnershipAsync(String roomName);
+    void dropPrivateRoomOwnership(String roomName);
 
-    CompletableFuture<Void> dropPrivateRoomOwnershipAsync(String roomName, CancellationSignal cancellationSignal);
+    void dropPrivateRoomOwnership(String roomName, CancellationSignal cancellationSignal);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
-            String username, String remoteFilename, String localFilename);
+    TransferHandle enqueueDownload(String username, String remoteFilename, String localFilename);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
-            String username, String remoteFilename, String localFilename, Long size);
+    TransferHandle enqueueDownload(String username, String remoteFilename, String localFilename, Long size);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    TransferHandle enqueueDownload(
             String username, String remoteFilename, String localFilename, Long size, long startOffset);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    TransferHandle enqueueDownload(
             String username, String remoteFilename, String localFilename, Long size, long startOffset, Integer token);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    TransferHandle enqueueDownload(
             String username,
             String remoteFilename,
             String localFilename,
@@ -467,7 +455,7 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
             Integer token,
             TransferOptions options);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    TransferHandle enqueueDownload(
             String username,
             String remoteFilename,
             String localFilename,
@@ -477,20 +465,19 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
             TransferOptions options,
             CancellationSignal cancellationSignal);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
-            String username, String remoteFilename, DownloadStreamFactory outputStreamFactory);
+    TransferHandle enqueueDownload(String username, String remoteFilename, DownloadStreamFactory outputStreamFactory);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    TransferHandle enqueueDownload(
             String username, String remoteFilename, DownloadStreamFactory outputStreamFactory, Long size);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    TransferHandle enqueueDownload(
             String username,
             String remoteFilename,
             DownloadStreamFactory outputStreamFactory,
             Long size,
             long startOffset);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    TransferHandle enqueueDownload(
             String username,
             String remoteFilename,
             DownloadStreamFactory outputStreamFactory,
@@ -498,7 +485,7 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
             long startOffset,
             Integer token);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    TransferHandle enqueueDownload(
             String username,
             String remoteFilename,
             DownloadStreamFactory outputStreamFactory,
@@ -507,7 +494,7 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
             Integer token,
             TransferOptions options);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueDownloadAsync(
+    TransferHandle enqueueDownload(
             String username,
             String remoteFilename,
             DownloadStreamFactory outputStreamFactory,
@@ -517,19 +504,17 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
             TransferOptions options,
             CancellationSignal cancellationSignal);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
-            String username, String remoteFilename, String localFilename);
+    TransferHandle enqueueUpload(String username, String remoteFilename, String localFilename);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
-            String username, String remoteFilename, String localFilename, Integer token);
+    TransferHandle enqueueUpload(String username, String remoteFilename, String localFilename, Integer token);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+    TransferHandle enqueueUpload(
             String username, String remoteFilename, String localFilename, CancellationSignal cancellationSignal);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+    TransferHandle enqueueUpload(
             String username, String remoteFilename, String localFilename, Integer token, TransferOptions options);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+    TransferHandle enqueueUpload(
             String username,
             String remoteFilename,
             String localFilename,
@@ -537,20 +522,20 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
             TransferOptions options,
             CancellationSignal cancellationSignal);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+    TransferHandle enqueueUpload(
             String username, String remoteFilename, long size, UploadStreamFactory inputStreamFactory);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+    TransferHandle enqueueUpload(
             String username, String remoteFilename, long size, UploadStreamFactory inputStreamFactory, Integer token);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+    TransferHandle enqueueUpload(
             String username,
             String remoteFilename,
             long size,
             UploadStreamFactory inputStreamFactory,
             CancellationSignal cancellationSignal);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+    TransferHandle enqueueUpload(
             String username,
             String remoteFilename,
             long size,
@@ -558,7 +543,7 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
             Integer token,
             TransferOptions options);
 
-    CompletableFuture<CompletableFuture<Transfer>> enqueueUploadAsync(
+    TransferHandle enqueueUpload(
             String username,
             String remoteFilename,
             long size,
@@ -567,122 +552,112 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
             TransferOptions options,
             CancellationSignal cancellationSignal);
 
-    CompletableFuture<List<Directory>> getDirectoryContentsAsync(String username, String directoryName);
+    List<Directory> getDirectoryContents(String username, String directoryName);
 
-    CompletableFuture<List<Directory>> getDirectoryContentsAsync(String username, String directoryName, int token);
+    List<Directory> getDirectoryContents(String username, String directoryName, int token);
 
-    CompletableFuture<List<Directory>> getDirectoryContentsAsync(
-            String username, String directoryName, CancellationSignal cancellationSignal);
+    List<Directory> getDirectoryContents(String username, String directoryName, CancellationSignal cancellationSignal);
 
-    CompletableFuture<List<Directory>> getDirectoryContentsAsync(
+    List<Directory> getDirectoryContents(
             String username, String directoryName, Integer token, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Integer> getDownloadPlaceInQueueAsync(String username, String filename);
+    Integer getDownloadPlaceInQueue(String username, String filename);
 
-    CompletableFuture<Integer> getDownloadPlaceInQueueAsync(
-            String username, String filename, CancellationSignal cancellationSignal);
+    Integer getDownloadPlaceInQueue(String username, String filename, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Integer> getPrivilegesAsync();
+    Integer getPrivileges();
 
-    CompletableFuture<Integer> getPrivilegesAsync(CancellationSignal cancellationSignal);
+    Integer getPrivileges(CancellationSignal cancellationSignal);
 
-    CompletableFuture<RoomList> getRoomListAsync();
+    RoomList getRoomList();
 
-    CompletableFuture<RoomList> getRoomListAsync(CancellationSignal cancellationSignal);
+    RoomList getRoomList(CancellationSignal cancellationSignal);
 
-    CompletableFuture<InetSocketAddress> getUserEndpointAsync(String username);
+    InetSocketAddress getUserEndpoint(String username);
 
-    CompletableFuture<InetSocketAddress> getUserEndpointAsync(String username, CancellationSignal cancellationSignal);
+    InetSocketAddress getUserEndpoint(String username, CancellationSignal cancellationSignal);
 
-    CompletableFuture<UserInfo> getUserInfoAsync(String username);
+    UserInfo getUserInfo(String username);
 
-    CompletableFuture<UserInfo> getUserInfoAsync(String username, CancellationSignal cancellationSignal);
+    UserInfo getUserInfo(String username, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Boolean> getUserPrivilegedAsync(String username);
+    Boolean getUserPrivileged(String username);
 
-    CompletableFuture<Boolean> getUserPrivilegedAsync(String username, CancellationSignal cancellationSignal);
+    Boolean getUserPrivileged(String username, CancellationSignal cancellationSignal);
 
-    CompletableFuture<UserStatistics> getUserStatisticsAsync(String username);
+    UserStatistics getUserStatistics(String username);
 
-    CompletableFuture<UserStatistics> getUserStatisticsAsync(String username, CancellationSignal cancellationSignal);
+    UserStatistics getUserStatistics(String username, CancellationSignal cancellationSignal);
 
-    CompletableFuture<UserStatus> getUserStatusAsync(String username);
+    UserStatus getUserStatus(String username);
 
-    CompletableFuture<UserStatus> getUserStatusAsync(String username, CancellationSignal cancellationSignal);
+    UserStatus getUserStatus(String username, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> grantUserPrivilegesAsync(String username, int days);
+    void grantUserPrivileges(String username, int days);
 
-    CompletableFuture<Void> grantUserPrivilegesAsync(String username, int days, CancellationSignal cancellationSignal);
+    void grantUserPrivileges(String username, int days, CancellationSignal cancellationSignal);
 
-    CompletableFuture<RoomData> joinRoomAsync(String roomName);
+    RoomData joinRoom(String roomName);
 
-    CompletableFuture<RoomData> joinRoomAsync(String roomName, boolean isPrivate);
+    RoomData joinRoom(String roomName, boolean isPrivate);
 
-    CompletableFuture<RoomData> joinRoomAsync(String roomName, CancellationSignal cancellationSignal);
+    RoomData joinRoom(String roomName, CancellationSignal cancellationSignal);
 
-    CompletableFuture<RoomData> joinRoomAsync(
-            String roomName, boolean isPrivate, CancellationSignal cancellationSignal);
+    RoomData joinRoom(String roomName, boolean isPrivate, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> leaveRoomAsync(String roomName);
+    void leaveRoom(String roomName);
 
-    CompletableFuture<Void> leaveRoomAsync(String roomName, CancellationSignal cancellationSignal);
+    void leaveRoom(String roomName, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Long> pingServerAsync();
+    Long pingServer();
 
-    CompletableFuture<Long> pingServerAsync(CancellationSignal cancellationSignal);
+    Long pingServer(CancellationSignal cancellationSignal);
 
-    CompletableFuture<Boolean> reconfigureOptionsAsync(SoulseekClientOptionsPatch patch);
+    Boolean reconfigureOptions(SoulseekClientOptionsPatch patch);
 
-    CompletableFuture<Boolean> reconfigureOptionsAsync(
-            SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal);
+    Boolean reconfigureOptions(SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> removePrivateRoomMemberAsync(String roomName, String username);
+    void removePrivateRoomMember(String roomName, String username);
 
-    CompletableFuture<Void> removePrivateRoomMemberAsync(
-            String roomName, String username, CancellationSignal cancellationSignal);
+    void removePrivateRoomMember(String roomName, String username, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> removePrivateRoomModeratorAsync(String roomName, String username);
+    void removePrivateRoomModerator(String roomName, String username);
 
-    CompletableFuture<Void> removePrivateRoomModeratorAsync(
-            String roomName, String username, CancellationSignal cancellationSignal);
+    void removePrivateRoomModerator(String roomName, String username, CancellationSignal cancellationSignal);
 
-    CompletableFuture<SearchResult> searchAsync(SearchQuery query);
+    SearchResult search(SearchQuery query);
 
-    CompletableFuture<SearchResult> searchAsync(SearchQuery query, CancellationSignal cancellationSignal);
+    SearchResult search(SearchQuery query, CancellationSignal cancellationSignal);
 
-    CompletableFuture<SearchResult> searchAsync(SearchQuery query, SearchScope scope);
+    SearchResult search(SearchQuery query, SearchScope scope);
 
-    CompletableFuture<SearchResult> searchAsync(SearchQuery query, SearchScope scope, Integer token);
+    SearchResult search(SearchQuery query, SearchScope scope, Integer token);
 
-    CompletableFuture<SearchResult> searchAsync(
-            SearchQuery query, SearchScope scope, Integer token, SearchOptions options);
+    SearchResult search(SearchQuery query, SearchScope scope, Integer token, SearchOptions options);
 
-    CompletableFuture<SearchResult> searchAsync(
+    SearchResult search(
             SearchQuery query,
             SearchScope scope,
             Integer token,
             SearchOptions options,
             CancellationSignal cancellationSignal);
 
-    CompletableFuture<Search> searchAsync(SearchQuery query, Consumer<SearchResponse> responseHandler);
+    Search search(SearchQuery query, Consumer<SearchResponse> responseHandler);
 
-    CompletableFuture<Search> searchAsync(
-            SearchQuery query, Consumer<SearchResponse> responseHandler, CancellationSignal cancellationSignal);
+    Search search(SearchQuery query, Consumer<SearchResponse> responseHandler, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Search> searchAsync(
-            SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope);
+    Search search(SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope);
 
-    CompletableFuture<Search> searchAsync(
-            SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope, Integer token);
+    Search search(SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope, Integer token);
 
-    CompletableFuture<Search> searchAsync(
+    Search search(
             SearchQuery query,
             Consumer<SearchResponse> responseHandler,
             SearchScope scope,
             Integer token,
             SearchOptions options);
 
-    CompletableFuture<Search> searchAsync(
+    Search search(
             SearchQuery query,
             Consumer<SearchResponse> responseHandler,
             SearchScope scope,
@@ -690,59 +665,55 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
             SearchOptions options,
             CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> sendPrivateMessageAsync(String username, String message);
+    void sendPrivateMessage(String username, String message);
 
-    CompletableFuture<Void> sendPrivateMessageAsync(
-            String username, String message, CancellationSignal cancellationSignal);
+    void sendPrivateMessage(String username, String message, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> sendRoomMessageAsync(String roomName, String message);
+    void sendRoomMessage(String roomName, String message);
 
-    CompletableFuture<Void> sendRoomMessageAsync(
-            String roomName, String message, CancellationSignal cancellationSignal);
+    void sendRoomMessage(String roomName, String message, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> sendUploadSpeedAsync(int speed);
+    void sendUploadSpeed(int speed);
 
-    CompletableFuture<Void> sendUploadSpeedAsync(int speed, CancellationSignal cancellationSignal);
+    void sendUploadSpeed(int speed, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> setRoomTickerAsync(String roomName, String message);
+    void setRoomTicker(String roomName, String message);
 
-    CompletableFuture<Void> setRoomTickerAsync(String roomName, String message, CancellationSignal cancellationSignal);
+    void setRoomTicker(String roomName, String message, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> setSharedCountsAsync(int directories, int files);
+    void setSharedCounts(int directories, int files);
 
-    CompletableFuture<Void> setSharedCountsAsync(int directories, int files, CancellationSignal cancellationSignal);
+    void setSharedCounts(int directories, int files, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> setStatusAsync(UserPresence status);
+    void setStatus(UserPresence status);
 
-    CompletableFuture<Void> setStatusAsync(UserPresence status, CancellationSignal cancellationSignal);
+    void setStatus(UserPresence status, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> startPublicChatAsync();
+    void startPublicChat();
 
-    CompletableFuture<Void> startPublicChatAsync(CancellationSignal cancellationSignal);
+    void startPublicChat(CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> stopPublicChatAsync();
+    void stopPublicChat();
 
-    CompletableFuture<Void> stopPublicChatAsync(CancellationSignal cancellationSignal);
+    void stopPublicChat(CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> unwatchUserAsync(String username);
+    void unwatchUser(String username);
 
-    CompletableFuture<Void> unwatchUserAsync(String username, CancellationSignal cancellationSignal);
+    void unwatchUser(String username, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Transfer> uploadAsync(String username, String remoteFilename, String localFilename);
+    Transfer upload(String username, String remoteFilename, String localFilename);
 
-    CompletableFuture<Transfer> uploadAsync(
-            String username, String remoteFilename, String localFilename, Integer token);
+    Transfer upload(String username, String remoteFilename, String localFilename, Integer token);
 
-    CompletableFuture<Transfer> uploadAsync(
+    Transfer upload(
             String username, String remoteFilename, String localFilename, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Transfer> uploadAsync(
-            String username, String remoteFilename, String localFilename, TransferOptions options);
+    Transfer upload(String username, String remoteFilename, String localFilename, TransferOptions options);
 
-    CompletableFuture<Transfer> uploadAsync(
+    Transfer upload(
             String username, String remoteFilename, String localFilename, Integer token, TransferOptions options);
 
-    CompletableFuture<Transfer> uploadAsync(
+    Transfer upload(
             String username,
             String remoteFilename,
             String localFilename,
@@ -750,27 +721,26 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
             TransferOptions options,
             CancellationSignal cancellationSignal);
 
-    CompletableFuture<Transfer> uploadAsync(
-            String username, String remoteFilename, long size, UploadStreamFactory inputStreamFactory);
+    Transfer upload(String username, String remoteFilename, long size, UploadStreamFactory inputStreamFactory);
 
-    CompletableFuture<Transfer> uploadAsync(
+    Transfer upload(
             String username, String remoteFilename, long size, UploadStreamFactory inputStreamFactory, Integer token);
 
-    CompletableFuture<Transfer> uploadAsync(
+    Transfer upload(
             String username,
             String remoteFilename,
             long size,
             UploadStreamFactory inputStreamFactory,
             CancellationSignal cancellationSignal);
 
-    CompletableFuture<Transfer> uploadAsync(
+    Transfer upload(
             String username,
             String remoteFilename,
             long size,
             UploadStreamFactory inputStreamFactory,
             TransferOptions options);
 
-    CompletableFuture<Transfer> uploadAsync(
+    Transfer upload(
             String username,
             String remoteFilename,
             long size,
@@ -778,7 +748,7 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
             Integer token,
             TransferOptions options);
 
-    CompletableFuture<Transfer> uploadAsync(
+    Transfer upload(
             String username,
             String remoteFilename,
             long size,
@@ -787,9 +757,9 @@ public interface SoulseekClient extends AutoCloseable, DiagnosticSource {
             TransferOptions options,
             CancellationSignal cancellationSignal);
 
-    CompletableFuture<UserData> watchUserAsync(String username);
+    UserData watchUser(String username);
 
-    CompletableFuture<UserData> watchUserAsync(String username, CancellationSignal cancellationSignal);
+    UserData watchUser(String username, CancellationSignal cancellationSignal);
 
     @Override
     void close();

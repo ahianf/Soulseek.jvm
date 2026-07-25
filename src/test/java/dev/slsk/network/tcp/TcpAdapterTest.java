@@ -142,7 +142,7 @@ class TcpAdapterTest {
                     throw new RuntimeException(exception);
                 }
             });
-            client.connectAsync(LOOPBACK, server.getLocalPort()).get(3, TimeUnit.SECONDS);
+            client.connectAsync(LOOPBACK, server.getLocalPort()).join();
             assertTrue(client.isConnected());
             assertEquals(server.getLocalPort(), client.getRemoteEndpoint().getPort());
 

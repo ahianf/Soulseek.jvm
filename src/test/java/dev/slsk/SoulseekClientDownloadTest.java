@@ -18,6 +18,7 @@ import dev.slsk.diagnostics.DiagnosticSink;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.DuplicateTokenException;
 import dev.slsk.exceptions.DuplicateTransferException;
+import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
@@ -55,6 +56,7 @@ import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
@@ -67,25 +69,23 @@ class SoulseekClientDownloadTest {
         try (Fixture fixture = new Fixture()) {
             for (String bad : new String[] {null, "", " ", "\t"}) {
                 assertThrows(
-                        IllegalArgumentException.class,
-                        () -> fixture.client.downloadAsync(bad, "file", outputFactory()));
+                        IllegalArgumentException.class, () -> fixture.client.download(bad, "file", outputFactory()));
                 assertThrows(
-                        IllegalArgumentException.class,
-                        () -> fixture.client.downloadAsync("alice", bad, outputFactory()));
-                assertThrows(IllegalArgumentException.class, () -> fixture.client.downloadAsync("alice", "file", bad));
+                        IllegalArgumentException.class, () -> fixture.client.download("alice", bad, outputFactory()));
+                assertThrows(IllegalArgumentException.class, () -> fixture.client.download("alice", "file", bad));
             }
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> fixture.client.downloadAsync("alice", "file", outputFactory(), -1L));
+                    () -> fixture.client.download("alice", "file", outputFactory(), -1L));
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> fixture.client.downloadAsync("alice", "file", outputFactory(), 1L, -1));
+                    () -> fixture.client.download("alice", "file", outputFactory(), 1L, -1));
             assertThrows(
                     NullPointerException.class,
-                    () -> fixture.client.downloadAsync("alice", "file", outputFactory(), null, 1));
+                    () -> fixture.client.download("alice", "file", outputFactory(), null, 1));
             assertThrows(
                     NullPointerException.class,
-                    () -> fixture.client.downloadAsync(
+                    () -> fixture.client.download(
                             "alice",
                             "file",
                             (dev.slsk.options.DownloadStreamFactory) null,
@@ -96,8 +96,7 @@ class SoulseekClientDownloadTest {
                             CancellationSignal.none()));
 
             fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
-            assertThrows(
-                    IllegalStateException.class, () -> fixture.client.downloadAsync("alice", "file", outputFactory()));
+            assertThrows(IllegalStateException.class, () -> fixture.client.download("alice", "file", outputFactory()));
         }
     }
 
@@ -107,25 +106,25 @@ class SoulseekClientDownloadTest {
             fixture.client.getDownloadDictionary().put(1, transfer(TransferDirection.DOWNLOAD, "other", "other", 1));
             assertThrows(
                     DuplicateTokenException.class,
-                    () -> fixture.client.downloadAsync("alice", "file", outputFactory(), 1L, 0, 1));
+                    () -> fixture.client.download("alice", "file", outputFactory(), 1L, 0, 1));
 
             fixture.client.getDownloadDictionary().clear();
             fixture.client.getUploadsInternal().put(2, transfer(TransferDirection.UPLOAD, "other", "other", 2));
             assertThrows(
                     DuplicateTokenException.class,
-                    () -> fixture.client.downloadAsync("alice", "file", outputFactory(), 1L, 0, 2));
+                    () -> fixture.client.download("alice", "file", outputFactory(), 1L, 0, 2));
 
             fixture.client.getUploadsInternal().clear();
             fixture.client.getDownloadDictionary().put(3, transfer(TransferDirection.DOWNLOAD, "alice", "file", 3));
             assertThrows(
                     DuplicateTransferException.class,
-                    () -> fixture.client.downloadAsync("alice", "file", outputFactory(), 1L, 0, 4));
+                    () -> fixture.client.download("alice", "file", outputFactory(), 1L, 0, 4));
 
             fixture.client.getDownloadDictionary().clear();
             fixture.client.getUniqueKeys().put("Download:alice:file", true);
             assertThrows(
                     DuplicateTransferException.class,
-                    () -> fixture.client.downloadAsync("alice", "file", outputFactory(), 1L, 0, 4));
+                    () -> fixture.client.download("alice", "file", outputFactory(), 1L, 0, 4));
         }
     }
 
@@ -143,17 +142,15 @@ class SoulseekClientDownloadTest {
             fixture.client.addTransferProgressUpdatedListener(
                     (sender, eventData) -> progress.add(eventData.getTransfer().getBytesTransferred()));
 
-            Transfer result = fixture.client
-                    .downloadAsync(
-                            "alice",
-                            "remote\\file",
-                            () -> CompletableFuture.completedFuture(output),
-                            null,
-                            0,
-                            11,
-                            options(),
-                            CancellationSignal.none())
-                    .join();
+            Transfer result = fixture.client.download(
+                    "alice",
+                    "remote\\file",
+                    () -> CompletableFuture.completedFuture(output),
+                    null,
+                    0,
+                    11,
+                    options(),
+                    CancellationSignal.none());
 
             assertEquals(bytes.length, result.getSize());
             assertEquals(bytes.length, result.getBytesTransferred());
@@ -190,7 +187,7 @@ class SoulseekClientDownloadTest {
                 }
             });
 
-            Throwable failure = failureOf(fixture.client.downloadAsync(
+            Throwable failure = failureOf(() -> fixture.client.download(
                     "alice", "file", outputFactory(), 4L, 0, 12, options(), CancellationSignal.none()));
 
             TransferSizeMismatchException mismatch = assertInstanceOf(TransferSizeMismatchException.class, failure);
@@ -214,7 +211,7 @@ class SoulseekClientDownloadTest {
                 }
             });
 
-            Throwable failure = failureOf(fixture.client.downloadAsync(
+            Throwable failure = failureOf(() -> fixture.client.download(
                     "alice", "file", outputFactory(), 5L, 0, 30, options(), CancellationSignal.none()));
 
             TransferSizeMismatchException mismatch = assertInstanceOf(TransferSizeMismatchException.class, failure);
@@ -230,7 +227,7 @@ class SoulseekClientDownloadTest {
         try (Fixture fixture = new Fixture()) {
             fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(13, "not shared"));
 
-            Throwable failure = failureOf(fixture.client.downloadAsync(
+            Throwable failure = failureOf(() -> fixture.client.download(
                     "alice", "file", outputFactory(), 1L, 0, 13, options(), CancellationSignal.none()));
 
             assertInstanceOf(TransferRejectedException.class, failure);
@@ -247,17 +244,15 @@ class SoulseekClientDownloadTest {
                     new TransferRequest(TransferDirection.UPLOAD, 99, "file", bytes.length));
             ByteArrayOutputStream output = new ByteArrayOutputStream();
 
-            Transfer result = fixture.client
-                    .downloadAsync(
-                            "alice",
-                            "file",
-                            () -> CompletableFuture.completedFuture(output),
-                            null,
-                            0,
-                            14,
-                            options(),
-                            CancellationSignal.none())
-                    .join();
+            Transfer result = fixture.client.download(
+                    "alice",
+                    "file",
+                    () -> CompletableFuture.completedFuture(output),
+                    null,
+                    0,
+                    14,
+                    options(),
+                    CancellationSignal.none());
 
             assertEquals(99, result.getRemoteToken());
             assertEquals(bytes.length, result.getSize());
@@ -280,9 +275,8 @@ class SoulseekClientDownloadTest {
             fixture.peerManager.awaitResult =
                     CompletableFuture.failedFuture(new ConnectionException("peer did not connect"));
 
-            Transfer result = fixture.client
-                    .downloadAsync("alice", "file", outputFactory(), 1L, 0, 15, options(), CancellationSignal.none())
-                    .join();
+            Transfer result = fixture.client.download(
+                    "alice", "file", outputFactory(), 1L, 0, 15, options(), CancellationSignal.none());
 
             assertTrue(result.getState().contains(TransferState.SUCCEEDED));
             assertEquals(1, fixture.peerManager.awaitCalls);
@@ -297,15 +291,13 @@ class SoulseekClientDownloadTest {
             fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(16, "Queued"));
             fixture.waiter.startRequest = new CompletableFuture<>();
 
-            CompletableFuture<Transfer> download = fixture.client
-                    .enqueueDownloadAsync(
-                            "alice", "file", outputFactory(), null, 0, 16, options(), CancellationSignal.none())
-                    .join();
+            TransferHandle download = fixture.client.enqueueDownload(
+                    "alice", "file", outputFactory(), null, 0, 16, options(), CancellationSignal.none());
 
             assertFalse(download.isDone());
             fixture.transfer.data = new byte[] {1, 2};
             fixture.waiter.startRequest.complete(new TransferRequest(TransferDirection.UPLOAD, 101, "file", 2));
-            assertTrue(download.join().getState().contains(TransferState.SUCCEEDED));
+            assertTrue(download.await().getState().contains(TransferState.SUCCEEDED));
         }
     }
 
@@ -315,13 +307,10 @@ class SoulseekClientDownloadTest {
             fixture.transfer.data = new byte[] {1, 2};
             fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(17, 2));
 
-            CompletableFuture<Transfer> download = fixture.client
-                    .enqueueDownloadAsync(
-                            "alice", "file", outputFactory(), 2L, 0, 17, options(), CancellationSignal.none())
-                    .orTimeout(1, java.util.concurrent.TimeUnit.SECONDS)
-                    .join();
+            TransferHandle download = fixture.client.enqueueDownload(
+                    "alice", "file", outputFactory(), 2L, 0, 17, options(), CancellationSignal.none());
 
-            assertTrue(download.join().getState().contains(TransferState.SUCCEEDED));
+            assertTrue(download.await().getState().contains(TransferState.SUCCEEDED));
         }
     }
 
@@ -331,7 +320,7 @@ class SoulseekClientDownloadTest {
             TransferRejectedException rejection = new TransferRejectedException("rejected");
             fixture.waiter.response = CompletableFuture.failedFuture(rejection);
 
-            Throwable failure = failureOf(fixture.client.enqueueDownloadAsync(
+            Throwable failure = failureOf(() -> fixture.client.enqueueDownload(
                     "alice", "file", outputFactory(), 1L, 0, 17, options(), CancellationSignal.none()));
 
             assertSame(rejection, failure);
@@ -345,17 +334,15 @@ class SoulseekClientDownloadTest {
             fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(18, 5));
             PositionableBuffer output = new PositionableBuffer(new byte[] {1, 2});
 
-            Transfer result = fixture.client
-                    .downloadAsync(
-                            "alice",
-                            "file",
-                            () -> CompletableFuture.completedFuture(output),
-                            5L,
-                            2,
-                            18,
-                            options(),
-                            CancellationSignal.none())
-                    .join();
+            Transfer result = fixture.client.download(
+                    "alice",
+                    "file",
+                    () -> CompletableFuture.completedFuture(output),
+                    5L,
+                    2,
+                    18,
+                    options(),
+                    CancellationSignal.none());
 
             assertArrayEquals(
                     ByteBuffer.allocate(8)
@@ -375,15 +362,14 @@ class SoulseekClientDownloadTest {
         try (Fixture fixture = new Fixture()) {
             fixture.transfer.data = new byte[] {2};
             fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(19, 2));
-            Throwable failure = failureOf(fixture.client.downloadAsync(
+            Throwable failure = failureOf(() -> fixture.client.download(
                     "alice", "file", outputFactory(), 2L, 1, 19, options(), CancellationSignal.none()));
             assertInstanceOf(SoulseekClientException.class, failure);
 
             TransferOptions noSeek = new TransferOptions(null, null, null, null, null, null, 3_000, true, false);
             fixture.transfer.data = new byte[] {2};
-            Transfer result = fixture.client
-                    .downloadAsync("alice", "other", outputFactory(), 2L, 1, 20, noSeek, CancellationSignal.none())
-                    .join();
+            Transfer result = fixture.client.download(
+                    "alice", "other", outputFactory(), 2L, 1, 20, noSeek, CancellationSignal.none());
             assertEquals(
                     1, result.getBytesTransferred(), "final progress follows stream position when seek is bypassed");
         }
@@ -409,9 +395,7 @@ class SoulseekClientDownloadTest {
                     null,
                     (transfer, attempted, granted, actual) -> reports.add(List.of(attempted, granted, actual)));
 
-            fixture.client
-                    .downloadAsync("alice", "file", outputFactory(), 5L, 0, 21, options, CancellationSignal.none())
-                    .join();
+            fixture.client.download("alice", "file", outputFactory(), 5L, 0, 21, options, CancellationSignal.none());
 
             assertFalse(grants.isEmpty());
             assertFalse(reports.isEmpty());
@@ -437,7 +421,7 @@ class SoulseekClientDownloadTest {
                 }
             });
 
-            Throwable failure = failureOf(fixture.client.downloadAsync(
+            Throwable failure = failureOf(() -> fixture.client.download(
                     "alice", "file", outputFactory(), 1L, 0, 22, options(), CancellationSignal.none()));
 
             SoulseekClientException mapped = assertInstanceOf(SoulseekClientException.class, failure);
@@ -465,7 +449,7 @@ class SoulseekClientDownloadTest {
                 }
             });
 
-            Throwable failure = failureOf(fixture.client.downloadAsync(
+            Throwable failure = failureOf(() -> fixture.client.download(
                     "alice", "file", outputFactory(), 1L, 0, 31, options(), CancellationSignal.none()));
 
             assertSame(rejection, failure);
@@ -481,7 +465,7 @@ class SoulseekClientDownloadTest {
             fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(23, 1));
             fixture.transfer.disconnectOnRead = socketFailure;
 
-            Throwable failure = failureOf(fixture.client.downloadAsync(
+            Throwable failure = failureOf(() -> fixture.client.download(
                     "alice", "file", outputFactory(), 1L, 0, 23, options(), CancellationSignal.none()));
 
             SoulseekClientException mapped = assertInstanceOf(SoulseekClientException.class, failure);
@@ -498,14 +482,30 @@ class SoulseekClientDownloadTest {
             timeoutFixture.waiter.response = CompletableFuture.failedFuture(timeout);
             assertSame(
                     timeout,
-                    failureOf(timeoutFixture.client.downloadAsync(
-                            "alice", "file", outputFactory(), 1L, 0, 24, options(), CancellationSignal.none())));
+                    assertInstanceOf(
+                                    NoResponseException.class,
+                                    failureOf(() -> timeoutFixture.client.download(
+                                            "alice",
+                                            "file",
+                                            outputFactory(),
+                                            1L,
+                                            0,
+                                            24,
+                                            options(),
+                                            CancellationSignal.none())))
+                            .getCause());
 
             CancellationException cancellation = new CancellationException("cancelled");
             cancellationFixture.waiter.response = CompletableFuture.failedFuture(cancellation);
-            assertSame(
-                    cancellation,
-                    failureOf(cancellationFixture.client.downloadAsync(
+            // The operation future is cancelled rather than completed
+            // exceptionally, so a blocking caller sees a CancellationException
+            // but cannot be handed the exact instance the peer layer recorded.
+            // Identity was observable only while the future itself was the
+            // return value; the contract callers rely on — that cancellation
+            // surfaces as CancellationException — is unchanged.
+            assertInstanceOf(
+                    CancellationException.class,
+                    failureOf(() -> cancellationFixture.client.download(
                             "alice", "file", outputFactory(), 1L, 0, 25, options(), CancellationSignal.none())));
         }
     }
@@ -517,18 +517,14 @@ class SoulseekClientDownloadTest {
             Files.write(file, new byte[] {9, 9, 9});
             first.transfer.data = new byte[] {1, 2};
             first.waiter.response = CompletableFuture.completedFuture(new TransferResponse(26, 2));
-            first.client
-                    .downloadAsync("alice", "file", file.toString(), 2L, 0, 26, options(), CancellationSignal.none())
-                    .join();
+            first.client.download("alice", "file", file.toString(), 2L, 0, 26, options(), CancellationSignal.none());
             assertArrayEquals(new byte[] {1, 2}, Files.readAllBytes(file));
         }
 
         try (Fixture second = new Fixture()) {
             second.transfer.data = new byte[] {3, 4};
             second.waiter.response = CompletableFuture.completedFuture(new TransferResponse(27, 4));
-            second.client
-                    .downloadAsync("alice", "file", file.toString(), 4L, 2, 27, options(), CancellationSignal.none())
-                    .join();
+            second.client.download("alice", "file", file.toString(), 4L, 2, 27, options(), CancellationSignal.none());
             assertArrayEquals(new byte[] {1, 2, 3, 4}, Files.readAllBytes(file));
         } finally {
             Files.deleteIfExists(file);
@@ -541,33 +537,29 @@ class SoulseekClientDownloadTest {
             fixture.transfer.data = new byte[] {1};
             fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(28, 1));
             CloseTrackingOutputStream disposable = new CloseTrackingOutputStream();
-            fixture.client
-                    .downloadAsync(
-                            "alice",
-                            "file",
-                            () -> CompletableFuture.completedFuture(disposable),
-                            1L,
-                            0,
-                            28,
-                            options().withDisposalOptions(null, true),
-                            CancellationSignal.none())
-                    .join();
+            fixture.client.download(
+                    "alice",
+                    "file",
+                    () -> CompletableFuture.completedFuture(disposable),
+                    1L,
+                    0,
+                    28,
+                    options().withDisposalOptions(null, true),
+                    CancellationSignal.none());
             assertTrue(disposable.flushed.get());
             assertTrue(disposable.closed.get());
 
             fixture.transfer.data = new byte[] {2};
             CloseTrackingOutputStream retained = new CloseTrackingOutputStream();
-            fixture.client
-                    .downloadAsync(
-                            "alice",
-                            "other",
-                            () -> CompletableFuture.completedFuture(retained),
-                            1L,
-                            0,
-                            29,
-                            options().withDisposalOptions(null, false),
-                            CancellationSignal.none())
-                    .join();
+            fixture.client.download(
+                    "alice",
+                    "other",
+                    () -> CompletableFuture.completedFuture(retained),
+                    1L,
+                    0,
+                    29,
+                    options().withDisposalOptions(null, false),
+                    CancellationSignal.none());
             assertFalse(retained.closed.get());
         }
     }
@@ -582,17 +574,15 @@ class SoulseekClientDownloadTest {
             fixture.transfer.closeFailure = new IllegalStateException("close failed");
             FailingCleanupOutputStream output = new FailingCleanupOutputStream();
 
-            Transfer transfer = fixture.client
-                    .downloadAsync(
-                            "alice",
-                            "folder/file",
-                            () -> CompletableFuture.completedFuture(output),
-                            1L,
-                            0,
-                            32,
-                            options().withDisposalOptions(null, true),
-                            CancellationSignal.none())
-                    .join();
+            Transfer transfer = fixture.client.download(
+                    "alice",
+                    "folder/file",
+                    () -> CompletableFuture.completedFuture(output),
+                    1L,
+                    0,
+                    32,
+                    options().withDisposalOptions(null, true),
+                    CancellationSignal.none());
 
             assertTrue(transfer.getState().contains(TransferState.SUCCEEDED));
             assertTrue(diagnostic.warnings.stream().anyMatch(warning -> warning.contains("Failed to cancel wait")));
@@ -617,15 +607,38 @@ class SoulseekClientDownloadTest {
         return new TransferInternal(direction, username, filename, token);
     }
 
-    private static Throwable failureOf(CompletableFuture<?> future) {
+    /**
+     * Runs a blocking client call on a virtual thread so the test can interact
+     * with it while it is in flight.
+     *
+     * <p>The API used to hand back a future; now the caller decides whether to
+     * be concurrent, and a test that wants to observe a call mid-flight is
+     * exactly such a caller. The assertions around it are unchanged.
+     */
+    private static <T> CompletableFuture<T> inBackground(java.util.function.Supplier<T> call) {
+        return CompletableFuture.supplyAsync(call, Executors.newVirtualThreadPerTaskExecutor());
+    }
+
+    /** Void-returning variant of {@link #inBackground}. */
+    private static CompletableFuture<Void> inBackground(Runnable call) {
+        return CompletableFuture.runAsync(call, Executors.newVirtualThreadPerTaskExecutor());
+    }
+
+    /**
+     * Returns the failure a blocking call produced.
+     *
+     * <p>Took a future before the API became blocking; the calls now throw
+     * directly, so it takes the call itself.
+     */
+    private static Throwable failureOf(org.junit.jupiter.api.function.Executable body) {
         try {
-            future.join();
-            throw new AssertionError("Expected the future to fail");
-        } catch (CancellationException failure) {
-            return unwrapCompletionFailure(failure);
-        } catch (CompletionException failure) {
-            return unwrapCompletionFailure(failure);
+            body.execute();
+        } catch (java.util.concurrent.CompletionException wrapped) {
+            return wrapped.getCause() == null ? wrapped : wrapped.getCause();
+        } catch (Throwable failure) {
+            return failure;
         }
+        throw new AssertionError("Expected operation to fail");
     }
 
     private static Throwable unwrapCompletionFailure(Throwable failure) {

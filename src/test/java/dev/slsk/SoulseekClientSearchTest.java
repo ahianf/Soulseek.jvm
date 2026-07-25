@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.exceptions.DuplicateTokenException;
+import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.messaging.messages.RoomSearchRequest;
 import dev.slsk.messaging.messages.SearchRequest;
@@ -28,7 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
@@ -40,27 +41,25 @@ class SoulseekClientSearchTest {
     void validatesQueryHandlerLoginAndDuplicateToken() {
         Fixture fixture = new Fixture();
 
-        assertThrows(NullPointerException.class, () -> fixture.client.searchAsync((SearchQuery) null));
+        assertThrows(NullPointerException.class, () -> fixture.client.search((SearchQuery) null));
         for (String invalid :
                 new String[] {"", " ", "\t", "-excluded", "\u00A0", "\u2003", "\u202F", "\u3000", " \u2003\t"}) {
-            assertThrows(
-                    IllegalArgumentException.class, () -> fixture.client.searchAsync(SearchQuery.fromText(invalid)));
+            assertThrows(IllegalArgumentException.class, () -> fixture.client.search(SearchQuery.fromText(invalid)));
         }
-        assertThrows(IllegalArgumentException.class, () -> fixture.client.searchAsync(SearchQuery.fromText("a")));
+        assertThrows(IllegalArgumentException.class, () -> fixture.client.search(SearchQuery.fromText("a")));
         assertThrows(
                 NullPointerException.class,
-                () -> fixture.client.searchAsync(SearchQuery.fromText("valid"), (Consumer<SearchResponse>) null));
+                () -> fixture.client.search(SearchQuery.fromText("valid"), (Consumer<SearchResponse>) null));
 
         fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
-        assertThrows(IllegalStateException.class, () -> fixture.client.searchAsync(SearchQuery.fromText("valid")));
+        assertThrows(IllegalStateException.class, () -> fixture.client.search(SearchQuery.fromText("valid")));
 
         fixture.client.setStateForTest(loggedIn());
         SearchInternal existing = new SearchInternal(SearchQuery.fromText("existing"), SearchScope.getNetwork(), 42);
         fixture.client.getSearches().put(42, existing);
         assertThrows(
                 DuplicateTokenException.class,
-                () -> fixture.client.searchAsync(
-                        SearchQuery.fromText("valid"), null, 42, null, CancellationSignal.none()));
+                () -> fixture.client.search(SearchQuery.fromText("valid"), null, 42, null, CancellationSignal.none()));
         fixture.client.getSearches().remove(42);
         existing.close();
         fixture.close();
@@ -71,9 +70,8 @@ class SoulseekClientSearchTest {
         Fixture fixture = new Fixture();
         SearchOptions options = options(40, 250, false);
 
-        SearchResult result = fixture.client
-                .searchAsync(SearchQuery.fromText("a"), null, 10, options, CancellationSignal.none())
-                .join();
+        SearchResult result =
+                fixture.client.search(SearchQuery.fromText("a"), null, 10, options, CancellationSignal.none());
 
         assertArrayEquals(new SearchRequest("a", 10).toByteArray(), fixture.server.messages.get(0));
         assertTrue(result.search().getState().contains(SearchState.TIMED_OUT));
@@ -87,9 +85,8 @@ class SoulseekClientSearchTest {
         SearchOptions options =
                 options(40, 250, true, change -> states.add(change.search().getState()), null);
 
-        SearchResult result = fixture.client
-                .searchAsync(SearchQuery.fromText("foo a -bar"), null, 11, options, CancellationSignal.none())
-                .join();
+        SearchResult result =
+                fixture.client.search(SearchQuery.fromText("foo a -bar"), null, 11, options, CancellationSignal.none());
 
         assertArrayEquals(new SearchRequest("foo -bar", 11).toByteArray(), fixture.server.messages.get(0));
         assertEquals(
@@ -131,8 +128,8 @@ class SoulseekClientSearchTest {
         fixture.client.addSearchStateChangedListener((sender, eventData) -> clientStates.incrementAndGet());
         SearchOptions options = options(2_000, 1, true, null, received -> optionResponses.incrementAndGet());
 
-        CompletableFuture<SearchResult> task =
-                fixture.client.searchAsync(SearchQuery.fromText("query"), null, 30, options, CancellationSignal.none());
+        CompletableFuture<SearchResult> task = inBackground(() ->
+                fixture.client.search(SearchQuery.fromText("query"), null, 30, options, CancellationSignal.none()));
         waitUntil(() -> {
             SearchInternal active = fixture.client.getSearches().get(30);
             return active != null && active.getState().equals(SearchState.IN_PROGRESS);
@@ -164,13 +161,13 @@ class SoulseekClientSearchTest {
         List<SearchResponse> responses = new ArrayList<>();
         SearchOptions options = options(2_000, 1, true);
 
-        CompletableFuture<Search> task = fixture.client.searchAsync(
+        CompletableFuture<Search> task = inBackground(() -> fixture.client.search(
                 SearchQuery.fromText("query"),
                 responses::add,
                 SearchScope.getNetwork(),
                 31,
                 options,
-                CancellationSignal.none());
+                CancellationSignal.none()));
         waitUntil(() -> fixture.client.getSearches().containsKey(31)
                 && fixture.client.getSearches().get(31).getState().equals(SearchState.IN_PROGRESS));
         SearchResponse response = new SearchResponse("bob", 31, true, 1, 0, List.of(new File(2, "file", 3, "ext")));
@@ -189,14 +186,14 @@ class SoulseekClientSearchTest {
     void generatesTokenAndTracksActiveSearch() {
         Fixture fixture = new Fixture();
         CancellationController source = new CancellationController();
-        CompletableFuture<SearchResult> task = fixture.client.searchAsync(
-                SearchQuery.fromText("query"), null, null, options(2_000, 250, true), source.getSignal());
+        CompletableFuture<SearchResult> task = inBackground(() -> fixture.client.search(
+                SearchQuery.fromText("query"), null, null, options(2_000, 250, true), source.getSignal()));
 
         waitUntil(() -> fixture.client.getSearches().size() == 1);
         SearchInternal active = fixture.client.getSearches().values().iterator().next();
         assertEquals("query", active.getQuery().getSearchText());
         source.cancel();
-        assertInstanceOf(CancellationException.class, completionCause(task));
+        assertInstanceOf(CancellationException.class, completionCause(task::join));
         assertTrue(fixture.client.getSearches().isEmpty());
         fixture.close();
     }
@@ -206,21 +203,25 @@ class SoulseekClientSearchTest {
         Fixture fixture = new Fixture();
         CancellationController source = new CancellationController();
         source.cancel();
-        CompletableFuture<SearchResult> cancelled = fixture.client.searchAsync(
-                SearchQuery.fromText("cancelled"), null, 40, options(2_000, 250, true), source.getSignal());
-        assertInstanceOf(CancellationException.class, completionCause(cancelled));
+        CompletableFuture<SearchResult> cancelled = inBackground(() -> fixture.client.search(
+                SearchQuery.fromText("cancelled"), null, 40, options(2_000, 250, true), source.getSignal()));
+        assertInstanceOf(CancellationException.class, completionCause(() -> cancelled.join()));
 
         TimeoutException timeout = new TimeoutException("write");
         fixture.server.result = CompletableFuture.failedFuture(timeout);
-        CompletableFuture<SearchResult> timedOut = fixture.client.searchAsync(
-                SearchQuery.fromText("timeout"), null, 41, options(2_000, 250, true), CancellationSignal.none());
-        assertSame(timeout, completionCause(timedOut));
+        CompletableFuture<SearchResult> timedOut = inBackground(() -> fixture.client.search(
+                SearchQuery.fromText("timeout"), null, 41, options(2_000, 250, true), CancellationSignal.none()));
+        assertSame(
+                timeout,
+                assertInstanceOf(NoResponseException.class, completionCause(() -> timedOut.join()))
+                        .getCause());
 
         IllegalStateException error = new IllegalStateException("boom");
         fixture.server.result = CompletableFuture.failedFuture(error);
-        CompletableFuture<SearchResult> failed = fixture.client.searchAsync(
-                SearchQuery.fromText("error"), null, 42, options(2_000, 250, true), CancellationSignal.none());
-        SoulseekClientException wrapped = assertInstanceOf(SoulseekClientException.class, completionCause(failed));
+        CompletableFuture<SearchResult> failed = inBackground(() -> fixture.client.search(
+                SearchQuery.fromText("error"), null, 42, options(2_000, 250, true), CancellationSignal.none()));
+        SoulseekClientException wrapped =
+                assertInstanceOf(SoulseekClientException.class, completionCause(() -> failed.join()));
         assertSame(error, wrapped.getCause());
         assertTrue(wrapped.getMessage().contains("error (42)"));
         fixture.close();
@@ -233,32 +234,33 @@ class SoulseekClientSearchTest {
         CancellationController firstSource = new CancellationController();
         CancellationController secondSource = new CancellationController();
         CancellationController thirdSource = new CancellationController();
-        CompletableFuture<SearchResult> first =
-                fixture.client.searchAsync(SearchQuery.fromText("one"), null, 51, options, firstSource.getSignal());
-        CompletableFuture<SearchResult> second =
-                fixture.client.searchAsync(SearchQuery.fromText("two"), null, 52, options, secondSource.getSignal());
-        CompletableFuture<SearchResult> third =
-                fixture.client.searchAsync(SearchQuery.fromText("three"), null, 53, options, thirdSource.getSignal());
+        CompletableFuture<SearchResult> first = inBackground(
+                () -> fixture.client.search(SearchQuery.fromText("one"), null, 51, options, firstSource.getSignal()));
+        CompletableFuture<SearchResult> second = inBackground(
+                () -> fixture.client.search(SearchQuery.fromText("two"), null, 52, options, secondSource.getSignal()));
+        CompletableFuture<SearchResult> third = inBackground(
+                () -> fixture.client.search(SearchQuery.fromText("three"), null, 53, options, thirdSource.getSignal()));
 
         waitUntil(() -> fixture.server.messages.size() == 2);
+        // The three callers each run on their own thread now, so the queued one
+        // is not necessarily registered the instant the first two have written.
+        waitUntil(() -> fixture.client.getSearches().get(53) != null);
         assertEquals(SearchState.QUEUED, fixture.client.getSearches().get(53).getState());
         firstSource.cancel();
-        assertInstanceOf(CancellationException.class, completionCause(first));
+        assertInstanceOf(CancellationException.class, completionCause(() -> first.join()));
         waitUntil(() -> fixture.server.messages.size() == 3);
         assertArrayEquals(new SearchRequest("three", 53).toByteArray(), fixture.server.messages.get(2));
         secondSource.cancel();
         thirdSource.cancel();
-        assertInstanceOf(CancellationException.class, completionCause(second));
-        assertInstanceOf(CancellationException.class, completionCause(third));
+        assertInstanceOf(CancellationException.class, completionCause(() -> second.join()));
+        assertInstanceOf(CancellationException.class, completionCause(() -> third.join()));
         fixture.close();
     }
 
     private static void assertScopeMessage(SearchScope scope, byte[] expected) {
         Fixture fixture = new Fixture();
-        SearchResult result = fixture.client
-                .searchAsync(
-                        SearchQuery.fromText("query"), scope, 20, options(30, 250, true), CancellationSignal.none())
-                .join();
+        SearchResult result = fixture.client.search(
+                SearchQuery.fromText("query"), scope, 20, options(30, 250, true), CancellationSignal.none());
         assertArrayEquals(expected, fixture.server.messages.get(0));
         assertTrue(result.search().getState().contains(SearchState.TIMED_OUT));
         fixture.close();
@@ -293,19 +295,38 @@ class SoulseekClientSearchTest {
         return SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN);
     }
 
-    private static Throwable completionCause(CompletableFuture<?> future) {
+    /**
+     * Runs a blocking client call on a virtual thread so the test can interact
+     * with it while it is in flight.
+     *
+     * <p>The API used to hand back a future; now the caller decides whether to
+     * be concurrent, and a test that wants to inject a response mid-call is
+     * exactly such a caller. The assertions around it are unchanged.
+     */
+    private static <T> CompletableFuture<T> inBackground(java.util.function.Supplier<T> call) {
+        return CompletableFuture.supplyAsync(call, Executors.newVirtualThreadPerTaskExecutor());
+    }
+
+    /** Void-returning variant of {@link #inBackground}. */
+    private static CompletableFuture<Void> inBackground(Runnable call) {
+        return CompletableFuture.runAsync(call, Executors.newVirtualThreadPerTaskExecutor());
+    }
+
+    /**
+     * Returns the failure a blocking call produced.
+     *
+     * <p>Took a future before the API became blocking; the calls now throw
+     * directly, so it takes the call itself.
+     */
+    private static Throwable completionCause(org.junit.jupiter.api.function.Executable body) {
         try {
-            future.join();
-            throw new AssertionError("Expected failure");
-        } catch (CancellationException failure) {
+            body.execute();
+        } catch (java.util.concurrent.CompletionException wrapped) {
+            return wrapped.getCause() == null ? wrapped : wrapped.getCause();
+        } catch (Throwable failure) {
             return failure;
-        } catch (CompletionException failure) {
-            Throwable cause = failure;
-            while (cause instanceof CompletionException && cause.getCause() != null) {
-                cause = cause.getCause();
-            }
-            return cause;
         }
+        throw new AssertionError("expected the operation to fail");
     }
 
     private static void waitUntil(BooleanSupplier condition) {

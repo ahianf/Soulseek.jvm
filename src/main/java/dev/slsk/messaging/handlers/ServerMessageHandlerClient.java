@@ -35,7 +35,7 @@ public interface ServerMessageHandlerClient {
 
     SearchResponder getSearchResponder();
 
-    CompletableFuture<Void> acknowledgePrivateMessageAsync(int id, CancellationSignal cancellationSignal);
+    CompletableFuture<Void> acknowledgePrivateMessageOperation(int id, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> acknowledgePrivilegeNotificationAsync(int id, CancellationSignal cancellationSignal);
+    CompletableFuture<Void> acknowledgePrivilegeNotificationOperation(int id, CancellationSignal cancellationSignal);
 }

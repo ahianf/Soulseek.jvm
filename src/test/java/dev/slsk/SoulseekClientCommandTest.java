@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.messaging.messages.AcknowledgePrivateMessageCommand;
 import dev.slsk.messaging.messages.AcknowledgePrivilegeNotificationCommand;
@@ -29,7 +30,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 
@@ -41,15 +41,15 @@ class SoulseekClientCommandTest {
             CancellationController source = new CancellationController();
             CancellationSignal token = source.getSignal();
 
-            client.sendPrivateMessageAsync("alice", "private", token).join();
-            client.sendRoomMessageAsync("room", "public", token).join();
-            client.sendUploadSpeedAsync(1234, token).join();
-            client.setRoomTickerAsync("room", "ticker", token).join();
-            client.setSharedCountsAsync(12, 34, token).join();
-            client.setStatusAsync(UserPresence.AWAY, token).join();
-            client.startPublicChatAsync(token).join();
-            client.stopPublicChatAsync(token).join();
-            client.unwatchUserAsync("bob", token).join();
+            client.sendPrivateMessage("alice", "private", token);
+            client.sendRoomMessage("room", "public", token);
+            client.sendUploadSpeed(1234, token);
+            client.setRoomTicker("room", "ticker", token);
+            client.setSharedCounts(12, 34, token);
+            client.setStatus(UserPresence.AWAY, token);
+            client.startPublicChat(token);
+            client.stopPublicChat(token);
+            client.unwatchUser("bob", token);
 
             assertEquals(9, connection.messages.size());
             PrivateMessageCommand privateMessage =
@@ -87,28 +87,28 @@ class SoulseekClientCommandTest {
     void validatesTextRangeAndStateInSourceOrder() {
         ConnectionProbe connection = new ConnectionProbe();
         try (DefaultSoulseekClient client = loggedInClient(connection)) {
-            assertThrows(IllegalArgumentException.class, () -> client.sendPrivateMessageAsync(" ", "message"));
-            assertThrows(IllegalArgumentException.class, () -> client.sendPrivateMessageAsync("user", ""));
-            assertThrows(IllegalArgumentException.class, () -> client.sendRoomMessageAsync(null, "message"));
-            assertThrows(IllegalArgumentException.class, () -> client.sendRoomMessageAsync("room", null));
-            assertThrows(IllegalArgumentException.class, () -> client.setRoomTickerAsync("\t", "message"));
-            assertThrows(IllegalArgumentException.class, () -> client.setRoomTickerAsync("room", ""));
-            assertThrows(IllegalArgumentException.class, () -> client.setSharedCountsAsync(-1, 0));
-            assertThrows(IllegalArgumentException.class, () -> client.setSharedCountsAsync(0, -1));
-            assertThrows(IllegalArgumentException.class, () -> client.sendUploadSpeedAsync(0));
-            assertThrows(IllegalArgumentException.class, () -> client.unwatchUserAsync(" "));
+            assertThrows(IllegalArgumentException.class, () -> client.sendPrivateMessage(" ", "message"));
+            assertThrows(IllegalArgumentException.class, () -> client.sendPrivateMessage("user", ""));
+            assertThrows(IllegalArgumentException.class, () -> client.sendRoomMessage(null, "message"));
+            assertThrows(IllegalArgumentException.class, () -> client.sendRoomMessage("room", null));
+            assertThrows(IllegalArgumentException.class, () -> client.setRoomTicker("\t", "message"));
+            assertThrows(IllegalArgumentException.class, () -> client.setRoomTicker("room", ""));
+            assertThrows(IllegalArgumentException.class, () -> client.setSharedCounts(-1, 0));
+            assertThrows(IllegalArgumentException.class, () -> client.setSharedCounts(0, -1));
+            assertThrows(IllegalArgumentException.class, () -> client.sendUploadSpeed(0));
+            assertThrows(IllegalArgumentException.class, () -> client.unwatchUser(" "));
 
-            client.sendPrivateMessageAsync("user", " ").join();
-            client.sendRoomMessageAsync("room", " ").join();
-            client.setRoomTickerAsync("room", " ").join();
+            client.sendPrivateMessage("user", " ");
+            client.sendRoomMessage("room", " ");
+            client.setRoomTicker("room", " ");
 
             client.setStateForTest(SoulseekClientState.DISCONNECTED);
             for (Operation operation : operations(client)) {
                 assertThrows(IllegalStateException.class, operation::run);
             }
-            assertThrows(IllegalArgumentException.class, () -> client.sendPrivateMessageAsync(null, "message"));
-            assertThrows(IllegalArgumentException.class, () -> client.setSharedCountsAsync(-1, 0));
-            assertThrows(IllegalStateException.class, () -> client.sendUploadSpeedAsync(0));
+            assertThrows(IllegalArgumentException.class, () -> client.sendPrivateMessage(null, "message"));
+            assertThrows(IllegalArgumentException.class, () -> client.setSharedCounts(-1, 0));
+            assertThrows(IllegalStateException.class, () -> client.sendUploadSpeed(0));
         }
     }
 
@@ -120,7 +120,7 @@ class SoulseekClientCommandTest {
                 RuntimeException expected = new RuntimeException("write failed");
                 connection.synchronousFailure = expected;
 
-                Throwable actual = failureOf(operation.run());
+                Throwable actual = failureOf(() -> operation.run());
 
                 SoulseekClientException mapped = assertInstanceOf(SoulseekClientException.class, actual);
                 assertSame(expected, mapped.getCause());
@@ -136,11 +136,14 @@ class SoulseekClientCommandTest {
             for (Operation operation : operations(client)) {
                 TimeoutException timeout = new TimeoutException("timed out");
                 connection.result = CompletableFuture.failedFuture(timeout);
-                assertSame(timeout, failureOf(operation.run()));
+                assertSame(
+                        timeout,
+                        assertInstanceOf(NoResponseException.class, failureOf(() -> operation.run()))
+                                .getCause());
 
                 CancellationException cancellation = new CancellationException("cancelled");
                 connection.result = CompletableFuture.failedFuture(cancellation);
-                assertSame(cancellation, failureOf(operation.run()));
+                assertSame(cancellation, failureOf(() -> operation.run()));
             }
         }
     }
@@ -149,8 +152,8 @@ class SoulseekClientCommandTest {
     void acknowledgementCommandsAlsoUseGuardedWritePath() {
         ConnectionProbe connection = new ConnectionProbe();
         try (DefaultSoulseekClient client = loggedInClient(connection)) {
-            client.acknowledgePrivateMessageAsync(123).join();
-            client.acknowledgePrivilegeNotificationAsync(456).join();
+            client.acknowledgePrivateMessage(123);
+            client.acknowledgePrivilegeNotification(456);
             assertEquals(
                     123,
                     assertInstanceOf(AcknowledgePrivateMessageCommand.class, connection.messages.get(0))
@@ -163,7 +166,7 @@ class SoulseekClientCommandTest {
             RuntimeException expected = new RuntimeException("synchronous");
             connection.synchronousFailure = expected;
             SoulseekClientException mapped = assertInstanceOf(
-                    SoulseekClientException.class, failureOf(client.acknowledgePrivateMessageAsync(789)));
+                    SoulseekClientException.class, failureOf(() -> client.acknowledgePrivateMessage(789)));
             assertSame(expected, mapped.getCause());
         }
     }
@@ -177,28 +180,34 @@ class SoulseekClientCommandTest {
 
     private static List<Operation> operations(DefaultSoulseekClient client) {
         return List.of(
-                () -> client.sendPrivateMessageAsync("user", "message"),
-                () -> client.sendRoomMessageAsync("room", "message"),
-                () -> client.sendUploadSpeedAsync(1),
-                () -> client.setRoomTickerAsync("room", "message"),
-                () -> client.setSharedCountsAsync(1, 2),
-                () -> client.setStatusAsync(UserPresence.ONLINE),
-                client::startPublicChatAsync,
-                client::stopPublicChatAsync,
-                () -> client.unwatchUserAsync("user"),
-                () -> client.acknowledgePrivateMessageAsync(1),
-                () -> client.acknowledgePrivilegeNotificationAsync(1));
+                () -> client.sendPrivateMessage("user", "message"),
+                () -> client.sendRoomMessage("room", "message"),
+                () -> client.sendUploadSpeed(1),
+                () -> client.setRoomTicker("room", "message"),
+                () -> client.setSharedCounts(1, 2),
+                () -> client.setStatus(UserPresence.ONLINE),
+                client::startPublicChat,
+                client::stopPublicChat,
+                () -> client.unwatchUser("user"),
+                () -> client.acknowledgePrivateMessage(1),
+                () -> client.acknowledgePrivilegeNotification(1));
     }
 
-    private static Throwable failureOf(CompletableFuture<?> future) {
+    /**
+     * Returns the failure a blocking call produced.
+     *
+     * <p>Took a future before the API became blocking; the calls now throw
+     * directly, so it takes the call itself.
+     */
+    private static Throwable failureOf(org.junit.jupiter.api.function.Executable body) {
         try {
-            future.join();
-            throw new AssertionError("Expected operation to fail");
-        } catch (CompletionException exception) {
-            return exception.getCause();
-        } catch (CancellationException exception) {
-            return exception;
+            body.execute();
+        } catch (java.util.concurrent.CompletionException wrapped) {
+            return wrapped.getCause() == null ? wrapped : wrapped.getCause();
+        } catch (Throwable failure) {
+            return failure;
         }
+        throw new AssertionError("Expected operation to fail");
     }
 
     private static Object defaultValue(Class<?> type) {
@@ -232,9 +241,10 @@ class SoulseekClientCommandTest {
         return null;
     }
 
+    /** A blocking client call under test; void now that the API is blocking. */
     @FunctionalInterface
     private interface Operation {
-        CompletableFuture<Void> run();
+        void run();
     }
 
     private static final class ConnectionProbe {

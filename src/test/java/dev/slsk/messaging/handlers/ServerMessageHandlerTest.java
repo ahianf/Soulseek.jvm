@@ -839,13 +839,14 @@ class ServerMessageHandlerTest {
         }
 
         @Override
-        public CompletableFuture<Void> acknowledgePrivateMessageAsync(int id, CancellationSignal cancellationSignal) {
+        public CompletableFuture<Void> acknowledgePrivateMessageOperation(
+                int id, CancellationSignal cancellationSignal) {
             privateAcknowledgements.add(id);
             return CompletableFuture.completedFuture(null);
         }
 
         @Override
-        public CompletableFuture<Void> acknowledgePrivilegeNotificationAsync(
+        public CompletableFuture<Void> acknowledgePrivilegeNotificationOperation(
                 int id, CancellationSignal cancellationSignal) {
             privilegeAcknowledgements.add(id);
             return CompletableFuture.completedFuture(null);

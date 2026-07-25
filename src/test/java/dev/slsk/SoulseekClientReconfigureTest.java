@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.common.TokenBucket;
 import dev.slsk.exceptions.ListenException;
+import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.messaging.messages.PrivateRoomToggle;
@@ -32,7 +33,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 
@@ -42,14 +42,14 @@ class SoulseekClientReconfigureTest {
     @Test
     void rejectsNullPatchAndListenerPreflightFailure() {
         Fixture fixture = new Fixture();
-        assertThrows(NullPointerException.class, () -> fixture.client.reconfigureOptionsAsync(null));
+        assertThrows(NullPointerException.class, () -> fixture.client.reconfigureOptions(null));
 
         ListenerProbe failing = new ListenerProbe();
         failing.startFailure = new IllegalStateException("bind");
         fixture.listenerFactory.next = failing;
         SoulseekClientOptionsPatch patch =
                 patch(null, LOOPBACK, 50_001, null, null, null, null, null, null, null, null, null);
-        assertThrows(ListenException.class, () -> fixture.client.reconfigureOptionsAsync(patch));
+        assertThrows(ListenException.class, () -> fixture.client.reconfigureOptions(patch));
         assertSame(fixture.options, fixture.client.getOptions());
         fixture.close();
     }
@@ -58,9 +58,7 @@ class SoulseekClientReconfigureTest {
     void emptyPatchSucceedsAndDisconnectedClientSendsNothing() {
         Fixture fixture = new Fixture();
 
-        boolean reconnect = fixture.client
-                .reconfigureOptionsAsync(new SoulseekClientOptionsPatch())
-                .join();
+        boolean reconnect = fixture.client.reconfigureOptions(new SoulseekClientOptionsPatch());
 
         assertFalse(reconnect);
         assertTrue(fixture.server.messages.isEmpty());
@@ -102,9 +100,7 @@ class SoulseekClientReconfigureTest {
         CancellationController source = new CancellationController();
         CancellationSignal token = source.getSignal();
 
-        boolean reconnect = fixture.client
-                .reconfigureOptionsAsync(new SoulseekClientOptionsPatch(), token)
-                .join();
+        boolean reconnect = fixture.client.reconfigureOptions(new SoulseekClientOptionsPatch(), token);
 
         assertFalse(reconnect);
         assertEquals(2, fixture.server.messages.size());
@@ -123,7 +119,7 @@ class SoulseekClientReconfigureTest {
         SoulseekClientOptionsPatch disable =
                 patch(false, null, null, null, null, null, null, null, null, null, null, null);
 
-        fixture.client.reconfigureOptionsAsync(disable).join();
+        fixture.client.reconfigureOptions(disable);
 
         assertEquals(1, fixture.initialListener.stopCount);
         assertNull(fixture.client.getListener());
@@ -131,7 +127,7 @@ class SoulseekClientReconfigureTest {
 
         Fixture nullFixture = new Fixture(new SoulseekClientOptions(true));
         nullFixture.client.setListenerForTest(null);
-        nullFixture.client.reconfigureOptionsAsync(disable).join();
+        nullFixture.client.reconfigureOptions(disable);
         assertNull(nullFixture.client.getListener());
         fixture.close();
         nullFixture.close();
@@ -148,7 +144,7 @@ class SoulseekClientReconfigureTest {
         SoulseekClientOptionsPatch patch =
                 patch(null, LOOPBACK, 50_002, null, null, null, null, null, null, null, incoming, null);
 
-        fixture.client.reconfigureOptionsAsync(patch).join();
+        fixture.client.reconfigureOptions(patch);
 
         assertEquals(1, preflight.startCount);
         assertEquals(1, preflight.stopCount);
@@ -171,7 +167,7 @@ class SoulseekClientReconfigureTest {
         SoulseekClientOptionsPatch patch =
                 patch(null, null, null, null, null, null, null, null, null, null, incoming, null);
 
-        fixture.client.reconfigureOptionsAsync(patch).join();
+        fixture.client.reconfigureOptions(patch);
 
         assertNull(fixture.client.getListener());
         assertSame(incoming, fixture.client.getOptions().getIncomingConnectionOptions());
@@ -211,7 +207,7 @@ class SoulseekClientReconfigureTest {
                 null,
                 null);
 
-        fixture.client.reconfigureOptionsAsync(patch).join();
+        fixture.client.reconfigureOptions(patch);
 
         SoulseekClientOptions updated = fixture.client.getOptions();
         assertFalse(updated.isEnableListener());
@@ -238,21 +234,19 @@ class SoulseekClientReconfigureTest {
         long uploadCapacity = fixture.uploadBucket.getCapacity();
         long downloadCapacity = fixture.downloadBucket.getCapacity();
 
-        fixture.client
-                .reconfigureOptionsAsync(patch(
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        fixture.options.getMaximumUploadSpeed(),
-                        fixture.options.getMaximumDownloadSpeed(),
-                        null,
-                        null,
-                        null,
-                        null))
-                .join();
+        fixture.client.reconfigureOptions(patch(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                fixture.options.getMaximumUploadSpeed(),
+                fixture.options.getMaximumDownloadSpeed(),
+                null,
+                null,
+                null,
+                null));
 
         assertEquals(uploadCapacity, fixture.uploadBucket.getCapacity());
         assertEquals(downloadCapacity, fixture.downloadBucket.getCapacity());
@@ -266,7 +260,7 @@ class SoulseekClientReconfigureTest {
         source.cancel();
         assertInstanceOf(
                 CancellationException.class,
-                completionCause(cancelledFixture.client.reconfigureOptionsAsync(
+                completionCause(() -> cancelledFixture.client.reconfigureOptions(
                         new SoulseekClientOptionsPatch(), source.getSignal())));
         assertSame(cancelledFixture.options, cancelledFixture.client.getOptions());
 
@@ -276,7 +270,11 @@ class SoulseekClientReconfigureTest {
         timeoutFixture.server.failure = timeout;
         assertSame(
                 timeout,
-                completionCause(timeoutFixture.client.reconfigureOptionsAsync(new SoulseekClientOptionsPatch())));
+                assertInstanceOf(
+                                NoResponseException.class,
+                                completionCause(() ->
+                                        timeoutFixture.client.reconfigureOptions(new SoulseekClientOptionsPatch())))
+                        .getCause());
 
         Fixture failedFixture = new Fixture();
         failedFixture.client.setStateForTest(loggedIn());
@@ -285,7 +283,7 @@ class SoulseekClientReconfigureTest {
         SoulseekClientOptionsPatch changed =
                 patch(null, null, null, false, null, null, null, null, null, null, null, null);
         SoulseekClientException wrapped = assertInstanceOf(
-                SoulseekClientException.class, completionCause(failedFixture.client.reconfigureOptionsAsync(changed)));
+                SoulseekClientException.class, completionCause(() -> failedFixture.client.reconfigureOptions(changed)));
         assertSame(failure, wrapped.getCause());
         assertFalse(failedFixture.client.getOptions().isEnableDistributedNetwork());
         cancelledFixture.close();
@@ -297,7 +295,7 @@ class SoulseekClientReconfigureTest {
             SoulseekClientOptions options, SoulseekClientOptionsPatch patch, boolean expected) {
         Fixture fixture = new Fixture(options);
         fixture.client.setStateForTest(loggedIn());
-        assertEquals(expected, fixture.client.reconfigureOptionsAsync(patch).join());
+        assertEquals(expected, fixture.client.reconfigureOptions(patch));
         fixture.close();
     }
 
@@ -346,19 +344,21 @@ class SoulseekClientReconfigureTest {
         return SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN);
     }
 
-    private static Throwable completionCause(CompletableFuture<?> future) {
+    /**
+     * Returns the failure a blocking call produced.
+     *
+     * <p>Took a future before the API became blocking; the calls now throw
+     * directly, so it takes the call itself.
+     */
+    private static Throwable completionCause(org.junit.jupiter.api.function.Executable body) {
         try {
-            future.join();
-            throw new AssertionError("Expected failure");
-        } catch (CancellationException failure) {
+            body.execute();
+        } catch (java.util.concurrent.CompletionException wrapped) {
+            return wrapped.getCause() == null ? wrapped : wrapped.getCause();
+        } catch (Throwable failure) {
             return failure;
-        } catch (CompletionException failure) {
-            Throwable cause = failure;
-            while (cause instanceof CompletionException && cause.getCause() != null) {
-                cause = cause.getCause();
-            }
-            return cause;
         }
+        throw new AssertionError("expected the operation to fail");
     }
 
     private static Object defaultValue(Class<?> type) {

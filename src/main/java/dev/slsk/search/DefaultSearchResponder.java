@@ -220,7 +220,7 @@ public final class DefaultSearchResponder implements SearchResponder {
 
         CompletableFuture<InetSocketAddress> endpointFuture;
         try {
-            endpointFuture = client.getUserEndpointAsync(username, CancellationSignal.none());
+            endpointFuture = client.getUserEndpointOperation(username, CancellationSignal.none());
         } catch (Throwable failure) {
             endpointFuture = CompletableFuture.failedFuture(failure);
         }
