@@ -70,6 +70,11 @@ class SoulseekClientApiTest {
                 "getScheduler",
                 "writeBytesToServer",
                 "raiseSearchEvent",
+                "getDownloadRegistry",
+                "getUploadRegistry",
+                "getDownloadTokenBucket",
+                "getUploadTokenBucket",
+                "getIoAdapter",
                 "acknowledgePrivateMessageOperation",
                 "acknowledgePrivilegeNotificationOperation",
                 "getUserEndpointOperation");

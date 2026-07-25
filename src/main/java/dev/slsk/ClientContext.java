@@ -132,6 +132,28 @@ interface ClientContext {
      */
     <T> void raiseSearchEvent(DefaultSoulseekClient.Event event, T eventData);
 
+    /**
+     * Returns the live download registry.
+     *
+     * <p>Stays on the client for the same reason as the search registry:
+     * incoming peer messages are dispatched against it from the handlers.
+     *
+     * @return downloads by token
+     */
+    java.util.Map<Integer, dev.slsk.transfer.TransferInternal> getDownloadRegistry();
+
+    /** Returns the live upload registry. */
+    java.util.Map<Integer, dev.slsk.transfer.TransferInternal> getUploadRegistry();
+
+    /** Returns the download rate-limit bucket. */
+    dev.slsk.common.TokenBucket getDownloadTokenBucket();
+
+    /** Returns the upload rate-limit bucket. */
+    dev.slsk.common.TokenBucket getUploadTokenBucket();
+
+    /** Returns the filesystem adapter. */
+    dev.slsk.common.IOAdapter getIoAdapter();
+
     /** Returns the peer connection manager. */
     dev.slsk.network.PeerConnectionManager getPeerConnectionManager();
 
