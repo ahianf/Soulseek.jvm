@@ -6,6 +6,7 @@ package dev.slsk.common;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -79,6 +80,27 @@ class CommonUtilsTest {
         assertEquals("5d41402abc4b2a76b9719d911017c592", CommonUtils.toMd5Hash("hello"));
         assertEquals("45bfb2ac344e0fee8b89047858fae25a", CommonUtils.toMd5Hash("påsswörd"));
         assertThrows(NullPointerException.class, () -> CommonUtils.toMd5Hash(null));
+    }
+
+    @Test
+    @DisplayName("IsNullOrWhiteSpace rejects the separators the source rejects")
+    void isNullOrWhiteSpaceMatchesTheSourceRejectionSet() {
+        assertTrue(CommonUtils.isNullOrWhiteSpace(null));
+        assertTrue(CommonUtils.isNullOrWhiteSpace(""));
+        assertTrue(CommonUtils.isNullOrWhiteSpace(" "));
+        assertTrue(CommonUtils.isNullOrWhiteSpace("\t\r\n"));
+
+        // Separators above U+0020 that String.trim() leaves in place and that the source still rejects.
+        assertTrue(CommonUtils.isNullOrWhiteSpace("\u00A0"), "no-break space");
+        assertTrue(CommonUtils.isNullOrWhiteSpace("\u2003"), "em space");
+        assertTrue(CommonUtils.isNullOrWhiteSpace("\u2007"), "figure space");
+        assertTrue(CommonUtils.isNullOrWhiteSpace("\u202F"), "narrow no-break space");
+        assertTrue(CommonUtils.isNullOrWhiteSpace("\u3000"), "ideographic space");
+        assertTrue(CommonUtils.isNullOrWhiteSpace(" \u2003\t"), "mixed separators");
+
+        assertFalse(CommonUtils.isNullOrWhiteSpace("a"));
+        assertFalse(CommonUtils.isNullOrWhiteSpace(" a "));
+        assertFalse(CommonUtils.isNullOrWhiteSpace("\u2003a"));
     }
 
     private static final class CountingCloseable implements AutoCloseable {

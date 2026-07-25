@@ -4,6 +4,7 @@
 
 package dev.slsk.options;
 
+import dev.slsk.common.CommonUtils;
 import dev.slsk.exceptions.AddressException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -144,10 +145,6 @@ public class ProxyOptions {
     }
 
     private static boolean isNullOrWhiteSpace(String value) {
-        if (value == null || value.isEmpty()) {
-            return true;
-        }
-        return value.codePoints()
-                .allMatch(codePoint -> Character.isWhitespace(codePoint) || Character.isSpaceChar(codePoint));
+        return CommonUtils.isNullOrWhiteSpace(value);
     }
 }

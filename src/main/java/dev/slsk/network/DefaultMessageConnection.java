@@ -263,9 +263,6 @@ public final class DefaultMessageConnection extends SocketConnection implements 
     }
 
     private static boolean isNullOrWhiteSpace(String value) {
-        return value == null
-                || value.isEmpty()
-                || value.codePoints()
-                        .allMatch(codePoint -> Character.isWhitespace(codePoint) || Character.isSpaceChar(codePoint));
+        return CommonUtils.isNullOrWhiteSpace(value);
     }
 }

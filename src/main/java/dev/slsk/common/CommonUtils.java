@@ -19,6 +19,24 @@ public final class CommonUtils {
     private CommonUtils() {}
 
     /**
+     * Reports whether a value is null, empty, or consists only of whitespace.
+     *
+     * <p>This is the counterpart of the source's {@code string.IsNullOrWhiteSpace} guard. {@code String.trim()} and
+     * {@code String.isBlank()} both classify fewer code points as whitespace than {@code char.IsWhiteSpace} does, so
+     * neither alone reproduces the source's rejection set. Testing {@code Character.isWhitespace} together with
+     * {@code Character.isSpaceChar} covers the non-breaking separators the source also rejects.
+     *
+     * @param value the value to test
+     * @return {@code true} when the value is null, empty, or entirely whitespace
+     */
+    public static boolean isNullOrWhiteSpace(String value) {
+        return value == null
+                || value.isEmpty()
+                || value.codePoints()
+                        .allMatch(codePoint -> Character.isWhitespace(codePoint) || Character.isSpaceChar(codePoint));
+    }
+
+    /**
      * Removes and closes every queued value.
      *
      * @param queue the queue to drain

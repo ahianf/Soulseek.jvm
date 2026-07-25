@@ -4,6 +4,7 @@
 
 package dev.slsk;
 
+import dev.slsk.common.CommonUtils;
 import dev.slsk.common.Constants;
 import dev.slsk.common.DefaultWaiter;
 import dev.slsk.common.IOAdapter;
@@ -3013,7 +3014,7 @@ final class DefaultSoulseekClient
     }
 
     private static void requireText(String value, String name) {
-        if (value == null || value.trim().isEmpty()) {
+        if (CommonUtils.isNullOrWhiteSpace(value)) {
             throw new IllegalArgumentException(name + " must not be null, empty, or whitespace");
         }
     }
@@ -3337,7 +3338,7 @@ final class DefaultSoulseekClient
 
     private static SearchQuery validateSearchQuery(SearchQuery initialQuery) {
         SearchQuery query = Objects.requireNonNull(initialQuery, "query");
-        if (query.getSearchText() == null || query.getSearchText().trim().isEmpty()) {
+        if (CommonUtils.isNullOrWhiteSpace(query.getSearchText())) {
             throw new IllegalArgumentException("Search text must not be null, empty, or whitespace");
         }
         if (query.getTerms().isEmpty()) {

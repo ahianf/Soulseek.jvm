@@ -41,7 +41,8 @@ class SoulseekClientSearchTest {
         Fixture fixture = new Fixture();
 
         assertThrows(NullPointerException.class, () -> fixture.client.searchAsync((SearchQuery) null));
-        for (String invalid : new String[] {"", " ", "\t", "-excluded"}) {
+        for (String invalid :
+                new String[] {"", " ", "\t", "-excluded", "\u00A0", "\u2003", "\u202F", "\u3000", " \u2003\t"}) {
             assertThrows(
                     IllegalArgumentException.class, () -> fixture.client.searchAsync(SearchQuery.fromText(invalid)));
         }
