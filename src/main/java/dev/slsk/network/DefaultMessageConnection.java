@@ -171,36 +171,36 @@ public final class DefaultMessageConnection extends SocketConnection implements 
             readingContinuously = true;
         }
         return NetworkExecutor.runAsync(() -> {
+            // Holds the code of the message currently being read, so the scoped
+            // progress listener can label its events. Confined to this loop's
+            // single thread.
             byte[][] codeHolder = new byte[1][];
             ConnectionEventListener<ConnectionDataEvent> payloadProgress = (sender, args) ->
                     raiseMessageDataRead(codeHolder[0], args.getCurrentLength(), args.getTotalLength());
             try {
                 while (!isDisposed()) {
                     ByteArrayOutputStream message = new ByteArrayOutputStream();
-                    try {
-                        byte[] lengthBytes =
-                                readAsync(4, CancellationSignal.none()).join();
-                        int length = ByteBuffer.wrap(lengthBytes)
-                                .order(ByteOrder.LITTLE_ENDIAN)
-                                .getInt();
-                        message.writeBytes(lengthBytes);
+                    byte[] lengthBytes = readAsync(4, CancellationSignal.none()).join();
+                    int length = ByteBuffer.wrap(lengthBytes)
+                            .order(ByteOrder.LITTLE_ENDIAN)
+                            .getInt();
+                    message.writeBytes(lengthBytes);
 
-                        byte[] codeBytes =
-                                readAsync(codeLength, CancellationSignal.none()).join();
-                        codeHolder[0] = codeBytes;
-                        message.writeBytes(codeBytes);
+                    byte[] codeBytes =
+                            readAsync(codeLength, CancellationSignal.none()).join();
+                    codeHolder[0] = codeBytes;
+                    message.writeBytes(codeBytes);
 
-                        raiseMessageDataRead(codeBytes, 0, length - codeLength);
-                        raiseMessageReceived(length, codeBytes);
+                    raiseMessageDataRead(codeBytes, 0, length - codeLength);
+                    raiseMessageReceived(length, codeBytes);
 
-                        addDataReadListener(payloadProgress);
-                        byte[] payload = readAsync(length - codeLength, CancellationSignal.none())
-                                .join();
-                        message.writeBytes(payload);
-                        raiseMessageRead(message.toByteArray());
-                    } finally {
-                        removeDataReadListener(payloadProgress);
-                    }
+                    // Passed to the read rather than added to the shared
+                    // listener list and removed afterwards, which cost two
+                    // CopyOnWriteArrayList copies per message.
+                    byte[] payload = readAsync(length - codeLength, payloadProgress, CancellationSignal.none())
+                            .join();
+                    message.writeBytes(payload);
+                    raiseMessageRead(message.toByteArray());
                 }
             } finally {
                 readingContinuously = false;
