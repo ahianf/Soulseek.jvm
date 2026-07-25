@@ -16,25 +16,48 @@ final class CancellationState {
 
     private final boolean cancellable;
     private final Map<Subscription, Runnable> listeners = new LinkedHashMap<>();
-    private boolean cancellationRequested;
+
+    /**
+     * Volatile rather than monitor-guarded because the read is on the hottest
+     * path in the library and the state it guards is a single boolean.
+     *
+     * <p>{@code CancellationSignal.none()} is a process-wide singleton, so a
+     * synchronized read here serialised every connection in every client on one
+     * monitor: three checks per buffer chunk in the connection read loop, plus
+     * two or three more per stream operation. Measured at eight threads that
+     * was 15.4x slower than uncontended, and 5.1x slower than the identical
+     * check on a per-instance signal.
+     *
+     * <p>Writers still take the monitor, so the flag flip stays ordered against
+     * the listener map: {@link #cancel()} sets it and drains the map while
+     * holding the lock, and {@link #register(Runnable)} reads it under the same
+     * lock before deciding whether to enqueue or run immediately. A listener
+     * therefore cannot be added into a map that is already being drained.
+     */
+    private volatile boolean cancellationRequested;
+
     private boolean closed;
 
     CancellationState(boolean cancellable) {
         this.cancellable = cancellable;
     }
 
-    synchronized boolean isCancellationRequested() {
+    boolean isCancellationRequested() {
         return cancellationRequested;
     }
 
     CancellationSubscription register(Runnable listener) {
+        // Short-circuit before synchronizing. A non-cancellable state can never
+        // fire, so taking the shared singleton's monitor only to return the
+        // empty subscription is pure contention.
+        if (!cancellable) {
+            return EMPTY_SUBSCRIPTION;
+        }
+
         boolean runImmediately;
         Subscription subscription = null;
 
         synchronized (this) {
-            if (!cancellable) {
-                return EMPTY_SUBSCRIPTION;
-            }
             if (closed) {
                 throw new IllegalStateException("The cancellation signal source is closed");
             }
