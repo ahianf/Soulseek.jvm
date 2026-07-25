@@ -3,13 +3,19 @@
 
 package dev.slsk;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
 
 class TestParityDispositionTest {
     private static final String BEGIN = "<!-- BEGIN GENERATED UNIT TEST DISPOSITION -->";
@@ -20,6 +26,92 @@ class TestParityDispositionTest {
             Pattern.compile("^\\s*\\[(?:InlineData|MemberData|ClassData)\\b", Pattern.MULTILINE);
     private static final Pattern XUNIT_DISPLAY_NAME = Pattern.compile("\\[Fact\\(DisplayName = \"([^\"]+)\"\\)\\]");
     private static final Pattern JUNIT_DISPLAY_NAME = Pattern.compile("@DisplayName\\(\"([^\"]+)\"\\)");
+
+    @Test
+    void everyOriginalUnitTestClassHasAResolvableDisposition() throws IOException {
+        Path csharpRoot = CsharpOracle.requireUnitTestRoot();
+        Set<String> documentedSources = new HashSet<>();
+        boolean generated = false;
+        int rows = 0;
+        int declarations = 0;
+
+        for (String line : Files.readAllLines(Path.of("docs", "test-parity.md"))) {
+            if (line.equals(BEGIN)) {
+                generated = true;
+                continue;
+            }
+            if (line.equals(END)) {
+                break;
+            }
+            if (!generated || !line.startsWith("| `")) {
+                continue;
+            }
+
+            String[] cells = line.substring(2).split(" \\| ", -1);
+            assertTrue(cells.length >= 6, line);
+            String source = unquote(cells[0]);
+            String className = unquote(cells[1]);
+            int expectedDeclarations = Integer.parseInt(cells[2]);
+            assertEquals("passing", cells[4], line);
+            assertTrue(documentedSources.add(source), line);
+
+            Path sourcePath = csharpRoot.resolve(source);
+            assertTrue(Files.isRegularFile(sourcePath), line);
+            String sourceText = Files.readString(sourcePath);
+            assertTrue(
+                    Pattern.compile("\\bpublic\\s+(?:sealed\\s+)?class\\s+" + Pattern.quote(className) + "\\b")
+                            .matcher(sourceText)
+                            .find(),
+                    line);
+            assertEquals(
+                    expectedDeclarations,
+                    XUNIT_DECLARATION.matcher(sourceText).results().count(),
+                    line);
+
+            Matcher destinations = DESTINATION.matcher(cells[3]);
+            int destinationCount = 0;
+            while (destinations.find()) {
+                destinationCount++;
+                assertTrue(Files.isRegularFile(Path.of("src", "test", "java", destinations.group(1))), line);
+            }
+            assertTrue(destinationCount > 0, line);
+            rows++;
+            declarations += expectedDeclarations;
+        }
+
+        assertEquals(160, rows);
+        assertEquals(2_025, declarations);
+        assertEquals(testBearingSources(csharpRoot), documentedSources);
+        assertEquals(306, dataDeclarationCount(csharpRoot));
+    }
+
+    @Test
+    void everyOriginalIntegrationScenarioHasAnExactJavaDisplayName() throws IOException {
+        String csharp =
+                Files.readString(CsharpOracle.requireIntegrationTestRoot().resolve("SoulseekClientTests.cs"));
+        String java =
+                Files.readString(Path.of("src", "integrationTest", "java", "dev", "slsk", "SoulseekClientLiveIT.java"));
+
+        List<String> originalNames = XUNIT_DISPLAY_NAME
+                .matcher(csharp)
+                .results()
+                .map(result -> result.group(1))
+                .toList();
+        List<String> portedNames = JUNIT_DISPLAY_NAME
+                .matcher(java)
+                .results()
+                .map(result -> result.group(1))
+                .toList();
+
+        assertEquals(6, originalNames.size());
+        assertEquals(originalNames, portedNames);
+        assertEquals(
+                6,
+                Pattern.compile("^\\s*@Test\\s*$", Pattern.MULTILINE)
+                        .matcher(java)
+                        .results()
+                        .count());
+    }
 
     private static Set<String> testBearingSources(Path root) throws IOException {
         Set<String> result = new HashSet<>();
