@@ -4,13 +4,11 @@
 
 package dev.slsk.common;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -64,13 +62,6 @@ class CommonUtilsTest {
 
         assertEquals(failure, thrown);
         assertEquals(1, queue.size());
-    }
-
-    @Test
-    @DisplayName("Forget accepts successful and failed futures")
-    void forgetAcceptsSuccessfulAndFailedFutures() {
-        assertDoesNotThrow(() -> CommonUtils.forget(CompletableFuture.completedFuture(null)));
-        assertDoesNotThrow(() -> CommonUtils.forget(CompletableFuture.failedFuture(new RuntimeException("failure"))));
     }
 
     @Test

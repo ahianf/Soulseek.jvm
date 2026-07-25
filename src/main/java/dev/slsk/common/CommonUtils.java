@@ -10,7 +10,6 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Queue;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Shared internal utility operations.
@@ -67,15 +66,6 @@ public final class CommonUtils {
                 close(entry.getValue());
             }
         }
-    }
-
-    /**
-     * Observes and intentionally ignores a future's outcome.
-     *
-     * @param future the future
-     */
-    public static void forget(CompletableFuture<?> future) {
-        Objects.requireNonNull(future, "future").exceptionally(exception -> null);
     }
 
     /**

@@ -150,6 +150,32 @@ class MessageConnectionTest {
     }
 
     @Test
+    @DisplayName("Read-loop failure disconnects and reports the cause")
+    void readLoopFailureDisconnectsWithCause() throws Exception {
+        // A throwing message-received listener is the cleanest way to inject a
+        // failure the read path does not already handle: that event is raised
+        // synchronously on the loop thread, so it escapes the loop. Before
+        // defect 1.7 the failure was discarded and the connection sat there
+        // looking healthy with a dead read loop.
+        byte[] frame = frame(new byte[] {1, 2, 3, 4}, new byte[] {5, 6});
+        FakeStream stream = new FakeStream(frame);
+        FakeTcpClient client = new FakeTcpClient(stream, true);
+        DefaultMessageConnection connection = new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 4, client);
+
+        IllegalStateException injected = new IllegalStateException("listener exploded");
+        connection.addMessageReceivedListener((sender, args) -> {
+            throw injected;
+        });
+
+        CompletableFuture<String> disconnected = connection.waitForDisconnect(null);
+        connection.startReadingContinuously();
+
+        ExecutionException thrown = assertThrows(ExecutionException.class, () -> disconnected.get(1, TimeUnit.SECONDS));
+        assertSame(injected, thrown.getCause());
+        connection.close();
+    }
+
+    @Test
     @DisplayName("Continuous read supports one-byte distributed codes")
     void readsOneByteCode() throws Exception {
         byte[] frame = frame(new byte[] {(byte) 0x93}, new byte[] {4, 5});

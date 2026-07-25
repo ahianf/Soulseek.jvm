@@ -22,6 +22,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /** Provides framed client connections to the Soulseek network. */
@@ -144,8 +145,36 @@ public final class DefaultMessageConnection extends SocketConnection implements 
     @Override
     public void startReadingContinuously() {
         if (!readingContinuously) {
-            CommonUtils.forget(readContinuouslyAsync());
+            watchReadLoop(readContinuouslyAsync());
         }
+    }
+
+    /**
+     * Routes a read-loop failure into the connection's own failure channel.
+     *
+     * <p>This loop used to be started with a helper that attached
+     * {@code exceptionally(e -> null)} and dropped the throwable on the floor —
+     * on the single most important loop in the library. Most failures already
+     * disconnect on the way out of {@code readInternal}, but anything else, a
+     * throwing listener included, vanished without trace.
+     *
+     * <p>Disconnecting is the right channel rather than a log line: it is what
+     * {@code ConnectionDisconnectedEvent} and {@code waitForDisconnect} already
+     * report, so the failure reaches whoever owns the connection. When the
+     * connection has already gone down, this is a no-op and the original reason
+     * is preserved.
+     */
+    private void watchReadLoop(CompletableFuture<Void> loop) {
+        loop.whenComplete((ignored, failure) -> {
+            if (failure == null || isDisposed()) {
+                return;
+            }
+            Throwable actual =
+                    failure instanceof CompletionException && failure.getCause() != null ? failure.getCause() : failure;
+            Exception reported =
+                    actual instanceof Exception exception ? exception : new MessageException(actual.toString(), actual);
+            disconnect("Read loop failed: " + reported.getMessage(), reported);
+        });
     }
 
     @Override
@@ -209,7 +238,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
     }
 
     private void bindConnectedReadLoop() {
-        addConnectedListener((sender, args) -> CommonUtils.forget(readContinuouslyAsync()));
+        addConnectedListener((sender, args) -> watchReadLoop(readContinuouslyAsync()));
     }
 
     private void raiseMessageDataRead(byte[] code, long currentLength, long totalLength) {

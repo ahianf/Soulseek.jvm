@@ -4,7 +4,6 @@
 
 package dev.slsk.network.tcp;
 
-import dev.slsk.common.CommonUtils;
 import dev.slsk.common.NetworkExecutor;
 import dev.slsk.options.ConnectionOptions;
 import java.net.InetAddress;
@@ -71,7 +70,7 @@ public final class SocketListener implements Listener {
     public void start() {
         tcpListener.start();
         listening = true;
-        CommonUtils.forget(NetworkExecutor.runAsync(this::listenContinuously));
+        runInBackground(this::listenContinuously);
     }
 
     @Override
@@ -81,10 +80,32 @@ public final class SocketListener implements Listener {
     }
 
     private void listenContinuously() {
-        while (listening) {
-            Socket client = tcpListener.acceptTcpClientAsync().join();
-            CommonUtils.forget(NetworkExecutor.runAsync(() -> raiseAccepted(client)));
+        try {
+            while (listening) {
+                Socket client = tcpListener.acceptTcpClientAsync().join();
+                runInBackground(() -> raiseAccepted(client));
+            }
+        } catch (RuntimeException failure) {
+            // The accept loop is dead; stop claiming otherwise before letting
+            // the failure reach the thread's uncaught handler.
+            listening = false;
+            throw failure;
         }
+    }
+
+    /**
+     * Runs a fire-and-forget task on a virtual thread without swallowing its
+     * failure.
+     *
+     * <p>These call sites used to wrap the task in a future and attach
+     * {@code exceptionally(e -> null)}, so a dead accept loop or a throwing
+     * accept handler left no trace at all. Submitting to the executor directly
+     * rather than through {@code CompletableFuture} means an escaping throwable
+     * reaches the thread's uncaught exception handler, which is the JVM's
+     * standard place for exactly this and is never silent.
+     */
+    private static void runInBackground(Runnable task) {
+        NetworkExecutor.executor().execute(task);
     }
 
     private void raiseAccepted(Socket client) {
