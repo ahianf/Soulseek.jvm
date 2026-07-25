@@ -225,6 +225,7 @@ final class DefaultSoulseekClient
     private final Semaphore globalDownloadSemaphore;
     private final Semaphore globalUploadSemaphore;
     private final Semaphore uploadSemaphoreSyncRoot = new Semaphore(1);
+    private final Semaphore userEndpointSemaphoreSyncRoot = new Semaphore(1);
     private final IOAdapter ioAdapter;
     private final TokenBucket uploadTokenBucket;
     private final TokenBucket downloadTokenBucket;
@@ -254,7 +255,7 @@ final class DefaultSoulseekClient
     private volatile Map<Integer, TransferInternal> uploads = new ConcurrentHashMap<>();
     private volatile Map<Integer, SearchInternal> searches = new ConcurrentHashMap<>();
     private final Map<String, Boolean> uniqueKeys = new ConcurrentHashMap<>();
-    private final Map<String, CompletableFuture<InetSocketAddress>> endpointRequests = new ConcurrentHashMap<>();
+    private final Map<String, Semaphore> userEndpointSemaphores = new ConcurrentHashMap<>();
     private final Map<String, Semaphore> uploadSemaphores = new ConcurrentHashMap<>();
 
     /** Creates a client with default options. */
@@ -356,6 +357,7 @@ final class DefaultSoulseekClient
             thread.setDaemon(true);
             return thread;
         });
+        cleanupScheduler.scheduleAtFixedRate(() -> cleanupUserEndpointSemaphoresAsync(), 5, 5, TimeUnit.MINUTES);
         cleanupScheduler.scheduleAtFixedRate(() -> cleanupUploadSemaphoresAsync(), 15, 15, TimeUnit.MINUTES);
     }
 
@@ -2467,17 +2469,78 @@ final class DefaultSoulseekClient
         requireLoggedIn("fetch user endpoint");
         CancellationSignal token = defaultToken(cancellationSignal);
         UserEndpointCache cache = options.getUserEndpointCache();
-        if (cache != null) {
-            CacheLookupResult<InetSocketAddress> cached = tryCacheGet(cache, requestedUsername);
-            if (cached.found()) {
-                diagnostic.debug("Endpoint cache HIT for " + requestedUsername + ": " + cached.value());
-                return CompletableFuture.completedFuture(cached.value());
-            }
+        if (cache == null) {
+            return retrieveUserEndpoint(requestedUsername, token, null);
         }
-        CompletableFuture<InetSocketAddress> request = endpointRequests.computeIfAbsent(
-                requestedUsername, ignored -> retrieveUserEndpoint(requestedUsername, token, cache));
-        request.whenComplete((result, failure) -> endpointRequests.remove(requestedUsername, request));
-        return request;
+
+        CacheLookupResult<InetSocketAddress> cached = tryCacheGet(cache, requestedUsername);
+        if (cached.found()) {
+            diagnostic.debug("Endpoint cache HIT for " + requestedUsername + ": " + cached.value());
+            return CompletableFuture.completedFuture(cached.value());
+        }
+
+        // The source serializes same-user lookups only when a cache is configured, so the first
+        // caller populates it and the rest read it back. Each caller still issues its own request
+        // under its own cancellation signal; sharing one in-flight request would let one caller's
+        // cancellation or failure surface in another's.
+        Semaphore semaphore;
+        userEndpointSemaphoreSyncRoot.acquireUninterruptibly();
+        try {
+            semaphore = userEndpointSemaphores.computeIfAbsent(requestedUsername, ignored -> new Semaphore(1));
+        } finally {
+            userEndpointSemaphoreSyncRoot.release();
+        }
+
+        // The permit is released only on the path that acquired it; a cancelled acquisition must
+        // not release a permit it never held.
+        return acquirePermit(semaphore, token).thenCompose(ignored -> {
+            CompletableFuture<InetSocketAddress> operation;
+            try {
+                CacheLookupResult<InetSocketAddress> second = tryCacheGet(cache, requestedUsername);
+                if (second.found()) {
+                    diagnostic.debug("Endpoint cache HIT for " + requestedUsername + ": " + second.value());
+                    operation = CompletableFuture.completedFuture(second.value());
+                } else {
+                    operation = retrieveUserEndpoint(requestedUsername, token, cache);
+                }
+            } catch (Throwable failure) {
+                semaphore.release();
+                throw failure;
+            }
+            return operation.whenComplete((result, failure) -> semaphore.release());
+        });
+    }
+
+    /**
+     * Removes idle per-user endpoint semaphores.
+     *
+     * <p>Mirrors the source's periodic cleanup: a semaphore whose permit can be taken has no waiter, so it can be
+     * dropped. The sync root is only taken opportunistically, matching the source's zero-timeout wait.
+     *
+     * @return a future completed when the sweep finishes
+     */
+    CompletableFuture<Void> cleanupUserEndpointSemaphoresAsync() {
+        if (!userEndpointSemaphoreSyncRoot.tryAcquire()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        try {
+            for (Map.Entry<String, Semaphore> entry : userEndpointSemaphores.entrySet()) {
+                Semaphore semaphore = entry.getValue();
+                if (!semaphore.tryAcquire()) {
+                    continue;
+                }
+                if (userEndpointSemaphores.remove(entry.getKey(), semaphore)) {
+                    diagnostic.debug("Cleaned up user endpoint semaphore for " + entry.getKey());
+                } else {
+                    semaphore.release();
+                }
+            }
+            return CompletableFuture.completedFuture(null);
+        } catch (Throwable failure) {
+            return CompletableFuture.failedFuture(failure);
+        } finally {
+            userEndpointSemaphoreSyncRoot.release();
+        }
     }
 
     /**
@@ -2799,6 +2862,10 @@ final class DefaultSoulseekClient
 
     final Map<String, Semaphore> getUploadSemaphoresForTest() {
         return uploadSemaphores;
+    }
+
+    final Map<String, Semaphore> getUserEndpointSemaphoresForTest() {
+        return userEndpointSemaphores;
     }
 
     final Semaphore getUploadSemaphoreSyncRootForTest() {

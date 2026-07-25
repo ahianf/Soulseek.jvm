@@ -135,7 +135,9 @@ class SoulseekClientEndpointTest {
     }
 
     @Test
-    void coalescesConcurrentSameUserRequestsAndCleansUpAfterward() {
+    void issuesAnIndependentRequestPerCallerWhenNoCacheIsConfigured() {
+        // The source only serializes same-user lookups when a cache is configured; with no cache
+        // every caller performs its own request under its own cancellation signal.
         Fixture fixture = new Fixture(null);
         CompletableFuture<UserAddressResponse> response = new CompletableFuture<>();
         fixture.waiter.result = response;
@@ -145,16 +147,51 @@ class SoulseekClientEndpointTest {
 
         assertFalse(first.isDone());
         assertFalse(second.isDone());
-        assertEquals(1, fixture.connection.writes);
-        assertEquals(1, fixture.waiter.registrations);
+        assertEquals(2, fixture.connection.writes);
+        assertEquals(2, fixture.waiter.registrations);
         response.complete(new UserAddressResponse("alice", ENDPOINT));
         assertEquals(ENDPOINT, first.join());
         assertEquals(ENDPOINT, second.join());
+        fixture.close();
+    }
 
+    @Test
+    void serializesSameUserLookupsBehindTheCacheAndSweepsIdleSemaphores() {
+        CacheProbe cache = new CacheProbe();
+        cache.value = CacheLookupResult.notFound();
+        Fixture fixture = new Fixture(cache);
         fixture.waiter.result = CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT));
-        fixture.client.getUserEndpointAsync("alice").join();
-        assertEquals(2, fixture.connection.writes);
-        assertEquals(2, fixture.waiter.registrations);
+
+        assertEquals(ENDPOINT, fixture.client.getUserEndpointAsync("alice").join());
+        assertEquals(1, fixture.connection.writes);
+
+        // The second caller reads the value the first stored rather than repeating the request.
+        cache.value = CacheLookupResult.found(ENDPOINT);
+        assertEquals(ENDPOINT, fixture.client.getUserEndpointAsync("alice").join());
+        assertEquals(1, fixture.connection.writes);
+
+        // The idle per-user semaphore is reclaimed, matching the source's periodic sweep.
+        fixture.client.cleanupUserEndpointSemaphoresAsync().join();
+        assertEquals(0, fixture.client.getUserEndpointSemaphoresForTest().size());
+        fixture.close();
+    }
+
+    @Test
+    void oneCallersCancellationDoesNotFailAnother() {
+        Fixture fixture = new Fixture(null);
+        CompletableFuture<UserAddressResponse> response = new CompletableFuture<>();
+        fixture.waiter.result = response;
+        CancellationController firstSource = new CancellationController();
+
+        CompletableFuture<InetSocketAddress> first =
+                fixture.client.getUserEndpointAsync("alice", firstSource.getSignal());
+        CompletableFuture<InetSocketAddress> second =
+                fixture.client.getUserEndpointAsync("alice", CancellationSignal.none());
+
+        firstSource.cancel();
+        response.complete(new UserAddressResponse("alice", ENDPOINT));
+
+        assertEquals(ENDPOINT, second.join(), "an uncancelled caller must not inherit another caller's cancellation");
         fixture.close();
     }
 
@@ -300,7 +337,21 @@ class SoulseekClientEndpointTest {
                 if (synchronousFailure != null) {
                     throw synchronousFailure;
                 }
-                return result;
+                // DefaultWaiter creates one PendingWait per registration and fails only that wait
+                // when its own signal is cancelled. Mirror both properties so cancellation scoping
+                // is exercised rather than stubbed away by a single shared future.
+                CompletableFuture<UserAddressResponse> registered = new CompletableFuture<>();
+                result.whenComplete((value, failure) -> {
+                    if (failure != null) {
+                        registered.completeExceptionally(failure);
+                    } else {
+                        registered.complete(value);
+                    }
+                });
+                if (token != null) {
+                    token.register(() -> registered.completeExceptionally(new CancellationException("cancelled")));
+                }
+                return registered;
             }
             return defaultValue(method.getReturnType());
         }
