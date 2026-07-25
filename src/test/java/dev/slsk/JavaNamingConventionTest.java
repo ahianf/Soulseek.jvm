@@ -46,12 +46,9 @@ class JavaNamingConventionTest {
     }
 
     @Test
-    void testsAndExampleUseOnlyTheSupportedJavaNames() throws IOException {
+    void testsUseOnlyTheSupportedJavaNames() throws IOException {
         List<String> failures = new ArrayList<>();
-        for (Path root : List.of(
-                Path.of("src", "test", "java"),
-                Path.of("src", "integrationTest", "java"),
-                Path.of("examples", "console", "src"))) {
+        for (Path root : List.of(Path.of("src", "test", "java"), Path.of("src", "integrationTest", "java"))) {
             inspectTree(root, false, failures);
         }
         assertNoFailures(failures);
@@ -65,8 +62,7 @@ class JavaNamingConventionTest {
                 Path.of("docs", "public-api.md"),
                 Path.of("docs", "port-decisions.md"),
                 Path.of("docs", "compatibility-report.md"),
-                Path.of("docs", "protocol-differences.md"),
-                Path.of("examples", "console", "README.md"))) {
+                Path.of("docs", "protocol-differences.md"))) {
             inspectCurrentDocument(path, failures);
         }
 

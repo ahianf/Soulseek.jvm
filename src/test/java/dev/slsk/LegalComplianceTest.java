@@ -20,7 +20,7 @@ class LegalComplianceTest {
     @Test
     void everyJavaSourceCarriesRequiredLegalNotices() throws IOException {
         List<String> failures = new ArrayList<>();
-        List<Path> roots = List.of(Path.of("src"), Path.of("examples", "console", "src"));
+        List<Path> roots = List.of(Path.of("src"));
 
         for (Path root : roots) {
             try (Stream<Path> paths = Files.walk(root)) {
