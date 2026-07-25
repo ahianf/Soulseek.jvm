@@ -11,6 +11,7 @@ import dev.slsk.DistributedNetworkInfo;
 import dev.slsk.DistributedPeer;
 import dev.slsk.SoulseekClientState;
 import dev.slsk.common.Constants;
+import dev.slsk.common.Scheduler;
 import dev.slsk.common.WaitKey;
 import dev.slsk.diagnostics.DiagnosticEvent;
 import dev.slsk.diagnostics.DiagnosticEventListener;
@@ -51,8 +52,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -69,7 +68,8 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     private final DistributedConnectionManagerClient client;
     private final ConnectionFactory connectionFactory;
     private final DiagnosticSink diagnostic;
-    private final ScheduledExecutorService scheduler;
+    private final Scheduler scheduler;
+    private final boolean ownsScheduler;
     private final ScheduledFuture<?> watchdog;
     private final AtomicReference<ScheduledFuture<?>> statusDebounce = new AtomicReference<>();
     private final AtomicBoolean parentConnecting = new AtomicBoolean();
@@ -124,17 +124,31 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
             DistributedConnectionManagerClient client,
             ConnectionFactory connectionFactory,
             DiagnosticSink diagnosticFactory) {
+        this(client, connectionFactory, diagnosticFactory, null);
+    }
+
+    /**
+     * Creates a distributed connection manager sharing a caller-owned
+     * scheduler.
+     *
+     * @param client the owning client
+     * @param connectionFactory the connection factory
+     * @param diagnosticFactory the diagnostic sink
+     * @param scheduler the shared scheduler, or {@code null} to own one
+     */
+    public DefaultDistributedConnectionManager(
+            DistributedConnectionManagerClient client,
+            ConnectionFactory connectionFactory,
+            DiagnosticSink diagnosticFactory,
+            Scheduler scheduler) {
         this.client = Objects.requireNonNull(client, "client");
         this.connectionFactory = connectionFactory == null ? new DefaultConnectionFactory() : connectionFactory;
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
-        scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "soulseek-distributed-status");
-            thread.setDaemon(true);
-            return thread;
-        });
-        watchdog = scheduler.scheduleAtFixedRate(
+        this.ownsScheduler = scheduler == null;
+        this.scheduler = scheduler == null ? new Scheduler("soulseek-distributed-status") : scheduler;
+        watchdog = this.scheduler.scheduleAtFixedRate(
                 this::watchdogElapsed, WATCHDOG_TIME, WATCHDOG_TIME, TimeUnit.MILLISECONDS);
     }
 
@@ -617,7 +631,9 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
             if (debounce != null) {
                 debounce.cancel(false);
             }
-            scheduler.shutdownNow();
+            if (ownsScheduler) {
+                scheduler.close();
+            }
             removeAndDisposeAll();
         }
     }

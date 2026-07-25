@@ -20,8 +20,6 @@ import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.DisplayName;
@@ -288,7 +286,7 @@ class WaiterTest {
     @Test
     @DisplayName("PendingWait close works before and after registration")
     void pendingWaitCloseWorksBeforeAndAfterRegistration() {
-        try (ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor()) {
+        try (Scheduler scheduler = new Scheduler("waiter-test-timer")) {
             DefaultWaiter.PendingWait<String> unregistered = new DefaultWaiter.PendingWait<>(
                     String.class, 30_000, () -> {}, () -> {}, CancellationSignal.none());
             DefaultWaiter.PendingWait<String> registered = new DefaultWaiter.PendingWait<>(

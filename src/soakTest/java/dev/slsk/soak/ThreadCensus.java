@@ -25,6 +25,7 @@ public final class ThreadCensus {
     public static final List<String> LIBRARY_PREFIXES = List.of(
             "soulseek-network-",
             "soulseek-connection-timer",
+            "soulseek-client-timer",
             "soulseek-client-cleanup",
             "soulseek-distributed-status",
             "soulseek-search-timeout-",

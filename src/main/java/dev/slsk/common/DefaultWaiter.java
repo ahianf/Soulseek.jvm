@@ -14,8 +14,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -27,7 +25,8 @@ public final class DefaultWaiter implements Waiter {
     static final int DEFAULT_TIMEOUT = 5_000;
 
     private final int defaultTimeout;
-    private final ScheduledExecutorService scheduler;
+    private final Scheduler scheduler;
+    private final boolean ownsScheduler;
     private final Map<WaitKey, ArrayDeque<PendingWait<?>>> waits = new HashMap<>();
     private boolean closed;
 
@@ -39,17 +38,26 @@ public final class DefaultWaiter implements Waiter {
     }
 
     /**
-     * Creates a waiter.
+     * Creates a waiter that owns its scheduler.
      *
      * @param defaultTimeout the default timeout in milliseconds
      */
     public DefaultWaiter(int defaultTimeout) {
         this.defaultTimeout = defaultTimeout;
-        scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "soulseek-waiter-timeouts");
-            thread.setDaemon(true);
-            return thread;
-        });
+        this.scheduler = new Scheduler("soulseek-waiter-timeouts");
+        this.ownsScheduler = true;
+    }
+
+    /**
+     * Creates a waiter sharing a caller-owned scheduler.
+     *
+     * @param defaultTimeout the default timeout in milliseconds
+     * @param scheduler the shared scheduler; not closed by this waiter
+     */
+    public DefaultWaiter(int defaultTimeout, Scheduler scheduler) {
+        this.defaultTimeout = defaultTimeout;
+        this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
+        this.ownsScheduler = false;
     }
 
     /**
@@ -288,7 +296,9 @@ public final class DefaultWaiter implements Waiter {
         }
 
         cancelAll();
-        scheduler.shutdownNow();
+        if (ownsScheduler) {
+            scheduler.close();
+        }
     }
 
     private synchronized PendingWait<?> dequeue(WaitKey key) {
@@ -368,7 +378,7 @@ public final class DefaultWaiter implements Waiter {
         /**
          * Registers cancellation and timeout actions.
          */
-        void register(ScheduledExecutorService scheduler) {
+        void register(Scheduler scheduler) {
             CancellationSubscription registration = cancellationSignal.register(cancelAction);
 
             synchronized (this) {
@@ -383,11 +393,10 @@ public final class DefaultWaiter implements Waiter {
                 return;
             }
 
-            // The scheduler only times out; the completion (and any continuation the
-            // caller chained on the wait future) runs on a virtual thread so a blocking
-            // continuation can never stall this single timer thread and every other wait.
-            ScheduledFuture<?> task = scheduler.schedule(
-                    () -> NetworkExecutor.executor().execute(timeoutAction), timeout, TimeUnit.MILLISECONDS);
+            // Scheduler dispatches every task onto a virtual thread, so a
+            // blocking continuation chained on the wait future cannot stall the
+            // timer thread and every other wait behind it.
+            ScheduledFuture<?> task = scheduler.schedule(timeoutAction, timeout, TimeUnit.MILLISECONDS);
             synchronized (this) {
                 if (closed) {
                     task.cancel(false);

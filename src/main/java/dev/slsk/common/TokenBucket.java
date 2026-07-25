@@ -10,8 +10,6 @@ import java.util.ArrayDeque;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -19,7 +17,8 @@ import java.util.concurrent.TimeUnit;
  * Implements the token-bucket rate-limiting algorithm.
  */
 public final class TokenBucket implements AutoCloseable {
-    private final ScheduledExecutorService scheduler;
+    private final Scheduler scheduler;
+    private final boolean ownsScheduler;
     private final ScheduledFuture<?> resetTask;
     private final ArrayDeque<Request> requests = new ArrayDeque<>();
     private long capacity;
@@ -33,6 +32,17 @@ public final class TokenBucket implements AutoCloseable {
      * @param interval the replenishment interval in milliseconds
      */
     public TokenBucket(long capacity, int interval) {
+        this(capacity, interval, null);
+    }
+
+    /**
+     * Creates and starts a token bucket.
+     *
+     * @param capacity the bucket capacity
+     * @param interval the replenishment interval in milliseconds
+     * @param scheduler the shared scheduler, or {@code null} to own one
+     */
+    public TokenBucket(long capacity, int interval, Scheduler scheduler) {
         if (capacity < 1) {
             throw new IllegalArgumentException("capacity must be greater than or equal to 1");
         }
@@ -42,12 +52,9 @@ public final class TokenBucket implements AutoCloseable {
 
         this.capacity = capacity;
         currentCount = capacity;
-        scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "soulseek-token-bucket");
-            thread.setDaemon(true);
-            return thread;
-        });
-        resetTask = scheduler.scheduleAtFixedRate(this::reset, interval, interval, TimeUnit.MILLISECONDS);
+        this.ownsScheduler = scheduler == null;
+        this.scheduler = scheduler == null ? new Scheduler("soulseek-token-bucket") : scheduler;
+        resetTask = this.scheduler.scheduleAtFixedRate(this::reset, interval, interval, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -165,7 +172,9 @@ public final class TokenBucket implements AutoCloseable {
         }
 
         resetTask.cancel(false);
-        scheduler.shutdownNow();
+        if (ownsScheduler) {
+            scheduler.close();
+        }
 
         IllegalStateException exception = new IllegalStateException("The token bucket is closed");
         for (Request request : pending) {

@@ -12,13 +12,12 @@ import dev.slsk.SearchResponse;
 import dev.slsk.SearchScope;
 import dev.slsk.SearchState;
 import dev.slsk.common.NetworkExecutor;
+import dev.slsk.common.Scheduler;
 import dev.slsk.options.SearchOptions;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -39,7 +38,8 @@ public final class SearchInternal implements AutoCloseable {
     private final AtomicInteger responseCount = new AtomicInteger();
     private final ReentrantReadWriteLock stateLock = new ReentrantReadWriteLock();
     private final SearchScope scope;
-    private final ScheduledExecutorService timerExecutor;
+    private final Scheduler timerExecutor;
+    private final boolean ownsScheduler;
     private final int token;
 
     private volatile Consumer<SearchResponse> responseReceived;
@@ -53,6 +53,19 @@ public final class SearchInternal implements AutoCloseable {
 
     /** Creates a search. */
     public SearchInternal(SearchQuery query, SearchScope scope, int token, SearchOptions options) {
+        this(query, scope, token, options, null);
+    }
+
+    /**
+     * Creates a search sharing a caller-owned scheduler.
+     *
+     * @param query the search query
+     * @param scope the search scope
+     * @param token the search token
+     * @param options the search options
+     * @param scheduler the shared scheduler, or {@code null} to own one
+     */
+    public SearchInternal(SearchQuery query, SearchScope scope, int token, SearchOptions options, Scheduler scheduler) {
         this.query = query;
         this.scope = scope;
         this.token = token;
@@ -60,11 +73,8 @@ public final class SearchInternal implements AutoCloseable {
         if (this.options.getSearchTimeout() <= 0) {
             throw new IllegalArgumentException("searchTimeout must be greater than zero");
         }
-        timerExecutor = Executors.newSingleThreadScheduledExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "soulseek-search-timeout-" + token);
-            thread.setDaemon(true);
-            return thread;
-        });
+        this.ownsScheduler = scheduler == null;
+        this.timerExecutor = scheduler == null ? new Scheduler("soulseek-search-timeout-" + token) : scheduler;
     }
 
     /** Returns the total received file count. */
@@ -273,7 +283,9 @@ public final class SearchInternal implements AutoCloseable {
     public void close() {
         if (disposed.compareAndSet(false, true)) {
             stopTimeout();
-            timerExecutor.shutdownNow();
+            if (ownsScheduler) {
+                timerExecutor.close();
+            }
         }
     }
 

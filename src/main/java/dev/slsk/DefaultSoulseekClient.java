@@ -9,6 +9,7 @@ import dev.slsk.common.Constants;
 import dev.slsk.common.DefaultWaiter;
 import dev.slsk.common.IOAdapter;
 import dev.slsk.common.NetworkExecutor;
+import dev.slsk.common.Scheduler;
 import dev.slsk.common.TokenBucket;
 import dev.slsk.common.TokenFactory;
 import dev.slsk.common.WaitKey;
@@ -190,8 +191,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -240,7 +239,14 @@ final class DefaultSoulseekClient
     private final DiagnosticSink diagnostic;
     private volatile ClientListenerFactory clientListenerFactory = SocketListener::new;
     private final AtomicBoolean closed = new AtomicBoolean();
-    private final ScheduledExecutorService cleanupScheduler;
+    /**
+     * The client's single timer thread. Every component that needs delayed or
+     * periodic work shares it: the waiter, both token buckets, the distributed
+     * status watchdog, semaphore cleanup, and each active search. Before this
+     * the client owned four platform threads at rest plus one per search.
+     */
+    private final Scheduler scheduler;
+
     private final Map<Event, CopyOnWriteArrayList<SoulseekClientEventListener<?>>> listeners =
             new EnumMap<>(Event.class);
 
@@ -313,17 +319,20 @@ final class DefaultSoulseekClient
         raiseEventsAsynchronously = this.options.isRaiseEventsAsynchronously();
         this.serverConnection = serverConnection;
         this.listener = listener;
-        this.waiter = waiter == null ? new DefaultWaiter(this.options.getMessageTimeout()) : waiter;
+        // Constructed before every component that schedules, since they all
+        // share it.
+        this.scheduler = new Scheduler("soulseek-client-timer");
+        this.waiter = waiter == null ? new DefaultWaiter(this.options.getMessageTimeout(), scheduler) : waiter;
         this.tokenFactory = tokenFactory == null ? new TokenFactory(this.options.getStartingToken()) : tokenFactory;
         this.searchSemaphore = new Semaphore(this.options.getMaximumConcurrentSearches());
         this.globalDownloadSemaphore = new Semaphore(this.options.getMaximumConcurrentDownloads());
         this.globalUploadSemaphore = new Semaphore(this.options.getMaximumConcurrentUploads());
         this.ioAdapter = ioAdapter == null ? new IOAdapter() : ioAdapter;
         this.uploadTokenBucket = uploadTokenBucket == null
-                ? new TokenBucket((this.options.getMaximumUploadSpeed() * 1024L) / 10, 100)
+                ? new TokenBucket((this.options.getMaximumUploadSpeed() * 1024L) / 10, 100, scheduler)
                 : uploadTokenBucket;
         this.downloadTokenBucket = downloadTokenBucket == null
-                ? new TokenBucket((this.options.getMaximumDownloadSpeed() * 1024L) / 10, 100)
+                ? new TokenBucket((this.options.getMaximumDownloadSpeed() * 1024L) / 10, 100, scheduler)
                 : downloadTokenBucket;
         this.connectionFactory = connectionFactory == null ? new DefaultConnectionFactory() : connectionFactory;
         for (Event event : Event.values()) {
@@ -346,19 +355,15 @@ final class DefaultSoulseekClient
         this.peerConnectionManager =
                 peerConnectionManager == null ? new DefaultPeerConnectionManager(this) : peerConnectionManager;
         this.distributedConnectionManager = distributedConnectionManager == null
-                ? new DefaultDistributedConnectionManager(this)
+                ? new DefaultDistributedConnectionManager(this, null, null, scheduler)
                 : distributedConnectionManager;
         this.serverMessageHandler =
                 serverMessageHandler == null ? new DefaultServerMessageHandler(this) : serverMessageHandler;
 
         bindEvents();
-        cleanupScheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "soulseek-client-cleanup");
-            thread.setDaemon(true);
-            return thread;
-        });
-        cleanupScheduler.scheduleAtFixedRate(() -> cleanupUserEndpointSemaphoresAsync(), 5, 5, TimeUnit.MINUTES);
-        cleanupScheduler.scheduleAtFixedRate(() -> cleanupUploadSemaphoresAsync(), 15, 15, TimeUnit.MINUTES);
+
+        scheduler.scheduleAtFixedRate(() -> cleanupUserEndpointSemaphoresAsync(), 5, 5, TimeUnit.MINUTES);
+        scheduler.scheduleAtFixedRate(() -> cleanupUploadSemaphoresAsync(), 15, 15, TimeUnit.MINUTES);
     }
 
     /** Returns whether client events are configured as asynchronous. */
@@ -2775,7 +2780,7 @@ final class DefaultSoulseekClient
         if (serverConnection != null) {
             serverConnection.close();
         }
-        cleanupScheduler.shutdownNow();
+        scheduler.close();
     }
 
     @Override
@@ -3418,8 +3423,8 @@ final class DefaultSoulseekClient
             SearchInvocation invocation,
             Consumer<SearchResponse> responseHandler,
             CancellationSignal cancellationSignal) {
-        SearchInternal search =
-                new SearchInternal(invocation.query(), invocation.scope(), invocation.token(), invocation.options());
+        SearchInternal search = new SearchInternal(
+                invocation.query(), invocation.scope(), invocation.token(), invocation.options(), scheduler);
         SearchState[] previousState = {SearchState.NONE};
         Consumer<SearchState> updateState = newState -> {
             search.setState(newState);
