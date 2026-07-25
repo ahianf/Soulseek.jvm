@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Ahian Fernandez -->
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+
+<Configuration status="WARN">
+  <Appenders>
+    <!--
+      Interactive prompts are written straight to stdout, so log records go to
+      stderr to keep the two streams separable when redirecting output.
+    -->
+    <Console name="Console" target="SYSTEM_ERR">
+      <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5level [%t] %logger{1} - %msg%n%throwable"/>
+    </Console>
+  </Appenders>
+
+  <Loggers>
+    <!--
+      Diagnostics raised by the library while it talks to the server and to
+      peers. Set to trace to see every protocol step, or to info to quiet the
+      per-connection detail.
+    -->
+    <Logger name="dev.slsk.diagnostics" level="debug"/>
+
+    <!--
+      Messages from the CLI itself. Transfer progress is logged at debug, so set this to debug
+      to follow a transfer chunk by chunk; at info only the transfer state changes are shown.
+    -->
+    <Logger name="tenine.example" level="info"/>
+
+    <Root level="info">
+      <AppenderRef ref="Console"/>
+    </Root>
+  </Loggers>
+</Configuration>

@@ -9,6 +9,7 @@ import dev.slsk.SearchQuery;
 import dev.slsk.SearchResponse;
 import dev.slsk.SoulseekClient;
 import dev.slsk.Transfer;
+import dev.slsk.diagnostics.DiagnosticEvent;
 import dev.slsk.diagnostics.DiagnosticLevel;
 import dev.slsk.events.TransferProgressUpdatedEvent;
 import dev.slsk.options.SearchOptions;
@@ -20,11 +21,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.CompletionException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A small interactive Soulseek search and download client.
  */
 public final class ConsoleExample {
+    private static final Logger LOG = LoggerFactory.getLogger(ConsoleExample.class);
+    /**
+     * Diagnostics raised by the library itself, logged under the library package so the log
+     * configuration can tune protocol detail separately from this example's own messages.
+     */
+    private static final Logger DIAGNOSTICS = LoggerFactory.getLogger("dev.slsk.diagnostics");
+
     private static final Path DOWNLOAD_DIRECTORY = Path.of(System.getProperty("user.home"), "slsk-jvm", "downloads");
     // slskd uses minor version 760 with the same major protocol version (170).
     private static final int MINOR_VERSION = 760;
@@ -46,22 +56,23 @@ public final class ConsoleExample {
                 String username = required(input, "Soulseek username: ");
                 String password = password(input);
                 Files.createDirectories(DOWNLOAD_DIRECTORY);
-                System.out.println("Downloads will be saved to " + DOWNLOAD_DIRECTORY);
-                System.out.printf(
-                        "Listening for peers on port %d; forward this TCP port in your router/firewall.%n", listenPort);
+                LOG.info("downloads will be saved to {}", DOWNLOAD_DIRECTORY);
+                LOG.info("listening for peers on port {}; forward this TCP port in your router/firewall", listenPort);
 
-                client.addTransferStateChangedListener((sender, event) -> System.out.printf(
-                        "%nTransfer state for %s: %s -> %s%n",
+                client.addTransferStateChangedListener((sender, event) -> LOG.info(
+                        "transfer state for {}: {} -> {}",
                         event.getTransfer().getFilename(),
                         event.getPreviousState(),
                         event.getTransfer().getState()));
-                client.addTransferProgressUpdatedListener((sender, event) -> printProgress(event));
-                client.addDiagnosticGeneratedListener((sender, event) -> printConnectionDiagnostic(event.getMessage()));
-                System.out.println("Connecting...");
+                client.addTransferProgressUpdatedListener((sender, event) -> logProgress(event));
+                client.addDiagnosticGeneratedListener((sender, event) -> logDiagnostic(event));
+                LOG.info("connecting as {}", username);
                 client.connectAsync(username, password).join();
-                System.out.printf(
-                        "Logged in as %s (network version %d.%d).%n",
-                        client.getUsername(), client.getMajorVersion(), client.getMinorVersion());
+                LOG.info(
+                        "logged in as {} (network version {}.{})",
+                        client.getUsername(),
+                        client.getMajorVersion(),
+                        client.getMinorVersion());
 
                 while (true) {
                     String query = prompt(input, "\nSearch (blank to quit): ");
@@ -76,8 +87,9 @@ public final class ConsoleExample {
 
     private static void searchAndOfferDownload(SoulseekClient client, Scanner input, String query) {
         List<SearchFile> files = new ArrayList<>();
-        System.out.printf(
-                "Searching; results appear live and finish after %d seconds of silence.%n",
+        LOG.info(
+                "searching '{}'; results appear live and finish after {} seconds of silence",
+                query,
                 SEARCH_TIMEOUT_MILLISECONDS / 1_000);
         var search = client.searchAsync(
                         SearchQuery.fromText(query),
@@ -87,11 +99,13 @@ public final class ConsoleExample {
                         new SearchOptions(SEARCH_TIMEOUT_MILLISECONDS, SEARCH_RESPONSE_LIMIT),
                         CancellationSignal.none())
                 .join();
-        System.out.printf(
-                "Search finished: %s. %d public file(s) accepted; %d shown for selection.%n",
-                search.getState(), search.getFileCount(), files.size());
+        LOG.info(
+                "search finished: {}. {} public file(s) accepted; {} shown for selection",
+                search.getState(),
+                search.getFileCount(),
+                files.size());
         if (files.isEmpty()) {
-            System.out.println("No downloadable public files found.");
+            LOG.warn("no downloadable public files found; an unforwarded listening port reduces peer responses");
             return;
         }
 
@@ -101,18 +115,22 @@ public final class ConsoleExample {
         }
         SearchFile file = files.get(selected);
         Path destination = availableDestination(localFilename(file.remoteFilename()));
-        System.out.printf("Requesting %s from %s to %s%n", file.remoteFilename(), file.username(), destination);
+        LOG.info("requesting {} from {} to {}", file.remoteFilename(), file.username(), destination);
         try {
             var completion = client.enqueueDownloadAsync(
                             file.username(), file.remoteFilename(), destination.toString(), file.size(), 0, null, null)
                     .join();
-            System.out.println("Peer accepted the request; waiting for the transfer to finish.");
+            LOG.info("peer accepted the request; waiting for the transfer to finish");
             Transfer transfer = completion.join();
-            System.out.printf("Download finished: %s%n", transfer.getState());
+            LOG.info("download finished: {}", transfer.getState());
         } catch (CompletionException exception) {
-            System.out.println();
-            System.err.println("Download failed: " + failureMessage(exception));
-            System.err.println("The peer may be offline, busy, or not accepting transfers. Try another result.");
+            LOG.error(
+                    "download of {} from {} failed: {}",
+                    file.remoteFilename(),
+                    file.username(),
+                    failureMessage(exception),
+                    exception);
+            LOG.warn("the peer may be offline, busy, or not accepting transfers; try another result");
         }
     }
 
@@ -130,8 +148,8 @@ public final class ConsoleExample {
                         response.getQueueLength(),
                         response.getUploadSpeed());
                 files.add(result);
-                System.out.printf(
-                        "[%d] %s — %s (%s; %s, queue %d, %d KiB/s)%n",
+                LOG.info(
+                        "[{}] {} — {} ({}; {}, queue {}, {} KiB/s)",
                         files.size(),
                         result.username(),
                         result.remoteFilename(),
@@ -157,7 +175,7 @@ public final class ConsoleExample {
             } catch (NumberFormatException ignored) {
                 // Repeat the prompt below.
             }
-            System.out.printf("Enter a number from 1 to %d.%n", limit);
+            LOG.warn("enter a number from 1 to {}", limit);
         }
     }
 
@@ -175,7 +193,7 @@ public final class ConsoleExample {
             } catch (NumberFormatException ignored) {
                 // Repeat the prompt below.
             }
-            System.out.println("Enter a port from 1024 to 65535.");
+            LOG.warn("enter a port from 1024 to 65535");
         }
     }
 
@@ -241,25 +259,40 @@ public final class ConsoleExample {
         return cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
     }
 
-    private static void printProgress(TransferProgressUpdatedEvent event) {
+    private static void logProgress(TransferProgressUpdatedEvent event) {
+        // Progress fires once per transferred chunk, so skip the formatting when debug is off.
+        if (!LOG.isDebugEnabled()) {
+            return;
+        }
         Transfer transfer = event.getTransfer();
-        System.out.printf(
-                "\rProgress: %.1f%% (%s/%s)",
-                transfer.getPercentComplete(),
+        LOG.debug(
+                "progress for {}: {} ({}/{})",
+                transfer.getFilename(),
+                String.format("%.1f%%", transfer.getPercentComplete()),
                 humanSize(transfer.getBytesTransferred()),
                 humanSize(transfer.getSize()));
-        if (transfer.getPercentComplete() >= 100) {
-            System.out.println();
-        }
     }
 
-    private static void printConnectionDiagnostic(String message) {
-        if (message != null
-                && (message.contains("GET_PEER_ADDRESS")
-                        || message.contains("endpoint response")
-                        || message.contains("message connection")
-                        || message.contains("Soliciting indirect"))) {
-            System.out.println("[network] " + message);
+    /**
+     * Mirrors a diagnostic raised by the library onto the matching log level, so the whole
+     * conversation with the server and with peers is visible while the client is connected.
+     */
+    private static void logDiagnostic(DiagnosticEvent event) {
+        String message = event.getMessage();
+        Throwable exception = event.getException();
+        if (exception != null) {
+            DIAGNOSTICS.error(message, exception);
+            return;
+        }
+        switch (event.getLevel()) {
+            case WARNING -> DIAGNOSTICS.warn(message);
+            case INFO -> DIAGNOSTICS.info(message);
+            case DEBUG -> DIAGNOSTICS.debug(message);
+            case TRACE -> DIAGNOSTICS.trace(message);
+            case NONE -> {
+                // Nothing to report.
+            }
+            default -> DIAGNOSTICS.info(message);
         }
     }
 

@@ -7,4 +7,5 @@
  */
 module tenine.example {
     requires dev.slsk.soulseek;
+    requires org.slf4j;
 }
