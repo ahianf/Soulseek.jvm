@@ -353,8 +353,13 @@ class ConnectionTest {
         FakeStream stream = new FakeStream();
         CompletableFuture<Void> blocked = new CompletableFuture<>();
         stream.writeFutures.add(blocked);
-        SocketConnection connection =
-                new SocketConnection(ENDPOINT, options(8, 8, 2, 100, -1, null, null), new FakeTcpClient(stream, true));
+        // A short queue timeout so the terminal case is reachable in a test.
+        // Defect 3.4: a full queue is backpressure, not an instant kill, so the
+        // drop only happens once a producer has waited this long.
+        SocketConnection connection = new SocketConnection(
+                ENDPOINT,
+                options(8, 8, 2, 100, -1, null, null).withWriteQueueTimeout(150),
+                new FakeTcpClient(stream, true));
 
         CompletableFuture<Void> first = connection.writeAsync(new byte[] {1}, null);
         awaitCondition(() -> connection.getWriteQueueDepth() == 1);

@@ -270,18 +270,24 @@ class SoulseekClientSearchTest {
         CancellationController firstSource = new CancellationController();
         CancellationController secondSource = new CancellationController();
         CancellationController thirdSource = new CancellationController();
+        // Started one at a time, each waited on before the next. The callers run
+        // on independent threads now, so without this the two that win the
+        // concurrency semaphore are whichever two get scheduled first — and the
+        // test would be asserting on a race.
         CompletableFuture<SearchResult> first =
                 inBackground(() -> fixture.client.search(SearchRequest.of(SearchQuery.fromText("one"))
                         .token(51)
                         .options(options)
                         .cancellation(firstSource.getSignal())
                         .build()));
+        waitUntil(() -> fixture.server.messages.size() == 1);
         CompletableFuture<SearchResult> second =
                 inBackground(() -> fixture.client.search(SearchRequest.of(SearchQuery.fromText("two"))
                         .token(52)
                         .options(options)
                         .cancellation(secondSource.getSignal())
                         .build()));
+        waitUntil(() -> fixture.server.messages.size() == 2);
         CompletableFuture<SearchResult> third =
                 inBackground(() -> fixture.client.search(SearchRequest.of(SearchQuery.fromText("three"))
                         .token(53)
@@ -289,9 +295,6 @@ class SoulseekClientSearchTest {
                         .cancellation(thirdSource.getSignal())
                         .build()));
 
-        waitUntil(() -> fixture.server.messages.size() == 2);
-        // The three callers each run on their own thread now, so the queued one
-        // is not necessarily registered the instant the first two have written.
         waitUntil(() -> fixture.client.getSearches().get(53) != null);
         assertEquals(SearchState.QUEUED, fixture.client.getSearches().get(53).getState());
         firstSource.cancel();

@@ -19,12 +19,31 @@ import java.util.concurrent.TimeUnit;
  * Implements the token-bucket rate-limiting algorithm.
  */
 public final class TokenBucket implements AutoCloseable {
+
+    /** How many refills happen per configured interval. */
+    private static final int REFILLS_PER_INTERVAL = 10;
+
+    /** Floor on the refill tick, so a tiny interval cannot spin the scheduler. */
+    private static final int MIN_REFILL_TICK_MILLIS = 10;
+
     private final Scheduler scheduler;
     private final boolean ownsScheduler;
     private final ScheduledFuture<?> resetTask;
     private final ArrayDeque<Request> requests = new ArrayDeque<>();
+    private final int intervalMillis;
     private long capacity;
     private long currentCount;
+    private long lastRefillNanos;
+
+    /**
+     * Fractional credit carried between ticks, in token-milliseconds.
+     *
+     * <p>Without it, integer division starves small buckets: a capacity of 1
+     * over a 25 ms interval earns {@code (1 * 10) / 25 == 0} tokens on every
+     * 10 ms tick and never refills at all.
+     */
+    private long refillCredit;
+
     private boolean closed;
 
     /**
@@ -53,10 +72,16 @@ public final class TokenBucket implements AutoCloseable {
         }
 
         this.capacity = capacity;
+        this.intervalMillis = interval;
         currentCount = capacity;
+        lastRefillNanos = System.nanoTime();
         this.ownsScheduler = scheduler == null;
         this.scheduler = scheduler == null ? new Scheduler("soulseek-token-bucket") : scheduler;
-        resetTask = this.scheduler.scheduleAtFixedRate(this::reset, interval, interval, TimeUnit.MILLISECONDS);
+
+        // Ticks finer than the configured interval so the bucket refills in
+        // proportion to elapsed time rather than all at once. See refill().
+        int tick = Math.max(MIN_REFILL_TICK_MILLIS, interval / REFILLS_PER_INTERVAL);
+        resetTask = this.scheduler.scheduleAtFixedRate(this::refill, tick, tick, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -186,21 +211,43 @@ public final class TokenBucket implements AutoCloseable {
     }
 
     /**
-     * Replenishes and releases whatever the new tokens allow.
+     * Adds the tokens that elapsed time has earned, then releases whatever they
+     * allow.
+     *
+     * <p>The source refilled to full capacity once per interval, which makes
+     * the transmit rate bursty: a whole interval's allowance becomes available
+     * at one instant and is consumed as fast as the socket will take it. Tokens
+     * are now added in proportion to elapsed time, so a peer sees a steady rate
+     * rather than a sawtooth. The average over an interval is unchanged, and
+     * the wire format is untouched.
      *
      * <p>The futures are completed after the lock is dropped. Completing them
      * under it ran every inline continuation — including anything a caller
      * chained onto the grant — while holding the bucket monitor, which is the
      * same lock every other {@code getAsync} caller needs.
      */
-    private void reset() {
+    private void refill() {
         List<Grant> grants;
 
         synchronized (this) {
             if (closed) {
                 return;
             }
-            currentCount = capacity;
+            long now = System.nanoTime();
+            long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(now - lastRefillNanos);
+            if (elapsedMillis <= 0) {
+                return;
+            }
+            lastRefillNanos = now;
+
+            refillCredit += capacity * elapsedMillis;
+            long earned = refillCredit / intervalMillis;
+            refillCredit -= earned * intervalMillis;
+            currentCount = Math.min(capacity, currentCount + Math.max(0, earned));
+            if (currentCount == capacity) {
+                // Full: stop banking credit that would burst on the next drain.
+                refillCredit = 0;
+            }
             grants = drainRequests();
         }
 

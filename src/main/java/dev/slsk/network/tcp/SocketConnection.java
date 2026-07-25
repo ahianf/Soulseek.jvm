@@ -638,11 +638,21 @@ public class SocketConnection implements Connection {
             ConnectionReporter reporter,
             CancellationSignal cancellationSignal)
             throws Exception {
-        if (writeQueueFull || !writeQueueSemaphore.tryAcquire()) {
+        // Real backpressure rather than an immediate kill. The source dropped
+        // the connection the moment the queue filled, which is a hard failure
+        // with no signal to the producer: a burst that the peer would have
+        // drained a moment later cost the whole connection.
+        //
+        // A producer now waits for room. Waiting is cheap because the caller is
+        // on a virtual thread. The disconnect survives only as the terminal
+        // case, once a producer has waited longer than the queue timeout, which
+        // means the peer really has stopped consuming.
+        if (writeQueueFull || !acquireWriteQueueSlot(cancellationSignal)) {
             writeQueueFull = true;
             disconnect("The write buffer is full", null);
-            throw new ConnectionWriteDroppedException(
-                    "Dropped buffered message to " + formatEndpoint(ipEndpoint) + "; the write buffer is full");
+            throw new ConnectionWriteDroppedException("Dropped buffered message to " + formatEndpoint(ipEndpoint)
+                    + "; the write buffer stayed full for "
+                    + options.getWriteQueueTimeout() + " milliseconds");
         }
         acquire(writeSemaphore, cancellationSignal);
 
@@ -815,6 +825,28 @@ public class SocketConnection implements Connection {
         }
         return new ConnectionException(
                 "Failed to connect to " + formatEndpoint(ipEndpoint) + ": " + actual.getMessage(), actual);
+    }
+
+    /**
+     * Waits for room in the write queue.
+     *
+     * @return whether a slot was obtained before the timeout elapsed
+     */
+    private boolean acquireWriteQueueSlot(CancellationSignal cancellationSignal) {
+        int timeout = options.getWriteQueueTimeout();
+        if (timeout <= 0) {
+            return writeQueueSemaphore.tryAcquire();
+        }
+        Thread caller = Thread.currentThread();
+        CancellationSubscription registration = cancellationSignal.register(caller::interrupt);
+        try {
+            return writeQueueSemaphore.tryAcquire(timeout, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException exception) {
+            throw new CancellationException("Operation cancelled");
+        } finally {
+            registration.close();
+            Thread.interrupted();
+        }
     }
 
     /**

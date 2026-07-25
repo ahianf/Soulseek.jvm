@@ -20,6 +20,13 @@ public class ConnectionOptions {
     public static final int DEFAULT_CONNECT_TIMEOUT = 10_000;
     /** Default inactivity timeout in milliseconds. */
     public static final int DEFAULT_INACTIVITY_TIMEOUT = 15_000;
+    /**
+     * Default time a producer waits for room in a full write queue.
+     *
+     * <p>Zero would reproduce the source's drop-and-disconnect. This gives a
+     * burst time to drain before the connection is written off.
+     */
+    public static final int DEFAULT_WRITE_QUEUE_TIMEOUT = 10_000;
 
     private final SocketConfigurator configureSocket;
     private final int connectTimeout;
@@ -38,6 +45,9 @@ public class ConnectionOptions {
      * connection options.
      */
     private final boolean raiseEventsAsynchronously;
+
+    /** How long a producer waits for room in a full write queue. */
+    private final int writeQueueTimeout;
 
     /**
      * Creates connection options with source defaults.
@@ -173,6 +183,7 @@ public class ConnectionOptions {
         this.writeBufferSize = writeBufferSize;
         this.writeQueueSize = writeQueueSize;
         this.raiseEventsAsynchronously = false;
+        this.writeQueueTimeout = DEFAULT_WRITE_QUEUE_TIMEOUT;
         this.connectTimeout = connectTimeout;
         this.inactivityTimeout = inactivityTimeout;
         this.proxyOptions = proxyOptions;
@@ -238,6 +249,29 @@ public class ConnectionOptions {
      *
      * @return the write queue size
      */
+    private ConnectionOptions(ConnectionOptions source, int writeQueueTimeout) {
+        this.configureSocket = source.configureSocket;
+        this.connectTimeout = source.connectTimeout;
+        this.inactivityTimeout = source.inactivityTimeout;
+        this.proxyOptions = source.proxyOptions;
+        this.readBufferSize = source.readBufferSize;
+        this.writeBufferSize = source.writeBufferSize;
+        this.writeQueueSize = source.writeQueueSize;
+        this.raiseEventsAsynchronously = source.raiseEventsAsynchronously;
+        this.writeQueueTimeout = writeQueueTimeout;
+    }
+
+    /**
+     * Returns a copy that waits a different length of time for write-queue room.
+     *
+     * @param value the timeout in milliseconds; {@code 0} restores the source's
+     *     drop-immediately behaviour
+     * @return a copy carrying the timeout
+     */
+    public final ConnectionOptions withWriteQueueTimeout(int value) {
+        return value == writeQueueTimeout ? this : new ConnectionOptions(this, value);
+    }
+
     private ConnectionOptions(ConnectionOptions source, boolean raiseEventsAsynchronously) {
         this.configureSocket = source.configureSocket;
         this.connectTimeout = source.connectTimeout;
@@ -247,6 +281,7 @@ public class ConnectionOptions {
         this.writeBufferSize = source.writeBufferSize;
         this.writeQueueSize = source.writeQueueSize;
         this.raiseEventsAsynchronously = raiseEventsAsynchronously;
+        this.writeQueueTimeout = source.writeQueueTimeout;
     }
 
     /**
@@ -254,6 +289,15 @@ public class ConnectionOptions {
      *
      * @return whether events are raised asynchronously
      */
+    /**
+     * Returns how long a producer waits for room in a full write queue.
+     *
+     * @return the timeout in milliseconds
+     */
+    public final int getWriteQueueTimeout() {
+        return writeQueueTimeout;
+    }
+
     public final boolean isRaiseEventsAsynchronously() {
         return raiseEventsAsynchronously;
     }
