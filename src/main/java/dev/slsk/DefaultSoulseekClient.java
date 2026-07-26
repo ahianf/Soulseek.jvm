@@ -34,9 +34,6 @@ import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
-import dev.slsk.exceptions.UserEndpointCacheException;
-import dev.slsk.exceptions.UserEndpointException;
-import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.handlers.DefaultDistributedMessageHandler;
 import dev.slsk.messaging.handlers.DefaultPeerMessageHandler;
@@ -48,14 +45,11 @@ import dev.slsk.messaging.handlers.PeerMessageHandlerClient;
 import dev.slsk.messaging.handlers.ServerMessageEvent;
 import dev.slsk.messaging.handlers.ServerMessageHandler;
 import dev.slsk.messaging.handlers.ServerMessageHandlerClient;
-import dev.slsk.messaging.messages.FolderContentsRequest;
 import dev.slsk.messaging.messages.LoginRequest;
 import dev.slsk.messaging.messages.LoginResponse;
 import dev.slsk.messaging.messages.OutgoingMessage;
 import dev.slsk.messaging.messages.PrivateRoomToggle;
 import dev.slsk.messaging.messages.SetListenPortCommand;
-import dev.slsk.messaging.messages.UserAddressRequest;
-import dev.slsk.messaging.messages.UserAddressResponse;
 import dev.slsk.network.ConnectionFactory;
 import dev.slsk.network.DefaultConnectionFactory;
 import dev.slsk.network.DefaultDistributedConnectionManager;
@@ -86,7 +80,6 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -103,7 +96,7 @@ import java.util.function.Consumer;
 /**
  * A client for the Soulseek file-sharing network.
  */
-final class DefaultSoulseekClient extends ClientEventSupport
+final class DefaultSoulseekClient extends ClientOperations
         implements SoulseekClient,
                 ClientContext,
                 DistributedConnectionManagerClient,
@@ -119,29 +112,28 @@ final class DefaultSoulseekClient extends ClientEventSupport
     private static final int DEFAULT_PORT = 2271;
     private static volatile boolean raiseEventsAsynchronously;
 
-    private volatile SoulseekClientOptions options;
+    volatile SoulseekClientOptions options;
     private final int minorVersion;
-    private final Waiter waiter;
+    final Waiter waiter;
     private final TokenFactory tokenFactory;
     private final Semaphore searchSemaphore;
-    private final Semaphore stateSemaphore = new Semaphore(1);
+    final Semaphore stateSemaphore = new Semaphore(1);
     private final Semaphore globalDownloadSemaphore;
     private final Semaphore globalUploadSemaphore;
     private final Semaphore uploadSemaphoreSyncRoot = new Semaphore(1);
-    private final Semaphore userEndpointSemaphoreSyncRoot = new Semaphore(1);
     private final IOAdapter ioAdapter;
-    private final TokenBucket uploadTokenBucket;
-    private final TokenBucket downloadTokenBucket;
-    private final ConnectionFactory connectionFactory;
-    private final ListenerHandler listenerHandler;
-    private final SearchResponder searchResponder;
+    final TokenBucket uploadTokenBucket;
+    final TokenBucket downloadTokenBucket;
+    final ConnectionFactory connectionFactory;
+    final ListenerHandler listenerHandler;
+    final SearchResponder searchResponder;
     private final PeerMessageHandler peerMessageHandler;
     private final DistributedMessageHandler distributedMessageHandler;
-    private final PeerConnectionManager peerConnectionManager;
-    private final DistributedConnectionManager distributedConnectionManager;
+    final PeerConnectionManager peerConnectionManager;
+    final DistributedConnectionManager distributedConnectionManager;
     private final ServerMessageHandler serverMessageHandler;
-    private final DiagnosticSink diagnostic;
-    private volatile ClientListenerFactory clientListenerFactory = SocketListener::new;
+    final DiagnosticSink diagnostic;
+    volatile ClientListenerFactory clientListenerFactory = SocketListener::new;
     private final AtomicBoolean closed = new AtomicBoolean();
     /**
      * The client's single timer thread. Every component that needs delayed or
@@ -149,10 +141,13 @@ final class DefaultSoulseekClient extends ClientEventSupport
      * status watchdog, semaphore cleanup, and each active search. Before this
      * the client owned four platform threads at rest plus one per search.
      */
-    private final Scheduler scheduler;
+    final Scheduler scheduler;
 
     /** Chat rooms, split out of this class; see RoomRegistry. */
     private final RoomRegistry rooms;
+
+    /** Applies option patches to a running client. */
+    private final ClientReconfiguration reconfiguration = new ClientReconfiguration(this);
 
     /** User info, presence and browsing, split out; see UserDirectory. */
     private final UserDirectory users;
@@ -166,17 +161,16 @@ final class DefaultSoulseekClient extends ClientEventSupport
     /** Transfer orchestration, split out; see TransferEngine. */
     private final TransferEngine transfers;
 
-    private volatile MessageConnection serverConnection;
-    private volatile Listener listener;
-    private volatile String address;
-    private volatile InetSocketAddress ipEndpoint;
-    private volatile String username;
+    volatile MessageConnection serverConnection;
+    volatile Listener listener;
+    volatile String address;
+    volatile InetSocketAddress ipEndpoint;
+    volatile String username;
     private volatile ServerInfo serverInfo = new ServerInfo();
-    private volatile SoulseekClientState state = SoulseekClientState.DISCONNECTED;
+    volatile SoulseekClientState state = SoulseekClientState.DISCONNECTED;
     private volatile Map<Integer, TransferInternal> downloads = new ConcurrentHashMap<>();
     private volatile Map<Integer, TransferInternal> uploads = new ConcurrentHashMap<>();
     private volatile Map<Integer, SearchInternal> searches = new ConcurrentHashMap<>();
-    private final Map<String, Semaphore> userEndpointSemaphores = new ConcurrentHashMap<>();
     private final Map<String, Semaphore> uploadSemaphores = new ConcurrentHashMap<>();
 
     /** Creates a client with default options. */
@@ -279,7 +273,7 @@ final class DefaultSoulseekClient extends ClientEventSupport
 
         bindEvents();
 
-        scheduler.scheduleAtFixedRate(() -> cleanupUserEndpointSemaphoresAsync(), 5, 5, TimeUnit.MINUTES);
+        scheduler.scheduleAtFixedRate(() -> users.cleanupUserEndpointSemaphoresAsync(), 5, 5, TimeUnit.MINUTES);
         scheduler.scheduleAtFixedRate(() -> cleanupUploadSemaphoresAsync(), 15, 15, TimeUnit.MINUTES);
     }
 
@@ -488,61 +482,6 @@ final class DefaultSoulseekClient extends ClientEventSupport
                 defaultToken(cancellationSignal));
     }
 
-    private CompletableFuture<List<Directory>> getDirectoryContentsOperation(
-            String requestedUsername, String directoryName) {
-        return getDirectoryContentsOperation(requestedUsername, directoryName, null, CancellationSignal.none());
-    }
-
-    private CompletableFuture<List<Directory>> getDirectoryContentsOperation(
-            String requestedUsername, String directoryName, int operationToken) {
-        return getDirectoryContentsOperation(
-                requestedUsername, directoryName, operationToken, CancellationSignal.none());
-    }
-
-    private CompletableFuture<List<Directory>> getDirectoryContentsOperation(
-            String requestedUsername, String directoryName, CancellationSignal cancellationSignal) {
-        return getDirectoryContentsOperation(requestedUsername, directoryName, null, cancellationSignal);
-    }
-
-    private CompletableFuture<List<Directory>> getDirectoryContentsOperation(
-            String requestedUsername,
-            String directoryName,
-            Integer operationToken,
-            CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
-        requireText(directoryName, "directoryName");
-        requireLoggedIn("fetch directory contents");
-        int tokenValue = operationToken == null ? getNextToken() : operationToken;
-        CancellationSignal token = defaultToken(cancellationSignal);
-        CompletableFuture<List<Directory>> contentsWait;
-        try {
-            @SuppressWarnings("unchecked")
-            CompletableFuture<List<Directory>> typedWait =
-                    (CompletableFuture<List<Directory>>) (CompletableFuture<?>) waiter.waitAsync(
-                            new WaitKey(MessageCode.Peer.FOLDER_CONTENTS_RESPONSE, requestedUsername, tokenValue),
-                            List.class,
-                            null,
-                            token);
-            contentsWait = typedWait;
-        } catch (Throwable failure) {
-            return mapClientFailure(
-                    CompletableFuture.failedFuture(failure),
-                    "Failed to retrieve directory contents for " + directoryName + " from " + requestedUsername + ": ",
-                    UserOfflineException.class);
-        }
-        CompletableFuture<List<Directory>> operation = getUserEndpointOperation(requestedUsername, token)
-                .thenCompose(endpoint ->
-                        peerConnectionManager.getOrAddMessageConnectionAsync(requestedUsername, endpoint, token))
-                .thenCompose(connection ->
-                        invokeMessageWrite(connection, new FolderContentsRequest(tokenValue, directoryName), token))
-                .thenCompose(ignored -> contentsWait)
-                .thenApply(response -> Collections.unmodifiableList(new ArrayList<>(response)));
-        return mapClientFailure(
-                operation,
-                "Failed to retrieve directory contents for " + directoryName + " from " + requestedUsername + ": ",
-                UserOfflineException.class);
-    }
-
     /**
      * Applies a patch to the current client options.
      *
@@ -585,91 +524,7 @@ final class DefaultSoulseekClient extends ClientEventSupport
                 }
             }
         }
-        return reconfigureOptionsInternalAsync(patch, defaultToken(cancellationSignal));
-    }
-
-    public CompletableFuture<InetSocketAddress> getUserEndpointOperation(String requestedUsername) {
-        return getUserEndpointOperation(requestedUsername, CancellationSignal.none());
-    }
-
-    public CompletableFuture<InetSocketAddress> getUserEndpointOperation(
-            String requestedUsername, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
-        requireLoggedIn("fetch user endpoint");
-        CancellationSignal token = defaultToken(cancellationSignal);
-        UserEndpointCache cache = options.getUserEndpointCache();
-        if (cache == null) {
-            return retrieveUserEndpoint(requestedUsername, token, null);
-        }
-
-        CacheLookupResult<InetSocketAddress> cached = tryCacheGet(cache, requestedUsername);
-        if (cached.found()) {
-            diagnostic.debug("Endpoint cache HIT for " + requestedUsername + ": " + cached.value());
-            return CompletableFuture.completedFuture(cached.value());
-        }
-
-        // The source serializes same-user lookups only when a cache is configured, so the first
-        // caller populates it and the rest read it back. Each caller still issues its own request
-        // under its own cancellation signal; sharing one in-flight request would let one caller's
-        // cancellation or failure surface in another's.
-        Semaphore semaphore;
-        userEndpointSemaphoreSyncRoot.acquireUninterruptibly();
-        try {
-            semaphore = userEndpointSemaphores.computeIfAbsent(requestedUsername, ignored -> new Semaphore(1));
-        } finally {
-            userEndpointSemaphoreSyncRoot.release();
-        }
-
-        // The permit is released only on the path that acquired it; a cancelled acquisition must
-        // not release a permit it never held.
-        return acquirePermit(semaphore, token).thenCompose(ignored -> {
-            CompletableFuture<InetSocketAddress> operation;
-            try {
-                CacheLookupResult<InetSocketAddress> second = tryCacheGet(cache, requestedUsername);
-                if (second.found()) {
-                    diagnostic.debug("Endpoint cache HIT for " + requestedUsername + ": " + second.value());
-                    operation = CompletableFuture.completedFuture(second.value());
-                } else {
-                    operation = retrieveUserEndpoint(requestedUsername, token, cache);
-                }
-            } catch (Throwable failure) {
-                semaphore.release();
-                throw failure;
-            }
-            return operation.whenComplete((result, failure) -> semaphore.release());
-        });
-    }
-
-    /**
-     * Removes idle per-user endpoint semaphores.
-     *
-     * <p>Mirrors the source's periodic cleanup: a semaphore whose permit can be taken has no waiter, so it can be
-     * dropped. The sync root is only taken opportunistically, matching the source's zero-timeout wait.
-     *
-     * @return a future completed when the sweep finishes
-     */
-    CompletableFuture<Void> cleanupUserEndpointSemaphoresAsync() {
-        if (!userEndpointSemaphoreSyncRoot.tryAcquire()) {
-            return CompletableFuture.completedFuture(null);
-        }
-        try {
-            for (Map.Entry<String, Semaphore> entry : userEndpointSemaphores.entrySet()) {
-                Semaphore semaphore = entry.getValue();
-                if (!semaphore.tryAcquire()) {
-                    continue;
-                }
-                if (userEndpointSemaphores.remove(entry.getKey(), semaphore)) {
-                    diagnostic.debug("Cleaned up user endpoint semaphore for " + entry.getKey());
-                } else {
-                    semaphore.release();
-                }
-            }
-            return CompletableFuture.completedFuture(null);
-        } catch (Throwable failure) {
-            return CompletableFuture.failedFuture(failure);
-        } finally {
-            userEndpointSemaphoreSyncRoot.release();
-        }
+        return reconfiguration.reconfigureOptionsInternalAsync(patch, defaultToken(cancellationSignal));
     }
 
     /** Disconnects with the default reason. */
@@ -819,7 +674,7 @@ final class DefaultSoulseekClient extends ClientEventSupport
     }
 
     final Map<String, Semaphore> getUserEndpointSemaphoresForTest() {
-        return userEndpointSemaphores;
+        return users.getUserEndpointSemaphores();
     }
 
     final Semaphore getUploadSemaphoreSyncRootForTest() {
@@ -1120,7 +975,7 @@ final class DefaultSoulseekClient extends ClientEventSupport
                 });
     }
 
-    private CompletableFuture<Void> sendConfigurationMessagesAsync(CancellationSignal cancellationSignal) {
+    CompletableFuture<Void> sendConfigurationMessagesAsync(CancellationSignal cancellationSignal) {
         return invokeServerWrite(new SetListenPortCommand(options.getListenPort()), cancellationSignal)
                 .thenCompose(ignored -> invokeServerWrite(
                         new PrivateRoomToggle(options.isAcceptPrivateRoomInvitations()), cancellationSignal))
@@ -1133,140 +988,8 @@ final class DefaultSoulseekClient extends ClientEventSupport
                 });
     }
 
-    private CompletableFuture<Boolean> reconfigureOptionsInternalAsync(
-            SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
-        CompletableFuture<Boolean> serialized = acquirePermit(stateSemaphore, cancellationSignal)
-                .thenCompose(ignored -> {
-                    CompletableFuture<Boolean> operation;
-                    try {
-                        operation = performReconfigureOptionsAsync(patch, cancellationSignal);
-                    } catch (Throwable failure) {
-                        operation = CompletableFuture.failedFuture(failure);
-                    }
-                    return operation.whenComplete((result, failure) -> stateSemaphore.release());
-                });
-        return serialized.handle((result, failure) -> {
-            if (failure == null) {
-                return result;
-            }
-            Throwable cause = unwrap(failure);
-            if (cause instanceof CancellationException || cause instanceof TimeoutException) {
-                throw new CompletionException(cause);
-            }
-            throw new CompletionException(new SoulseekClientException(
-                    "Failed to reconfigure options: "
-                            + failureMessage(cause)
-                            + ".  Any successful reconfiguration has not "
-                            + "been rolled back; retry with the same patch "
-                            + "until successful or consider this as a "
-                            + "fatal Exception",
-                    cause));
-        });
-    }
-
-    private CompletableFuture<Boolean> performReconfigureOptionsAsync(
-            SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
-        boolean connected = isConnectedAndLoggedIn();
-        boolean enableDistributedNetworkChanged = patch.getEnableDistributedNetwork() != null
-                && patch.getEnableDistributedNetwork() != options.isEnableDistributedNetwork();
-        boolean acceptDistributedChildrenChanged = patch.getAcceptDistributedChildren() != null
-                && patch.getAcceptDistributedChildren() != options.isAcceptDistributedChildren();
-        boolean distributedConnectionOptionsChanged = patch.getDistributedConnectionOptions() != null
-                && patch.getDistributedConnectionOptions() != options.getDistributedConnectionOptions();
-        boolean distributedNetworkWasDisabled = enableDistributedNetworkChanged && !patch.getEnableDistributedNetwork();
-        boolean distributedChildrenWereDisabled =
-                acceptDistributedChildrenChanged && !patch.getAcceptDistributedChildren();
-        boolean reconnectRequired = connected
-                && (distributedNetworkWasDisabled
-                        || distributedChildrenWereDisabled
-                        || distributedConnectionOptionsChanged);
-        boolean serverConnectionOptionsChanged = patch.getServerConnectionOptions() != null
-                && patch.getServerConnectionOptions() != options.getServerConnectionOptions();
-        if (connected && serverConnectionOptionsChanged) {
-            reconnectRequired = true;
-        }
-
-        boolean enableListenerChanged =
-                patch.getEnableListener() != null && patch.getEnableListener() != options.isEnableListener();
-        boolean listenAddressChanged = patch.getListenIpAddress() != null
-                && !patch.getListenIpAddress().equals(options.getListenIpAddress());
-        boolean listenPortChanged = patch.getListenPort() != null && patch.getListenPort() != options.getListenPort();
-        boolean incomingConnectionOptionsChanged = patch.getIncomingConnectionOptions() != null
-                && patch.getIncomingConnectionOptions() != options.getIncomingConnectionOptions();
-
-        if (enableListenerChanged || listenAddressChanged || listenPortChanged || incomingConnectionOptionsChanged) {
-            boolean wasListening = listener != null && listener.isListening();
-            if (listener != null) {
-                listener.stop();
-            }
-            listener = null;
-            options = options.with(listenerPatch(patch));
-            if (wasListening && options.isEnableListener()) {
-                listener = clientListenerFactory.create(
-                        options.getListenIpAddress(), options.getListenPort(), options.getIncomingConnectionOptions());
-                listener.addAcceptedListener(listenerHandler::handleConnection);
-                listener.start();
-            }
-        }
-
-        boolean maximumUploadSpeedChanged = patch.getMaximumUploadSpeed() != null
-                && patch.getMaximumUploadSpeed() != options.getMaximumUploadSpeed();
-        boolean maximumDownloadSpeedChanged = patch.getMaximumDownloadSpeed() != null
-                && patch.getMaximumDownloadSpeed() != options.getMaximumDownloadSpeed();
-        options = options.with(patch);
-
-        if (maximumUploadSpeedChanged) {
-            uploadTokenBucket.setCapacity((options.getMaximumUploadSpeed() * 1024L) / 10);
-        }
-        if (maximumDownloadSpeedChanged) {
-            downloadTokenBucket.setCapacity((options.getMaximumDownloadSpeed() * 1024L) / 10);
-        }
-
-        diagnostic.info("Options reconfigured successfully");
-        if (!isConnectedAndLoggedIn()) {
-            return CompletableFuture.completedFuture(false);
-        }
-        diagnostic.debug("Updating server with latest configuration");
-        boolean requiresReconnect = reconnectRequired;
-        return sendConfigurationMessagesAsync(cancellationSignal).thenApply(ignored -> {
-            if (requiresReconnect) {
-                diagnostic.warning("Server reconnect required for options " + "to fully take effect");
-            }
-            return requiresReconnect;
-        });
-    }
-
-    private boolean isConnectedAndLoggedIn() {
+    boolean isConnectedAndLoggedIn() {
         return state.contains(SoulseekClientState.CONNECTED) && state.contains(SoulseekClientState.LOGGED_IN);
-    }
-
-    private static SoulseekClientOptionsPatch listenerPatch(SoulseekClientOptionsPatch patch) {
-        return new SoulseekClientOptionsPatch(
-                patch.getEnableListener(),
-                patch.getListenIpAddress(),
-                patch.getListenPort(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                patch.getIncomingConnectionOptions(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
     }
 
     private static Exception asException(Throwable failure) {
@@ -1317,7 +1040,8 @@ final class DefaultSoulseekClient extends ClientEventSupport
      * was not received" and is the semantically correct member of the existing
      * hierarchy. Recorded as D11 in docs/fork-divergence.md.
      */
-    private static <T> T unwrapped(CompletableFuture<T> operation) {
+    @Override
+    <T> T unwrapped(CompletableFuture<T> operation) {
         try {
             return operation.join();
         } catch (Throwable failure) {
@@ -1455,10 +1179,21 @@ final class DefaultSoulseekClient extends ClientEventSupport
 
     // ---- ClientContext, the seam the components delegate through ----------
 
+    /** The periodic endpoint-semaphore sweep; exposed for tests. */
+    CompletableFuture<Void> cleanupUserEndpointSemaphoresAsync() {
+        return users.cleanupUserEndpointSemaphoresAsync();
+    }
+
+    @Override
+    public CompletableFuture<java.net.InetSocketAddress> getUserEndpointOperation(
+            String username, CancellationSignal cancellationSignal) {
+        return users.getUserEndpoint(username, cancellationSignal);
+    }
+
     @Override
     public CompletableFuture<java.net.InetSocketAddress> resolveUserEndpoint(
             String username, CancellationSignal cancellationSignal) {
-        return getUserEndpointOperation(username, cancellationSignal);
+        return users.getUserEndpoint(username, cancellationSignal);
     }
 
     @Override
@@ -1578,423 +1313,6 @@ final class DefaultSoulseekClient extends ClientEventSupport
                 message, waitKey, resultType, cancellationSignal, failurePrefix, preservedFailures);
     }
 
-    // ---- Blocking public API ----------------------------------------------
-    // Each of these presents one internal operation. The operations are still
-    // future-shaped inside; Phase 6 inlines them as the client is decomposed.
-
-    @Override
-    public void acknowledgePrivateMessage(int privateMessageId) {
-        unwrapped(server.acknowledgePrivateMessage(privateMessageId));
-    }
-
-    @Override
-    public void acknowledgePrivateMessage(int privateMessageId, CancellationSignal cancellationSignal) {
-        unwrapped(server.acknowledgePrivateMessage(privateMessageId, cancellationSignal));
-    }
-
-    @Override
-    public void acknowledgePrivilegeNotification(int privilegeNotificationId) {
-        unwrapped(server.acknowledgePrivilegeNotification(privilegeNotificationId));
-    }
-
-    @Override
-    public void acknowledgePrivilegeNotification(int privilegeNotificationId, CancellationSignal cancellationSignal) {
-        unwrapped(server.acknowledgePrivilegeNotification(privilegeNotificationId, cancellationSignal));
-    }
-
-    @Override
-    public void addPrivateRoomMember(String roomName, String username) {
-        unwrapped(rooms.addPrivateRoomMember(roomName, username));
-    }
-
-    @Override
-    public void addPrivateRoomMember(String roomName, String username, CancellationSignal cancellationSignal) {
-        unwrapped(rooms.addPrivateRoomMember(roomName, username, cancellationSignal));
-    }
-
-    @Override
-    public void addPrivateRoomModerator(String roomName, String username) {
-        unwrapped(rooms.addPrivateRoomModerator(roomName, username));
-    }
-
-    @Override
-    public void addPrivateRoomModerator(String roomName, String username, CancellationSignal cancellationSignal) {
-        unwrapped(rooms.addPrivateRoomModerator(roomName, username, cancellationSignal));
-    }
-
-    @Override
-    public BrowseResponse browse(String username) {
-        return unwrapped(users.browse(username));
-    }
-
-    @Override
-    public BrowseResponse browse(String username, BrowseOptions options) {
-        return unwrapped(users.browse(username, options));
-    }
-
-    @Override
-    public BrowseResponse browse(String username, CancellationSignal cancellationSignal) {
-        return unwrapped(users.browse(username, cancellationSignal));
-    }
-
-    @Override
-    public BrowseResponse browse(String username, BrowseOptions options, CancellationSignal cancellationSignal) {
-        return unwrapped(users.browse(username, options, cancellationSignal));
-    }
-
-    @Override
-    public void changePassword(String password) {
-        unwrapped(server.changePassword(password));
-    }
-
-    @Override
-    public void changePassword(String password, CancellationSignal cancellationSignal) {
-        unwrapped(server.changePassword(password, cancellationSignal));
-    }
-
-    @Override
-    public void connect(String username, String password) {
-        unwrapped(connectOperation(username, password));
-    }
-
-    @Override
-    public void connect(String username, String password, CancellationSignal cancellationSignal) {
-        unwrapped(connectOperation(username, password, cancellationSignal));
-    }
-
-    @Override
-    public void connect(String address, int port, String username, String password) {
-        unwrapped(connectOperation(address, port, username, password));
-    }
-
-    @Override
-    public void connect(
-            String address, int port, String username, String password, CancellationSignal cancellationSignal) {
-        unwrapped(connectOperation(address, port, username, password, cancellationSignal));
-    }
-
-    @Override
-    public void connectToUser(String username) {
-        unwrapped(users.connectToUser(username));
-    }
-
-    @Override
-    public void connectToUser(String username, boolean invalidateCache) {
-        unwrapped(users.connectToUser(username, invalidateCache));
-    }
-
-    @Override
-    public void connectToUser(String username, CancellationSignal cancellationSignal) {
-        unwrapped(users.connectToUser(username, cancellationSignal));
-    }
-
-    @Override
-    public void connectToUser(String username, boolean invalidateCache, CancellationSignal cancellationSignal) {
-        unwrapped(users.connectToUser(username, invalidateCache, cancellationSignal));
-    }
-
-    @Override
-    public void dropPrivateRoomMembership(String roomName) {
-        unwrapped(rooms.dropPrivateRoomMembership(roomName));
-    }
-
-    @Override
-    public void dropPrivateRoomMembership(String roomName, CancellationSignal cancellationSignal) {
-        unwrapped(rooms.dropPrivateRoomMembership(roomName, cancellationSignal));
-    }
-
-    @Override
-    public void dropPrivateRoomOwnership(String roomName) {
-        unwrapped(rooms.dropPrivateRoomOwnership(roomName));
-    }
-
-    @Override
-    public void dropPrivateRoomOwnership(String roomName, CancellationSignal cancellationSignal) {
-        unwrapped(rooms.dropPrivateRoomOwnership(roomName, cancellationSignal));
-    }
-
-    @Override
-    public List<Directory> getDirectoryContents(String username, String directoryName) {
-        return unwrapped(getDirectoryContentsOperation(username, directoryName));
-    }
-
-    @Override
-    public List<Directory> getDirectoryContents(String username, String directoryName, int token) {
-        return unwrapped(getDirectoryContentsOperation(username, directoryName, token));
-    }
-
-    @Override
-    public List<Directory> getDirectoryContents(
-            String username, String directoryName, CancellationSignal cancellationSignal) {
-        return unwrapped(getDirectoryContentsOperation(username, directoryName, cancellationSignal));
-    }
-
-    @Override
-    public List<Directory> getDirectoryContents(
-            String username, String directoryName, Integer token, CancellationSignal cancellationSignal) {
-        return unwrapped(getDirectoryContentsOperation(username, directoryName, token, cancellationSignal));
-    }
-
-    @Override
-    public Integer getDownloadPlaceInQueue(String username, String filename) {
-        return unwrapped(transfers.getDownloadPlaceInQueue(username, filename));
-    }
-
-    @Override
-    public Integer getDownloadPlaceInQueue(String username, String filename, CancellationSignal cancellationSignal) {
-        return unwrapped(transfers.getDownloadPlaceInQueue(username, filename, cancellationSignal));
-    }
-
-    @Override
-    public Integer getPrivileges() {
-        return unwrapped(server.getPrivileges());
-    }
-
-    @Override
-    public Integer getPrivileges(CancellationSignal cancellationSignal) {
-        return unwrapped(server.getPrivileges(cancellationSignal));
-    }
-
-    @Override
-    public RoomList getRoomList() {
-        return unwrapped(rooms.getRoomList());
-    }
-
-    @Override
-    public RoomList getRoomList(CancellationSignal cancellationSignal) {
-        return unwrapped(rooms.getRoomList(cancellationSignal));
-    }
-
-    @Override
-    public InetSocketAddress getUserEndpoint(String username) {
-        return unwrapped(getUserEndpointOperation(username));
-    }
-
-    @Override
-    public InetSocketAddress getUserEndpoint(String username, CancellationSignal cancellationSignal) {
-        return unwrapped(getUserEndpointOperation(username, cancellationSignal));
-    }
-
-    @Override
-    public UserInfo getUserInfo(String username) {
-        return unwrapped(users.getUserInfo(username));
-    }
-
-    @Override
-    public UserInfo getUserInfo(String username, CancellationSignal cancellationSignal) {
-        return unwrapped(users.getUserInfo(username, cancellationSignal));
-    }
-
-    @Override
-    public Boolean getUserPrivileged(String username) {
-        return unwrapped(users.getUserPrivileged(username));
-    }
-
-    @Override
-    public Boolean getUserPrivileged(String username, CancellationSignal cancellationSignal) {
-        return unwrapped(users.getUserPrivileged(username, cancellationSignal));
-    }
-
-    @Override
-    public UserStatistics getUserStatistics(String username) {
-        return unwrapped(users.getUserStatistics(username));
-    }
-
-    @Override
-    public UserStatistics getUserStatistics(String username, CancellationSignal cancellationSignal) {
-        return unwrapped(users.getUserStatistics(username, cancellationSignal));
-    }
-
-    @Override
-    public UserStatus getUserStatus(String username) {
-        return unwrapped(users.getUserStatus(username));
-    }
-
-    @Override
-    public UserStatus getUserStatus(String username, CancellationSignal cancellationSignal) {
-        return unwrapped(users.getUserStatus(username, cancellationSignal));
-    }
-
-    @Override
-    public void grantUserPrivileges(String username, int days) {
-        unwrapped(users.grantUserPrivileges(username, days));
-    }
-
-    @Override
-    public void grantUserPrivileges(String username, int days, CancellationSignal cancellationSignal) {
-        unwrapped(users.grantUserPrivileges(username, days, cancellationSignal));
-    }
-
-    @Override
-    public RoomData joinRoom(String roomName) {
-        return unwrapped(rooms.joinRoom(roomName));
-    }
-
-    @Override
-    public RoomData joinRoom(String roomName, boolean isPrivate) {
-        return unwrapped(rooms.joinRoom(roomName, isPrivate));
-    }
-
-    @Override
-    public RoomData joinRoom(String roomName, CancellationSignal cancellationSignal) {
-        return unwrapped(rooms.joinRoom(roomName, cancellationSignal));
-    }
-
-    @Override
-    public RoomData joinRoom(String roomName, boolean isPrivate, CancellationSignal cancellationSignal) {
-        return unwrapped(rooms.joinRoom(roomName, isPrivate, cancellationSignal));
-    }
-
-    @Override
-    public void leaveRoom(String roomName) {
-        unwrapped(rooms.leaveRoom(roomName));
-    }
-
-    @Override
-    public void leaveRoom(String roomName, CancellationSignal cancellationSignal) {
-        unwrapped(rooms.leaveRoom(roomName, cancellationSignal));
-    }
-
-    @Override
-    public Long pingServer() {
-        return unwrapped(server.pingServer());
-    }
-
-    @Override
-    public Long pingServer(CancellationSignal cancellationSignal) {
-        return unwrapped(server.pingServer(cancellationSignal));
-    }
-
-    @Override
-    public Boolean reconfigureOptions(SoulseekClientOptionsPatch patch) {
-        return unwrapped(reconfigureOptionsOperation(patch));
-    }
-
-    @Override
-    public Boolean reconfigureOptions(SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
-        return unwrapped(reconfigureOptionsOperation(patch, cancellationSignal));
-    }
-
-    @Override
-    public void removePrivateRoomMember(String roomName, String username) {
-        unwrapped(rooms.removePrivateRoomMember(roomName, username));
-    }
-
-    @Override
-    public void removePrivateRoomMember(String roomName, String username, CancellationSignal cancellationSignal) {
-        unwrapped(rooms.removePrivateRoomMember(roomName, username, cancellationSignal));
-    }
-
-    @Override
-    public void removePrivateRoomModerator(String roomName, String username) {
-        unwrapped(rooms.removePrivateRoomModerator(roomName, username));
-    }
-
-    @Override
-    public void removePrivateRoomModerator(String roomName, String username, CancellationSignal cancellationSignal) {
-        unwrapped(rooms.removePrivateRoomModerator(roomName, username, cancellationSignal));
-    }
-
-    @Override
-    public void sendPrivateMessage(String username, String message) {
-        unwrapped(server.sendPrivateMessage(username, message));
-    }
-
-    @Override
-    public void sendPrivateMessage(String username, String message, CancellationSignal cancellationSignal) {
-        unwrapped(server.sendPrivateMessage(username, message, cancellationSignal));
-    }
-
-    @Override
-    public void sendRoomMessage(String roomName, String message) {
-        unwrapped(rooms.sendRoomMessage(roomName, message));
-    }
-
-    @Override
-    public void sendRoomMessage(String roomName, String message, CancellationSignal cancellationSignal) {
-        unwrapped(rooms.sendRoomMessage(roomName, message, cancellationSignal));
-    }
-
-    @Override
-    public void sendUploadSpeed(int speed) {
-        unwrapped(server.sendUploadSpeed(speed));
-    }
-
-    @Override
-    public void sendUploadSpeed(int speed, CancellationSignal cancellationSignal) {
-        unwrapped(server.sendUploadSpeed(speed, cancellationSignal));
-    }
-
-    @Override
-    public void setRoomTicker(String roomName, String message) {
-        unwrapped(rooms.setRoomTicker(roomName, message));
-    }
-
-    @Override
-    public void setRoomTicker(String roomName, String message, CancellationSignal cancellationSignal) {
-        unwrapped(rooms.setRoomTicker(roomName, message, cancellationSignal));
-    }
-
-    @Override
-    public void setSharedCounts(int directories, int files) {
-        unwrapped(server.setSharedCounts(directories, files));
-    }
-
-    @Override
-    public void setSharedCounts(int directories, int files, CancellationSignal cancellationSignal) {
-        unwrapped(server.setSharedCounts(directories, files, cancellationSignal));
-    }
-
-    @Override
-    public void setStatus(UserPresence status) {
-        unwrapped(server.setStatus(status));
-    }
-
-    @Override
-    public void setStatus(UserPresence status, CancellationSignal cancellationSignal) {
-        unwrapped(server.setStatus(status, cancellationSignal));
-    }
-
-    @Override
-    public void startPublicChat() {
-        unwrapped(server.startPublicChat());
-    }
-
-    @Override
-    public void startPublicChat(CancellationSignal cancellationSignal) {
-        unwrapped(server.startPublicChat(cancellationSignal));
-    }
-
-    @Override
-    public void stopPublicChat() {
-        unwrapped(server.stopPublicChat());
-    }
-
-    @Override
-    public void stopPublicChat(CancellationSignal cancellationSignal) {
-        unwrapped(server.stopPublicChat(cancellationSignal));
-    }
-
-    @Override
-    public void unwatchUser(String username) {
-        unwrapped(users.unwatchUser(username));
-    }
-
-    @Override
-    public void unwatchUser(String username, CancellationSignal cancellationSignal) {
-        unwrapped(users.unwatchUser(username, cancellationSignal));
-    }
-
-    @Override
-    public UserData watchUser(String username) {
-        return unwrapped(users.watchUser(username));
-    }
-
-    @Override
-    public UserData watchUser(String username, CancellationSignal cancellationSignal) {
-        return unwrapped(users.watchUser(username, cancellationSignal));
-    }
-
     private static <T> T await(CompletableFuture<T> future) {
         try {
             return future.join();
@@ -2064,70 +1382,6 @@ final class DefaultSoulseekClient extends ClientEventSupport
         return operation;
     }
 
-    private CompletableFuture<InetSocketAddress> retrieveUserEndpoint(
-            String requestedUsername, CancellationSignal cancellationSignal, UserEndpointCache cache) {
-        CompletableFuture<UserAddressResponse> wait;
-        try {
-            wait = waiter.waitAsync(
-                    new dev.slsk.common.WaitKey(MessageCode.Server.GET_PEER_ADDRESS, requestedUsername),
-                    UserAddressResponse.class,
-                    null,
-                    cancellationSignal);
-        } catch (Throwable failure) {
-            return mapUserEndpointFailure(CompletableFuture.failedFuture(failure), requestedUsername);
-        }
-        CompletableFuture<InetSocketAddress> operation = invokeServerWrite(
-                        new UserAddressRequest(requestedUsername), cancellationSignal)
-                .thenCompose(ignored -> wait)
-                .thenApply(response -> {
-                    if (response.getIpAddress().isAnyLocalAddress()) {
-                        throw new UserOfflineException("User " + requestedUsername + " appears to be offline");
-                    }
-                    InetSocketAddress result = response.getIpEndpoint();
-                    if (cache != null) {
-                        try {
-                            cache.put(requestedUsername, result);
-                        } catch (Throwable failure) {
-                            throw new UserEndpointCacheException(
-                                    "Exception retrieving or updating user "
-                                            + "endpoint cache: "
-                                            + failureMessage(failure),
-                                    failure);
-                        }
-                        diagnostic.debug("Endpoint cache MISS for " + requestedUsername + ": " + result);
-                    }
-                    return result;
-                });
-        return mapUserEndpointFailure(operation, requestedUsername);
-    }
-
-    private static CompletableFuture<InetSocketAddress> mapUserEndpointFailure(
-            CompletableFuture<InetSocketAddress> operation, String requestedUsername) {
-        return operation.handle((result, failure) -> {
-            if (failure == null) {
-                return result;
-            }
-            Throwable cause = unwrap(failure);
-            if (cause instanceof UserOfflineException
-                    || cause instanceof UserEndpointCacheException
-                    || cause instanceof CancellationException
-                    || cause instanceof TimeoutException) {
-                throw new CompletionException(cause);
-            }
-            throw new CompletionException(new UserEndpointException(
-                    "Failed to retrieve endpoint for user " + requestedUsername + ": " + failureMessage(cause), cause));
-        });
-    }
-
-    private static CacheLookupResult<InetSocketAddress> tryCacheGet(UserEndpointCache cache, String requestedUsername) {
-        try {
-            return cache.lookup(requestedUsername);
-        } catch (Throwable failure) {
-            throw new UserEndpointCacheException(
-                    "Exception retrieving or updating user endpoint cache: " + failureMessage(failure), failure);
-        }
-    }
-
     @Override
     public CancellationSignal defaultToken(CancellationSignal token) {
         return token == null ? CancellationSignal.none() : token;
@@ -2136,5 +1390,93 @@ final class DefaultSoulseekClient extends ClientEventSupport
     @FunctionalInterface
     interface ClientListenerFactory {
         Listener create(InetAddress ipAddress, int port, ConnectionOptions connectionOptions);
+    }
+
+    @Override
+    public void connect(String username, String password) {
+        unwrapped(connectOperation(username, password));
+    }
+
+    @Override
+    public void connect(String username, String password, CancellationSignal cancellationSignal) {
+        unwrapped(connectOperation(username, password, cancellationSignal));
+    }
+
+    @Override
+    public void connect(String address, int port, String username, String password) {
+        unwrapped(connectOperation(address, port, username, password));
+    }
+
+    @Override
+    public void connect(
+            String address, int port, String username, String password, CancellationSignal cancellationSignal) {
+        unwrapped(connectOperation(address, port, username, password, cancellationSignal));
+    }
+
+    @Override
+    public List<Directory> getDirectoryContents(String username, String directoryName) {
+        return unwrapped(users.getDirectoryContents(username, directoryName));
+    }
+
+    @Override
+    public List<Directory> getDirectoryContents(String username, String directoryName, int token) {
+        return unwrapped(users.getDirectoryContents(username, directoryName, token));
+    }
+
+    @Override
+    public List<Directory> getDirectoryContents(
+            String username, String directoryName, CancellationSignal cancellationSignal) {
+        return unwrapped(users.getDirectoryContents(username, directoryName, cancellationSignal));
+    }
+
+    @Override
+    public List<Directory> getDirectoryContents(
+            String username, String directoryName, Integer token, CancellationSignal cancellationSignal) {
+        return unwrapped(users.getDirectoryContents(username, directoryName, token, cancellationSignal));
+    }
+
+    @Override
+    public InetSocketAddress getUserEndpoint(String username) {
+        return unwrapped(users.getUserEndpoint(username));
+    }
+
+    @Override
+    public InetSocketAddress getUserEndpoint(String username, CancellationSignal cancellationSignal) {
+        return unwrapped(users.getUserEndpoint(username, cancellationSignal));
+    }
+
+    @Override
+    public Boolean reconfigureOptions(SoulseekClientOptionsPatch patch) {
+        return unwrapped(reconfigureOptionsOperation(patch));
+    }
+
+    @Override
+    public Boolean reconfigureOptions(SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
+        return unwrapped(reconfigureOptionsOperation(patch, cancellationSignal));
+    }
+
+    @Override
+    RoomRegistry rooms() {
+        return rooms;
+    }
+
+    @Override
+    UserDirectory users() {
+        return users;
+    }
+
+    @Override
+    ServerSession server() {
+        return server;
+    }
+
+    @Override
+    SearchCoordinator searchCoordinator() {
+        return searchCoordinator;
+    }
+
+    @Override
+    TransferEngine transfers() {
+        return transfers;
     }
 }

@@ -3,6 +3,8 @@
 
 package dev.slsk;
 
+import static dev.slsk.ClientSupport.acquirePermit;
+import static dev.slsk.ClientSupport.failureMessage;
 import static dev.slsk.ClientSupport.mapClientFailure;
 import static dev.slsk.ClientSupport.requireText;
 import static dev.slsk.ClientSupport.unwrap;
@@ -10,13 +12,18 @@ import static dev.slsk.ClientSupport.unwrap;
 import dev.slsk.common.Constants;
 import dev.slsk.common.WaitKey;
 import dev.slsk.exceptions.ConnectionException;
+import dev.slsk.exceptions.UserEndpointCacheException;
+import dev.slsk.exceptions.UserEndpointException;
 import dev.slsk.exceptions.UserNotFoundException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.messaging.MessageCode;
 import dev.slsk.messaging.handlers.BrowseResponseConnection;
 import dev.slsk.messaging.messages.BrowseRequest;
+import dev.slsk.messaging.messages.FolderContentsRequest;
 import dev.slsk.messaging.messages.GivePrivilegesCommand;
 import dev.slsk.messaging.messages.UnwatchUserCommand;
+import dev.slsk.messaging.messages.UserAddressRequest;
+import dev.slsk.messaging.messages.UserAddressResponse;
 import dev.slsk.messaging.messages.UserInfoRequest;
 import dev.slsk.messaging.messages.UserPrivilegesRequest;
 import dev.slsk.messaging.messages.UserStatisticsRequest;
@@ -25,9 +32,16 @@ import dev.slsk.messaging.messages.WatchUserRequest;
 import dev.slsk.messaging.messages.WatchUserResponse;
 import dev.slsk.network.MessageConnection;
 import dev.slsk.options.BrowseOptions;
+import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -42,6 +56,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 final class UserDirectory {
 
     private final ClientContext context;
+
+    /**
+     * Serialises endpoint lookups per user, so concurrent callers asking about
+     * the same peer issue one request rather than several. Owned here now that
+     * endpoint resolution lives here.
+     */
+    private final java.util.Map<String, java.util.concurrent.Semaphore> userEndpointSemaphores =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private final java.util.concurrent.Semaphore userEndpointSemaphoreSyncRoot = new java.util.concurrent.Semaphore(1);
 
     UserDirectory(ClientContext context) {
         this.context = Objects.requireNonNull(context, "context");
@@ -69,7 +93,7 @@ final class UserDirectory {
                     "Failed to retrieve information for user " + requestedUsername + ": ",
                     UserOfflineException.class);
         }
-        CompletableFuture<UserInfo> operation = context.resolveUserEndpoint(requestedUsername, token)
+        CompletableFuture<UserInfo> operation = getUserEndpoint(requestedUsername, token)
                 .thenCompose(endpoint -> context.getPeerConnectionManager()
                         .getOrAddMessageConnectionAsync(requestedUsername, endpoint, token))
                 .thenCompose(connection -> context.writeToPeer(connection, new UserInfoRequest(), token))
@@ -216,7 +240,7 @@ final class UserDirectory {
                     UserOfflineException.class);
         }
 
-        CompletableFuture<BrowseResponseConnection> setup = context.resolveUserEndpoint(requestedUsername, token)
+        CompletableFuture<BrowseResponseConnection> setup = getUserEndpoint(requestedUsername, token)
                 .thenCompose(endpoint -> context.getPeerConnectionManager()
                         .getOrAddMessageConnectionAsync(requestedUsername, endpoint, token))
                 .thenCompose(connection -> context.writeToPeer(connection, new BrowseRequest(), token))
@@ -283,7 +307,7 @@ final class UserDirectory {
         requireText(requestedUsername, "username");
         context.requireLoggedIn("connect to other users");
         CancellationSignal token = context.defaultToken(cancellationSignal);
-        CompletableFuture<Void> operation = context.resolveUserEndpoint(requestedUsername, token)
+        CompletableFuture<Void> operation = getUserEndpoint(requestedUsername, token)
                 .thenCompose(endpoint -> {
                     if (invalidateCache
                             && context.getPeerConnectionManager()
@@ -296,5 +320,216 @@ final class UserDirectory {
                 });
         return mapClientFailure(
                 operation, "Failed to connect to user " + requestedUsername + ": ", UserOfflineException.class);
+    }
+
+    CompletableFuture<InetSocketAddress> getUserEndpoint(String requestedUsername) {
+        return getUserEndpoint(requestedUsername, CancellationSignal.none());
+    }
+
+    CompletableFuture<InetSocketAddress> getUserEndpoint(
+            String requestedUsername, CancellationSignal cancellationSignal) {
+        requireText(requestedUsername, "username");
+        context.requireLoggedIn("fetch user endpoint");
+        CancellationSignal token = context.defaultToken(cancellationSignal);
+        UserEndpointCache cache = context.getClientOptions().getUserEndpointCache();
+        if (cache == null) {
+            return retrieveUserEndpoint(requestedUsername, token, null);
+        }
+
+        CacheLookupResult<InetSocketAddress> cached = tryCacheGet(cache, requestedUsername);
+        if (cached.found()) {
+            context.getDiagnostic().debug("Endpoint cache HIT for " + requestedUsername + ": " + cached.value());
+            return CompletableFuture.completedFuture(cached.value());
+        }
+
+        // The source serializes same-user lookups only when a cache is configured, so the first
+        // caller populates it and the rest read it back. Each caller still issues its own request
+        // under its own cancellation signal; sharing one in-flight request would let one caller's
+        // cancellation or failure surface in another's.
+        Semaphore semaphore;
+        userEndpointSemaphoreSyncRoot.acquireUninterruptibly();
+        try {
+            semaphore = userEndpointSemaphores.computeIfAbsent(requestedUsername, ignored -> new Semaphore(1));
+        } finally {
+            userEndpointSemaphoreSyncRoot.release();
+        }
+
+        // The permit is released only on the path that acquired it; a cancelled acquisition must
+        // not release a permit it never held.
+        return acquirePermit(semaphore, token).thenCompose(ignored -> {
+            CompletableFuture<InetSocketAddress> operation;
+            try {
+                CacheLookupResult<InetSocketAddress> second = tryCacheGet(cache, requestedUsername);
+                if (second.found()) {
+                    context.getDiagnostic()
+                            .debug("Endpoint cache HIT for " + requestedUsername + ": " + second.value());
+                    operation = CompletableFuture.completedFuture(second.value());
+                } else {
+                    operation = retrieveUserEndpoint(requestedUsername, token, cache);
+                }
+            } catch (Throwable failure) {
+                semaphore.release();
+                throw failure;
+            }
+            return operation.whenComplete((result, failure) -> semaphore.release());
+        });
+    }
+
+    CompletableFuture<InetSocketAddress> retrieveUserEndpoint(
+            String requestedUsername, CancellationSignal cancellationSignal, UserEndpointCache cache) {
+        CompletableFuture<UserAddressResponse> wait;
+        try {
+            wait = context.getWaiter()
+                    .waitAsync(
+                            new dev.slsk.common.WaitKey(MessageCode.Server.GET_PEER_ADDRESS, requestedUsername),
+                            UserAddressResponse.class,
+                            null,
+                            cancellationSignal);
+        } catch (Throwable failure) {
+            return mapUserEndpointFailure(CompletableFuture.failedFuture(failure), requestedUsername);
+        }
+        CompletableFuture<InetSocketAddress> operation = context.writeToServer(
+                        new UserAddressRequest(requestedUsername), cancellationSignal)
+                .thenCompose(ignored -> wait)
+                .thenApply(response -> {
+                    if (response.getIpAddress().isAnyLocalAddress()) {
+                        throw new UserOfflineException("User " + requestedUsername + " appears to be offline");
+                    }
+                    InetSocketAddress result = response.getIpEndpoint();
+                    if (cache != null) {
+                        try {
+                            cache.put(requestedUsername, result);
+                        } catch (Throwable failure) {
+                            throw new UserEndpointCacheException(
+                                    "Exception retrieving or updating user "
+                                            + "endpoint cache: "
+                                            + failureMessage(failure),
+                                    failure);
+                        }
+                        context.getDiagnostic().debug("Endpoint cache MISS for " + requestedUsername + ": " + result);
+                    }
+                    return result;
+                });
+        return mapUserEndpointFailure(operation, requestedUsername);
+    }
+
+    CompletableFuture<List<Directory>> getDirectoryContents(String requestedUsername, String directoryName) {
+        return getDirectoryContents(requestedUsername, directoryName, null, CancellationSignal.none());
+    }
+
+    CompletableFuture<List<Directory>> getDirectoryContents(
+            String requestedUsername, String directoryName, int operationToken) {
+        return getDirectoryContents(requestedUsername, directoryName, operationToken, CancellationSignal.none());
+    }
+
+    CompletableFuture<List<Directory>> getDirectoryContents(
+            String requestedUsername, String directoryName, CancellationSignal cancellationSignal) {
+        return getDirectoryContents(requestedUsername, directoryName, null, cancellationSignal);
+    }
+
+    CompletableFuture<List<Directory>> getDirectoryContents(
+            String requestedUsername,
+            String directoryName,
+            Integer operationToken,
+            CancellationSignal cancellationSignal) {
+        requireText(requestedUsername, "username");
+        requireText(directoryName, "directoryName");
+        context.requireLoggedIn("fetch directory contents");
+        int tokenValue = operationToken == null ? context.getTokenFactory().nextToken() : operationToken;
+        CancellationSignal token = context.defaultToken(cancellationSignal);
+        CompletableFuture<List<Directory>> contentsWait;
+        try {
+            @SuppressWarnings("unchecked")
+            CompletableFuture<List<Directory>> typedWait =
+                    (CompletableFuture<List<Directory>>) (CompletableFuture<?>) context.getWaiter()
+                            .waitAsync(
+                                    new WaitKey(
+                                            MessageCode.Peer.FOLDER_CONTENTS_RESPONSE, requestedUsername, tokenValue),
+                                    List.class,
+                                    null,
+                                    token);
+            contentsWait = typedWait;
+        } catch (Throwable failure) {
+            return mapClientFailure(
+                    CompletableFuture.failedFuture(failure),
+                    "Failed to retrieve directory contents for " + directoryName + " from " + requestedUsername + ": ",
+                    UserOfflineException.class);
+        }
+        CompletableFuture<List<Directory>> operation = getUserEndpoint(requestedUsername, token)
+                .thenCompose(endpoint -> context.getPeerConnectionManager()
+                        .getOrAddMessageConnectionAsync(requestedUsername, endpoint, token))
+                .thenCompose(connection ->
+                        context.writeToPeer(connection, new FolderContentsRequest(tokenValue, directoryName), token))
+                .thenCompose(ignored -> contentsWait)
+                .thenApply(response -> Collections.unmodifiableList(new ArrayList<>(response)));
+        return mapClientFailure(
+                operation,
+                "Failed to retrieve directory contents for " + directoryName + " from " + requestedUsername + ": ",
+                UserOfflineException.class);
+    }
+
+    static CompletableFuture<InetSocketAddress> mapUserEndpointFailure(
+            CompletableFuture<InetSocketAddress> operation, String requestedUsername) {
+        return operation.handle((result, failure) -> {
+            if (failure == null) {
+                return result;
+            }
+            Throwable cause = unwrap(failure);
+            if (cause instanceof UserOfflineException
+                    || cause instanceof UserEndpointCacheException
+                    || cause instanceof CancellationException
+                    || cause instanceof TimeoutException) {
+                throw new CompletionException(cause);
+            }
+            throw new CompletionException(new UserEndpointException(
+                    "Failed to retrieve endpoint for user " + requestedUsername + ": " + failureMessage(cause), cause));
+        });
+    }
+
+    static CacheLookupResult<InetSocketAddress> tryCacheGet(UserEndpointCache cache, String requestedUsername) {
+        try {
+            return cache.lookup(requestedUsername);
+        } catch (Throwable failure) {
+            throw new UserEndpointCacheException(
+                    "Exception retrieving or updating user endpoint cache: " + failureMessage(failure), failure);
+        }
+    }
+    /**
+     * Releases per-user endpoint semaphores that nobody is waiting on.
+     *
+     * <p>Runs periodically from the client's shared timer. Skips any semaphore
+     * currently held rather than blocking on it, so a lookup in flight is never
+     * disturbed.
+     *
+     * @return a future completed when the sweep finishes
+     */
+    CompletableFuture<Void> cleanupUserEndpointSemaphoresAsync() {
+        if (!userEndpointSemaphoreSyncRoot.tryAcquire()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        try {
+            for (java.util.Map.Entry<String, java.util.concurrent.Semaphore> entry :
+                    userEndpointSemaphores.entrySet()) {
+                java.util.concurrent.Semaphore semaphore = entry.getValue();
+                if (!semaphore.tryAcquire()) {
+                    continue;
+                }
+                if (userEndpointSemaphores.remove(entry.getKey(), semaphore)) {
+                    context.getDiagnostic().debug("Cleaned up user endpoint semaphore for " + entry.getKey());
+                } else {
+                    semaphore.release();
+                }
+            }
+            return CompletableFuture.completedFuture(null);
+        } catch (Throwable failure) {
+            return CompletableFuture.failedFuture(failure);
+        } finally {
+            userEndpointSemaphoreSyncRoot.release();
+        }
+    }
+
+    /** Exposes the per-user endpoint semaphores for the client's test accessor. */
+    java.util.Map<String, java.util.concurrent.Semaphore> getUserEndpointSemaphores() {
+        return userEndpointSemaphores;
     }
 }
