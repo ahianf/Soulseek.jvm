@@ -172,8 +172,9 @@ class PublicApiDispositionTest {
 
         // 144 since Phase 4: TransferHandle replaced the nested enqueue future,
         // and DownloadRequest/UploadRequest/SearchRequest replaced the overload
-        // cross products.
-        assertEquals(144, publicTypes);
+        // cross products. 145 since RemotePath, which has no C# counterpart —
+        // see the fork-divergence ledger.
+        assertEquals(145, publicTypes);
     }
 
     private static int countOccurrences(String text, String value) {
