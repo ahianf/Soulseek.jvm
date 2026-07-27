@@ -20,15 +20,28 @@ import java.util.concurrent.TimeUnit;
  */
 public final class TokenBucket implements AutoCloseable {
 
-    /** How many refills happen per configured interval. */
-    private static final int REFILLS_PER_INTERVAL = 10;
-
-    /** Floor on the refill tick, so a tiny interval cannot spin the scheduler. */
-    private static final int MIN_REFILL_TICK_MILLIS = 10;
-
     private final Scheduler scheduler;
     private final boolean ownsScheduler;
-    private final ScheduledFuture<?> resetTask;
+
+    /**
+     * The single pending replenishment wake-up, or {@code null} when nothing is
+     * waiting on one.
+     *
+     * <p>Armed only while {@link #requests} is non-empty, and aimed at the
+     * instant the next token actually accrues. An idle bucket holds no timer at
+     * all.
+     *
+     * <p>This replaced a fixed-rate tick at a tenth of the configured interval.
+     * Two buckets at the 100 ms default cost 200 scheduler dispatches a second
+     * — each one a fresh virtual thread — and the overwhelming majority of them
+     * drained an empty queue. The sub-interval tick was there to make the
+     * bucket "refill in proportion to elapsed time rather than all at once",
+     * but that property comes from the elapsed-time arithmetic in
+     * {@link #accrue()}, not from how often it runs; a deadline-driven wake-up
+     * paces more precisely than a 10 ms quantum did.
+     */
+    private ScheduledFuture<?> wakeup;
+
     private final ArrayDeque<Request> requests = new ArrayDeque<>();
     private final int intervalMillis;
     private long capacity;
@@ -77,11 +90,6 @@ public final class TokenBucket implements AutoCloseable {
         lastRefillNanos = System.nanoTime();
         this.ownsScheduler = scheduler == null;
         this.scheduler = scheduler == null ? new Scheduler("soulseek-token-bucket") : scheduler;
-
-        // Ticks finer than the configured interval so the bucket refills in
-        // proportion to elapsed time rather than all at once. See refill().
-        int tick = Math.max(MIN_REFILL_TICK_MILLIS, interval / REFILLS_PER_INTERVAL);
-        resetTask = this.scheduler.scheduleAtFixedRate(this::refill, tick, tick, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -133,6 +141,10 @@ public final class TokenBucket implements AutoCloseable {
                 return closedFuture();
             }
 
+            // Nothing has been adding tokens in the background, so the balance
+            // is earned here, on demand, before it is read.
+            accrue();
+
             if (requests.isEmpty() && currentCount != 0) {
                 int available = (int) Math.min(currentCount, limitedCount);
                 currentCount -= available;
@@ -154,6 +166,7 @@ public final class TokenBucket implements AutoCloseable {
                     cancelFromFuture(request);
                 }
             });
+            armWakeup();
             return request.future;
         }
     }
@@ -163,8 +176,20 @@ public final class TokenBucket implements AutoCloseable {
      *
      * @param count the tokens to return
      */
-    public synchronized void returnTokens(int count) {
-        currentCount += Math.min(Math.max(count, 0), capacity);
+    public void returnTokens(int count) {
+        List<Grant> grants;
+
+        synchronized (this) {
+            currentCount += Math.min(Math.max(count, 0), capacity);
+            // Returned tokens can satisfy a waiter straight away. The fixed-rate
+            // tick used to notice on its next pass; with no tick, the drain has
+            // to happen here or a waiter sits until its accrual deadline for
+            // tokens that are already in the bucket.
+            grants = drainRequests();
+            armWakeup();
+        }
+
+        publish(grants);
     }
 
     /**
@@ -172,13 +197,23 @@ public final class TokenBucket implements AutoCloseable {
      *
      * @param capacity the new capacity
      */
-    public synchronized void setCapacity(long capacity) {
+    public void setCapacity(long capacity) {
         if (capacity < 1) {
             throw new IllegalArgumentException("capacity must be greater than or equal to 1");
         }
 
-        this.capacity = capacity;
-        currentCount = Math.min(currentCount, capacity);
+        List<Grant> grants;
+
+        synchronized (this) {
+            this.capacity = capacity;
+            currentCount = Math.min(currentCount, capacity);
+            // A raised capacity can release a waiter immediately, and it changes
+            // the accrual rate that any armed wake-up was aimed at.
+            grants = drainRequests();
+            armWakeup();
+        }
+
+        publish(grants);
     }
 
     /**
@@ -187,6 +222,7 @@ public final class TokenBucket implements AutoCloseable {
     @Override
     public void close() {
         ArrayDeque<Request> pending;
+        ScheduledFuture<?> armed;
 
         synchronized (this) {
             if (closed) {
@@ -196,9 +232,13 @@ public final class TokenBucket implements AutoCloseable {
             closed = true;
             pending = new ArrayDeque<>(requests);
             requests.clear();
+            armed = wakeup;
+            wakeup = null;
         }
 
-        resetTask.cancel(false);
+        if (armed != null) {
+            armed.cancel(false);
+        }
         if (ownsScheduler) {
             scheduler.close();
         }
@@ -211,20 +251,11 @@ public final class TokenBucket implements AutoCloseable {
     }
 
     /**
-     * Adds the tokens that elapsed time has earned, then releases whatever they
-     * allow.
+     * Services the armed wake-up: accrue, release whatever the new balance
+     * allows, then re-arm if anyone is still waiting.
      *
-     * <p>The source refilled to full capacity once per interval, which makes
-     * the transmit rate bursty: a whole interval's allowance becomes available
-     * at one instant and is consumed as fast as the socket will take it. Tokens
-     * are now added in proportion to elapsed time, so a peer sees a steady rate
-     * rather than a sawtooth. The average over an interval is unchanged, and
-     * the wire format is untouched.
-     *
-     * <p>The futures are completed after the lock is dropped. Completing them
-     * under it ran every inline continuation — including anything a caller
-     * chained onto the grant — while holding the bucket monitor, which is the
-     * same lock every other {@code getAsync} caller needs.
+     * <p>Reached only from {@link #armWakeup()}, and only while a request is
+     * queued. Every other route into the bucket accrues on demand.
      */
     private void refill() {
         List<Grant> grants;
@@ -233,24 +264,120 @@ public final class TokenBucket implements AutoCloseable {
             if (closed) {
                 return;
             }
-            long now = System.nanoTime();
-            long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(now - lastRefillNanos);
-            if (elapsedMillis <= 0) {
-                return;
-            }
-            lastRefillNanos = now;
-
-            refillCredit += capacity * elapsedMillis;
-            long earned = refillCredit / intervalMillis;
-            refillCredit -= earned * intervalMillis;
-            currentCount = Math.min(capacity, currentCount + Math.max(0, earned));
-            if (currentCount == capacity) {
-                // Full: stop banking credit that would burst on the next drain.
-                refillCredit = 0;
-            }
+            // This wake-up has been consumed; armWakeup() decides whether the
+            // queue still warrants another.
+            wakeup = null;
+            accrue();
             grants = drainRequests();
+            armWakeup();
         }
 
+        publish(grants);
+    }
+
+    /**
+     * Adds the tokens that elapsed time has earned since the last accrual.
+     *
+     * <p>The source refilled to full capacity once per interval, which makes
+     * the transmit rate bursty: a whole interval's allowance becomes available
+     * at one instant and is consumed as fast as the socket will take it. Tokens
+     * are added in proportion to elapsed time instead, so a peer sees a steady
+     * rate rather than a sawtooth. The average over an interval is unchanged,
+     * and the wire format is untouched.
+     *
+     * <p>Must be called while holding the monitor.
+     */
+    private void accrue() {
+        long now = System.nanoTime();
+        long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(now - lastRefillNanos);
+        if (elapsedMillis <= 0) {
+            return;
+        }
+        lastRefillNanos = now;
+
+        // A whole interval earns exactly one capacity, so anything longer fills
+        // the bucket whatever the arithmetic says. Taking that shortcut also
+        // keeps the multiply below from overflowing: accrual is driven by
+        // demand now rather than by a tick, so an idle bucket can go hours
+        // between calls and capacity is already scaled by 1024.
+        if (elapsedMillis >= intervalMillis) {
+            currentCount = capacity;
+            refillCredit = 0;
+            return;
+        }
+
+        refillCredit += capacity * elapsedMillis;
+        long earned = refillCredit / intervalMillis;
+        refillCredit -= earned * intervalMillis;
+        currentCount = Math.min(capacity, currentCount + Math.max(0, earned));
+        if (currentCount == capacity) {
+            // Full: stop banking credit that would burst on the next drain.
+            refillCredit = 0;
+        }
+    }
+
+    /**
+     * Arms one wake-up for the instant the next token accrues, or drops the
+     * pending one once nothing is waiting.
+     *
+     * <p>{@link #drainRequests} returns having either emptied the queue or
+     * emptied the bucket, so a request still queued here is waiting on accrual
+     * rather than on its turn.
+     *
+     * <p>An already-armed wake-up is left alone. Credit only grows and the
+     * capacity only moves under {@link #setCapacity}, so a standing deadline
+     * can be early but never late; an early one accrues nothing, grants
+     * nothing, and re-arms. That keeps this a no-op on the hot path, where
+     * every granted read re-enters through {@code getAsync}.
+     *
+     * <p>Must be called while holding the monitor.
+     */
+    private void armWakeup() {
+        if (closed) {
+            return;
+        }
+
+        if (requests.isEmpty()) {
+            if (wakeup != null) {
+                wakeup.cancel(false);
+                wakeup = null;
+            }
+            return;
+        }
+
+        if (wakeup == null) {
+            wakeup = scheduler.schedule(this::refill, millisUntilNextToken(), TimeUnit.MILLISECONDS);
+        }
+    }
+
+    /**
+     * Returns how long until the bucket earns its next whole token.
+     *
+     * <p>Accrual banks {@code capacity} credit per elapsed millisecond and pays
+     * out a token per {@code intervalMillis} of credit, so the wait is the
+     * outstanding credit over that rate, rounded up. Never zero: the accrual
+     * clock has millisecond resolution, so a wake-up any sooner would find no
+     * elapsed time and re-arm on the spot.
+     *
+     * <p>Must be called while holding the monitor.
+     */
+    private long millisUntilNextToken() {
+        long needed = intervalMillis - refillCredit;
+        if (needed <= 0) {
+            return 1;
+        }
+        return Math.max(1, (needed + capacity - 1) / capacity);
+    }
+
+    /**
+     * Completes decided grants.
+     *
+     * <p>Must be called after the monitor is dropped: completing under it ran
+     * every inline continuation — including anything a caller chained onto the
+     * grant — while holding the same lock every other {@code getAsync} caller
+     * needs.
+     */
+    private static void publish(List<Grant> grants) {
         for (Grant grant : grants) {
             grant.request.future.complete(grant.amount);
         }

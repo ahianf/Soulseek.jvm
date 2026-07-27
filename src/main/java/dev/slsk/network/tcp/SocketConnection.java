@@ -72,6 +72,9 @@ public class SocketConnection implements Connection {
      */
     private static final int CANCELLATION_POLL_MILLIS = 250;
 
+    /** {@link NetworkStream}'s sentinel for "block until data arrives". */
+    private static final int NO_READ_TIMEOUT = -1;
+
     private final UUID id = UUID.randomUUID();
     private final CopyOnWriteArrayList<ConnectionEventListener<Void>> connectedListeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<ConnectionEventListener<ConnectionDataEvent>> dataReadListeners =
@@ -89,6 +92,14 @@ public class SocketConnection implements Connection {
     private final AtomicBoolean closeStarted = new AtomicBoolean();
     private volatile boolean disposed;
     private volatile long lastActivityNanos = System.nanoTime();
+
+    /**
+     * The {@code SO_TIMEOUT} currently applied, so a read that does not need to
+     * change it makes no syscall. Tracks what the constructor and
+     * {@link #setStreamTimeouts()} install.
+     */
+    private int appliedReadTimeoutMillis = CANCELLATION_POLL_MILLIS;
+
     private volatile ConnectionState state = ConnectionState.PENDING;
     private volatile ConnectionTypes type = ConnectionTypes.NONE;
     private volatile boolean writeQueueFull;
@@ -446,6 +457,23 @@ public class SocketConnection implements Connection {
         });
     }
 
+    /**
+     * Writes {@code bytes} on the calling thread.
+     *
+     * <p>Same work as {@link #writeAsync(byte[], CancellationSignal)} without
+     * the dispatch, for callers that already own a virtual thread. See
+     * {@link Connection#write(byte[], CancellationSignal)}.
+     */
+    @Override
+    public void write(byte[] bytes, CancellationSignal cancellationSignal) throws Exception {
+        if (bytes == null || bytes.length == 0) {
+            throw new IllegalArgumentException("Invalid attempt to send empty data");
+        }
+        validateConnected();
+        CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
+        writeInternal(bytes.length, new java.io.ByteArrayInputStream(bytes), SocketConnection::grantAll, null, token);
+    }
+
     @Override
     public CompletableFuture<Void> writeAsync(
             long length,
@@ -570,6 +598,7 @@ public class SocketConnection implements Connection {
             CancellationSignal cancellationSignal)
             throws Exception {
         resetInactivityTime();
+        applyReadTimeout(cancellationSignal);
         // Sized to the request, not to the configured maximum. The framed read
         // loop asks for 4 bytes, then the code, then the payload; a full
         // read-buffer allocation for each of those was 48 KiB of garbage per
@@ -726,10 +755,42 @@ public class SocketConnection implements Connection {
         tcpClient.getClient().setSoTimeout(timeout);
     }
 
+    /**
+     * Applies the {@code SO_TIMEOUT} the pending read needs.
+     *
+     * <p>A read governed by {@link CancellationSignal#none()} can never be
+     * cancelled, so there is nothing for it to wake up and poll for. The framed
+     * message loop passes exactly that for all three of its reads per frame, so
+     * on an idle peer or distributed connection the 250 ms poll did nothing but
+     * throw: four {@code SocketTimeoutException}s a second, each filling in a
+     * stack trace, for the life of the connection. A recorded client held
+     * around twenty such connections and threw 5.9 million of them in
+     * eighteen hours.
+     *
+     * <p>Those reads block indefinitely instead. Liveness there was never the
+     * timeout's job — the periodic monitor owns it, and it disconnects, which
+     * closes the transport out from under the blocked read.
+     *
+     * <p>A cancellable read keeps the poll. Its expiry leaves the socket usable
+     * and loses no bytes, which is what lets a transfer be cancelled without
+     * tearing down the connection carrying it.
+     */
+    private void applyReadTimeout(CancellationSignal cancellationSignal) throws IOException {
+        // -1, not 0: NetworkStream spells "no timeout" as -1 and rejects 0.
+        int desired = cancellationSignal == CancellationSignal.none() ? NO_READ_TIMEOUT : CANCELLATION_POLL_MILLIS;
+        if (desired == appliedReadTimeoutMillis || stream == null) {
+            return;
+        }
+        stream.setReadTimeout(desired);
+        appliedReadTimeoutMillis = desired;
+    }
+
     private void setStreamTimeouts() throws IOException {
         // The read timeout is the cancellation poll interval, not the
         // inactivity budget; the periodic monitor owns inactivity now.
+        // applyReadTimeout narrows it per read.
         stream.setReadTimeout(CANCELLATION_POLL_MILLIS);
+        appliedReadTimeoutMillis = CANCELLATION_POLL_MILLIS;
         // SO_TIMEOUT does not apply to writes in Java, so this stays
         // informational; write cancellation is checked between chunks.
         stream.setWriteTimeout(options.getInactivityTimeout());

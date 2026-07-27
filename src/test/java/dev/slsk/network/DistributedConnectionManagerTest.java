@@ -985,6 +985,21 @@ class DistributedConnectionManagerTest {
                     }
                     yield writeFuture;
                 }
+                case "write" -> {
+                    // The blocking sibling of writeAsync. Records the same way,
+                    // but a configured failure surfaces as a throw rather than
+                    // as a failed future. Default interface methods still route
+                    // through the handler on a proxy, so this case has to exist
+                    // or the broadcast silently writes nothing.
+                    if (arguments[0] instanceof byte[] bytes) {
+                        byteWrites.add(Arrays.copyOf(bytes, bytes.length));
+                        if (onByteWrite != null) {
+                            onByteWrite.run();
+                        }
+                    }
+                    writeFuture.join();
+                    yield null;
+                }
                 case "handoffTcpClient" -> {
                     handoffCount++;
                     yield tcpClient;

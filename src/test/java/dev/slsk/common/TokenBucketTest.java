@@ -219,4 +219,39 @@ class TokenBucketTest {
                     heldDuringContinuation.get(), "A grant continuation ran while holding the token bucket monitor");
         }
     }
+
+    @Test
+    @DisplayName("An idle bucket accrues on demand rather than on a tick")
+    void idleBucketAccruesOnDemand() throws Exception {
+        // Nothing replenishes the bucket in the background any more, so a
+        // caller returning after a quiet spell has to earn its tokens on the
+        // way in. A full interval of elapsed time is worth a whole capacity.
+        try (TokenBucket bucket = new TokenBucket(10, 100)) {
+            assertEquals(10, bucket.getAsync(10).join());
+            assertEquals(0, bucket.getCurrentCount());
+
+            Thread.sleep(150);
+
+            assertEquals(10, bucket.getAsync(10).join());
+        }
+    }
+
+    @Test
+    @DisplayName("Returned tokens release a waiter without waiting for accrual")
+    void returnedTokensReleaseAWaiterWithoutWaitingForAccrual() throws Exception {
+        // The fixed-rate tick used to pick returned tokens up on its next pass.
+        // With replenishment armed for the accrual deadline instead, returning
+        // tokens has to drain the queue itself or this waiter sits for the full
+        // ten-second interval behind tokens that are already in the bucket.
+        try (TokenBucket bucket = new TokenBucket(1, 10_000)) {
+            assertEquals(1, bucket.getAsync(1).join());
+
+            CountDownLatch granted = new CountDownLatch(1);
+            bucket.getAsync(1).thenAccept(tokens -> granted.countDown());
+
+            bucket.returnTokens(1);
+
+            assertTrue(granted.await(2, TimeUnit.SECONDS), "Returned tokens did not release the waiter");
+        }
+    }
 }

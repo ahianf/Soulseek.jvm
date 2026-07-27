@@ -133,6 +133,24 @@ public interface Connection extends AutoCloseable {
         return writeAsync(bytes, CancellationSignal.none());
     }
 
+    /**
+     * Writes an array on the calling thread.
+     *
+     * <p>The blocking sibling of {@link #writeAsync(byte[], CancellationSignal)},
+     * mirroring the blocking read the framed read loop uses. It is for callers
+     * already running on their own virtual thread that would otherwise dispatch
+     * a write and immediately block on the result: that pattern costs a second
+     * thread whose only job is to be waited on. The distributed broadcast did
+     * it once per child, per message.
+     *
+     * @param bytes the bytes to write
+     * @param cancellationSignal the cancellation signal
+     * @throws Exception if the write fails
+     */
+    default void write(byte[] bytes, CancellationSignal cancellationSignal) throws Exception {
+        writeAsync(bytes, cancellationSignal).join();
+    }
+
     /** Writes an exact byte count from a stream. */
     CompletableFuture<Void> writeAsync(
             long length,

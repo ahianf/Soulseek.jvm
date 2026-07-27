@@ -502,8 +502,12 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
             return;
         }
         try {
-            connection.writeAsync(bytes, cancellationSignal).join();
-        } catch (RuntimeException failure) {
+            // Written on this thread rather than dispatched and joined. This
+            // method already runs on a virtual thread of its own, one per
+            // child, so going through writeAsync bought a second thread per
+            // child per message whose only purpose was to be waited on.
+            connection.write(bytes, cancellationSignal);
+        } catch (Exception failure) {
             connection.disconnect("Broadcast failure: " + message(unwrap(failure)));
         }
     }
@@ -1166,6 +1170,15 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     }
 
     private void raiseStateChanged() {
+        // Snapshotting the network builds two lists and walks every child, and
+        // this runs from the message path — branch level, branch root and
+        // parent changes all land here. With nobody listening it was pure
+        // garbage; the sibling raise* methods already forEach over an empty
+        // list for free, but only because they have a payload to hand.
+        if (stateChangedListeners.isEmpty()) {
+            return;
+        }
+
         DistributedNetworkInfo info = new DistributedNetworkInfo(
                 getAverageBroadcastLatency(),
                 getBranchLevel(),
