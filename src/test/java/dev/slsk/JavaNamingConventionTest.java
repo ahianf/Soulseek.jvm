@@ -54,23 +54,17 @@ class JavaNamingConventionTest {
         assertNoFailures(failures);
     }
 
+    /**
+     * The ported documentation this used to walk was deleted with the C#-parity paper
+     * trail, so only the surviving documents are inspected. Add {@code docs/public-api.md}
+     * here when Phase 9 of {@code JAVA_API_1_0_GOAL.md} writes it.
+     */
     @Test
     void currentFacingDocumentationUsesOnlySupportedJavaNames() throws IOException {
         List<String> failures = new ArrayList<>();
-        for (Path path : List.of(
-                Path.of("README.md"),
-                Path.of("docs", "public-api.md"),
-                Path.of("docs", "port-decisions.md"),
-                Path.of("docs", "compatibility-report.md"),
-                Path.of("docs", "protocol-differences.md"))) {
+        for (Path path : List.of(Path.of("README.md"))) {
             inspectCurrentDocument(path, failures);
         }
-
-        inspectJavaTableColumn(Path.of("docs", "api-mapping.md"), 2, failures);
-        inspectJavaTableColumn(Path.of("docs", "source-map.md"), 2, failures);
-        inspectJavaTableColumn(Path.of("docs", "test-parity.md"), 4, failures);
-        inspectJavaTableColumn(Path.of("docs", "java-naming-migration.md"), 2, failures);
-
         assertNoFailures(failures);
     }
 
@@ -103,21 +97,6 @@ class JavaNamingConventionTest {
                 continue;
             }
             inspectText(Path.of(path + ":" + lineNumber), line, failures);
-        }
-    }
-
-    private static void inspectJavaTableColumn(Path path, int column, List<String> failures) throws IOException {
-        int lineNumber = 0;
-        for (String line : Files.readAllLines(path)) {
-            lineNumber++;
-            if (!line.startsWith("|")) {
-                continue;
-            }
-            String[] cells = line.split("\\|", -1);
-            if (cells.length <= column) {
-                continue;
-            }
-            inspectText(Path.of(path + ":" + lineNumber), cells[column], failures);
         }
     }
 
