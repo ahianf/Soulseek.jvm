@@ -141,6 +141,9 @@ final class DownloadQueue {
     /** Called with (entry, previous state) whenever a state changes. */
     private final BiConsumer<Entry, TransferState> onStateChanged;
 
+    /** Called with (entry, when the next attempt is due) before a retry waits. */
+    private volatile BiConsumer<Entry, Instant> onRetryScheduled = (entry, at) -> {};
+
     private volatile DownloadPolicy policy = DownloadPolicy.defaults();
     private final AtomicBoolean closed = new AtomicBoolean();
 
@@ -150,6 +153,19 @@ final class DownloadQueue {
         this.runner = Objects.requireNonNull(runner, "runner");
         this.store = Objects.requireNonNull(store, "store");
         this.onStateChanged = Objects.requireNonNull(onStateChanged, "onStateChanged");
+    }
+
+    /**
+     * Sets who hears about a scheduled retry.
+     *
+     * <p>Separate from the state-change callback because a retry is not a state:
+     * the download goes back to {@code Queued} either way, and what a consumer
+     * needs to know is that it will not be tried again for another four minutes.
+     *
+     * @param listener called before each retry's backoff begins
+     */
+    void onRetryScheduled(BiConsumer<Entry, Instant> listener) {
+        onRetryScheduled = Objects.requireNonNull(listener, "listener");
     }
 
     DownloadPolicy policy() {
@@ -394,6 +410,7 @@ final class DownloadQueue {
     private void scheduleRetry(Entry entry, Duration backoff) {
         transition(entry, new TransferState.Queued(0));
         long millis = Math.max(1, backoff.toMillis());
+        onRetryScheduled.accept(entry, Instant.now().plusMillis(millis));
         scheduler.schedule(
                 () -> {
                     if (!closed.get() && entry.state instanceof TransferState.Queued && !entry.paused.get()) {

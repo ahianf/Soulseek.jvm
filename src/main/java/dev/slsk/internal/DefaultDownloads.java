@@ -22,8 +22,10 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -47,6 +49,17 @@ final class DefaultDownloads implements Downloads {
     private final SoulseekEngine client;
     private final EventBus<DownloadEvent> events;
     private final DownloadQueue queue;
+    private final ProgressCoalescer progress = new ProgressCoalescer(System::nanoTime);
+
+    /**
+     * Which queue entry a running transfer belongs to.
+     *
+     * <p>The engine knows transfers by the token it was given; the queue knows
+     * them by the id a consumer holds. They are different because a retry is the
+     * same download and a different transfer, which is exactly the distinction
+     * the old surface could not make.
+     */
+    private final Map<Integer, TransferId> running = new ConcurrentHashMap<>();
 
     DefaultDownloads(SoulseekEngine client, EventBus<DownloadEvent> events) {
         this(client, events, TransferStore.inMemory());
@@ -56,6 +69,9 @@ final class DefaultDownloads implements Downloads {
         this.client = Objects.requireNonNull(client, "client");
         this.events = Objects.requireNonNull(events, "events");
         this.queue = new DownloadQueue(client.getScheduler(), this::fetch, store, this::publish);
+        this.queue.onRetryScheduled((entry, nextAttemptAt) -> events.publish(
+                new DownloadEvent.RetryScheduled(entry.id(), entry.attempt() + 1, nextAttemptAt, Instant.now())));
+        client.events().on(EngineEvents.Kind.TRANSFER_PROGRESS_UPDATED, this::onProgress);
     }
 
     /**
@@ -84,6 +100,7 @@ final class DefaultDownloads implements Downloads {
                 .cancellation(entry.signal())
                 .build();
 
+        running.put(token, entry.id());
         try {
             Transfer completed = Blocking.await(client.transfers().download(internal));
             TransferState state = Transfers.state(completed);
@@ -96,7 +113,30 @@ final class DefaultDownloads implements Downloads {
             TransferOutcome outcome = outcomeOf(failure);
             settle(stream.get(), outcome);
             return outcome;
+        } finally {
+            running.remove(token);
+            progress.forget(entry.id());
         }
+    }
+
+    /**
+     * Publishes progress on a fixed cadence, with the rate smoothed.
+     *
+     * <p>The engine raises one of these per socket read. Most of them are
+     * dropped here, which is the point: the event rate a consumer sees is
+     * bounded by the library rather than by how fast the network happens to be.
+     */
+    private void onProgress(dev.slsk.internal.events.TransferProgressUpdatedEvent event) {
+        if (event == null || event.getTransfer() == null) {
+            return;
+        }
+        Transfer transfer = event.getTransfer();
+        TransferId id = running.get(transfer.getToken());
+        if (id == null) {
+            return;
+        }
+        progress.offer(id, transfer.getBytesTransferred(), transfer.getSize())
+                .ifPresent(value -> events.publish(new DownloadEvent.Progressed(id, value, Instant.now())));
     }
 
     /** Classifies a thrown failure the way the transfer path would have. */
