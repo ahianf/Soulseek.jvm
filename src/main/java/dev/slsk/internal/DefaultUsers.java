@@ -13,6 +13,7 @@ import dev.slsk.Username;
 import dev.slsk.Users;
 import dev.slsk.Watch;
 import dev.slsk.events.UserEvent;
+import dev.slsk.internal.ClientEvents.Kind;
 import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import java.net.InetSocketAddress;
@@ -53,8 +54,11 @@ final class DefaultUsers implements Users {
         this.directory = Objects.requireNonNull(client, "client").users();
         this.events = Objects.requireNonNull(events, "events");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
-        client.addLoggedInListener((sender, ignored) -> reregister());
-        client.addUserStatisticsChangedListener((sender, statistics) -> onStatistics(statistics));
+        client.events().on(Kind.LOGGED_IN, (Void ignored) -> reregister());
+        client.events()
+                .on(
+                        Kind.USER_STATISTICS_CHANGED,
+                        (dev.slsk.internal.UserStatistics statistics) -> onStatistics(statistics));
     }
 
     /** One watched user: the last status seen, and how many holders remain. */

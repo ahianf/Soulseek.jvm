@@ -21,6 +21,7 @@ import dev.slsk.exceptions.ListenException;
 import dev.slsk.exceptions.LoginRejectedException;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
+import dev.slsk.internal.ClientEvents.Kind;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.messaging.MessageCode;
@@ -105,7 +106,12 @@ class SoulseekClientConnectTest {
         CancellationController source = new CancellationController();
         CancellationSignal token = source.getSignal();
         List<SoulseekClientState> states = new ArrayList<>();
-        fixture.client.addStateChangedListener((sender, eventData) -> states.add(eventData.getState()));
+        fixture.client
+                .events()
+                .on(
+                        Kind.STATE_CHANGED,
+                        (dev.slsk.internal.events.SoulseekClientStateChangedEvent eventData) ->
+                                states.add(eventData.getState()));
         fixture.connection.fireConnected = true;
 
         fixture.client.connect("127.0.0.1", 2271, "alice", "secret", token);
@@ -147,17 +153,18 @@ class SoulseekClientConnectTest {
         Fixture fixture = new Fixture();
         fixture.waiter.response = new LoginResponse(true, "", null, null, true);
         List<String> sequence = new ArrayList<>();
-        fixture.client.addServerInfoReceivedListener((sender, eventData) -> {
-            assertSame(fixture.client, sender);
+        fixture.client.events().on(Kind.SERVER_INFO_RECEIVED, (dev.slsk.internal.ServerInfo eventData) -> {
             assertTrue(eventData.isSupporter());
             assertNull(fixture.client.getUsername());
             sequence.add("server-info");
         });
-        fixture.client.addStateChangedListener((sender, eventData) -> {
-            if (eventData.getState().equals(loggedIn())) {
-                sequence.add("logged-in");
-            }
-        });
+        fixture.client
+                .events()
+                .on(Kind.STATE_CHANGED, (dev.slsk.internal.events.SoulseekClientStateChangedEvent eventData) -> {
+                    if (eventData.getState().equals(loggedIn())) {
+                        sequence.add("logged-in");
+                    }
+                });
 
         fixture.client.connect("127.0.0.1", 2271, "alice", "secret");
 

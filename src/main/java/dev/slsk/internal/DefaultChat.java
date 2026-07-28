@@ -8,8 +8,10 @@ import dev.slsk.Chat;
 import dev.slsk.EventStream;
 import dev.slsk.Username;
 import dev.slsk.events.ChatEvent;
+import dev.slsk.internal.ClientEvents.Kind;
 import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
+import dev.slsk.internal.events.PrivateMessageReceivedEvent;
 import java.time.Instant;
 import java.util.Objects;
 
@@ -40,10 +42,10 @@ final class DefaultChat implements Chat {
         this.server = Objects.requireNonNull(client, "client").server();
         this.events = Objects.requireNonNull(events, "events");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
-        client.addPrivateMessageReceivedListener((sender, event) -> onMessage(event));
+        client.events().on(Kind.PRIVATE_MESSAGE_RECEIVED, (PrivateMessageReceivedEvent event) -> onMessage(event));
     }
 
-    private void onMessage(dev.slsk.internal.events.PrivateMessageReceivedEvent event) {
+    private void onMessage(PrivateMessageReceivedEvent event) {
         if (event == null) {
             return;
         }

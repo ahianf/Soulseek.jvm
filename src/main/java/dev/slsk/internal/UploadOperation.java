@@ -20,6 +20,7 @@ import dev.slsk.exceptions.TransferException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferStreamException;
 import dev.slsk.exceptions.UserOfflineException;
+import dev.slsk.internal.ClientEvents.Kind;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.events.TransferProgressUpdatedEvent;
 import dev.slsk.internal.events.TransferStateChangedEvent;
@@ -513,7 +514,7 @@ final class UploadOperation {
         if (transferOptions.getStateChanged() != null) {
             transferOptions.getStateChanged().onStateChanged(new TransferStateChange(previous, transfer));
         }
-        engine.context.raiseSearchEvent(DefaultSoulseekClient.Event.TRANSFER_STATE_CHANGED, eventData);
+        engine.context.raiseEvent(Kind.TRANSFER_STATE_CHANGED, eventData);
     }
 
     private void updateProgress(long bytesUploaded) {
@@ -523,9 +524,7 @@ final class UploadOperation {
         if (transferOptions.getProgressUpdated() != null) {
             transferOptions.getProgressUpdated().onProgressUpdated(new TransferProgressUpdate(previous, transfer));
         }
-        engine.context.raiseSearchEvent(
-                DefaultSoulseekClient.Event.TRANSFER_PROGRESS_UPDATED,
-                new TransferProgressUpdatedEvent(previous, transfer));
+        engine.context.raiseEvent(Kind.TRANSFER_PROGRESS_UPDATED, new TransferProgressUpdatedEvent(previous, transfer));
     }
 
     private long currentStreamPosition() {

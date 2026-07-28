@@ -21,6 +21,7 @@ import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
 import dev.slsk.exceptions.TransferSizeMismatchException;
+import dev.slsk.internal.ClientEvents.Kind;
 import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
@@ -186,10 +187,18 @@ class SoulseekClientDownloadTest {
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             List<TransferState> states = new ArrayList<>();
             List<Long> progress = new ArrayList<>();
-            fixture.client.addTransferStateChangedListener(
-                    (sender, eventData) -> states.add(eventData.getTransfer().getState()));
-            fixture.client.addTransferProgressUpdatedListener(
-                    (sender, eventData) -> progress.add(eventData.getTransfer().getBytesTransferred()));
+            fixture.client
+                    .events()
+                    .on(
+                            Kind.TRANSFER_STATE_CHANGED,
+                            (dev.slsk.internal.events.TransferStateChangedEvent eventData) ->
+                                    states.add(eventData.getTransfer().getState()));
+            fixture.client
+                    .events()
+                    .on(
+                            Kind.TRANSFER_PROGRESS_UPDATED,
+                            (dev.slsk.internal.events.TransferProgressUpdatedEvent eventData) ->
+                                    progress.add(eventData.getTransfer().getBytesTransferred()));
 
             Transfer result = Blocking.await(fixture.client
                     .transfers()
@@ -228,11 +237,13 @@ class SoulseekClientDownloadTest {
         try (Fixture fixture = new Fixture()) {
             fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(12, 5));
             List<Transfer> terminal = new ArrayList<>();
-            fixture.client.addTransferStateChangedListener((sender, eventData) -> {
-                if (eventData.getTransfer().getState().contains(TransferState.COMPLETED)) {
-                    terminal.add(eventData.getTransfer());
-                }
-            });
+            fixture.client
+                    .events()
+                    .on(Kind.TRANSFER_STATE_CHANGED, (dev.slsk.internal.events.TransferStateChangedEvent eventData) -> {
+                        if (eventData.getTransfer().getState().contains(TransferState.COMPLETED)) {
+                            terminal.add(eventData.getTransfer());
+                        }
+                    });
 
             Throwable failure = failureOf(() -> Blocking.await(fixture.client
                     .transfers()
@@ -257,11 +268,13 @@ class SoulseekClientDownloadTest {
             fixture.waiter.startRequest =
                     CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 130, "file", 6));
             List<Transfer> terminal = new ArrayList<>();
-            fixture.client.addTransferStateChangedListener((sender, eventData) -> {
-                if (eventData.getTransfer().getState().contains(TransferState.COMPLETED)) {
-                    terminal.add(eventData.getTransfer());
-                }
-            });
+            fixture.client
+                    .events()
+                    .on(Kind.TRANSFER_STATE_CHANGED, (dev.slsk.internal.events.TransferStateChangedEvent eventData) -> {
+                        if (eventData.getTransfer().getState().contains(TransferState.COMPLETED)) {
+                            terminal.add(eventData.getTransfer());
+                        }
+                    });
 
             Throwable failure = failureOf(() -> Blocking.await(fixture.client
                     .transfers()
@@ -510,11 +523,13 @@ class SoulseekClientDownloadTest {
                     .completeExceptionally(new TransferReportedFailedException("remote failed"));
             fixture.transfer.blockRead = true;
             List<Transfer> terminal = new ArrayList<>();
-            fixture.client.addTransferStateChangedListener((sender, eventData) -> {
-                if (eventData.getTransfer().getState().contains(TransferState.COMPLETED)) {
-                    terminal.add(eventData.getTransfer());
-                }
-            });
+            fixture.client
+                    .events()
+                    .on(Kind.TRANSFER_STATE_CHANGED, (dev.slsk.internal.events.TransferStateChangedEvent eventData) -> {
+                        if (eventData.getTransfer().getState().contains(TransferState.COMPLETED)) {
+                            terminal.add(eventData.getTransfer());
+                        }
+                    });
 
             Throwable failure = failureOf(() -> Blocking.await(fixture.client
                     .transfers()
@@ -543,11 +558,13 @@ class SoulseekClientDownloadTest {
                     .completeExceptionally(rejection);
             fixture.transfer.blockRead = true;
             List<Transfer> terminal = new ArrayList<>();
-            fixture.client.addTransferStateChangedListener((sender, eventData) -> {
-                if (eventData.getTransfer().getState().contains(TransferState.COMPLETED)) {
-                    terminal.add(eventData.getTransfer());
-                }
-            });
+            fixture.client
+                    .events()
+                    .on(Kind.TRANSFER_STATE_CHANGED, (dev.slsk.internal.events.TransferStateChangedEvent eventData) -> {
+                        if (eventData.getTransfer().getState().contains(TransferState.COMPLETED)) {
+                            terminal.add(eventData.getTransfer());
+                        }
+                    });
 
             Throwable failure = failureOf(() -> Blocking.await(fixture.client
                     .transfers()

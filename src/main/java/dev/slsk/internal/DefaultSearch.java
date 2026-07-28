@@ -20,7 +20,10 @@ import dev.slsk.SearchSnapshot;
 import dev.slsk.SearchStatus;
 import dev.slsk.Username;
 import dev.slsk.events.SearchEvent;
+import dev.slsk.internal.ClientEvents.Kind;
 import dev.slsk.internal.common.Blocking;
+import dev.slsk.internal.events.SearchRequestEvent;
+import dev.slsk.internal.events.SearchRequestResponseEvent;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -85,20 +88,20 @@ final class DefaultSearch implements Search {
     }
 
     private void wire() {
-        client.addSearchRequestReceivedListener((sender, event) -> {
+        client.events().on(Kind.SEARCH_REQUEST_RECEIVED, (SearchRequestEvent event) -> {
             if (event != null) {
                 events.publish(new SearchEvent.RequestReceived(
                         Username.of(event.getUsername()), event.getQuery(), event.getToken(), Instant.now()));
             }
         });
-        client.addSearchResponseDeliveredListener((sender, event) -> {
+        client.events().on(Kind.SEARCH_RESPONSE_DELIVERED, (SearchRequestResponseEvent event) -> {
             if (event != null && event.getSearchResponse() != null) {
                 dev.slsk.internal.SearchResponse delivered = event.getSearchResponse();
                 events.publish(new SearchEvent.ResponseDelivered(
                         Username.of(event.getUsername()), event.getToken(), delivered.getFileCount(), Instant.now()));
             }
         });
-        client.addSearchResponseDeliveryFailedListener((sender, event) -> {
+        client.events().on(Kind.SEARCH_RESPONSE_DELIVERY_FAILED, (SearchRequestResponseEvent event) -> {
             if (event != null) {
                 events.publish(new SearchEvent.ResponseDeliveryFailed(
                         Username.of(event.getUsername()),

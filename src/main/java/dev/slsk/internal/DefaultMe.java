@@ -10,8 +10,10 @@ import dev.slsk.ServerInfo;
 import dev.slsk.UserPresence;
 import dev.slsk.Username;
 import dev.slsk.events.MeEvent;
+import dev.slsk.internal.ClientEvents.Kind;
 import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
+import dev.slsk.internal.events.PrivilegeNotificationReceivedEvent;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -56,28 +58,41 @@ final class DefaultMe implements Me {
     }
 
     private void wire() {
-        client.addLoggedInListener(
-                (sender, ignored) -> events.publish(new MeEvent.LoggedIn(ServerInfo.empty(), Instant.now())));
-        client.addPrivilegedUserListReceivedListener((sender, users) ->
-                events.publish(new MeEvent.PrivilegedUserListReceived(
-                        users == null
-                                ? List.of()
-                                : users.stream().map(Username::of).toList(),
-                        Instant.now())));
-        client.addPrivilegeNotificationReceivedListener((sender, event) -> {
-            if (event == null) {
-                return;
+        client.events()
+                .on(
+                        Kind.LOGGED_IN,
+                        (Void ignored) -> events.publish(new MeEvent.LoggedIn(ServerInfo.empty(), Instant.now())));
+        client.events()
+                .on(
+                        Kind.PRIVILEGED_USER_LIST_RECEIVED,
+                        (java.util.List<String> users) -> events.publish(new MeEvent.PrivilegedUserListReceived(
+                                users == null
+                                        ? List.of()
+                                        : users.stream().map(Username::of).toList(),
+                                Instant.now())));
+        client.events().on(Kind.PRIVILEGE_NOTIFICATION_RECEIVED, this::onPrivilegeNotification);
+    }
+
+    /**
+     * Publishes a privilege notification and acknowledges it.
+     *
+     * <p>Acknowledgement is on the same rule as a private message: the consumer
+     * is handed the notification and never asked to confirm it, because a
+     * consumer that forgets is redelivered everything forever.
+     */
+    private void onPrivilegeNotification(PrivilegeNotificationReceivedEvent event) {
+        if (event == null) {
+            return;
+        }
+        events.publish(new MeEvent.PrivilegeNotificationReceived(
+                event.getUsername() == null ? null : Username.of(event.getUsername()), Instant.now()));
+        if (event.isRequiresAcknowlegement() && event.getId() != null) {
+            try {
+                Blocking.await(server.acknowledgePrivilegeNotification(event.getId()));
+            } catch (RuntimeException exception) {
+                diagnostics.warning("Failed to acknowledge privilege notification " + event.getId(), exception);
             }
-            events.publish(new MeEvent.PrivilegeNotificationReceived(
-                    event.getUsername() == null ? null : Username.of(event.getUsername()), Instant.now()));
-            if (event.isRequiresAcknowlegement() && event.getId() != null) {
-                try {
-                    Blocking.await(server.acknowledgePrivilegeNotification(event.getId()));
-                } catch (RuntimeException exception) {
-                    diagnostics.warning("Failed to acknowledge privilege notification " + event.getId(), exception);
-                }
-            }
-        });
+        }
     }
 
     @Override

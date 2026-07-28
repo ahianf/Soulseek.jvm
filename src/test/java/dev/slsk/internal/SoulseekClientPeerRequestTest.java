@@ -17,6 +17,7 @@ import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferNotFoundException;
 import dev.slsk.exceptions.UserEndpointException;
 import dev.slsk.exceptions.UserOfflineException;
+import dev.slsk.internal.ClientEvents.Kind;
 import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
@@ -406,7 +407,11 @@ class SoulseekClientPeerRequestTest {
                 CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));
         List<BrowseProgressUpdatedEvent> events = new ArrayList<>();
         List<dev.slsk.internal.options.BrowseProgress> callbacks = new ArrayList<>();
-        fixture.client.addBrowseProgressUpdatedListener((sender, eventData) -> events.add(eventData));
+        fixture.client
+                .events()
+                .on(
+                        Kind.BROWSE_PROGRESS_UPDATED,
+                        (dev.slsk.internal.events.BrowseProgressUpdatedEvent eventData) -> events.add(eventData));
         CancellationController source = new CancellationController();
         CancellationSignal token = source.getSignal();
 

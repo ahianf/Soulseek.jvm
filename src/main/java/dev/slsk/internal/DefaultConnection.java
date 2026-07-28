@@ -11,7 +11,10 @@ import dev.slsk.EventStream;
 import dev.slsk.ServerAddress;
 import dev.slsk.ServerInfo;
 import dev.slsk.events.ConnectionEvent;
+import dev.slsk.internal.ClientEvents.Kind;
 import dev.slsk.internal.common.Blocking;
+import dev.slsk.internal.events.SoulseekClientDisconnectedEvent;
+import dev.slsk.internal.events.SoulseekClientStateChangedEvent;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -66,19 +69,34 @@ final class DefaultConnection implements Connection {
     }
 
     private void wire() {
-        client.addStateChangedListener((sender, event) -> onStateChanged());
-        client.addConnectedListener((sender, event) -> onStateChanged());
-        client.addDisconnectedListener((sender, event) -> onStateChanged());
-        client.addLoggedInListener((sender, event) -> onStateChanged());
-        client.addServerInfoReceivedListener(
-                (sender, event) -> events.publish(new ConnectionEvent.ServerInfoReceived(serverInfo(), Instant.now())));
-        client.addKickedFromServerListener((sender, event) ->
-                events.publish(new ConnectionEvent.KickedFromServer("kicked from the server", Instant.now())));
-        client.addGlobalMessageReceivedListener((sender, message) ->
-                events.publish(new ConnectionEvent.GlobalMessageReceived(String.valueOf(message), Instant.now())));
-        client.addExcludedSearchPhrasesReceivedListener(
-                (sender, phrases) -> events.publish(new ConnectionEvent.ExcludedSearchPhrasesReceived(
-                        phrases == null ? List.of() : List.copyOf(phrases), Instant.now())));
+        // Four kinds for one transition: the engine raises connected, logged-in
+        // and state-changed for what a consumer sees as a single move.
+        client.events().on(Kind.STATE_CHANGED, (SoulseekClientStateChangedEvent event) -> onStateChanged());
+        client.events().on(Kind.CONNECTED, (Void event) -> onStateChanged());
+        client.events().on(Kind.DISCONNECTED, (SoulseekClientDisconnectedEvent event) -> onStateChanged());
+        client.events().on(Kind.LOGGED_IN, (Void event) -> onStateChanged());
+
+        client.events()
+                .on(
+                        Kind.SERVER_INFO_RECEIVED,
+                        (dev.slsk.internal.ServerInfo event) ->
+                                events.publish(new ConnectionEvent.ServerInfoReceived(serverInfo(), Instant.now())));
+        client.events()
+                .on(
+                        Kind.KICKED_FROM_SERVER,
+                        (Void event) -> events.publish(
+                                new ConnectionEvent.KickedFromServer("kicked from the server", Instant.now())));
+        client.events()
+                .on(
+                        Kind.GLOBAL_MESSAGE_RECEIVED,
+                        (String message) -> events.publish(
+                                new ConnectionEvent.GlobalMessageReceived(String.valueOf(message), Instant.now())));
+        client.events()
+                .on(
+                        Kind.EXCLUDED_SEARCH_PHRASES_RECEIVED,
+                        (java.util.List<String> phrases) ->
+                                events.publish(new ConnectionEvent.ExcludedSearchPhrasesReceived(
+                                        phrases == null ? List.of() : List.copyOf(phrases), Instant.now())));
     }
 
     /**

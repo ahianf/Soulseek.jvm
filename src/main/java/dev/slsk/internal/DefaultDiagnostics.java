@@ -11,6 +11,9 @@ import dev.slsk.Metrics;
 import dev.slsk.Username;
 import dev.slsk.events.DiagnosticEvent;
 import dev.slsk.events.MeshEvent;
+import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.events.DistributedChildEvent;
+import dev.slsk.internal.events.DistributedParentEvent;
 import dev.slsk.internal.network.DistributedConnectionManager;
 import dev.slsk.internal.network.PeerEndpoint;
 import java.time.Instant;
@@ -55,24 +58,27 @@ final class DefaultDiagnostics implements Diagnostics {
     }
 
     private void wire(DefaultSoulseekClient client) {
-        client.addDiagnosticGeneratedListener((sender, event) -> {
-            if (event == null) {
-                return;
-            }
-            events.publish(new DiagnosticEvent(
-                    level(event.getLevel()),
-                    event.getMessage(),
-                    Optional.ofNullable(event.getException()),
-                    event.getTimestamp() == null ? Instant.now() : event.getTimestamp()));
-        });
+        client.events().on(Kind.DIAGNOSTIC_GENERATED, this::onDiagnostic);
 
-        client.addDistributedParentAdoptedListener((sender, event) -> onMeshChanged());
-        client.addDistributedParentDisconnectedListener((sender, event) -> onMeshChanged());
-        client.addDistributedChildAddedListener((sender, event) -> onMeshChanged());
-        client.addDistributedChildDisconnectedListener((sender, event) -> onMeshChanged());
-        client.addPromotedToDistributedBranchRootListener((sender, event) -> onMeshChanged());
-        client.addDemotedFromDistributedBranchRootListener((sender, event) -> onMeshChanged());
-        client.addDistributedNetworkResetListener((sender, event) -> onMeshChanged());
+        client.events().on(Kind.DISTRIBUTED_PARENT_ADOPTED, (DistributedParentEvent event) -> onMeshChanged());
+        client.events().on(Kind.DISTRIBUTED_PARENT_DISCONNECTED, (DistributedParentEvent event) -> onMeshChanged());
+        client.events().on(Kind.DISTRIBUTED_CHILD_ADDED, (DistributedChildEvent event) -> onMeshChanged());
+        client.events().on(Kind.DISTRIBUTED_CHILD_DISCONNECTED, (DistributedChildEvent event) -> onMeshChanged());
+        client.events().on(Kind.PROMOTED_TO_DISTRIBUTED_BRANCH_ROOT, (Void event) -> onMeshChanged());
+        client.events().on(Kind.DEMOTED_FROM_DISTRIBUTED_BRANCH_ROOT, (Void event) -> onMeshChanged());
+        client.events().on(Kind.DISTRIBUTED_NETWORK_RESET, (Void event) -> onMeshChanged());
+    }
+
+    /** The internal record carries boxed nulls; the published one does not. */
+    private void onDiagnostic(dev.slsk.internal.diagnostics.DiagnosticEvent event) {
+        if (event == null) {
+            return;
+        }
+        events.publish(new DiagnosticEvent(
+                level(event.getLevel()),
+                event.getMessage(),
+                Optional.ofNullable(event.getException()),
+                event.getTimestamp() == null ? Instant.now() : event.getTimestamp()));
     }
 
     private void onMeshChanged() {

@@ -19,6 +19,7 @@ import dev.slsk.exceptions.LoginRejectedException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
+import dev.slsk.internal.ClientEvents.Kind;
 import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.common.DefaultWaiter;
 import dev.slsk.internal.common.IOAdapter;
@@ -95,7 +96,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * A client for the Soulseek file-sharing network.
  */
-final class DefaultSoulseekClient extends ClientEventSupport
+final class DefaultSoulseekClient
         implements AutoCloseable,
                 ClientContext,
                 DistributedConnectionManagerClient,
@@ -132,6 +133,12 @@ final class DefaultSoulseekClient extends ClientEventSupport
     final DistributedConnectionManager distributedConnectionManager;
     private final ServerMessageHandler serverMessageHandler;
     final DiagnosticSink diagnostic;
+    /**
+     * What the engine tells the facets. Constructed before the diagnostic sink,
+     * because the sink raises through it.
+     */
+    private final ClientEvents events = new ClientEvents(this::reportListenerFault);
+
     volatile ClientListenerFactory clientListenerFactory = SocketListener::new;
     private final AtomicBoolean closed = new AtomicBoolean();
     /**
@@ -252,7 +259,7 @@ final class DefaultSoulseekClient extends ClientEventSupport
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(
                         this.options.getMinimumDiagnosticLevel(),
-                        eventData -> raise(Event.DIAGNOSTIC_GENERATED, eventData))
+                        eventData -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData))
                 : diagnosticFactory;
         GlobalDiagnostic.init(diagnostic);
 
@@ -274,6 +281,24 @@ final class DefaultSoulseekClient extends ClientEventSupport
 
         scheduler.scheduleAtFixedRate(() -> users.cleanupUserEndpointSemaphoresAsync(), 5, 5, TimeUnit.MINUTES);
         scheduler.scheduleAtFixedRate(() -> cleanupUploadSemaphoresAsync(), 15, 15, TimeUnit.MINUTES);
+    }
+
+    /**
+     * Where a contained listener fault goes.
+     *
+     * <p>These events are raised on read loops. Before containment a facet that
+     * threw while translating one took the connection down with it.
+     */
+    private void reportListenerFault(ClientEvents.Kind kind, Throwable failure) {
+        if (diagnostic != null) {
+            diagnostic.warning(
+                    "A listener for " + kind + " threw; the event was still delivered " + "to the rest", failure);
+        }
+    }
+
+    /** The channel the facets subscribe to. */
+    ClientEvents events() {
+        return events;
     }
 
     /** Returns whether client events are configured as asynchronous. */
@@ -685,101 +710,101 @@ final class DefaultSoulseekClient extends ClientEventSupport
         diagnostic.debug("Client state changed from " + previousState + " to "
                 + newState
                 + (message == null ? "" : "; message: " + message));
-        raise(Event.STATE_CHANGED, new SoulseekClientStateChangedEvent(previousState, state, message, exception));
+        events.raise(Kind.STATE_CHANGED, new SoulseekClientStateChangedEvent(previousState, state, message, exception));
         if (state.equals(SoulseekClientState.CONNECTED)) {
-            raise(Event.CONNECTED, null);
+            events.raise(Kind.CONNECTED, null);
         } else if (state.equals(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN))) {
-            raise(Event.LOGGED_IN, null);
+            events.raise(Kind.LOGGED_IN, null);
         } else if (state.equals(SoulseekClientState.DISCONNECTED)) {
-            raise(Event.DISCONNECTED, new SoulseekClientDisconnectedEvent(message, exception));
+            events.raise(Kind.DISCONNECTED, new SoulseekClientDisconnectedEvent(message, exception));
         }
     }
 
     private void bindEvents() {
         listenerHandler.addDiagnosticGeneratedListener(
-                (sender, eventData) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventData));
+                (sender, eventData) -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
         searchResponder.addDiagnosticGeneratedListener(
-                (sender, eventData) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventData));
+                (sender, eventData) -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
         searchResponder.addRequestReceivedListener(
-                (sender, eventData) -> raise(Event.SEARCH_REQUEST_RECEIVED, eventData));
+                (sender, eventData) -> events.raise(Kind.SEARCH_REQUEST_RECEIVED, eventData));
         searchResponder.addResponseDeliveredListener(
-                (sender, eventData) -> raise(Event.SEARCH_RESPONSE_DELIVERED, eventData));
+                (sender, eventData) -> events.raise(Kind.SEARCH_RESPONSE_DELIVERED, eventData));
         searchResponder.addResponseDeliveryFailedListener(
-                (sender, eventData) -> raise(Event.SEARCH_RESPONSE_DELIVERY_FAILED, eventData));
+                (sender, eventData) -> events.raise(Kind.SEARCH_RESPONSE_DELIVERY_FAILED, eventData));
 
         peerMessageHandler.addDiagnosticGeneratedListener(
-                (sender, eventData) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventData));
+                (sender, eventData) -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
         peerMessageHandler.addDownloadDeniedListener((sender, eventData) -> downloadDenied(eventData));
         peerMessageHandler.addDownloadFailedListener((sender, eventData) -> downloadFailed(eventData));
         distributedMessageHandler.addDiagnosticGeneratedListener(
-                (sender, eventData) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventData));
+                (sender, eventData) -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
         peerConnectionManager.addDiagnosticGeneratedListener(
-                (sender, eventData) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventData));
+                (sender, eventData) -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
         distributedConnectionManager.addDiagnosticGeneratedListener(
-                (sender, eventData) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventData));
+                (sender, eventData) -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
         distributedConnectionManager.addPromotedToBranchRootListener(
-                (sender, eventData) -> raise(Event.PROMOTED_TO_DISTRIBUTED_BRANCH_ROOT, null));
+                (sender, eventData) -> events.raise(Kind.PROMOTED_TO_DISTRIBUTED_BRANCH_ROOT, null));
         distributedConnectionManager.addDemotedFromBranchRootListener(
-                (sender, eventData) -> raise(Event.DEMOTED_FROM_DISTRIBUTED_BRANCH_ROOT, null));
+                (sender, eventData) -> events.raise(Kind.DEMOTED_FROM_DISTRIBUTED_BRANCH_ROOT, null));
         distributedConnectionManager.addParentAdoptedListener(
-                (sender, eventData) -> raise(Event.DISTRIBUTED_PARENT_ADOPTED, eventData));
+                (sender, eventData) -> events.raise(Kind.DISTRIBUTED_PARENT_ADOPTED, eventData));
         distributedConnectionManager.addParentDisconnectedListener(
-                (sender, eventData) -> raise(Event.DISTRIBUTED_PARENT_DISCONNECTED, eventData));
+                (sender, eventData) -> events.raise(Kind.DISTRIBUTED_PARENT_DISCONNECTED, eventData));
         distributedConnectionManager.addChildAddedListener(
-                (sender, eventData) -> raise(Event.DISTRIBUTED_CHILD_ADDED, eventData));
+                (sender, eventData) -> events.raise(Kind.DISTRIBUTED_CHILD_ADDED, eventData));
         distributedConnectionManager.addChildDisconnectedListener(
-                (sender, eventData) -> raise(Event.DISTRIBUTED_CHILD_DISCONNECTED, eventData));
+                (sender, eventData) -> events.raise(Kind.DISTRIBUTED_CHILD_DISCONNECTED, eventData));
         distributedConnectionManager.addStateChangedListener(
-                (sender, eventData) -> raise(Event.DISTRIBUTED_NETWORK_STATE_CHANGED, eventData));
+                (sender, eventData) -> events.raise(Kind.DISTRIBUTED_NETWORK_STATE_CHANGED, eventData));
 
         serverMessageHandler.addDiagnosticGeneratedListener(
-                (sender, eventData) -> raiseFrom(sender, Event.DIAGNOSTIC_GENERATED, eventData));
+                (sender, eventData) -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
         bindServerEvents();
     }
 
     private void bindServerEvents() {
-        forwardServer(ServerMessageEvent.USER_CANNOT_CONNECT, Event.USER_CANNOT_CONNECT);
-        forwardServer(ServerMessageEvent.USER_STATUS_CHANGED, Event.USER_STATUS_CHANGED);
-        forwardServer(ServerMessageEvent.USER_STATISTICS_CHANGED, Event.USER_STATISTICS_CHANGED);
-        forwardServer(ServerMessageEvent.PRIVATE_MESSAGE_RECEIVED, Event.PRIVATE_MESSAGE_RECEIVED);
-        forwardServer(ServerMessageEvent.PRIVATE_ROOM_MEMBERSHIP_ADDED, Event.PRIVATE_ROOM_MEMBERSHIP_ADDED);
-        forwardServer(ServerMessageEvent.PRIVATE_ROOM_MEMBERSHIP_REMOVED, Event.PRIVATE_ROOM_MEMBERSHIP_REMOVED);
+        forwardServer(ServerMessageEvent.USER_CANNOT_CONNECT, Kind.USER_CANNOT_CONNECT);
+        forwardServer(ServerMessageEvent.USER_STATUS_CHANGED, Kind.USER_STATUS_CHANGED);
+        forwardServer(ServerMessageEvent.USER_STATISTICS_CHANGED, Kind.USER_STATISTICS_CHANGED);
+        forwardServer(ServerMessageEvent.PRIVATE_MESSAGE_RECEIVED, Kind.PRIVATE_MESSAGE_RECEIVED);
+        forwardServer(ServerMessageEvent.PRIVATE_ROOM_MEMBERSHIP_ADDED, Kind.PRIVATE_ROOM_MEMBERSHIP_ADDED);
+        forwardServer(ServerMessageEvent.PRIVATE_ROOM_MEMBERSHIP_REMOVED, Kind.PRIVATE_ROOM_MEMBERSHIP_REMOVED);
         forwardServer(
                 ServerMessageEvent.PRIVATE_ROOM_MODERATED_USER_LIST_RECEIVED,
-                Event.PRIVATE_ROOM_MODERATED_USER_LIST_RECEIVED);
-        forwardServer(ServerMessageEvent.PRIVATE_ROOM_MODERATION_ADDED, Event.PRIVATE_ROOM_MODERATION_ADDED);
-        forwardServer(ServerMessageEvent.PRIVATE_ROOM_MODERATION_REMOVED, Event.PRIVATE_ROOM_MODERATION_REMOVED);
-        forwardServer(ServerMessageEvent.PRIVATE_ROOM_USER_LIST_RECEIVED, Event.PRIVATE_ROOM_USER_LIST_RECEIVED);
-        forwardServer(ServerMessageEvent.PRIVILEGED_USER_LIST_RECEIVED, Event.PRIVILEGED_USER_LIST_RECEIVED);
-        forwardServer(ServerMessageEvent.PRIVILEGE_NOTIFICATION_RECEIVED, Event.PRIVILEGE_NOTIFICATION_RECEIVED);
-        forwardServer(ServerMessageEvent.ROOM_MESSAGE_RECEIVED, Event.ROOM_MESSAGE_RECEIVED);
-        forwardServer(ServerMessageEvent.ROOM_TICKER_LIST_RECEIVED, Event.ROOM_TICKER_LIST_RECEIVED);
-        forwardServer(ServerMessageEvent.ROOM_TICKER_ADDED, Event.ROOM_TICKER_ADDED);
-        forwardServer(ServerMessageEvent.ROOM_TICKER_REMOVED, Event.ROOM_TICKER_REMOVED);
-        forwardServer(ServerMessageEvent.PUBLIC_CHAT_MESSAGE_RECEIVED, Event.PUBLIC_CHAT_MESSAGE_RECEIVED);
-        forwardServer(ServerMessageEvent.ROOM_JOINED, Event.ROOM_JOINED);
-        forwardServer(ServerMessageEvent.ROOM_LEFT, Event.ROOM_LEFT);
-        forwardServer(ServerMessageEvent.ROOM_LIST_RECEIVED, Event.ROOM_LIST_RECEIVED);
-        forwardServer(ServerMessageEvent.GLOBAL_MESSAGE_RECEIVED, Event.GLOBAL_MESSAGE_RECEIVED);
-        forwardServer(ServerMessageEvent.DISTRIBUTED_NETWORK_RESET, Event.DISTRIBUTED_NETWORK_RESET);
-        forwardServer(ServerMessageEvent.EXCLUDED_SEARCH_PHRASES_RECEIVED, Event.EXCLUDED_SEARCH_PHRASES_RECEIVED);
+                Kind.PRIVATE_ROOM_MODERATED_USER_LIST_RECEIVED);
+        forwardServer(ServerMessageEvent.PRIVATE_ROOM_MODERATION_ADDED, Kind.PRIVATE_ROOM_MODERATION_ADDED);
+        forwardServer(ServerMessageEvent.PRIVATE_ROOM_MODERATION_REMOVED, Kind.PRIVATE_ROOM_MODERATION_REMOVED);
+        forwardServer(ServerMessageEvent.PRIVATE_ROOM_USER_LIST_RECEIVED, Kind.PRIVATE_ROOM_USER_LIST_RECEIVED);
+        forwardServer(ServerMessageEvent.PRIVILEGED_USER_LIST_RECEIVED, Kind.PRIVILEGED_USER_LIST_RECEIVED);
+        forwardServer(ServerMessageEvent.PRIVILEGE_NOTIFICATION_RECEIVED, Kind.PRIVILEGE_NOTIFICATION_RECEIVED);
+        forwardServer(ServerMessageEvent.ROOM_MESSAGE_RECEIVED, Kind.ROOM_MESSAGE_RECEIVED);
+        forwardServer(ServerMessageEvent.ROOM_TICKER_LIST_RECEIVED, Kind.ROOM_TICKER_LIST_RECEIVED);
+        forwardServer(ServerMessageEvent.ROOM_TICKER_ADDED, Kind.ROOM_TICKER_ADDED);
+        forwardServer(ServerMessageEvent.ROOM_TICKER_REMOVED, Kind.ROOM_TICKER_REMOVED);
+        forwardServer(ServerMessageEvent.PUBLIC_CHAT_MESSAGE_RECEIVED, Kind.PUBLIC_CHAT_MESSAGE_RECEIVED);
+        forwardServer(ServerMessageEvent.ROOM_JOINED, Kind.ROOM_JOINED);
+        forwardServer(ServerMessageEvent.ROOM_LEFT, Kind.ROOM_LEFT);
+        forwardServer(ServerMessageEvent.ROOM_LIST_RECEIVED, Kind.ROOM_LIST_RECEIVED);
+        forwardServer(ServerMessageEvent.GLOBAL_MESSAGE_RECEIVED, Kind.GLOBAL_MESSAGE_RECEIVED);
+        forwardServer(ServerMessageEvent.DISTRIBUTED_NETWORK_RESET, Kind.DISTRIBUTED_NETWORK_RESET);
+        forwardServer(ServerMessageEvent.EXCLUDED_SEARCH_PHRASES_RECEIVED, Kind.EXCLUDED_SEARCH_PHRASES_RECEIVED);
         serverMessageHandler.<ServerInfo>addListener(ServerMessageEvent.SERVER_INFO_RECEIVED, (sender, eventData) -> {
             serverInfo = serverInfo.with(
                     eventData.getParentMinSpeed(),
                     eventData.getParentSpeedRatio(),
                     eventData.getWishlistInterval(),
                     eventData.isSupporter());
-            raise(Event.SERVER_INFO_RECEIVED, serverInfo);
+            events.raise(Kind.SERVER_INFO_RECEIVED, serverInfo);
         });
         serverMessageHandler.<Void>addListener(ServerMessageEvent.KICKED_FROM_SERVER, (sender, eventData) -> {
             diagnostic.info("Kicked from server.");
-            raise(Event.KICKED_FROM_SERVER, null);
+            events.raise(Kind.KICKED_FROM_SERVER, null);
             disconnect("Kicked from server", new KickedFromServerException());
         });
     }
 
-    private <T> void forwardServer(ServerMessageEvent source, Event target) {
-        serverMessageHandler.<T>addListener(source, (sender, eventData) -> raise(target, eventData));
+    private <T> void forwardServer(ServerMessageEvent source, ClientEvents.Kind target) {
+        serverMessageHandler.<T>addListener(source, (sender, eventData) -> events.raise(target, eventData));
     }
 
     private void downloadDenied(DownloadDeniedEvent eventData) {
@@ -799,7 +824,7 @@ final class DefaultSoulseekClient extends ClientEventSupport
         } catch (Throwable failure) {
             diagnostic.warning("Failed to mark download(s) rejected: " + failureMessage(failure), failure);
         } finally {
-            raise(Event.DOWNLOAD_DENIED, eventData);
+            events.raise(Kind.DOWNLOAD_DENIED, eventData);
         }
     }
 
@@ -821,7 +846,7 @@ final class DefaultSoulseekClient extends ClientEventSupport
         } catch (Throwable failure) {
             diagnostic.warning("Failed to mark download(s) failed: " + failureMessage(failure), failure);
         } finally {
-            raise(Event.DOWNLOAD_FAILED, eventData);
+            events.raise(Kind.DOWNLOAD_FAILED, eventData);
         }
     }
 
@@ -934,7 +959,7 @@ final class DefaultSoulseekClient extends ClientEventSupport
                                 "The server rejected login attempt: " + response.getMessage()));
                     }
                     serverInfo = serverInfo.with(null, null, null, response.isSupporter());
-                    raise(Event.SERVER_INFO_RECEIVED, serverInfo);
+                    events.raise(Kind.SERVER_INFO_RECEIVED, serverInfo);
                     username = requestedUsername;
                     changeState(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN), "Logged in", null);
                     return sendConfigurationMessagesAsync(cancellationSignal);
@@ -1036,7 +1061,7 @@ final class DefaultSoulseekClient extends ClientEventSupport
                             eventData.getPercentComplete(),
                             eventData.getSize()));
         }
-        raise(Event.BROWSE_PROGRESS_UPDATED, eventData);
+        events.raise(Kind.BROWSE_PROGRESS_UPDATED, eventData);
     }
 
     @Override
@@ -1067,8 +1092,8 @@ final class DefaultSoulseekClient extends ClientEventSupport
     }
 
     @Override
-    public <T> void raiseSearchEvent(Event event, T eventData) {
-        raise(event, eventData);
+    public <T> void raiseEvent(ClientEvents.Kind kind, T eventData) {
+        events.raise(kind, eventData);
     }
 
     @Override

@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.slsk.internal.ClientEvents.Kind;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -36,8 +37,8 @@ import org.junit.jupiter.api.Test;
  * accessors the message handlers reach it by. {@link #ENGINE} is what it
  * genuinely owns: the connection lifecycle and the state that goes with it.
  * {@link #AWAITING_A_FACET} is the residue — blocking operations with a facet
- * waiting to take them — and it is now empty. What is left to remove is the
- * listener registry, which goes when the facets stop subscribing through it.
+ * waiting to take them — and it is now empty, as is the listener registry that
+ * once sat beside it. What the engine has left is what an engine should have.
  */
 class SoulseekClientApiTest {
 
@@ -70,7 +71,7 @@ class SoulseekClientApiTest {
             "getUploadTokenBucket",
             "getUserEndpointOperation",
             "getWaiter",
-            "raiseSearchEvent",
+            "raiseEvent",
             "reportBrowseProgress",
             "requireLoggedIn",
             "resolveUserEndpoint",
@@ -118,10 +119,6 @@ class SoulseekClientApiTest {
     @DisplayName("the engine carries the seam, the lifecycle, and nothing unaccounted for")
     void everyPublicMethodIsSeamOrLifecycle() {
         Set<String> observed = publicInstanceMethodNames();
-        // Not "endsWith(Listener)": getListener() is the engine's own accessor
-        // for the incoming-connection listener, not an event registration.
-        observed.removeIf(name -> (name.startsWith("add") || name.startsWith("remove")) && name.endsWith("Listener"));
-
         Set<String> expected = Stream.of(SEAM, ENGINE, AWAITING_A_FACET)
                 .flatMap(Set::stream)
                 .collect(Collectors.toCollection(TreeSet::new));
@@ -146,18 +143,16 @@ class SoulseekClientApiTest {
     }
 
     @Test
-    @DisplayName("the listener registry is intact until a facet replaces each of its events")
-    void everyClientEventStillHasItsPair() {
+    @DisplayName("the named listener registry is gone, and every event it named is a kind")
+    void theListenerRegistryCollapsedIntoOneChannel() {
         Set<String> names = publicInstanceMethodNames();
-        long added = names.stream()
-                .filter(name -> name.startsWith("add") && name.endsWith("Listener"))
-                .count();
-        long removed = names.stream()
-                .filter(name -> name.startsWith("remove") && name.endsWith("Listener"))
-                .count();
+        assertTrue(
+                names.stream()
+                        .noneMatch(name ->
+                                (name.startsWith("add") || name.startsWith("remove")) && name.endsWith("Listener")),
+                "the engine still carries named listener registrations: " + names);
 
-        assertEquals(47, added, "46 client events plus DiagnosticGenerated");
-        assertEquals(added, removed, "every add has a remove");
+        assertEquals(47, Kind.values().length, "46 client events plus DiagnosticGenerated");
     }
 
     @Test

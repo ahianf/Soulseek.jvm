@@ -125,13 +125,13 @@ interface ClientContext {
     CompletableFuture<Void> writeBytesToServer(byte[] message, CancellationSignal cancellationSignal);
 
     /**
-     * Raises a search-related client event.
+     * Raises an engine event.
      *
-     * @param event which event
+     * @param kind which event
      * @param eventData the payload
      * @param <T> the payload type
      */
-    <T> void raiseSearchEvent(DefaultSoulseekClient.Event event, T eventData);
+    <T> void raiseEvent(ClientEvents.Kind kind, T eventData);
 
     /**
      * Returns the live download registry.

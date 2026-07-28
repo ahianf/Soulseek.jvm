@@ -17,7 +17,15 @@ import dev.slsk.UserPresence;
 import dev.slsk.UserStatistics;
 import dev.slsk.Username;
 import dev.slsk.events.RoomEvent;
+import dev.slsk.internal.ClientEvents.Kind;
 import dev.slsk.internal.common.Blocking;
+import dev.slsk.internal.events.PublicChatMessageReceivedEvent;
+import dev.slsk.internal.events.RoomJoinedEvent;
+import dev.slsk.internal.events.RoomLeftEvent;
+import dev.slsk.internal.events.RoomMessageReceivedEvent;
+import dev.slsk.internal.events.RoomTickerAddedEvent;
+import dev.slsk.internal.events.RoomTickerListReceivedEvent;
+import dev.slsk.internal.events.RoomTickerRemovedEvent;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -66,14 +74,14 @@ final class DefaultRooms implements Rooms {
     }
 
     private void wire() {
-        client.addRoomMessageReceivedListener((sender, event) -> {
+        client.events().on(Kind.ROOM_MESSAGE_RECEIVED, (RoomMessageReceivedEvent event) -> {
             if (event != null) {
                 events.publish(new RoomEvent.MessageReceived(
                         event.getRoomName(), Username.of(event.getUsername()),
                         event.getMessage(), Instant.now()));
             }
         });
-        client.addRoomJoinedListener((sender, event) -> {
+        client.events().on(Kind.ROOM_JOINED, (RoomJoinedEvent event) -> {
             if (event == null) {
                 return;
             }
@@ -84,7 +92,7 @@ final class DefaultRooms implements Rooms {
                 return new RoomEvent.UserJoined(event.getRoomName(), roomUser(event), Instant.now());
             });
         });
-        client.addRoomLeftListener((sender, event) -> {
+        client.events().on(Kind.ROOM_LEFT, (RoomLeftEvent event) -> {
             if (event == null) {
                 return;
             }
@@ -94,7 +102,7 @@ final class DefaultRooms implements Rooms {
                 return new RoomEvent.UserLeft(event.getRoomName(), user, Instant.now());
             });
         });
-        client.addRoomTickerListReceivedListener((sender, event) -> {
+        client.events().on(Kind.ROOM_TICKER_LIST_RECEIVED, (RoomTickerListReceivedEvent event) -> {
             if (event == null) {
                 return;
             }
@@ -104,7 +112,7 @@ final class DefaultRooms implements Rooms {
                 return new RoomEvent.TickerListReceived(event.getRoomName(), tickers, Instant.now());
             });
         });
-        client.addRoomTickerAddedListener((sender, event) -> {
+        client.events().on(Kind.ROOM_TICKER_ADDED, (RoomTickerAddedEvent event) -> {
             if (event == null || event.getTicker() == null) {
                 return;
             }
@@ -114,7 +122,7 @@ final class DefaultRooms implements Rooms {
                 return new RoomEvent.TickerAdded(event.getRoomName(), ticker, Instant.now());
             });
         });
-        client.addRoomTickerRemovedListener((sender, event) -> {
+        client.events().on(Kind.ROOM_TICKER_REMOVED, (RoomTickerRemovedEvent event) -> {
             if (event == null) {
                 return;
             }
@@ -124,23 +132,38 @@ final class DefaultRooms implements Rooms {
                 return new RoomEvent.TickerRemoved(event.getRoomName(), user, Instant.now());
             });
         });
-        client.addPublicChatMessageReceivedListener((sender, event) -> {
+        client.events().on(Kind.PUBLIC_CHAT_MESSAGE_RECEIVED, (PublicChatMessageReceivedEvent event) -> {
             if (event != null) {
                 events.publish(new RoomEvent.PublicChatMessageReceived(
                         event.getRoomName(), Username.of(event.getUsername()),
                         event.getMessage(), Instant.now()));
             }
         });
-        client.addRoomListReceivedListener(
-                (sender, list) -> events.publish(new RoomEvent.ListReceived(roomList(list), Instant.now())));
-        client.addPrivateRoomMembershipAddedListener(
-                (sender, room) -> events.publish(new RoomEvent.MembershipAdded(String.valueOf(room), Instant.now())));
-        client.addPrivateRoomMembershipRemovedListener(
-                (sender, room) -> events.publish(new RoomEvent.MembershipRemoved(String.valueOf(room), Instant.now())));
-        client.addPrivateRoomModerationAddedListener(
-                (sender, room) -> events.publish(new RoomEvent.ModerationAdded(String.valueOf(room), Instant.now())));
-        client.addPrivateRoomModerationRemovedListener(
-                (sender, room) -> events.publish(new RoomEvent.ModerationRemoved(String.valueOf(room), Instant.now())));
+        client.events()
+                .on(
+                        Kind.ROOM_LIST_RECEIVED,
+                        (dev.slsk.internal.RoomList list) ->
+                                events.publish(new RoomEvent.ListReceived(roomList(list), Instant.now())));
+        client.events()
+                .on(
+                        Kind.PRIVATE_ROOM_MEMBERSHIP_ADDED,
+                        (String room) ->
+                                events.publish(new RoomEvent.MembershipAdded(String.valueOf(room), Instant.now())));
+        client.events()
+                .on(
+                        Kind.PRIVATE_ROOM_MEMBERSHIP_REMOVED,
+                        (String room) ->
+                                events.publish(new RoomEvent.MembershipRemoved(String.valueOf(room), Instant.now())));
+        client.events()
+                .on(
+                        Kind.PRIVATE_ROOM_MODERATION_ADDED,
+                        (String room) ->
+                                events.publish(new RoomEvent.ModerationAdded(String.valueOf(room), Instant.now())));
+        client.events()
+                .on(
+                        Kind.PRIVATE_ROOM_MODERATION_REMOVED,
+                        (String room) ->
+                                events.publish(new RoomEvent.ModerationRemoved(String.valueOf(room), Instant.now())));
     }
 
     // --- state reducers ----------------------------------------------------
@@ -202,7 +225,7 @@ final class DefaultRooms implements Rooms {
                 : source.stream().map(DefaultRooms::ticker).toList();
     }
 
-    private static RoomUser roomUser(dev.slsk.internal.events.RoomJoinedEvent event) {
+    private static RoomUser roomUser(RoomJoinedEvent event) {
         return user(Username.of(event.getUsername()), event.getUserData());
     }
 

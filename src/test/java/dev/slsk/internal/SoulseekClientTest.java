@@ -5,6 +5,7 @@
 package dev.slsk.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -14,11 +15,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.Download;
 import dev.slsk.MeshState;
 import dev.slsk.Soulseek;
+import dev.slsk.Subscription;
 import dev.slsk.Upload;
 import dev.slsk.Username;
 import dev.slsk.exceptions.KickedFromServerException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
+import dev.slsk.internal.ClientEvents.Kind;
 import dev.slsk.internal.common.TokenBucket;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.Waiter;
@@ -49,10 +52,12 @@ import java.lang.reflect.Proxy;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -123,11 +128,21 @@ class SoulseekClientTest {
     void stateChangesRaiseSourceEventsSynchronously() {
         Fixture fixture = new Fixture();
         List<String> order = new ArrayList<>();
-        fixture.client.addStateChangedListener((sender, eventData) -> order.add("state:" + eventData.getState()));
-        fixture.client.addConnectedListener((sender, eventData) -> order.add("connected"));
-        fixture.client.addLoggedInListener((sender, eventData) -> order.add("logged"));
+        fixture.client
+                .events()
+                .on(
+                        Kind.STATE_CHANGED,
+                        (dev.slsk.internal.events.SoulseekClientStateChangedEvent eventData) ->
+                                order.add("state:" + eventData.getState()));
+        fixture.client.events().on(Kind.CONNECTED, (Void eventData) -> order.add("connected"));
+        fixture.client.events().on(Kind.LOGGED_IN, (Void eventData) -> order.add("logged"));
         AtomicReference<SoulseekClientDisconnectedEvent> disconnected = new AtomicReference<>();
-        fixture.client.addDisconnectedListener((sender, eventData) -> disconnected.set(eventData));
+        fixture.client
+                .events()
+                .on(
+                        Kind.DISCONNECTED,
+                        (dev.slsk.internal.events.SoulseekClientDisconnectedEvent eventData) ->
+                                disconnected.set(eventData));
 
         fixture.client.changeState(SoulseekClientState.CONNECTED, "connected", null);
         fixture.client.changeState(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN), "logged", null);
@@ -178,8 +193,16 @@ class SoulseekClientTest {
                 2, second)));
         AtomicReference<DownloadDeniedEvent> denied = new AtomicReference<>();
         AtomicReference<DownloadFailedEvent> failed = new AtomicReference<>();
-        fixture.client.addDownloadDeniedListener((sender, eventData) -> denied.set(eventData));
-        fixture.client.addDownloadFailedListener((sender, eventData) -> failed.set(eventData));
+        fixture.client
+                .events()
+                .on(
+                        Kind.DOWNLOAD_DENIED,
+                        (dev.slsk.internal.events.DownloadDeniedEvent eventData) -> denied.set(eventData));
+        fixture.client
+                .events()
+                .on(
+                        Kind.DOWNLOAD_FAILED,
+                        (dev.slsk.internal.events.DownloadFailedEvent eventData) -> failed.set(eventData));
 
         fixture.peer.raiseDenied(new DownloadDeniedEvent("user", "file", "rejected"));
         assertInstanceOf(TransferRejectedException.class, failure(first.getRemoteTaskCompletionSource()::join));
@@ -204,9 +227,11 @@ class SoulseekClientTest {
         AtomicReference<String> global = new AtomicReference<>();
         AtomicReference<ServerInfo> serverInfo = new AtomicReference<>();
         AtomicInteger kicked = new AtomicInteger();
-        fixture.client.addGlobalMessageReceivedListener((sender, value) -> global.set(value));
-        fixture.client.addServerInfoReceivedListener((sender, value) -> serverInfo.set(value));
-        fixture.client.addKickedFromServerListener((sender, value) -> kicked.incrementAndGet());
+        fixture.client.events().on(Kind.GLOBAL_MESSAGE_RECEIVED, (String value) -> global.set(value));
+        fixture.client
+                .events()
+                .on(Kind.SERVER_INFO_RECEIVED, (dev.slsk.internal.ServerInfo value) -> serverInfo.set(value));
+        fixture.client.events().on(Kind.KICKED_FROM_SERVER, (Void value) -> kicked.incrementAndGet());
 
         fixture.server.raise(ServerMessageEvent.GLOBAL_MESSAGE_RECEIVED, "global");
         fixture.server.raise(ServerMessageEvent.SERVER_INFO_RECEIVED, new ServerInfo(1, 2, 3, true));
@@ -219,7 +244,11 @@ class SoulseekClientTest {
         assertEquals(1, kicked.get());
         assertEquals(SoulseekClientState.DISCONNECTED, fixture.client.getState());
         AtomicReference<SoulseekClientDisconnectedEvent> disconnect = new AtomicReference<>();
-        fixture.client.addDisconnectedListener((sender, value) -> disconnect.set(value));
+        fixture.client
+                .events()
+                .on(
+                        Kind.DISCONNECTED,
+                        (dev.slsk.internal.events.SoulseekClientDisconnectedEvent value) -> disconnect.set(value));
         fixture.client.setStateForTest(SoulseekClientState.CONNECTED);
         fixture.server.raise(ServerMessageEvent.KICKED_FROM_SERVER, null);
         assertInstanceOf(KickedFromServerException.class, disconnect.get().getException());
@@ -227,26 +256,49 @@ class SoulseekClientTest {
     }
 
     @Test
-    void subsystemEventsForwardSenderPayloadAndListenerRemoval() {
+    void subsystemEventsForwardPayloadAndSubscriptionsCanBeClosed() {
         Fixture fixture = new Fixture();
-        AtomicReference<Object> diagnosticSender = new AtomicReference<>();
         AtomicReference<DiagnosticEvent> diagnostic = new AtomicReference<>();
-        DiagnosticEventListener diagnosticListener = (sender, value) -> {
-            diagnosticSender.set(sender);
-            diagnostic.set(value);
-        };
-        fixture.client.addDiagnosticGeneratedListener(diagnosticListener);
+        Subscription subscription = fixture.client.events().on(Kind.DIAGNOSTIC_GENERATED, diagnostic::set);
+
         DiagnosticEvent expected = new DiagnosticEvent(dev.slsk.internal.diagnostics.DiagnosticLevel.INFO, "message");
         fixture.search.raiseDiagnostic(expected);
-        assertSame(fixture.search.proxy, diagnosticSender.get());
         assertSame(expected, diagnostic.get());
-        fixture.client.removeDiagnosticGeneratedListener(diagnosticListener);
+
+        subscription.close();
+        diagnostic.set(null);
+        fixture.search.raiseDiagnostic(
+                new DiagnosticEvent(dev.slsk.internal.diagnostics.DiagnosticLevel.INFO, "after"));
+        assertNull(diagnostic.get(), "a closed subscription receives nothing");
 
         AtomicReference<DistributedChildEvent> child = new AtomicReference<>();
-        fixture.client.addDistributedChildAddedListener((sender, value) -> child.set(value));
+        fixture.client
+                .events()
+                .on(
+                        Kind.DISTRIBUTED_CHILD_ADDED,
+                        (dev.slsk.internal.events.DistributedChildEvent value) -> child.set(value));
         DistributedChildEvent childArgs = new DistributedChildEvent("child", ENDPOINT);
         fixture.distributed.raise("addChildAddedListener", childArgs);
         assertSame(childArgs, child.get());
+        fixture.close();
+    }
+
+    /**
+     * A facet translating one of these runs on the read loop that raised it.
+     * Before containment, one that threw took the connection with it.
+     */
+    @Test
+    void aThrowingListenerIsContainedAndTheRestStillRun() {
+        Fixture fixture = new Fixture();
+        List<String> delivered = new ArrayList<>();
+        fixture.client.events().on(Kind.DISTRIBUTED_CHILD_ADDED, value -> {
+            throw new IllegalStateException("listener is broken");
+        });
+        fixture.client.events().on(Kind.DISTRIBUTED_CHILD_ADDED, value -> delivered.add("second"));
+
+        fixture.distributed.raise("addChildAddedListener", new DistributedChildEvent("child", ENDPOINT));
+
+        assertEquals(List.of("second"), delivered);
         fixture.close();
     }
 
@@ -277,8 +329,13 @@ class SoulseekClientTest {
         }
     }
 
+    /**
+     * The ninety-four named add/remove methods collapsed into one kind and one
+     * {@code Consumer}. Nothing may have been dropped in the collapse, so every
+     * event the client used to name still has to be a kind.
+     */
     @Test
-    void everyPublicSourceEventHasAddAndRemoveMethods() {
+    void everyClientEventSurvivedTheCollapseIntoAKind() {
         String[] names = {
             "BrowseProgressUpdated",
             "Connected",
@@ -328,10 +385,17 @@ class SoulseekClientTest {
             "UserStatisticsChanged",
             "UserStatusChanged"
         };
+        Set<String> kinds = Arrays.stream(Kind.values()).map(Enum::name).collect(java.util.stream.Collectors.toSet());
+        assertEquals(names.length, kinds.size(), "a kind was added or lost");
         for (String name : names) {
-            assertTrue(hasMethod("add" + name + "Listener"));
-            assertTrue(hasMethod("remove" + name + "Listener"));
+            assertTrue(kinds.contains(screamingCase(name)), name + " has no kind; the collapse dropped an event");
+            assertFalse(hasMethod("add" + name + "Listener"), "the named registration should be gone");
         }
+    }
+
+    /** {@code RoomTickerAdded} to {@code ROOM_TICKER_ADDED}. */
+    private static String screamingCase(String name) {
+        return name.replaceAll("([a-z0-9])([A-Z])", "$1_$2").toUpperCase(java.util.Locale.ROOT);
     }
 
     private static boolean hasMethod(String name) {

@@ -10,6 +10,7 @@ import static dev.slsk.internal.ClientSupport.unwrap;
 import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.DuplicateTokenException;
 import dev.slsk.exceptions.SoulseekClientException;
+import dev.slsk.internal.ClientEvents.Kind;
 import dev.slsk.internal.events.SearchResponseReceivedEvent;
 import dev.slsk.internal.events.SearchStateChangedEvent;
 import dev.slsk.internal.messaging.messages.RoomSearchRequest;
@@ -317,7 +318,7 @@ final class SearchCoordinator {
                         .getStateChanged()
                         .onStateChanged(new SearchStateChange(eventData.getPreviousState(), eventData.getSearch()));
             }
-            context.raiseSearchEvent(DefaultSoulseekClient.Event.SEARCH_STATE_CHANGED, eventData);
+            context.raiseEvent(Kind.SEARCH_STATE_CHANGED, eventData);
         };
 
         CompletableFuture<Search> operation;
@@ -348,7 +349,7 @@ final class SearchCoordinator {
                                     .onResponseReceived(
                                             new SearchResponseReceived(eventData.getSearch(), eventData.getResponse()));
                         }
-                        context.raiseSearchEvent(DefaultSoulseekClient.Event.SEARCH_RESPONSE_RECEIVED, eventData);
+                        context.raiseEvent(Kind.SEARCH_RESPONSE_RECEIVED, eventData);
                     });
                     activeSearch = context.writeBytesToServer(message, cancellationSignal)
                             .thenRun(() -> updateState.accept(SearchState.IN_PROGRESS))

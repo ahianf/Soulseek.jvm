@@ -7,6 +7,7 @@ package dev.slsk.internal;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import dev.slsk.internal.ClientEvents.Kind;
 import dev.slsk.internal.diagnostics.DiagnosticLevel;
 import dev.slsk.internal.events.SoulseekClientStateChangedEvent;
 import dev.slsk.internal.options.SoulseekClientOptions;
@@ -35,7 +36,10 @@ class SoulseekClientLiveIT {
         LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
         try (DefaultSoulseekClient client = new DefaultSoulseekClient(credentials.minorVersion())) {
             List<SoulseekClientStateChangedEvent> events = new ArrayList<>();
-            client.addStateChangedListener((sender, event) -> events.add(event));
+            client.events()
+                    .on(
+                            Kind.STATE_CHANGED,
+                            (dev.slsk.internal.events.SoulseekClientStateChangedEvent event) -> events.add(event));
 
             assertDoesNotThrow(() -> client.connect(credentials.username(), credentials.password()));
 
@@ -70,7 +74,11 @@ class SoulseekClientLiveIT {
         AtomicReference<SoulseekClientStateChangedEvent> event = new AtomicReference<>();
         try (DefaultSoulseekClient client = new DefaultSoulseekClient(credentials.minorVersion())) {
             client.connect(credentials.username(), credentials.password());
-            client.addStateChangedListener((sender, eventData) -> event.set(eventData));
+            client.events()
+                    .on(
+                            Kind.STATE_CHANGED,
+                            (dev.slsk.internal.events.SoulseekClientStateChangedEvent eventData) ->
+                                    event.set(eventData));
 
             assertDoesNotThrow(() -> client.disconnect());
 

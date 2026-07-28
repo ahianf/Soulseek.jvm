@@ -16,6 +16,7 @@ import dev.slsk.CancellationController;
 import dev.slsk.exceptions.DuplicateTokenException;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
+import dev.slsk.internal.ClientEvents.Kind;
 import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.messaging.messages.RoomSearchRequest;
 import dev.slsk.internal.messaging.messages.UserSearchRequest;
@@ -157,12 +158,17 @@ class SoulseekClientSearchTest {
         AtomicInteger optionResponses = new AtomicInteger();
         AtomicInteger clientResponses = new AtomicInteger();
         AtomicInteger clientStates = new AtomicInteger();
-        fixture.client.addSearchResponseReceivedListener((sender, eventData) -> {
-            assertSame(fixture.client, sender);
-            assertEquals("alice", eventData.getResponse().getUsername());
-            clientResponses.incrementAndGet();
-        });
-        fixture.client.addSearchStateChangedListener((sender, eventData) -> clientStates.incrementAndGet());
+        fixture.client
+                .events()
+                .on(Kind.SEARCH_RESPONSE_RECEIVED, (dev.slsk.internal.events.SearchResponseReceivedEvent eventData) -> {
+                    assertEquals("alice", eventData.getResponse().getUsername());
+                    clientResponses.incrementAndGet();
+                });
+        fixture.client
+                .events()
+                .on(
+                        Kind.SEARCH_STATE_CHANGED,
+                        (dev.slsk.internal.events.SearchStateChangedEvent eventData) -> clientStates.incrementAndGet());
         SearchOptions options = options(2_000, 1, true, null, received -> optionResponses.incrementAndGet());
 
         CompletableFuture<SearchResult> task = inBackground(() -> Blocking.await(fixture.client
