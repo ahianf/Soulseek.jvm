@@ -1,0 +1,105 @@
+// SPDX-FileCopyrightText: 2026 Ahian Fernandez
+// SPDX-License-Identifier: GPL-3.0-only
+
+package dev.slsk.internal;
+
+import dev.slsk.Progress;
+import dev.slsk.TransferId;
+import dev.slsk.TransferOutcome;
+import dev.slsk.TransferState;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Optional;
+
+/**
+ * Translation from the internal {@link dev.slsk.internal.Transfer} to the 1.0
+ * transfer model.
+ *
+ * <p>Shared by the download and upload facets, because the state mapping is the
+ * same in both directions and only the surrounding record differs.
+ *
+ * <p>The interesting part is the state mapping. Internally a transfer state is a
+ * bit-flag set transliterated from a C# {@code [Flags]} enum, where being
+ * finished is {@code COMPLETED} or-ed with one of five outcome bits. Reading it
+ * means masking, and illegal combinations are representable. Here it becomes a
+ * sealed hierarchy in which each state carries its own data and nothing else.
+ */
+final class Transfers {
+
+    private Transfers() {}
+
+    /** Derives an id from the transfer's token, which is unique per transfer. */
+    static TransferId id(Transfer transfer) {
+        return TransferId.of(transfer.getDirection() + ":" + transfer.getToken());
+    }
+
+    /**
+     * Maps the bit-flag state onto the sealed hierarchy.
+     *
+     * <p>Order matters: terminal states are checked first, because a finished
+     * transfer keeps the bits describing how it got there and would otherwise
+     * match an earlier, non-terminal case.
+     */
+    static TransferState state(Transfer transfer) {
+        dev.slsk.internal.TransferState source = transfer.getState();
+        if (source == null) {
+            return new TransferState.Queued(0);
+        }
+        if (source.contains(dev.slsk.internal.TransferState.COMPLETED)) {
+            return new TransferState.Finished(outcome(transfer, source));
+        }
+        if (source.contains(dev.slsk.internal.TransferState.IN_PROGRESS)) {
+            return new TransferState.Transferring(progress(transfer));
+        }
+        if (source.contains(dev.slsk.internal.TransferState.INITIALIZING)) {
+            return new TransferState.Connecting(false);
+        }
+        if (source.contains(dev.slsk.internal.TransferState.QUEUED)) {
+            return new TransferState.QueuedRemotely(java.util.OptionalInt.empty(), Instant.now());
+        }
+        if (source.contains(dev.slsk.internal.TransferState.REQUESTED)) {
+            return new TransferState.Requesting();
+        }
+        return new TransferState.Queued(0);
+    }
+
+    private static TransferOutcome outcome(Transfer transfer, dev.slsk.internal.TransferState source) {
+        if (source.contains(dev.slsk.internal.TransferState.SUCCEEDED)) {
+            return new TransferOutcome.Succeeded(
+                    transfer.getBytesTransferred(),
+                    transfer.getElapsedTime() == null ? Duration.ZERO : transfer.getElapsedTime());
+        }
+        if (source.contains(dev.slsk.internal.TransferState.CANCELLED)) {
+            return new TransferOutcome.Cancelled();
+        }
+        if (source.contains(dev.slsk.internal.TransferState.REJECTED)) {
+            Throwable cause = transfer.getException();
+            String message = cause == null ? "" : String.valueOf(cause.getMessage());
+            return new TransferOutcome.Rejected(RejectionReasons.parse(message), message);
+        }
+        if (source.contains(dev.slsk.internal.TransferState.TIMED_OUT)) {
+            return new TransferOutcome.Failed(
+                    transfer.getException() == null
+                            ? new java.util.concurrent.TimeoutException("the transfer timed out")
+                            : transfer.getException(),
+                    true);
+        }
+        return new TransferOutcome.Failed(
+                transfer.getException() == null
+                        ? new IllegalStateException("the transfer failed")
+                        : transfer.getException(),
+                true);
+    }
+
+    static Progress progress(Transfer transfer) {
+        return Progress.of(transfer.getBytesTransferred(), transfer.getSize(), transfer.getAverageSpeed());
+    }
+
+    static Optional<Instant> startedAt(Transfer transfer) {
+        return Optional.ofNullable(transfer.getStartTime());
+    }
+
+    static Optional<Instant> endedAt(Transfer transfer) {
+        return Optional.ofNullable(transfer.getEndTime());
+    }
+}

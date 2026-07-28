@@ -16,8 +16,8 @@ package dev.slsk;
  * spends our own privilege balance, so it is on {@code me()}. Applied
  * consistently, the facet is guessable without reading documentation.
  *
- * <p>The remaining facets — {@code downloads()}, {@code uploads()} and {@code
- * shares()} — are added as their phases land. See {@code JAVA_API_1_0_GOAL.md}.
+ * <p>{@code shares()} is added when its phase lands. See {@code
+ * JAVA_API_1_0_GOAL.md}.
  *
  * <p>Every facet answers "what is true now?" synchronously and cheaply, and
  * publishes events as deltas on that. A consumer that misses every event and
@@ -79,6 +79,20 @@ public interface Soulseek extends AutoCloseable {
      * @return the search facet
      */
     Search search();
+
+    /**
+     * Downloads, and the queue that runs them.
+     *
+     * @return the downloads facet
+     */
+    Downloads downloads();
+
+    /**
+     * Uploads peers have asked us for.
+     *
+     * @return the uploads facet
+     */
+    Uploads uploads();
 
     /**
      * Closes the client and everything it owns — connections, listeners, timers,

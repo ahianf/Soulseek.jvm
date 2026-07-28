@@ -6,10 +6,12 @@ package dev.slsk.internal;
 import dev.slsk.Chat;
 import dev.slsk.Connection;
 import dev.slsk.Diagnostics;
+import dev.slsk.Downloads;
 import dev.slsk.Me;
 import dev.slsk.Rooms;
 import dev.slsk.Search;
 import dev.slsk.Soulseek;
+import dev.slsk.Uploads;
 import dev.slsk.Users;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.diagnostics.GlobalDiagnostic;
@@ -38,6 +40,8 @@ public final class DefaultSoulseek implements Soulseek {
     private final DefaultDiagnostics diagnostics;
     private final DefaultRooms rooms;
     private final DefaultSearch search;
+    private final DefaultDownloads downloads;
+    private final DefaultUploads uploads;
     private final AtomicBoolean closed = new AtomicBoolean();
 
     private DefaultSoulseek(SoulseekClient client, DefaultConnection.Credentials credentials) {
@@ -52,6 +56,8 @@ public final class DefaultSoulseek implements Soulseek {
                 client, new EventBus<>("diagnostics", diagnostics), new EventBus<>("mesh", diagnostics));
         this.rooms = new DefaultRooms(client, new EventBus<>("rooms", diagnostics));
         this.search = new DefaultSearch(client, new EventBus<>("search", diagnostics));
+        this.downloads = new DefaultDownloads(client, new EventBus<>("downloads", diagnostics));
+        this.uploads = new DefaultUploads(client, new EventBus<>("uploads", diagnostics));
     }
 
     /**
@@ -153,6 +159,16 @@ public final class DefaultSoulseek implements Soulseek {
     @Override
     public Search search() {
         return search;
+    }
+
+    @Override
+    public Downloads downloads() {
+        return downloads;
+    }
+
+    @Override
+    public Uploads uploads() {
+        return uploads;
     }
 
     @Override
