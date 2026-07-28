@@ -98,7 +98,7 @@ import java.util.function.Consumer;
  * A client for the Soulseek file-sharing network.
  */
 final class DefaultSoulseekClient extends ClientOperations
-        implements SoulseekClient,
+        implements AutoCloseable,
                 ClientContext,
                 DistributedConnectionManagerClient,
                 DistributedMessageHandlerClient,
@@ -1060,7 +1060,6 @@ final class DefaultSoulseekClient extends ClientOperations
         }
     }
 
-    @Override
     public Transfer download(DownloadRequest request) {
         Objects.requireNonNull(request, "request");
         return unwrapped(
@@ -1085,7 +1084,6 @@ final class DefaultSoulseekClient extends ClientOperations
                                 request.getCancellationSignal()));
     }
 
-    @Override
     public TransferHandle enqueueDownload(DownloadRequest request) {
         Objects.requireNonNull(request, "request");
         return new TransferHandle(unwrapped(
@@ -1110,7 +1108,6 @@ final class DefaultSoulseekClient extends ClientOperations
                                 request.getCancellationSignal())));
     }
 
-    @Override
     public Transfer upload(UploadRequest request) {
         Objects.requireNonNull(request, "request");
         return unwrapped(
@@ -1132,7 +1129,6 @@ final class DefaultSoulseekClient extends ClientOperations
                                 request.getCancellationSignal()));
     }
 
-    @Override
     public TransferHandle enqueueUpload(UploadRequest request) {
         Objects.requireNonNull(request, "request");
         return new TransferHandle(unwrapped(
@@ -1154,7 +1150,6 @@ final class DefaultSoulseekClient extends ClientOperations
                                 request.getCancellationSignal())));
     }
 
-    @Override
     public SearchResult search(SearchRequest request) {
         Objects.requireNonNull(request, "request");
         return unwrapped(searchCoordinator.search(
@@ -1165,7 +1160,6 @@ final class DefaultSoulseekClient extends ClientOperations
                 request.getCancellationSignal()));
     }
 
-    @Override
     public Search search(SearchRequest request, Consumer<SearchResponse> responseHandler) {
         Objects.requireNonNull(request, "request");
         Objects.requireNonNull(responseHandler, "responseHandler");
@@ -1393,65 +1387,53 @@ final class DefaultSoulseekClient extends ClientOperations
         Listener create(InetAddress ipAddress, int port, ConnectionOptions connectionOptions);
     }
 
-    @Override
     public void connect(String username, String password) {
         unwrapped(connectOperation(username, password));
     }
 
-    @Override
     public void connect(String username, String password, CancellationSignal cancellationSignal) {
         unwrapped(connectOperation(username, password, cancellationSignal));
     }
 
-    @Override
     public void connect(String address, int port, String username, String password) {
         unwrapped(connectOperation(address, port, username, password));
     }
 
-    @Override
     public void connect(
             String address, int port, String username, String password, CancellationSignal cancellationSignal) {
         unwrapped(connectOperation(address, port, username, password, cancellationSignal));
     }
 
-    @Override
     public List<Directory> getDirectoryContents(String username, String directoryName) {
         return unwrapped(users.getDirectoryContents(username, directoryName));
     }
 
-    @Override
     public List<Directory> getDirectoryContents(String username, String directoryName, int token) {
         return unwrapped(users.getDirectoryContents(username, directoryName, token));
     }
 
-    @Override
     public List<Directory> getDirectoryContents(
             String username, String directoryName, CancellationSignal cancellationSignal) {
         return unwrapped(users.getDirectoryContents(username, directoryName, cancellationSignal));
     }
 
-    @Override
     public List<Directory> getDirectoryContents(
             String username, String directoryName, Integer token, CancellationSignal cancellationSignal) {
         return unwrapped(users.getDirectoryContents(username, directoryName, token, cancellationSignal));
     }
 
-    @Override
     public InetSocketAddress getUserEndpoint(String username) {
         return unwrapped(users.getUserEndpoint(username));
     }
 
-    @Override
     public InetSocketAddress getUserEndpoint(String username, CancellationSignal cancellationSignal) {
         return unwrapped(users.getUserEndpoint(username, cancellationSignal));
     }
 
-    @Override
     public Boolean reconfigureOptions(SoulseekClientOptionsPatch patch) {
         return unwrapped(reconfigureOptionsOperation(patch));
     }
 
-    @Override
     public Boolean reconfigureOptions(SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
         return unwrapped(reconfigureOptionsOperation(patch, cancellationSignal));
     }

@@ -23,7 +23,7 @@ class SoulseekClientLiveIT {
     @DisplayName("Client connects")
     void clientConnects() {
         LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
-        try (SoulseekClient client = SoulseekClient.create(credentials.minorVersion())) {
+        try (DefaultSoulseekClient client = new DefaultSoulseekClient(credentials.minorVersion())) {
             assertDoesNotThrow(() -> client.connect(credentials.username(), credentials.password()));
             assertEquals(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN), client.getState());
         }
@@ -33,7 +33,7 @@ class SoulseekClientLiveIT {
     @DisplayName("Client connect raises StateChanged event")
     void clientConnectRaisesStateChangedEvent() {
         LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
-        try (SoulseekClient client = SoulseekClient.create(credentials.minorVersion())) {
+        try (DefaultSoulseekClient client = new DefaultSoulseekClient(credentials.minorVersion())) {
             List<SoulseekClientStateChangedEvent> events = new ArrayList<>();
             client.addStateChangedListener((sender, event) -> events.add(event));
 
@@ -55,7 +55,7 @@ class SoulseekClientLiveIT {
     @DisplayName("Client disconnects")
     void clientDisconnects() {
         LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
-        try (SoulseekClient client = SoulseekClient.create(credentials.minorVersion())) {
+        try (DefaultSoulseekClient client = new DefaultSoulseekClient(credentials.minorVersion())) {
             client.connect(credentials.username(), credentials.password());
 
             assertDoesNotThrow(() -> client.disconnect());
@@ -68,7 +68,7 @@ class SoulseekClientLiveIT {
     void clientDisconnectRaisesStateChangedEvent() {
         LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
         AtomicReference<SoulseekClientStateChangedEvent> event = new AtomicReference<>();
-        try (SoulseekClient client = SoulseekClient.create(credentials.minorVersion())) {
+        try (DefaultSoulseekClient client = new DefaultSoulseekClient(credentials.minorVersion())) {
             client.connect(credentials.username(), credentials.password());
             client.addStateChangedListener((sender, eventData) -> event.set(eventData));
 
@@ -82,7 +82,7 @@ class SoulseekClientLiveIT {
     @Test
     @DisplayName("GetNextToken returns sequential tokens")
     void getNextTokenReturnsSequentialTokens() {
-        try (SoulseekClient client = SoulseekClient.create(101)) {
+        try (DefaultSoulseekClient client = new DefaultSoulseekClient(101)) {
             int first = client.getNextToken();
             int second = client.getNextToken();
 
@@ -94,7 +94,7 @@ class SoulseekClientLiveIT {
     @DisplayName("GetNextToken rolls over at int.MaxValue")
     void getNextTokenRollsOverAtIntMaxValue() {
         SoulseekClientOptions options = optionsStartingAtMaximumToken();
-        try (SoulseekClient client = SoulseekClient.create(101, options)) {
+        try (DefaultSoulseekClient client = new DefaultSoulseekClient(101, options)) {
             int first = client.getNextToken();
             int second = client.getNextToken();
 

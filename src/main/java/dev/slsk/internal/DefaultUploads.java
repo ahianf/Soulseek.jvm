@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
- * {@link Uploads} over the {@link SoulseekClient} seam.
+ * {@link Uploads}, over the engine.
  *
  * <p>A projection of the engine's upload list, plus the two pieces of state that
  * are ours rather than the engine's: the per-upload priority, and the ban list.
@@ -35,12 +35,12 @@ import java.util.function.Consumer;
  */
 final class DefaultUploads implements Uploads {
 
-    private final SoulseekClient client;
+    private final DefaultSoulseekClient client;
     private final EventBus<UploadEvent> events;
     private final Map<TransferId, Priority> priorities = new ConcurrentHashMap<>();
     private final Map<Username, String> bans = new ConcurrentHashMap<>();
 
-    DefaultUploads(SoulseekClient client, EventBus<UploadEvent> events) {
+    DefaultUploads(DefaultSoulseekClient client, EventBus<UploadEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
         this.events = Objects.requireNonNull(events, "events");
     }

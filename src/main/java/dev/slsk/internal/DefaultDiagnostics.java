@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * {@link Diagnostics} over the {@link SoulseekClient} seam.
+ * {@link Diagnostics}, over the engine.
  *
  * <p>The mesh collapse happens here. Seven client listeners — parent adopted,
  * parent disconnected, child added, child disconnected, promoted, demoted,
@@ -35,13 +35,13 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 final class DefaultDiagnostics implements Diagnostics {
 
-    private final SoulseekClient client;
+    private final DefaultSoulseekClient client;
     private final EventBus<DiagnosticEvent> events;
     private final EventBus<MeshEvent> meshEvents;
     private final AtomicReference<MeshState> published = new AtomicReference<>(empty());
     private final AtomicBoolean tracing = new AtomicBoolean();
 
-    DefaultDiagnostics(SoulseekClient client, EventBus<DiagnosticEvent> events, EventBus<MeshEvent> meshEvents) {
+    DefaultDiagnostics(DefaultSoulseekClient client, EventBus<DiagnosticEvent> events, EventBus<MeshEvent> meshEvents) {
         this.client = Objects.requireNonNull(client, "client");
         this.events = Objects.requireNonNull(events, "events");
         this.meshEvents = Objects.requireNonNull(meshEvents, "meshEvents");

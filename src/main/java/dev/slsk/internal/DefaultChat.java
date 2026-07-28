@@ -13,7 +13,7 @@ import java.time.Instant;
 import java.util.Objects;
 
 /**
- * {@link Chat} over the {@link SoulseekClient} seam.
+ * {@link Chat}, over the engine.
  *
  * <p>This is where acknowledge-on-dispatch lives. The old surface exposed
  * {@code acknowledgePrivateMessage(id)} and left the consumer to call it, which
@@ -31,11 +31,11 @@ import java.util.Objects;
  */
 final class DefaultChat implements Chat {
 
-    private final SoulseekClient client;
+    private final DefaultSoulseekClient client;
     private final EventBus<ChatEvent> events;
     private final DiagnosticSink diagnostics;
 
-    DefaultChat(SoulseekClient client, EventBus<ChatEvent> events, DiagnosticSink diagnostics) {
+    DefaultChat(DefaultSoulseekClient client, EventBus<ChatEvent> events, DiagnosticSink diagnostics) {
         this.client = Objects.requireNonNull(client, "client");
         this.events = Objects.requireNonNull(events, "events");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");

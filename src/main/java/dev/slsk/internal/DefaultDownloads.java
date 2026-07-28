@@ -22,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
- * {@link Downloads} over the {@link SoulseekClient} seam.
+ * {@link Downloads}, over the engine.
  *
  * <p>A projection of the existing transfer engine, plus the per-enqueue data the
  * engine has no place for: the priority and the application's tags, which are
@@ -35,13 +35,13 @@ import java.util.function.Consumer;
  */
 final class DefaultDownloads implements Downloads {
 
-    private final SoulseekClient client;
+    private final DefaultSoulseekClient client;
     private final EventBus<DownloadEvent> events;
 
     /** Per-enqueue data the engine does not carry. */
     private final Map<TransferId, Metadata> metadata = new ConcurrentHashMap<>();
 
-    DefaultDownloads(SoulseekClient client, EventBus<DownloadEvent> events) {
+    DefaultDownloads(DefaultSoulseekClient client, EventBus<DownloadEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
         this.events = Objects.requireNonNull(events, "events");
     }

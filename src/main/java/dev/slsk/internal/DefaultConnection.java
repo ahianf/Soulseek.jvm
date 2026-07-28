@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
- * {@link Connection} over the {@link SoulseekClient} seam.
+ * {@link Connection}, over the engine.
  *
  * <p>Most of what this does is translate two bit-flag sets into types that name
  * themselves. {@code SoulseekClientState} is a set of bits where {@code CONNECTED
@@ -37,7 +37,7 @@ import java.util.function.Consumer;
  */
 final class DefaultConnection implements Connection {
 
-    private final SoulseekClient client;
+    private final DefaultSoulseekClient client;
     private final Credentials credentials;
     private final EventBus<ConnectionEvent> events;
 
@@ -47,7 +47,7 @@ final class DefaultConnection implements Connection {
     /** The last state we published, so a transition can report what it came from. */
     private final AtomicReference<ConnectionState> published = new AtomicReference<>(new ConnectionState.Offline());
 
-    DefaultConnection(SoulseekClient client, Credentials credentials, EventBus<ConnectionEvent> events) {
+    DefaultConnection(DefaultSoulseekClient client, Credentials credentials, EventBus<ConnectionEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
         this.credentials = Objects.requireNonNull(credentials, "credentials");
         this.events = Objects.requireNonNull(events, "events");

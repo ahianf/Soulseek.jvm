@@ -5,7 +5,9 @@ package dev.slsk.soak;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.internal.SoulseekClient;
+import dev.slsk.Soulseek;
+import dev.slsk.internal.DefaultSoulseek;
+import dev.slsk.internal.options.SoulseekClientOptions;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -28,6 +30,11 @@ import org.junit.jupiter.api.Test;
 class ClientLifecycleSoak {
 
     private static final int ITERATIONS = 25;
+
+    private static Soulseek client() {
+        return DefaultSoulseek.create("soak", "soak", 157, new SoulseekClientOptions());
+    }
+
     private static final int CONCURRENT_CLIENTS = 8;
 
     @Test
@@ -36,10 +43,10 @@ class ClientLifecycleSoak {
         int atRest = ThreadCensus.libraryThreadCount();
         SoakReport.record("client-lifecycle", "library platform threads at rest", atRest);
 
-        List<SoulseekClient> clients = new ArrayList<>(CONCURRENT_CLIENTS);
+        List<Soulseek> clients = new ArrayList<>(CONCURRENT_CLIENTS);
         try {
             for (int index = 0; index < CONCURRENT_CLIENTS; index++) {
-                clients.add(SoulseekClient.create(157));
+                clients.add(client());
             }
             int withClients = ThreadCensus.libraryThreadCount();
             SoakReport.record(
@@ -50,7 +57,7 @@ class ClientLifecycleSoak {
                     String.format(Locale.ROOT, "%.1f", (withClients - atRest) / (double) CONCURRENT_CLIENTS));
             SoakReport.note("client-lifecycle", "census with clients: " + ThreadCensus.describe());
         } finally {
-            for (SoulseekClient client : clients) {
+            for (Soulseek client : clients) {
                 client.close();
             }
         }
@@ -70,9 +77,9 @@ class ClientLifecycleSoak {
         int atRest = ThreadCensus.libraryThreadCount();
 
         for (int iteration = 0; iteration < ITERATIONS; iteration++) {
-            try (SoulseekClient client = SoulseekClient.create(157)) {
+            try (Soulseek client = client()) {
                 // Constructing and closing is the whole lifecycle under test.
-                assertTrue(client.getState() != null, "A newly created client must report a state.");
+                assertTrue(client.connection().state() != null, "A newly created client must report a state.");
             }
         }
 

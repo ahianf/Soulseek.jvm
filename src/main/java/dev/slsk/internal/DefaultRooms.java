@@ -31,7 +31,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
- * {@link Rooms} over the {@link SoulseekClient} seam.
+ * {@link Rooms}, over the engine.
  *
  * <p>This holds room state, which the old surface did not. Previously a consumer
  * wanting to render "who is in this room" subscribed to joined, user-joined,
@@ -48,12 +48,12 @@ import java.util.stream.Collectors;
  */
 final class DefaultRooms implements Rooms {
 
-    private final SoulseekClient client;
+    private final DefaultSoulseekClient client;
     private final EventBus<RoomEvent> events;
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
     private final PrivateRooms privateRooms;
 
-    DefaultRooms(SoulseekClient client, EventBus<RoomEvent> events) {
+    DefaultRooms(DefaultSoulseekClient client, EventBus<RoomEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
         this.events = Objects.requireNonNull(events, "events");
         this.privateRooms = new DefaultPrivateRooms(client);
@@ -359,7 +359,7 @@ final class DefaultRooms implements Rooms {
     }
 
     /** {@link PrivateRooms} over the same seam. */
-    private record DefaultPrivateRooms(SoulseekClient client) implements PrivateRooms {
+    private record DefaultPrivateRooms(DefaultSoulseekClient client) implements PrivateRooms {
 
         @Override
         public void addMember(String room, Username user, CancellationSignal signal) {

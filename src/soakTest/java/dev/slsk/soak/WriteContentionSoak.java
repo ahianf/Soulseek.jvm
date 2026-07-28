@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
  * Scenario: many writers queued behind one stalled write.
  *
  * <p>Stands in for the queued-transfer case in the goal's scenario table. The
- * client-level permit helper ({@code DefaultSoulseekClient.acquirePermit}) is
+ * client-level permit helper ({@code ClientSupport.acquirePermit}) is
  * private and needs a logged-in client, but it and
  * {@code SocketConnection.acquire} are the same defect: a semaphore acquired by
  * spinning {@code tryAcquire} with a timeout instead of blocking. This

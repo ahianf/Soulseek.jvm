@@ -17,7 +17,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * {@link Me} over the {@link SoulseekClient} seam.
+ * {@link Me}, over the engine.
  *
  * <p>Presence is tracked here because the protocol has no way to ask. {@code
  * setStatus} tells the server, and nothing reads it back, so a consumer that
@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 final class DefaultMe implements Me {
 
-    private final SoulseekClient client;
+    private final DefaultSoulseekClient client;
     private final EventBus<MeEvent> events;
     private final DiagnosticSink diagnostics;
     private final Username username;
@@ -42,7 +42,7 @@ final class DefaultMe implements Me {
     /** The last presence we published; the protocol offers no way to read it back. */
     private final AtomicReference<UserPresence> presence = new AtomicReference<>(UserPresence.ONLINE);
 
-    DefaultMe(SoulseekClient client, Username username, EventBus<MeEvent> events, DiagnosticSink diagnostics) {
+    DefaultMe(DefaultSoulseekClient client, Username username, EventBus<MeEvent> events, DiagnosticSink diagnostics) {
         this.client = Objects.requireNonNull(client, "client");
         this.username = Objects.requireNonNull(username, "username");
         this.events = Objects.requireNonNull(events, "events");

@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * {@link Users} over the {@link SoulseekClient} seam.
+ * {@link Users}, over the engine.
  *
  * <p>The watch registry is the part worth reading. Soulseek's {@code AddUser} is
  * a server-side subscription with two properties that applications reliably get
@@ -41,14 +41,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 final class DefaultUsers implements Users {
 
-    private final SoulseekClient client;
+    private final DefaultSoulseekClient client;
     private final EventBus<UserEvent> events;
     private final DiagnosticSink diagnostics;
 
     /** Watched users, and how many holders each has. */
     private final Map<Username, Registration> watches = new ConcurrentHashMap<>();
 
-    DefaultUsers(SoulseekClient client, EventBus<UserEvent> events, DiagnosticSink diagnostics) {
+    DefaultUsers(DefaultSoulseekClient client, EventBus<UserEvent> events, DiagnosticSink diagnostics) {
         this.client = Objects.requireNonNull(client, "client");
         this.events = Objects.requireNonNull(events, "events");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");

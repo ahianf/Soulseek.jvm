@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 /**
- * {@link Shares} over the {@link SoulseekClient} seam.
+ * {@link Shares}, over the engine.
  *
  * <p>Scanning walks the configured folders and counts what it finds, then tells
  * the server. The announcement is part of the scan rather than something the
@@ -31,12 +31,12 @@ import java.util.stream.Stream;
  */
 final class DefaultShares implements Shares {
 
-    private final SoulseekClient client;
+    private final DefaultSoulseekClient client;
     private final EventBus<ShareEvent> events;
     private final AtomicReference<List<SharedFolder>> folders = new AtomicReference<>(List.of());
     private final AtomicReference<ShareIndex> index = new AtomicReference<>(ShareIndex.empty());
 
-    DefaultShares(SoulseekClient client, EventBus<ShareEvent> events) {
+    DefaultShares(DefaultSoulseekClient client, EventBus<ShareEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
         this.events = Objects.requireNonNull(events, "events");
     }

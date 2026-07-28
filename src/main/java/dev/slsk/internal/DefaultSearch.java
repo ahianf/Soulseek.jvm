@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 /**
- * {@link Search} over the {@link SoulseekClient} seam.
+ * {@link Search}, over the engine.
  *
  * <p>Holds a snapshot per search so {@code get} and {@code active} can be
  * answered synchronously, and carries a revision counter so a consumer polling
@@ -47,12 +47,12 @@ import java.util.function.Consumer;
  */
 final class DefaultSearch implements Search {
 
-    private final SoulseekClient client;
+    private final DefaultSoulseekClient client;
     private final EventBus<SearchEvent> events;
     private final Map<SearchId, State> searches = new ConcurrentHashMap<>();
     private final AtomicLong revisions = new AtomicLong();
 
-    DefaultSearch(SoulseekClient client, EventBus<SearchEvent> events) {
+    DefaultSearch(DefaultSoulseekClient client, EventBus<SearchEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
         this.events = Objects.requireNonNull(events, "events");
         wire();
