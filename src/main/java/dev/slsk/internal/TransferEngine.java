@@ -95,6 +95,7 @@ final class TransferEngine {
                         request.getStartOffset(),
                         request.getToken(),
                         request.getOptions(),
+                        request.getOffer(),
                         request.getCancellationSignal())
                 : download(
                         request.getUsername(),
@@ -376,6 +377,29 @@ final class TransferEngine {
             Integer token,
             TransferOptions transferOptions,
             CancellationSignal cancellationSignal) {
+        return download(
+                requestedUsername,
+                remoteFilename,
+                outputStreamFactory,
+                size,
+                startOffset,
+                token,
+                transferOptions,
+                null,
+                cancellationSignal);
+    }
+
+    /** Downloads data to a stream, taking up a peer's standing offer if there is one. */
+    CompletableFuture<Transfer> download(
+            String requestedUsername,
+            String remoteFilename,
+            Supplier<OutputStream> outputStreamFactory,
+            Long size,
+            long startOffset,
+            Integer token,
+            TransferOptions transferOptions,
+            dev.slsk.internal.messaging.messages.TransferRequest offer,
+            CancellationSignal cancellationSignal) {
         CommonUtils.requireText(requestedUsername, "username");
         CommonUtils.requireText(remoteFilename, "remoteFilename");
         validateDownloadRange(size, startOffset);
@@ -391,6 +415,7 @@ final class TransferEngine {
                 startOffset,
                 transferToken,
                 transferOptions == null ? new TransferOptions() : transferOptions,
+                offer,
                 context.defaultToken(cancellationSignal));
     }
     /** Uploads a local file to a peer. */
@@ -911,6 +936,28 @@ final class TransferEngine {
             int token,
             TransferOptions transferOptions,
             CancellationSignal cancellationSignal) {
+        return downloadToStreamAsync(
+                requestedUsername,
+                remoteFilename,
+                outputStreamFactory,
+                size,
+                startOffset,
+                token,
+                transferOptions,
+                null,
+                cancellationSignal);
+    }
+
+    CompletableFuture<Transfer> downloadToStreamAsync(
+            String requestedUsername,
+            String remoteFilename,
+            Supplier<OutputStream> outputStreamFactory,
+            Long size,
+            long startOffset,
+            int token,
+            TransferOptions transferOptions,
+            dev.slsk.internal.messaging.messages.TransferRequest offer,
+            CancellationSignal cancellationSignal) {
         TransferOptions operationOptions = transferOptions == null ? new TransferOptions() : transferOptions;
         TransferInternal download = new TransferInternal(
                 TransferDirection.DOWNLOAD, requestedUsername, remoteFilename, token, operationOptions);
@@ -929,7 +976,7 @@ final class TransferEngine {
         }
 
         DownloadOperation operation = new DownloadOperation(
-                this, download, outputStreamFactory, operationOptions, cancellationSignal, uniqueKey);
+                this, download, outputStreamFactory, operationOptions, offer, cancellationSignal, uniqueKey);
         return NetworkExecutor.supplyAsync(operation::execute);
     }
 

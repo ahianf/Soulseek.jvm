@@ -66,6 +66,17 @@ final class DownloadOperation {
     private final TransferInternal download;
     private final Supplier<OutputStream> outputStreamFactory;
     private final TransferOptions transferOptions;
+
+    /**
+     * A peer's standing offer of this file, or {@code null}.
+     *
+     * <p>Present when this download exists <em>because</em> the peer said it was
+     * ready. Its token and size are the same ones the ordinary path waits for,
+     * so having it up front does not shorten the handshake by guesswork — it
+     * skips a round trip whose only possible answer we already hold.
+     */
+    private final TransferRequest offer;
+
     private final CancellationSignal cancellationSignal;
     private final String uniqueKey;
     private final AtomicBoolean globalPermit = new AtomicBoolean();
@@ -84,8 +95,10 @@ final class DownloadOperation {
             TransferInternal download,
             Supplier<OutputStream> outputStreamFactory,
             TransferOptions transferOptions,
+            TransferRequest offer,
             CancellationSignal cancellationSignal,
             String uniqueKey) {
+        this.offer = offer;
         this.engine = engine;
         this.download = download;
         this.outputStreamFactory = outputStreamFactory;
@@ -117,6 +130,22 @@ final class DownloadOperation {
                             + filenameOnly(download.getFilename()) + " from "
                             + download.getUsername() + " (id: " + peerConnection.getId()
                             + ", state: " + peerConnection.getState() + ")");
+
+            if (offer != null) {
+                // The peer already told us it is ready, so there is nothing to
+                // ask for. Asking anyway would send a fresh request against the
+                // queue we have just reached the front of, and a peer with one
+                // free slot would answer the second request with "Queued".
+                engine.context
+                        .getDiagnostic()
+                        .debug("Download of " + filenameOnly(download.getFilename())
+                                + " from " + download.getUsername()
+                                + " is taking up an offer already made (remote token: "
+                                + offer.getToken() + ")");
+                updateState(TransferState.REQUESTED);
+                beginQueuedDownload(CompletableFuture.completedFuture(offer), peerConnection);
+                return receiveFile();
+            }
 
             CompletableFuture<TransferResponse> transferRequestAcknowledged = engine.context
                     .getWaiter()
@@ -161,25 +190,7 @@ final class DownloadOperation {
                 peerConnection = beginQueuedDownload(transferStartRequested, peerConnection);
             }
 
-            bindConnectionEvents();
-            outputStream = Objects.requireNonNull(outputStreamFactory.get(), "outputStreamFactory result");
-            positionOutputStream();
-            trackingStream = new TransferEngine.PositionTrackingOutputStream(
-                    outputStream,
-                    determineOutputPosition(
-                            outputStream,
-                            transferOptions.isSeekOutputStreamAutomatically() ? download.getStartOffset() : 0));
-            readTransfer();
-
-            updateProgress(currentOutputPosition());
-            updateState(TransferState.COMPLETED.or(TransferState.SUCCEEDED));
-            engine.context
-                    .getDiagnostic()
-                    .info("Download of " + filenameOnly(download.getFilename())
-                            + " from " + download.getUsername() + " complete ("
-                            + currentOutputPosition() + " of " + download.getSize() + " bytes).");
-            connection.disconnect("Transfer complete");
-            return download.toTransfer();
+            return receiveFile();
         } catch (Throwable failure) {
             Throwable cause = Failures.unwrap(failure);
             handleFailure(cause);
@@ -187,6 +198,39 @@ final class DownloadOperation {
         } finally {
             cleanup();
         }
+    }
+
+    /**
+     * Reads the file off the transfer connection.
+     *
+     * <p>Shared by both ways of getting here — asking a peer for a file, and
+     * taking up a file a peer offered. Only the handshake differs; once there is
+     * a transfer connection there is exactly one way to receive bytes, and
+     * keeping it in one place is what stops the offered path drifting into a
+     * second, less-tested copy of the download.
+     *
+     * @return the completed transfer
+     */
+    private Transfer receiveFile() throws IOException {
+        bindConnectionEvents();
+        outputStream = Objects.requireNonNull(outputStreamFactory.get(), "outputStreamFactory result");
+        positionOutputStream();
+        trackingStream = new TransferEngine.PositionTrackingOutputStream(
+                outputStream,
+                determineOutputPosition(
+                        outputStream,
+                        transferOptions.isSeekOutputStreamAutomatically() ? download.getStartOffset() : 0));
+        readTransfer();
+
+        updateProgress(currentOutputPosition());
+        updateState(TransferState.COMPLETED.or(TransferState.SUCCEEDED));
+        engine.context
+                .getDiagnostic()
+                .info("Download of " + filenameOnly(download.getFilename())
+                        + " from " + download.getUsername() + " complete ("
+                        + currentOutputPosition() + " of " + download.getSize() + " bytes).");
+        connection.disconnect("Transfer complete");
+        return download.toTransfer();
     }
 
     private MessageConnection beginImmediateDownload(

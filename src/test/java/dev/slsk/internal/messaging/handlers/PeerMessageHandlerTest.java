@@ -411,6 +411,52 @@ class PeerMessageHandlerTest {
         assertArrayEquals(
                 new TransferResponse(TOKEN, "Cancelled").toByteArray(),
                 unknown.connection.outgoing.getFirst().toByteArray());
+        // Even to refuse it, the queue has to be asked: "not a live transfer"
+        // is not the same question as "not wanted".
+        assertEquals(List.of(USERNAME + " " + FILENAME), unknown.client.offered);
+    }
+
+    /**
+     * A peer offering a file reaches our name in its queue after a wait that can
+     * run to hours, and by then the download is usually still in ours. Refusing
+     * it spends that wait for nothing and puts us at the back, so the queue is
+     * consulted before anything is refused.
+     */
+    @Test
+    @DisplayName("an offer for a queued download is taken up, silently")
+    void offeredDownloadsAreTakenUpRatherThanCancelled() {
+        Fixture taken = new Fixture(new SoulseekClientOptions());
+        taken.client.disposition = PeerMessageHandlerClient.OfferDisposition.TAKEN;
+        taken.handler
+                .handleMessageReadAsync(
+                        taken.connection.proxy,
+                        new TransferRequest(TransferDirection.UPLOAD, TOKEN, FILENAME).toByteArray())
+                .join();
+
+        // No reply from here. The download writes the acceptance once it has a
+        // peer connection, which is the same message the tracked path sends —
+        // sending one here too would accept the transfer twice.
+        assertTrue(taken.connection.outgoing.isEmpty());
+        assertEquals(List.of(USERNAME + " " + FILENAME), taken.client.offered);
+    }
+
+    /**
+     * The peer uses the difference to decide whether to keep holding the file
+     * for us; "Cancelled" invites it to try again, "Complete" does not.
+     */
+    @Test
+    @DisplayName("an offer for something already downloaded is refused as Complete")
+    void offersForFinishedDownloadsAreRefusedAsComplete() {
+        Fixture done = new Fixture(new SoulseekClientOptions());
+        done.client.disposition = PeerMessageHandlerClient.OfferDisposition.COMPLETE;
+        done.handler
+                .handleMessageReadAsync(
+                        done.connection.proxy,
+                        new TransferRequest(TransferDirection.UPLOAD, TOKEN, FILENAME).toByteArray())
+                .join();
+        assertArrayEquals(
+                new TransferResponse(TOKEN, "Complete").toByteArray(),
+                done.connection.outgoing.getFirst().toByteArray());
     }
 
     /**
@@ -645,6 +691,19 @@ class PeerMessageHandlerTest {
         @Override
         public void serveUpload(Username user, String path) {
             served.add(user.value() + " " + path);
+        }
+
+        /** What the download queue would make of an offer. */
+        private OfferDisposition disposition = OfferDisposition.UNKNOWN;
+
+        /** Offers the handler passed on rather than answering itself. */
+        private final java.util.List<String> offered = new java.util.ArrayList<>();
+
+        @Override
+        public OfferDisposition offerDownload(
+                String username, String filename, dev.slsk.internal.messaging.messages.TransferRequest offer) {
+            offered.add(username + " " + filename);
+            return disposition;
         }
 
         @Override

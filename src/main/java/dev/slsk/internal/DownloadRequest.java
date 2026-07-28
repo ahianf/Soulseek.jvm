@@ -43,6 +43,7 @@ public final class DownloadRequest {
     private final TransferOptions options;
     private final CancellationSignal cancellationSignal;
     private final boolean toStream;
+    private final dev.slsk.internal.messaging.messages.TransferRequest offer;
 
     private DownloadRequest(Builder builder) {
         this.username = builder.username;
@@ -55,6 +56,7 @@ public final class DownloadRequest {
         this.options = builder.options;
         this.cancellationSignal = builder.cancellationSignal;
         this.toStream = builder.toStream;
+        this.offer = builder.offer;
     }
 
     /**
@@ -131,6 +133,19 @@ public final class DownloadRequest {
         return toStream;
     }
 
+    /**
+     * Returns a peer's standing offer of this file, or {@code null}.
+     *
+     * <p>Set when the download exists because the peer said it was ready, in
+     * which case its token and size are already known and asking for the file
+     * again would only put us back in the queue we just reached the front of.
+     *
+     * @return the offer, or {@code null} for an ordinary download
+     */
+    public dev.slsk.internal.messaging.messages.TransferRequest getOffer() {
+        return offer;
+    }
+
     /** Returns the cancellation signal; never {@code null}. */
     public CancellationSignal getCancellationSignal() {
         return cancellationSignal;
@@ -148,6 +163,7 @@ public final class DownloadRequest {
         private TransferOptions options;
         private CancellationSignal cancellationSignal = CancellationSignal.none();
         private boolean toStream;
+        private dev.slsk.internal.messaging.messages.TransferRequest offer;
 
         // Names are not validated here: the client rejects null, empty and
         // whitespace-only values with IllegalArgumentException, and the builder
@@ -178,6 +194,12 @@ public final class DownloadRequest {
         /** Sets the transfer options. */
         public Builder options(TransferOptions options) {
             this.options = options;
+            return this;
+        }
+
+        /** Sets a peer's standing offer of the file, if there is one. */
+        public Builder offer(dev.slsk.internal.messaging.messages.TransferRequest offer) {
+            this.offer = offer;
             return this;
         }
 

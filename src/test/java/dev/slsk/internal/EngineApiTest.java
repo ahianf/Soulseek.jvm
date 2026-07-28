@@ -81,6 +81,7 @@ class EngineApiTest {
             "getWaiter",
             "raiseEvent",
             "reportBrowseProgress",
+            "offerDownload",
             "requireLoggedIn",
             "resolveUserEndpoint",
             "serveUpload",

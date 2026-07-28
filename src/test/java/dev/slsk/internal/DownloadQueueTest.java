@@ -24,6 +24,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -513,6 +514,73 @@ class DownloadQueueTest {
         assertInstanceOf(
                 TransferState.Finished.class,
                 queue.find(id).orElseThrow().snapshot().state());
+        queue.close();
+    }
+
+    /**
+     * The per-user cap is the rule this deliberately breaks. It exists so we do
+     * not open connections at a peer; a peer volunteering a file is the opposite
+     * situation, and the place it is offering took the length of its queue to
+     * earn. Refusing to spend a slot on it throws that away.
+     */
+    @Test
+    @DisplayName("a peer's offer starts its download immediately, past both caps")
+    void anOfferedDownloadIsPromotedPastTheCaps() {
+        GatedRunner runner = new GatedRunner();
+        DownloadQueue queue = queue(runner);
+        queue.policy(DownloadPolicy.defaults().maxConcurrent(1).maxConcurrentPerUser(1));
+
+        TransferId first = TransferId.of("first");
+        TransferId held = TransferId.of("held");
+        queue.enqueue(first, request("alice", "music\\first.mp3"));
+        queue.enqueue(held, request("alice", "music\\held.mp3"));
+
+        // The cap admits one; the second is queued and invisible to the engine.
+        awaitStarted(runner, 1);
+        assertEquals(List.of(first), List.copyOf(runner.started));
+        assertInstanceOf(
+                TransferState.Queued.class,
+                queue.find(held).orElseThrow().snapshot().state());
+
+        assertEquals(
+                Optional.of(held),
+                queue.promote(Username.of("alice"), "music\\held.mp3"),
+                "an offer for a queued download should promote it");
+        awaitStarted(runner, 2);
+        assertEquals(2, runner.started.size());
+
+        runner.releaseAll();
+        awaitTerminal(queue, first);
+        awaitTerminal(queue, held);
+        queue.close();
+    }
+
+    @Test
+    @DisplayName("only a download we are actually holding can be promoted")
+    void promotionIgnoresWhatIsNotQueued() {
+        GatedRunner runner = new GatedRunner();
+        DownloadQueue queue = queue(runner);
+
+        TransferId id = TransferId.of("one");
+        queue.enqueue(id, request("alice", "music\\one.mp3"));
+        awaitStarted(runner, 1);
+
+        // Already running: a second promotion would be a duplicate transfer.
+        assertEquals(Optional.empty(), queue.promote(Username.of("alice"), "music\\one.mp3"));
+        // Never asked for, and a peer must not be able to push us a file.
+        assertEquals(Optional.empty(), queue.promote(Username.of("alice"), "music\\never.mp3"));
+        assertEquals(Optional.empty(), queue.promote(Username.of("mallory"), "music\\one.mp3"));
+
+        TransferId paused = TransferId.of("paused");
+        queue.enqueue(paused, request("bob", "music\\paused.mp3"));
+        queue.pause(paused);
+        // A download the consumer stopped is not one a peer gets to restart.
+        assertEquals(Optional.empty(), queue.promote(Username.of("bob"), "music\\paused.mp3"));
+
+        runner.releaseAll();
+        awaitTerminal(queue, id);
+        assertTrue(queue.isComplete(Username.of("alice"), "music\\one.mp3"));
+        assertTrue(!queue.isComplete(Username.of("alice"), "music\\never.mp3"));
         queue.close();
     }
 

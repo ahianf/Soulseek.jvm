@@ -292,6 +292,81 @@ final class DownloadQueue {
     }
 
     /**
+     * Starts a queued download now, because its peer says it is ready.
+     *
+     * <p>The one case where the queue's own ordering is the wrong answer. A peer
+     * offering a file has reached our name in its queue, and that place is worth
+     * more than a slot: refusing it costs however long the wait was and puts us
+     * at the back. So this admits past both caps rather than joining the
+     * ordinary rotation.
+     *
+     * <p>{@code Queued} is the state both waiting-for-a-slot and
+     * serving-out-a-retry-backoff park in, so one check covers both. Paused is
+     * excluded — a download the consumer stopped is not one a peer can restart.
+     * A retry already scheduled for the entry becomes a no-op on its own, since
+     * it re-checks the state before admitting.
+     *
+     * @param user who is offering
+     * @param path what they are offering
+     * @return the promoted download, or empty if we have nothing queued for it
+     */
+    Optional<TransferId> promote(Username user, String path) {
+        Entry promoted = null;
+        synchronized (lock) {
+            if (closed.get()) {
+                return Optional.empty();
+            }
+            for (Entry entry : entries.values()) {
+                if (entry.user().equals(user)
+                        && entry.request().path().equals(path)
+                        && entry.state instanceof TransferState.Queued
+                        && !entry.paused.get()) {
+                    promoted = entry;
+                    break;
+                }
+            }
+            if (promoted == null) {
+                return Optional.empty();
+            }
+            promoted.state = new TransferState.Requesting();
+            renumber();
+        }
+
+        promoted.startedAt = Instant.now();
+        promoted.attempt++;
+        onStateChanged.accept(promoted, new TransferState.Queued(0));
+        save(promoted);
+        Entry starting = promoted;
+        NetworkExecutor.runAsync(() -> attempt(starting));
+        return Optional.of(promoted.id());
+    }
+
+    /**
+     * Whether a download of this file from this peer has already succeeded.
+     *
+     * <p>Only so an offer for it can be refused as {@code Complete} rather than
+     * {@code Cancelled}; the peer uses the difference to decide whether to keep
+     * the file queued for us.
+     *
+     * @param user the peer
+     * @param path the file
+     * @return whether it is already done
+     */
+    boolean isComplete(Username user, String path) {
+        synchronized (lock) {
+            for (Entry entry : entries.values()) {
+                if (entry.user().equals(user)
+                        && entry.request().path().equals(path)
+                        && entry.state instanceof TransferState.Finished finished
+                        && finished.outcome() instanceof TransferOutcome.Succeeded) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
+    /**
      * Records how far a running download has got.
      *
      * <p>Deliberately not {@link #observed}. A state change is rare, is worth a

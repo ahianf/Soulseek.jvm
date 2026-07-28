@@ -440,6 +440,34 @@ final class SoulseekEngine
                 limit == null || limit.isUnlimited() ? Long.MAX_VALUE / 16 : Math.max(1, limit.bytesPerSecond() / 10));
     }
 
+    /** Answers a peer's unsolicited offer of a file. */
+    @FunctionalInterface
+    interface DownloadOffers {
+        PeerMessageHandlerClient.OfferDisposition offered(
+                String username, String filename, dev.slsk.internal.messaging.messages.TransferRequest offer);
+    }
+
+    /**
+     * Who decides what an offered file is.
+     *
+     * <p>The download queue, once the downloads facet installs itself. Until
+     * then every offer is unknown, which is the honest answer: without a queue
+     * there is nothing an offer could match beyond the live transfers the
+     * handler already checked.
+     */
+    private volatile DownloadOffers downloadOffers =
+            (username, filename, offer) -> PeerMessageHandlerClient.OfferDisposition.UNKNOWN;
+
+    void downloadOffers(DownloadOffers value) {
+        this.downloadOffers = Objects.requireNonNull(value, "downloadOffers");
+    }
+
+    @Override
+    public PeerMessageHandlerClient.OfferDisposition offerDownload(
+            String username, String filename, dev.slsk.internal.messaging.messages.TransferRequest offer) {
+        return downloadOffers.offered(username, filename, offer);
+    }
+
     /**
      * Serves a file to a peer whose request the policy allowed.
      *

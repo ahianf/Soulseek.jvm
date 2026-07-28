@@ -387,10 +387,27 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                                 request);
                 return completed();
             }
+            // Not live in the engine, which is not the same as not wanted: the
+            // queue holds downloads that have not been given a slot yet, and
+            // this offer is the peer telling us our turn has come.
+            PeerMessageHandlerClient.OfferDisposition disposition =
+                    client.offerDownload(connection.getUsername(), request.getFilename(), request);
+            if (disposition == PeerMessageHandlerClient.OfferDisposition.TAKEN) {
+                diagnostic.debug("Taking up an offered upload from " + connection.getUsername()
+                        + " for " + request.getFilename() + " with token "
+                        + request.getToken() + "; the queued download starts now");
+                // Deliberately no reply. The download writes the acceptance
+                // once it has the peer connection, exactly as it would have
+                // done had it been waiting on this message all along.
+                return completed();
+            }
+
+            String reason =
+                    disposition == PeerMessageHandlerClient.OfferDisposition.COMPLETE ? "Complete" : "Cancelled";
             diagnostic.debug("Rejecting unknown upload from " + connection.getUsername()
                     + " for " + request.getFilename() + " with token "
-                    + request.getToken());
-            return connection.writeAsync(new TransferResponse(request.getToken(), "Cancelled"));
+                    + request.getToken() + " (" + reason + ")");
+            return connection.writeAsync(new TransferResponse(request.getToken(), reason));
         }
 
         return tryEnqueueDownloadAsync(connection.getUsername(), connection.getIpEndpoint(), request.getFilename())
