@@ -3,6 +3,7 @@
 
 package dev.slsk;
 
+import dev.slsk.spi.TransferSink;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -13,19 +14,19 @@ import java.util.Objects;
  *
  * @param user who to fetch it from
  * @param path the file on the peer, in Soulseek's backslash-joined form
- * @param destination where to write it locally
+ * @param sink where the bytes go, and what makes the result visible
  * @param expectedSize the size the peer advertised, or {@code 0} if unknown
  * @param priority its place in our own queue
  * @param tags whatever the application wants handed back on every event
  */
 public record DownloadRequest(
-        Username user, String path, Path destination, long expectedSize, Priority priority, Map<String, String> tags) {
+        Username user, String path, TransferSink sink, long expectedSize, Priority priority, Map<String, String> tags) {
 
     /** Validates and returns the request. */
     public DownloadRequest {
         Objects.requireNonNull(user, "user");
         Objects.requireNonNull(path, "path");
-        Objects.requireNonNull(destination, "destination");
+        Objects.requireNonNull(sink, "sink");
         Objects.requireNonNull(priority, "priority");
         tags = Map.copyOf(Objects.requireNonNull(tags, "tags"));
         if (path.isBlank()) {
@@ -45,7 +46,19 @@ public record DownloadRequest(
      * @return the request
      */
     public static DownloadRequest of(Username user, String path, Path destination) {
-        return new DownloadRequest(user, path, destination, 0, Priority.NORMAL, Map.of());
+        return of(user, path, TransferSink.file(destination));
+    }
+
+    /**
+     * Returns a request writing through a sink of your own.
+     *
+     * @param user who to fetch from
+     * @param path the file on the peer
+     * @param sink where the bytes go
+     * @return the request
+     */
+    public static DownloadRequest of(Username user, String path, TransferSink sink) {
+        return new DownloadRequest(user, path, sink, 0, Priority.NORMAL, Map.of());
     }
 
     /**
@@ -57,8 +70,21 @@ public record DownloadRequest(
      * @return the request, carrying the size the peer advertised
      */
     public static DownloadRequest of(Username user, SearchFile file, Path destination) {
+        return of(user, file, TransferSink.file(destination));
+    }
+
+    /**
+     * Returns a request for a file found by a search, writing through a sink of
+     * your own.
+     *
+     * @param user who offered it
+     * @param file the file they offered
+     * @param sink where the bytes go
+     * @return the request, carrying the size the peer advertised
+     */
+    public static DownloadRequest of(Username user, SearchFile file, TransferSink sink) {
         Objects.requireNonNull(file, "file");
-        return new DownloadRequest(user, file.path(), destination, file.size(), Priority.NORMAL, Map.of());
+        return new DownloadRequest(user, file.path(), sink, file.size(), Priority.NORMAL, Map.of());
     }
 
     /**
@@ -70,22 +96,34 @@ public record DownloadRequest(
      * @return a builder
      */
     public static Builder builder(Username user, String path, Path destination) {
-        return new Builder(user, path, destination);
+        return new Builder(user, path, TransferSink.file(destination));
+    }
+
+    /**
+     * Returns a builder writing through a sink of your own.
+     *
+     * @param user who to fetch from
+     * @param path the file on the peer
+     * @param sink where the bytes go
+     * @return a builder
+     */
+    public static Builder builder(Username user, String path, TransferSink sink) {
+        return new Builder(user, path, sink);
     }
 
     /** Builds a {@link DownloadRequest}. */
     public static final class Builder {
         private final Username user;
         private final String path;
-        private final Path destination;
+        private final TransferSink sink;
         private long expectedSize;
         private Priority priority = Priority.NORMAL;
         private final Map<String, String> tags = new LinkedHashMap<>();
 
-        private Builder(Username user, String path, Path destination) {
+        private Builder(Username user, String path, TransferSink sink) {
             this.user = Objects.requireNonNull(user, "user");
             this.path = Objects.requireNonNull(path, "path");
-            this.destination = Objects.requireNonNull(destination, "destination");
+            this.sink = Objects.requireNonNull(sink, "sink");
         }
 
         /**
@@ -129,7 +167,7 @@ public record DownloadRequest(
          * @return the request
          */
         public DownloadRequest build() {
-            return new DownloadRequest(user, path, destination, expectedSize, priority, Map.copyOf(tags));
+            return new DownloadRequest(user, path, sink, expectedSize, priority, Map.copyOf(tags));
         }
     }
 }

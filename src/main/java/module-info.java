@@ -4,18 +4,19 @@
 /**
  * Soulseek.jvm.
  *
- * <p>Mid-rewrite toward the 1.0 facet API. The implementation now lives under
- * {@code dev.slsk.internal.*} and is not exported; the public surface is
- * being rebuilt package by package, and every type earns its way back onto it.
- * See {@code JAVA_API_1_0_GOAL.md}.
+ * <p>Mid-rewrite toward the 1.0 facet API. The implementation lives under
+ * {@code dev.slsk.internal.*} and is not exported. See
+ * {@code JAVA_API_1_0_GOAL.md}.
  *
- * <p>The 1.0 target is exactly four exports: {@code dev.slsk} (what you
- * call), {@code dev.slsk.events} (what you receive), {@code
- * dev.slsk.exceptions} (what can go wrong), and {@code dev.slsk.spi}
- * (what you implement).
+ * <p>Four exports, with one rule each: {@code dev.slsk} is what you call,
+ * {@code dev.slsk.events} is what you receive, {@code dev.slsk.exceptions}
+ * is what can go wrong, and {@code dev.slsk.spi} is what you implement.
+ * Everything else is internal, and a test asserts that none of it is reachable
+ * from a signature here.
  */
 module dev.slsk.soulseek {
     exports dev.slsk;
     exports dev.slsk.events;
     exports dev.slsk.exceptions;
+    exports dev.slsk.spi;
 }

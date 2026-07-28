@@ -14,12 +14,16 @@ import dev.slsk.TransferId;
 import dev.slsk.Username;
 import dev.slsk.events.DownloadEvent;
 import dev.slsk.internal.common.Blocking;
+import dev.slsk.internal.options.TransferOptions;
+import dev.slsk.internal.options.TransferStateChange;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
@@ -82,12 +86,23 @@ final class DefaultDownloads implements Downloads {
         // that has not appeared yet.
         int token = client.getNextToken();
         CancellationController cancellation = new CancellationController();
-        dev.slsk.internal.DownloadRequest internal = dev.slsk.internal.DownloadRequest.toFile(
-                        request.user().value(),
-                        request.path(),
-                        request.destination().toString())
+        // One sink per attempt, opened lazily: the engine decides when the peer
+        // has accepted, and opening a file for a download that is refused would
+        // leave a part file for a transfer that never started.
+        AtomicReference<SinkOutputStream> stream = new AtomicReference<>();
+        dev.slsk.internal.DownloadRequest internal = dev.slsk.internal.DownloadRequest.toStream(
+                        request.user().value(), request.path(), () -> {
+                            try {
+                                SinkOutputStream opened = new SinkOutputStream(request.sink(), 0);
+                                stream.set(opened);
+                                return java.util.concurrent.CompletableFuture.completedFuture(opened);
+                            } catch (IOException failure) {
+                                return java.util.concurrent.CompletableFuture.failedFuture(failure);
+                            }
+                        })
                 .size(request.expectedSize() == 0 ? null : request.expectedSize())
                 .token(token)
+                .options(new TransferOptions().withAdditionalStateChanged(change -> settle(stream, change)))
                 .cancellation(cancellation.getSignal())
                 .build();
         TransferId id = TransferId.of("DOWNLOAD:" + token);
@@ -95,6 +110,34 @@ final class DefaultDownloads implements Downloads {
         Blocking.await(client.transfers().enqueueDownload(internal));
         events.publish(new DownloadEvent.Enqueued(get(id), java.time.Instant.now()));
         return id;
+    }
+
+    /**
+     * Tells the sink how the transfer ended.
+     *
+     * <p>Commit exactly once on success, discard on anything else. This is the
+     * whole of what the sink contract buys: an application that writes to a file
+     * no longer has to work out for itself whether a transfer that stopped is
+     * one whose bytes are safe to publish.
+     */
+    private void settle(AtomicReference<SinkOutputStream> stream, TransferStateChange change) {
+        dev.slsk.internal.TransferState state = change.transfer().getState();
+        if (!state.contains(dev.slsk.internal.TransferState.COMPLETED)) {
+            return;
+        }
+        SinkOutputStream opened = stream.getAndSet(null);
+        if (opened == null) {
+            return;
+        }
+        if (state.contains(dev.slsk.internal.TransferState.SUCCEEDED)) {
+            try {
+                opened.commit();
+                return;
+            } catch (IOException failure) {
+                client.getDiagnostic().warning("Failed to commit a completed download", failure);
+            }
+        }
+        opened.discard();
     }
 
     @Override
