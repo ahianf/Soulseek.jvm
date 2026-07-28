@@ -528,6 +528,41 @@ class PeerConnectionManagerTest {
         assertEquals(1, third.closeCount);
     }
 
+    /**
+     * The map holds attempts as well as connections. This used to join every
+     * one, so asking how many peers were connected waited for whichever was
+     * slowest to answer — up to the connection timeout — and threw when one
+     * failed. Its callers are a metrics gauge and a diagnostic, which is to say
+     * the one thing a monitoring system calls every few seconds.
+     */
+    @Test
+    // On a separate thread, so a regression fails in ten seconds rather than
+    // hanging the build — which is what the blocking version actually did.
+    @org.junit.jupiter.api.Timeout(
+            value = 10,
+            unit = java.util.concurrent.TimeUnit.SECONDS,
+            threadMode = org.junit.jupiter.api.Timeout.ThreadMode.SEPARATE_THREAD)
+    @org.junit.jupiter.api.DisplayName("counting connections neither waits on nor breaks over an attempt in flight")
+    void theConnectionListDoesNotBlockOnPendingAttempts() {
+        Fixture fixture = new Fixture();
+        ConnectionProbe pending = ConnectionProbe.message(USERNAME, INDIRECT_ENDPOINT);
+        CompletableFuture<Void> neverConnects = new CompletableFuture<>();
+        pending.connectFuture = neverConnects;
+        fixture.factory.messageDirect = pending;
+
+        CompletableFuture<MessageConnection> attempt = fixture.manager()
+                .getOrAddMessageConnectionAsync(new ConnectToPeerResponse(
+                        USERNAME, Constants.ConnectionType.PEER, INDIRECT_ENDPOINT, TOKEN, false));
+
+        assertFalse(attempt.isDone(), "the attempt should still be in flight");
+        // Returns now, not when the peer answers.
+        assertEquals(List.of(), fixture.manager().getMessageConnections());
+
+        neverConnects.completeExceptionally(new ConnectionException("no route to host"));
+        // And a failed attempt is an absent connection, not a thrown gauge.
+        assertEquals(List.of(), fixture.manager().getMessageConnections());
+    }
+
     @Test
     void returnedSnapshotsAreImmutable() {
         Fixture fixture = new Fixture();

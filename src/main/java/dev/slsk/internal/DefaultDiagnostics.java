@@ -149,25 +149,45 @@ final class DefaultDiagnostics implements Diagnostics {
      */
     @Override
     public Metrics metrics() {
+        // One snapshot of each list, not one per field. Ten separate calls built
+        // ten copies of lists that grow with every download the consumer has not
+        // forgotten, and a scrape reads several of these — the counts also had
+        // no reason to agree with each other, having been taken at ten different
+        // moments.
+        List<dev.slsk.Download> downloadList = downloads.get().all();
+        List<dev.slsk.Upload> uploadList = uploads.get().all();
+
+        long downloadedBytes = 0;
+        int activeDownloads = 0;
+        int queuedDownloads = 0;
+        for (dev.slsk.Download download : downloadList) {
+            downloadedBytes += transferred(download.state());
+            if (download.state() instanceof dev.slsk.TransferState.Queued) {
+                queuedDownloads++;
+            } else if (running(download.state())) {
+                activeDownloads++;
+            }
+        }
+
+        long uploadedBytes = 0;
+        int activeUploads = 0;
+        int queuedUploads = 0;
+        for (dev.slsk.Upload upload : uploadList) {
+            uploadedBytes += transferred(upload.state());
+            if (upload.state() instanceof dev.slsk.TransferState.Queued) {
+                queuedUploads++;
+            } else if (running(upload.state())) {
+                activeUploads++;
+            }
+        }
+
         return new Metrics(
-                downloads.get().all().stream()
-                        .mapToLong(download -> transferred(download.state()))
-                        .sum(),
-                uploads.get().all().stream()
-                        .mapToLong(upload -> transferred(upload.state()))
-                        .sum(),
-                (int) downloads.get().all().stream()
-                        .filter(d -> running(d.state()))
-                        .count(),
-                (int) uploads.get().all().stream()
-                        .filter(u -> running(u.state()))
-                        .count(),
-                (int) downloads.get().all().stream()
-                        .filter(d -> d.state() instanceof dev.slsk.TransferState.Queued)
-                        .count(),
-                (int) uploads.get().all().stream()
-                        .filter(u -> u.state() instanceof dev.slsk.TransferState.Queued)
-                        .count(),
+                downloadedBytes,
+                uploadedBytes,
+                activeDownloads,
+                activeUploads,
+                queuedDownloads,
+                queuedUploads,
                 peerConnections.getAsInt(),
                 activeSearches.getAsInt(),
                 0,

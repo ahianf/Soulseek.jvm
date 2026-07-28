@@ -81,12 +81,33 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         diagnosticListeners.remove(listener);
     }
 
+    /**
+     * Returns the peers there is currently a message connection to.
+     *
+     * <p>Established ones only. The map holds attempts as well as connections,
+     * and an attempt is a future that does not complete until the peer answers
+     * or the timeout expires — so joining them, as this used to, made reading
+     * the list cost as much as making a connection, and throw when one failed.
+     *
+     * <p>That is the wrong shape for something whose only callers are a metrics
+     * gauge and a diagnostic. A connection that has not been established is not
+     * a connection, and asking how many there are must never be the thing that
+     * waits for one. It is also why this deviates from the C# property it was
+     * ported from, which blocks on {@code .Result} the same way.
+     *
+     * @return the established peer connections; never blocks, never throws
+     */
     @Override
     public List<PeerEndpoint> getMessageConnections() {
         List<PeerEndpoint> snapshot = new ArrayList<>();
         for (CompletableFuture<MessageConnection> future : messageConnections.values()) {
-            MessageConnection connection = future.join();
-            snapshot.add(new PeerEndpoint(connection.getUsername(), connection.getIpEndpoint()));
+            if (!future.isDone() || future.isCompletedExceptionally()) {
+                continue;
+            }
+            MessageConnection connection = future.getNow(null);
+            if (connection != null) {
+                snapshot.add(new PeerEndpoint(connection.getUsername(), connection.getIpEndpoint()));
+            }
         }
         return List.copyOf(snapshot);
     }
