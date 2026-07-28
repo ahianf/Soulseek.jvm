@@ -29,6 +29,18 @@ package dev.slsk;
 public interface Soulseek extends AutoCloseable {
 
     /**
+     * Returns a builder.
+     *
+     * <p>The only way to get a client. Everything but the credentials and the
+     * application's minor version has a working default.
+     *
+     * @return a builder
+     */
+    static SoulseekBuilder builder() {
+        return new SoulseekBuilder();
+    }
+
+    /**
      * The connection to the server.
      *
      * @return the connection facet

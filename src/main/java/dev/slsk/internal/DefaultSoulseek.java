@@ -43,7 +43,8 @@ public final class DefaultSoulseek implements Soulseek {
     private final DefaultShares shares;
     private final AtomicBoolean closed = new AtomicBoolean();
 
-    private DefaultSoulseek(SoulseekEngine client, DefaultConnection.Credentials credentials) {
+    private DefaultSoulseek(
+            SoulseekEngine client, DefaultConnection.Credentials credentials, dev.slsk.spi.TransferStore store) {
         this.client = Objects.requireNonNull(client, "client");
         DiagnosticSink diagnostics = client.getDiagnostic();
         this.connection = new DefaultConnection(client, credentials, new EventBus<>("connection", diagnostics));
@@ -55,7 +56,7 @@ public final class DefaultSoulseek implements Soulseek {
                 client, new EventBus<>("diagnostics", diagnostics), new EventBus<>("mesh", diagnostics));
         this.rooms = new DefaultRooms(client, new EventBus<>("rooms", diagnostics));
         this.search = new DefaultSearch(client, new EventBus<>("search", diagnostics));
-        this.downloads = new DefaultDownloads(client, new EventBus<>("downloads", diagnostics));
+        this.downloads = new DefaultDownloads(client, new EventBus<>("downloads", diagnostics), store);
         this.uploads = new DefaultUploads(client, new EventBus<>("uploads", diagnostics));
         this.shares = new DefaultShares(client, new EventBus<>("shares", diagnostics));
     }
@@ -71,8 +72,27 @@ public final class DefaultSoulseek implements Soulseek {
      * @return the client
      */
     public static Soulseek create(String username, String password, int minorVersion, SoulseekClientOptions options) {
+        return create(username, password, minorVersion, options, dev.slsk.spi.TransferStore.inMemory());
+    }
+
+    /**
+     * Creates a client whose download queue is recorded somewhere.
+     *
+     * @param username the account to log in as
+     * @param password the account password
+     * @param minorVersion the application minor version
+     * @param options the client options
+     * @param store where the download queue is recorded
+     * @return the client
+     */
+    public static Soulseek create(
+            String username,
+            String password,
+            int minorVersion,
+            SoulseekClientOptions options,
+            dev.slsk.spi.TransferStore store) {
         SoulseekEngine client = new SoulseekEngine(minorVersion, options);
-        return new DefaultSoulseek(client, new DefaultConnection.Credentials(username, password));
+        return new DefaultSoulseek(client, new DefaultConnection.Credentials(username, password), store);
     }
 
     /**
@@ -89,7 +109,8 @@ public final class DefaultSoulseek implements Soulseek {
      * @return the client
      */
     static Soulseek over(SoulseekEngine client, String username, String password) {
-        return new DefaultSoulseek(client, new DefaultConnection.Credentials(username, password));
+        return new DefaultSoulseek(
+                client, new DefaultConnection.Credentials(username, password), dev.slsk.spi.TransferStore.inMemory());
     }
 
     @Override

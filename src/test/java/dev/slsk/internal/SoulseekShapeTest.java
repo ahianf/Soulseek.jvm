@@ -33,8 +33,12 @@ class SoulseekShapeTest {
     @Test
     @DisplayName("the root type is exactly ten facet accessors and close()")
     void rootTypeIsTenFacetsAndClose() {
-        Set<String> methods =
-                Arrays.stream(Soulseek.class.getMethods()).map(Method::getName).collect(Collectors.toSet());
+        // Instance members only: builder() is static, and the constraint is
+        // about what the root type carries, not how you get one.
+        Set<String> methods = Arrays.stream(Soulseek.class.getMethods())
+                .filter(method -> !java.lang.reflect.Modifier.isStatic(method.getModifiers()))
+                .map(Method::getName)
+                .collect(Collectors.toSet());
 
         assertEquals(
                 Set.of(
