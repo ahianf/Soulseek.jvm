@@ -1,0 +1,142 @@
+# Where every capability of the pre-1.0 SoulseekClient went.
+#
+# One row per distinct member name in capability-baseline.txt. The
+# exhaustiveness test parses both and fails if a baseline name has no row here,
+# or if a row names a facet member that does not exist. It is the gate on
+# deleting anything: a capability with no replacement is a design gap to raise,
+# not a deletion to make.
+#
+# Format:  <baseline member name> = <disposition>
+#
+# A disposition is either a facet member as Type.member, or one of:
+#   ABSORBED:<why>   the library now does this itself and a consumer does not ask
+#   BUILDER:<what>   moved to construction rather than being a runtime call
+#   PENDING:<phase>  a replacement is designed and lands in a named later phase
+#
+# 92 of the 202 baseline members are listener add/remove pairs. All of them
+# collapse onto a facet EventStream, so the add and the remove share a row: the
+# stream replaces registration, and Subscription.close replaces removal.
+
+# --- connection -------------------------------------------------------------
+connect                                        = Connection.connect
+disconnect                                     = Connection.disconnect
+getState                                       = Connection.state
+getServerInfo                                  = Connection.server
+pingServer                                     = Connection.ping
+close                                          = Soulseek.close
+create                                         = BUILDER:Soulseek is built, not constructed from a static factory
+getAddress                                     = BUILDER:the server address is given to connect or the builder
+getPort                                        = BUILDER:the server address is given to connect or the builder
+getIpAddress                                   = BUILDER:the server address is given to connect or the builder
+getIpEndpoint                                  = BUILDER:the server address is given to connect or the builder
+getOptions                                     = BUILDER:options are set at build time
+reconfigureOptions                             = BUILDER:options are set at build time
+getMajorVersion                                = BUILDER:the protocol version is not a consumer concern
+getMinorVersion                                = BUILDER:applicationMinorVersion is a builder setting
+isRaiseEventsAsynchronously                    = BUILDER:event dispatch policy is a builder setting
+setRaiseEventsAsynchronously                   = BUILDER:event dispatch policy is a builder setting
+getNextToken                                   = ABSORBED:tokens are an implementation detail; ids are minted by the library
+connectToUser                                  = ABSORBED:peer connections are established on demand by the transfer and browse paths
+addConnectedListener                           = Connection.events
+addDisconnectedListener                        = Connection.events
+addStateChangedListener                        = Connection.events
+addServerInfoReceivedListener                  = Connection.events
+addKickedFromServerListener                    = Connection.events
+addGlobalMessageReceivedListener               = Connection.events
+addExcludedSearchPhrasesReceivedListener       = Connection.events
+
+# --- me ---------------------------------------------------------------------
+getUsername                                    = Me.username
+setStatus                                      = Me.presence
+getPrivileges                                  = Me.privileges
+grantUserPrivileges                            = Me.giftPrivileges
+changePassword                                 = Me.changePassword
+sendUploadSpeed                                = Me.reportUploadSpeed
+acknowledgePrivilegeNotification               = ABSORBED:acknowledged automatically once a listener has taken it cleanly
+addLoggedInListener                            = Me.events
+addPrivilegeNotificationReceivedListener       = Me.events
+addPrivilegedUserListReceivedListener          = Me.events
+
+# --- chat -------------------------------------------------------------------
+sendPrivateMessage                             = Chat.send
+acknowledgePrivateMessage                      = ABSORBED:acknowledged automatically once a listener has taken it cleanly
+addPrivateMessageReceivedListener              = Chat.events
+
+# --- users ------------------------------------------------------------------
+getUserInfo                                    = Users.info
+getUserStatistics                              = Users.statistics
+getUserStatus                                  = Users.status
+getUserEndpoint                                = Users.endpoint
+watchUser                                      = Users.watch
+unwatchUser                                    = Watch.close
+getUserPrivileged                              = Users.status
+browse                                         = PENDING:5 - Users.browse, with the browse SPI
+getDirectoryContents                           = PENDING:5 - Users.directory, with the browse SPI
+addUserStatusChangedListener                   = Users.events
+addUserStatisticsChangedListener               = Users.events
+addUserCannotConnectListener                   = Users.events
+addBrowseProgressUpdatedListener               = PENDING:5 - browse progress arrives with the browse SPI
+
+# --- rooms ------------------------------------------------------------------
+joinRoom                                       = Rooms.join
+leaveRoom                                      = Rooms.leave
+sendRoomMessage                                = Rooms.say
+setRoomTicker                                  = Rooms.setTicker
+getRoomList                                    = Rooms.list
+startPublicChat                                = Rooms.startPublicChat
+stopPublicChat                                 = Rooms.stopPublicChat
+addPrivateRoomMember                           = PrivateRooms.addMember
+removePrivateRoomMember                        = PrivateRooms.removeMember
+addPrivateRoomModerator                        = PrivateRooms.addOperator
+removePrivateRoomModerator                     = PrivateRooms.removeOperator
+dropPrivateRoomMembership                      = PrivateRooms.dropMembership
+dropPrivateRoomOwnership                       = PrivateRooms.dropOwnership
+addRoomJoinedListener                          = Rooms.events
+addRoomLeftListener                            = Rooms.events
+addRoomMessageReceivedListener                 = Rooms.events
+addRoomListReceivedListener                    = Rooms.events
+addRoomTickerAddedListener                     = Rooms.events
+addRoomTickerRemovedListener                   = Rooms.events
+addRoomTickerListReceivedListener              = Rooms.events
+addPublicChatMessageReceivedListener           = Rooms.events
+addPrivateRoomMembershipAddedListener          = Rooms.events
+addPrivateRoomMembershipRemovedListener        = Rooms.events
+addPrivateRoomModerationAddedListener          = Rooms.events
+addPrivateRoomModerationRemovedListener        = Rooms.events
+addPrivateRoomUserListReceivedListener         = Rooms.get
+addPrivateRoomModeratedUserListReceivedListener = Rooms.get
+
+# --- search -----------------------------------------------------------------
+search                                         = Search.run
+addSearchResponseReceivedListener              = Search.events
+addSearchStateChangedListener                  = Search.events
+addSearchRequestReceivedListener               = Search.events
+addSearchResponseDeliveredListener             = Search.events
+addSearchResponseDeliveryFailedListener        = Search.events
+
+# --- transfers --------------------------------------------------------------
+enqueueDownload                                = Downloads.enqueue
+download                                       = Downloads.enqueue
+getDownloads                                   = Downloads.all
+getDownloadPlaceInQueue                        = ABSORBED:the library polls the peer queue and reports it as TransferState.QueuedRemotely
+enqueueUpload                                  = ABSORBED:uploads are requested by peers and admitted by the upload policy
+upload                                         = ABSORBED:uploads are requested by peers and admitted by the upload policy
+getUploads                                     = Uploads.all
+addTransferStateChangedListener                = Downloads.events
+addTransferProgressUpdatedListener             = Downloads.events
+addDownloadDeniedListener                      = Downloads.events
+addDownloadFailedListener                      = Downloads.events
+
+# --- shares -----------------------------------------------------------------
+setSharedCounts                                = ABSORBED:announced by Shares.rescan, so it cannot be forgotten
+
+# --- diagnostics ------------------------------------------------------------
+getDistributedNetwork                          = Diagnostics.mesh
+addDistributedNetworkStateChangedListener      = Diagnostics.meshEvents
+addDistributedParentAdoptedListener            = Diagnostics.meshEvents
+addDistributedParentDisconnectedListener       = Diagnostics.meshEvents
+addDistributedChildAddedListener               = Diagnostics.meshEvents
+addDistributedChildDisconnectedListener        = Diagnostics.meshEvents
+addDistributedNetworkResetListener             = Diagnostics.meshEvents
+addPromotedToDistributedBranchRootListener     = Diagnostics.meshEvents
+addDemotedFromDistributedBranchRootListener    = Diagnostics.meshEvents
