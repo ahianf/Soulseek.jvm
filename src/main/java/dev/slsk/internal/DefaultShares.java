@@ -55,6 +55,31 @@ final class DefaultShares implements Shares {
     DefaultShares(SoulseekEngine client, EventBus<ShareEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
         this.events = Objects.requireNonNull(events, "events");
+        // The counts are per-session state on the server's side, so they have to
+        // be re-sent on every login. Forgetting that is invisible from the
+        // inside: the share is served perfectly well while the server tells
+        // every peer we have nothing.
+        client.events().on(EngineEvents.Kind.LOGGED_IN, (Void ignored) -> announce());
+    }
+
+    /**
+     * Tells the server what we are sharing.
+     *
+     * <p>Reads the index rather than the scan, so an installed catalog announces
+     * its own counts. Without this a consumer that replaced the built-in index
+     * announced whatever the last scan of the configured folders found, which
+     * for a consumer with its own catalog is nothing at all.
+     */
+    private void announce() {
+        ShareIndex current = index();
+        if (current.fileCount() == 0 && current.directoryCount() == 0) {
+            return;
+        }
+        try {
+            Blocking.await(client.server().setSharedCounts(current.directoryCount(), current.fileCount()));
+        } catch (RuntimeException failure) {
+            client.getDiagnostic().warning("Failed to announce the share counts", failure);
+        }
     }
 
     @Override
@@ -139,6 +164,9 @@ final class DefaultShares implements Shares {
         installed.set(true);
         client.setShareCatalog(value);
         index.set(value.index());
+        // Installing a catalog changes what we are sharing, which the server has
+        // to be told. It is also how a consumer whose own index changed says so.
+        announce();
     }
 
     @Override
