@@ -8,6 +8,7 @@ import dev.slsk.Download;
 import dev.slsk.DownloadPolicy;
 import dev.slsk.DownloadRequest;
 import dev.slsk.Priority;
+import dev.slsk.Progress;
 import dev.slsk.TransferId;
 import dev.slsk.TransferOutcome;
 import dev.slsk.TransferState;
@@ -288,6 +289,36 @@ final class DownloadQueue {
             return;
         }
         transition(entry, observed);
+    }
+
+    /**
+     * Records how far a running download has got.
+     *
+     * <p>Deliberately not {@link #observed}. A state change is rare, is worth a
+     * store write and is worth telling a consumer about; progress is none of
+     * those. The engine reaches {@code IN_PROGRESS} exactly once, so without a
+     * separate path the snapshot keeps the byte count it had at that moment —
+     * zero — for the whole transfer, and every consumer reading {@code all()}
+     * shows a download that is running and never moves.
+     *
+     * <p>Applied only to a download already {@code Transferring}, so a sample
+     * that arrives after the transfer settled cannot pull it back out of its
+     * terminal state.
+     *
+     * @param id which download
+     * @param progress how far it has got
+     */
+    void progressed(TransferId id, Progress progress) {
+        Objects.requireNonNull(progress, "progress");
+        Entry entry = entry(id);
+        if (entry == null) {
+            return;
+        }
+        synchronized (lock) {
+            if (entry.state instanceof TransferState.Transferring) {
+                entry.state = new TransferState.Transferring(progress);
+            }
+        }
     }
 
     /**

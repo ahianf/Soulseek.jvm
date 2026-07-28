@@ -467,6 +467,55 @@ class DownloadQueueTest {
         queue.close();
     }
 
+    /**
+     * The bug this exists for: a download that was visibly transferring bytes
+     * reported zero of them for its entire life, because the engine reaches
+     * {@code IN_PROGRESS} once and nothing refreshed the snapshot afterwards.
+     * Every consumer that polls {@code all()} — which is the ordinary way to
+     * render a transfer list — showed a live download frozen at 0%.
+     */
+    @Test
+    @DisplayName("progress reaches the snapshot, and cannot revive a settled download")
+    void progressIsRecordedWhileTransferring() {
+        GatedRunner runner = new GatedRunner();
+        DownloadQueue queue = queue(runner);
+
+        TransferId id = TransferId.of("one");
+        queue.enqueue(id, request("alice", "music\\one.mp3"));
+        awaitStarted(runner, 1);
+
+        // Before IN_PROGRESS there is nothing to update: progress that arrives
+        // early must not invent a Transferring state.
+        queue.progressed(id, dev.slsk.Progress.of(50, 100, 1_000));
+        assertInstanceOf(
+                TransferState.Requesting.class,
+                queue.find(id).orElseThrow().snapshot().state());
+
+        queue.observed(id, new TransferState.Transferring(dev.slsk.Progress.none(100)));
+        assertEquals(
+                0,
+                ((TransferState.Transferring)
+                                queue.find(id).orElseThrow().snapshot().state())
+                        .progress()
+                        .transferred());
+
+        queue.progressed(id, dev.slsk.Progress.of(64, 100, 2_048));
+        TransferState moved = queue.find(id).orElseThrow().snapshot().state();
+        assertEquals(64, ((TransferState.Transferring) moved).progress().transferred());
+        assertEquals(2_048.0, ((TransferState.Transferring) moved).progress().bytesPerSecond(), 0.0);
+
+        runner.releaseAll();
+        awaitTerminal(queue, id);
+
+        // A sample still in flight when the transfer settled must not pull it
+        // back out of its terminal state.
+        queue.progressed(id, dev.slsk.Progress.of(99, 100, 2_048));
+        assertInstanceOf(
+                TransferState.Finished.class,
+                queue.find(id).orElseThrow().snapshot().state());
+        queue.close();
+    }
+
     @Test
     @DisplayName("the peer's queue position is polled, and only a change is published")
     void positionsArePolledAndOnlyChangesPublished() {

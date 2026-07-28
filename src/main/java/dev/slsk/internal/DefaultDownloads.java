@@ -188,8 +188,14 @@ final class DefaultDownloads implements Downloads {
         if (id == null) {
             return;
         }
-        progress.offer(id, transfer.getBytesTransferred(), transfer.getSize())
-                .ifPresent(value -> events.publish(new DownloadEvent.Progressed(id, value, Instant.now())));
+        progress.offer(id, transfer.getBytesTransferred(), transfer.getSize()).ifPresent(value -> {
+            // Both, and neither is redundant. The event is for a consumer that
+            // subscribes; the queue update is for one that polls `all()`, which
+            // would otherwise read a byte count frozen at the moment the
+            // transfer started.
+            queue.progressed(id, value);
+            events.publish(new DownloadEvent.Progressed(id, value, Instant.now()));
+        });
     }
 
     /** Classifies a thrown failure the way the transfer path would have. */
