@@ -609,7 +609,16 @@ final class DownloadQueue {
         onStateChanged.accept(entry, previous);
     }
 
-    /** Records an entry's current state, in state order. */
+    /**
+     * Records an entry's current state, in state order.
+     *
+     * <p>The record trails the state by the width of one write: a snapshot read
+     * through {@code find} can show a download finished a moment before the
+     * store has been told. That is the right way round for a persistence log —
+     * blocking a state change on a consumer's database would make the queue only
+     * as fast as its slowest writer — but it means the store is not a read
+     * model, and nothing should treat it as one.
+     */
     private void save(Entry entry) {
         synchronized (storeLock) {
             store.save(entry.snapshot());

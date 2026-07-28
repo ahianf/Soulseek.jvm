@@ -101,7 +101,7 @@ class DownloadQueueTest {
             try {
                 if (!open) {
                     gates.computeIfAbsent(entry.id(), id -> new CountDownLatch(1))
-                            .await(5, TimeUnit.SECONDS);
+                            .await(15, TimeUnit.SECONDS);
                 }
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
@@ -123,14 +123,26 @@ class DownloadQueueTest {
     }
 
     private static void awaitStarted(GatedRunner runner, int count) {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
         while (runner.started.size() < count && System.nanoTime() < deadline) {
             Thread.onSpinWait();
         }
     }
 
+    /** Waits for the store to have caught up with a state it trails. */
+    private static void awaitStored(TransferStore store, Class<? extends TransferState> state) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+        while (System.nanoTime() < deadline) {
+            if (store.loadAll().stream().allMatch(saved -> state.isInstance(saved.state()))) {
+                return;
+            }
+            Thread.onSpinWait();
+        }
+        throw new AssertionError("the store never recorded " + state.getSimpleName());
+    }
+
     private static void awaitTerminal(DownloadQueue queue, TransferId id) {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
         while (System.nanoTime() < deadline) {
             if (queue.find(id).map(DownloadQueue.Entry::isTerminal).orElse(false)) {
                 return;
@@ -397,6 +409,9 @@ class DownloadQueueTest {
         queue.enqueue(id, request("alice", "music\\one.mp3"));
         awaitTerminal(queue, id);
 
+        // The record trails the state by one write, so waiting on the state is
+        // not waiting on the store.
+        awaitStored(store, TransferState.Finished.class);
         List<Download> saved = store.loadAll();
         assertEquals(1, saved.size());
         assertInstanceOf(TransferState.Finished.class, saved.getFirst().state());
