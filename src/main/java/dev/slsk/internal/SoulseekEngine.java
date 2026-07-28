@@ -74,6 +74,7 @@ import dev.slsk.internal.search.SearchResponder;
 import dev.slsk.internal.search.SearchResponderClient;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.spi.ShareCatalog;
+import dev.slsk.spi.UploadPolicy;
 import java.io.ByteArrayOutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -109,6 +110,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 final class SoulseekEngine
         implements AutoCloseable,
                 EngineContext,
+                UploadAdmission.Host,
                 DistributedConnectionManagerClient,
                 DistributedMessageHandlerClient,
                 ListenerHandlerClient,
@@ -152,6 +154,18 @@ final class SoulseekEngine
     volatile ClientListenerFactory clientListenerFactory = SocketListener::new;
     private volatile ShareCatalog catalog = ShareCatalog.empty();
     private volatile UserProfile profile = UserProfile.empty();
+    private volatile UploadPolicy uploadPolicy = UploadPolicy.standard(2, 1);
+    private volatile UploadAdmission uploadAdmission = new UploadAdmission(this);
+
+    /**
+     * Who the server said has bought privileges.
+     *
+     * <p>Sent once on login as a list, and the only way to know: there is no
+     * per-user query for it. Kept because privileged users jump the upload
+     * queue, which is protocol-mandated rather than a matter of taste.
+     */
+    private volatile java.util.Set<String> privilegedUsers = java.util.Set.of();
+
     private final AtomicBoolean closed = new AtomicBoolean();
     /**
      * The client's single timer thread. Every component that needs delayed or
@@ -340,6 +354,61 @@ final class SoulseekEngine
     @Override
     public UserProfile getProfile() {
         return profile;
+    }
+
+    /**
+     * Returns who we serve and in what order.
+     *
+     * @return the upload policy, never {@code null}
+     */
+    @Override
+    public UploadPolicy getUploadPolicy() {
+        return uploadPolicy;
+    }
+
+    @Override
+    public UploadPolicy uploadPolicy() {
+        return uploadPolicy;
+    }
+
+    @Override
+    public java.util.Map<Integer, dev.slsk.internal.transfer.TransferInternal> uploads() {
+        return getUploadRegistry();
+    }
+
+    @Override
+    public DiagnosticSink diagnostic() {
+        return diagnostic;
+    }
+
+    /**
+     * Sets who we serve and in what order.
+     *
+     * @param value the policy, or {@code null} for the standard one
+     */
+    void setUploadPolicy(UploadPolicy value) {
+        uploadPolicy = value == null ? UploadPolicy.standard(2, 1) : value;
+    }
+
+    /**
+     * Returns what admits or refuses a peer's request.
+     *
+     * @return the admission
+     */
+    @Override
+    public UploadAdmission getUploadAdmission() {
+        return uploadAdmission;
+    }
+
+    /**
+     * Returns whether the server said a user has bought privileges.
+     *
+     * @param username who
+     * @return whether they are privileged
+     */
+    @Override
+    public boolean isPrivileged(String username) {
+        return username != null && privilegedUsers.contains(username);
     }
 
     /**
@@ -825,7 +894,11 @@ final class SoulseekEngine
         forwardServer(ServerMessageEvent.PRIVATE_ROOM_MODERATION_ADDED, Kind.PRIVATE_ROOM_MODERATION_ADDED);
         forwardServer(ServerMessageEvent.PRIVATE_ROOM_MODERATION_REMOVED, Kind.PRIVATE_ROOM_MODERATION_REMOVED);
         forwardServer(ServerMessageEvent.PRIVATE_ROOM_USER_LIST_RECEIVED, Kind.PRIVATE_ROOM_USER_LIST_RECEIVED);
-        forwardServer(ServerMessageEvent.PRIVILEGED_USER_LIST_RECEIVED, Kind.PRIVILEGED_USER_LIST_RECEIVED);
+        serverMessageHandler.<java.util.List<String>>addListener(
+                ServerMessageEvent.PRIVILEGED_USER_LIST_RECEIVED, (sender, eventData) -> {
+                    privilegedUsers = eventData == null ? java.util.Set.of() : java.util.Set.copyOf(eventData);
+                    events.raise(Kind.PRIVILEGED_USER_LIST_RECEIVED, eventData);
+                });
         forwardServer(ServerMessageEvent.PRIVILEGE_NOTIFICATION_RECEIVED, Kind.PRIVILEGE_NOTIFICATION_RECEIVED);
         forwardServer(ServerMessageEvent.ROOM_MESSAGE_RECEIVED, Kind.ROOM_MESSAGE_RECEIVED);
         forwardServer(ServerMessageEvent.ROOM_TICKER_LIST_RECEIVED, Kind.ROOM_TICKER_LIST_RECEIVED);
@@ -1162,8 +1235,6 @@ final class SoulseekEngine
                 null,
                 null,
                 patch.getIncomingConnectionOptions(),
-                null,
-                null,
                 null,
                 null,
                 null);

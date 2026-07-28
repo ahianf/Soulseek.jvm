@@ -19,14 +19,12 @@ public class SoulseekClientOptionsPatch {
     private final ConnectionOptions distributedConnectionOptions;
     private final Boolean enableDistributedNetwork;
     private final Boolean enableListener;
-    private final EnqueueDownloadCallback enqueueDownload;
     private final ConnectionOptions incomingConnectionOptions;
     private final InetAddress listenIpAddress;
     private final Integer listenPort;
     private final Integer maximumDownloadSpeed;
     private final Integer maximumUploadSpeed;
     private final ConnectionOptions peerConnectionOptions;
-    private final PlaceInQueueResolver placeInQueueResolver;
     private final SearchResponseCache searchResponseCache;
     private final ConnectionOptions serverConnectionOptions;
     private final ConnectionOptions transferConnectionOptions;
@@ -36,15 +34,13 @@ public class SoulseekClientOptionsPatch {
     public SoulseekClientOptionsPatch() {
         this(
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null);
+                null, null);
     }
 
     /** Creates a patch through its listener switch. */
     public SoulseekClientOptionsPatch(Boolean enableListener) {
         this(
                 enableListener,
-                null,
-                null,
                 null,
                 null,
                 null,
@@ -86,8 +82,6 @@ public class SoulseekClientOptionsPatch {
                 null,
                 null,
                 null,
-                null,
-                null,
                 null);
     }
 
@@ -97,8 +91,6 @@ public class SoulseekClientOptionsPatch {
                 enableListener,
                 listenIpAddress,
                 listenPort,
-                null,
-                null,
                 null,
                 null,
                 null,
@@ -142,9 +134,7 @@ public class SoulseekClientOptionsPatch {
             ConnectionOptions incomingConnectionOptions,
             ConnectionOptions distributedConnectionOptions,
             UserEndpointCache userEndpointCache,
-            SearchResponseCache searchResponseCache,
-            EnqueueDownloadCallback enqueueDownload,
-            PlaceInQueueResolver placeInQueueResolver) {
+            SearchResponseCache searchResponseCache) {
         this.enableListener = enableListener;
         this.listenIpAddress = listenIpAddress;
         this.listenPort = listenPort;
@@ -176,8 +166,6 @@ public class SoulseekClientOptionsPatch {
         this.distributedConnectionOptions = distributedConnectionOptions;
         this.userEndpointCache = userEndpointCache;
         this.searchResponseCache = searchResponseCache;
-        this.enqueueDownload = enqueueDownload;
-        this.placeInQueueResolver = placeInQueueResolver;
     }
 
     /** Returns the distributed-child setting, or {@code null}. */
@@ -225,11 +213,6 @@ public class SoulseekClientOptionsPatch {
         return enableListener;
     }
 
-    /** Returns the enqueue-download callback, or {@code null}. */
-    public final EnqueueDownloadCallback getEnqueueDownload() {
-        return enqueueDownload;
-    }
-
     /** Returns the incoming connection options, or {@code null}. */
     public final ConnectionOptions getIncomingConnectionOptions() {
         return incomingConnectionOptions;
@@ -258,11 +241,6 @@ public class SoulseekClientOptionsPatch {
     /** Returns the peer connection options, or {@code null}. */
     public final ConnectionOptions getPeerConnectionOptions() {
         return peerConnectionOptions;
-    }
-
-    /** Returns the place-in-queue resolver, or {@code null}. */
-    public final PlaceInQueueResolver getPlaceInQueueResolver() {
-        return placeInQueueResolver;
     }
 
     /** Returns the search response cache, or {@code null}. */

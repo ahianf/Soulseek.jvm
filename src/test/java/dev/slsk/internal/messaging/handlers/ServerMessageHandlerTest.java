@@ -696,8 +696,6 @@ class ServerMessageHandlerTest {
                 null,
                 null,
                 null,
-                null,
-                null,
                 null);
         return new SoulseekClientOptions().with(patch);
     }

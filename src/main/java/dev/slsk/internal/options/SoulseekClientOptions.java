@@ -10,7 +10,6 @@ import dev.slsk.internal.diagnostics.DiagnosticLevel;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 
 /** Options for a Soulseek client. */
 public class SoulseekClientOptions {
@@ -34,7 +33,6 @@ public class SoulseekClientOptions {
     private final ConnectionOptions distributedConnectionOptions;
     private final boolean enableDistributedNetwork;
     private final boolean enableListener;
-    private final EnqueueDownloadCallback enqueueDownload;
     private final ConnectionOptions incomingConnectionOptions;
     private final InetAddress listenIpAddress;
     private final int listenPort;
@@ -47,7 +45,6 @@ public class SoulseekClientOptions {
     private final int messageTimeout;
     private final DiagnosticLevel minimumDiagnosticLevel;
     private final ConnectionOptions peerConnectionOptions;
-    private final PlaceInQueueResolver placeInQueueResolver;
     private final boolean raiseEventsAsynchronously;
     private final SearchResponseCache searchResponseCache;
     private final ConnectionOptions serverConnectionOptions;
@@ -76,8 +73,6 @@ public class SoulseekClientOptions {
                 false,
                 DiagnosticLevel.INFO,
                 0,
-                null,
-                null,
                 null,
                 null,
                 null,
@@ -116,8 +111,6 @@ public class SoulseekClientOptions {
                 null,
                 null,
                 null,
-                null,
-                null,
                 false);
     }
 
@@ -142,8 +135,6 @@ public class SoulseekClientOptions {
                 false,
                 DiagnosticLevel.INFO,
                 0,
-                null,
-                null,
                 null,
                 null,
                 null,
@@ -213,8 +204,6 @@ public class SoulseekClientOptions {
                 null,
                 null,
                 null,
-                null,
-                null,
                 false);
     }
 
@@ -245,8 +234,6 @@ public class SoulseekClientOptions {
             ConnectionOptions distributedConnectionOptions,
             UserEndpointCache userEndpointCache,
             SearchResponseCache searchResponseCache,
-            EnqueueDownloadCallback enqueueDownload,
-            PlaceInQueueResolver placeInQueueResolver,
             boolean raiseEventsAsynchronously) {
         // Assigned first: the connection options below are stamped with it, so a
         // connection reads the dispatch policy from itself rather than a static
@@ -311,12 +298,6 @@ public class SoulseekClientOptions {
 
         this.userEndpointCache = userEndpointCache;
         this.searchResponseCache = searchResponseCache;
-        this.enqueueDownload = enqueueDownload == null
-                ? (username, endpoint, filename) -> CompletableFuture.completedFuture(null)
-                : enqueueDownload;
-        this.placeInQueueResolver = placeInQueueResolver == null
-                ? (username, endpoint, filename) -> CompletableFuture.completedFuture(null)
-                : placeInQueueResolver;
     }
 
     /** Returns a clone with the supplied patch applied. */
@@ -369,8 +350,6 @@ public class SoulseekClientOptions {
                         : patch.getDistributedConnectionOptions(),
                 patch.getUserEndpointCache() == null ? userEndpointCache : patch.getUserEndpointCache(),
                 patch.getSearchResponseCache() == null ? searchResponseCache : patch.getSearchResponseCache(),
-                patch.getEnqueueDownload() == null ? enqueueDownload : patch.getEnqueueDownload(),
-                patch.getPlaceInQueueResolver() == null ? placeInQueueResolver : patch.getPlaceInQueueResolver(),
                 false);
     }
 
@@ -417,11 +396,6 @@ public class SoulseekClientOptions {
     /** Returns whether the listener is enabled. */
     public final boolean isEnableListener() {
         return enableListener;
-    }
-
-    /** Returns the enqueue-download callback. */
-    public final EnqueueDownloadCallback getEnqueueDownload() {
-        return enqueueDownload;
     }
 
     /** Returns the incoming connection options. */
@@ -482,11 +456,6 @@ public class SoulseekClientOptions {
     /** Returns the peer connection options. */
     public final ConnectionOptions getPeerConnectionOptions() {
         return peerConnectionOptions;
-    }
-
-    /** Returns the place-in-queue resolver. */
-    public final PlaceInQueueResolver getPlaceInQueueResolver() {
-        return placeInQueueResolver;
     }
 
     /** Returns whether events are raised asynchronously. */

@@ -13,11 +13,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.FileAttributes;
+import dev.slsk.RejectionReason;
 import dev.slsk.SearchFile;
 import dev.slsk.ShareIndex;
 import dev.slsk.UserProfile;
 import dev.slsk.Username;
-import dev.slsk.exceptions.DownloadEnqueueException;
 import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
@@ -53,14 +53,12 @@ import dev.slsk.internal.messaging.messages.UploadFailed;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.MessageEvent;
 import dev.slsk.internal.network.MessageReceivedEvent;
-import dev.slsk.internal.options.EnqueueDownloadCallback;
-import dev.slsk.internal.options.PlaceInQueueResolver;
 import dev.slsk.internal.options.SoulseekClientOptions;
-import dev.slsk.internal.options.SoulseekClientOptionsPatch;
 import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.spi.ResolvedFile;
 import dev.slsk.spi.ShareCatalog;
+import dev.slsk.spi.UploadPolicy;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -78,6 +76,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class PeerMessageHandlerTest {
@@ -319,11 +318,14 @@ class PeerMessageHandlerTest {
         assertTrue(failed.diagnostic.containsWarning("The share catalog failed to answer a folder request"));
     }
 
+    /**
+     * Four callbacks answered parts of this and could not see each other. One
+     * policy answers it now, so what is asserted is the decision reaching the
+     * wire rather than four functions agreeing by luck.
+     */
     @Test
-    void queueDownloadSendsPlaceOrDenialWithSourceMessages() {
-        Fixture queued = new Fixture(options(
-                (username, endpoint, filename) -> CompletableFuture.completedFuture(null),
-                (username, endpoint, filename) -> CompletableFuture.completedFuture(4)));
+    void queueDownloadSendsThePolicysAnswer() {
+        Fixture queued = new Fixture(policy((request, context) -> new UploadPolicy.Decision.Queue(4)));
         queued.handler
                 .handleMessageReadAsync(queued.connection.proxy, new QueueDownloadRequest(FILENAME).toByteArray())
                 .join();
@@ -331,34 +333,35 @@ class PeerMessageHandlerTest {
                 new PlaceInQueueResponse(FILENAME, 4).toByteArray(),
                 queued.connection.outgoing.getFirst().toByteArray());
 
-        Fixture rejected = new Fixture(options(
-                (username, endpoint, filename) ->
-                        CompletableFuture.failedFuture(new DownloadEnqueueException("No slot")),
-                null));
-        rejected.handler
-                .handleMessageReadAsync(rejected.connection.proxy, new QueueDownloadRequest(FILENAME).toByteArray())
+        Fixture denied = new Fixture(
+                policy((request, context) -> new UploadPolicy.Decision.Deny(RejectionReason.QUEUE_FULL, "No slot")));
+        denied.handler
+                .handleMessageReadAsync(denied.connection.proxy, new QueueDownloadRequest(FILENAME).toByteArray())
                 .join();
         assertArrayEquals(
                 new UploadDenied(FILENAME, "No slot").toByteArray(),
-                rejected.connection.outgoing.getFirst().toByteArray());
+                denied.connection.outgoing.getFirst().toByteArray());
+    }
 
-        Fixture failed = new Fixture(options(
-                (username, endpoint, filename) -> CompletableFuture.failedFuture(new RuntimeException("enqueue")),
-                null));
+    @Test
+    @DisplayName("a policy that throws refuses the request rather than dropping it")
+    void aFailingPolicyStillAnswersThePeer() {
+        Fixture failed = new Fixture(policy((request, context) -> {
+            throw new IllegalStateException("policy is broken");
+        }));
         failed.handler
                 .handleMessageReadAsync(failed.connection.proxy, new QueueDownloadRequest(FILENAME).toByteArray())
                 .join();
+
+        // Silence would leave the peer waiting on a read that never completes.
         assertArrayEquals(
-                new UploadDenied(FILENAME, "Enqueue failed due to internal error").toByteArray(),
+                new UploadDenied(FILENAME, "Upload policy failed.").toByteArray(),
                 failed.connection.outgoing.getFirst().toByteArray());
-        assertTrue(failed.diagnostic.containsWarning("Failed to invoke QueueDownload action"));
     }
 
     @Test
     void downloadTransferRequestSendsQueuedOrTwoRejectionMessages() {
-        Fixture queued = new Fixture(options(
-                (username, endpoint, filename) -> CompletableFuture.completedFuture(null),
-                (username, endpoint, filename) -> CompletableFuture.completedFuture(null)));
+        Fixture queued = new Fixture(policy((request, context) -> new UploadPolicy.Decision.Allow()));
         queued.handler
                 .handleMessageReadAsync(
                         queued.connection.proxy,
@@ -369,10 +372,8 @@ class PeerMessageHandlerTest {
                 new TransferResponse(TOKEN, "Queued").toByteArray(),
                 queued.connection.outgoing.getFirst().toByteArray());
 
-        Fixture rejected = new Fixture(options(
-                (username, endpoint, filename) ->
-                        CompletableFuture.failedFuture(new DownloadEnqueueException("Rejected")),
-                null));
+        Fixture rejected = new Fixture(policy(
+                (request, context) -> new UploadPolicy.Decision.Deny(RejectionReason.FILE_NOT_SHARED, "Rejected")));
         rejected.handler
                 .handleMessageReadAsync(
                         rejected.connection.proxy,
@@ -412,10 +413,18 @@ class PeerMessageHandlerTest {
                 unknown.connection.outgoing.getFirst().toByteArray());
     }
 
+    /**
+     * The queue a place refers to is the one the policy put them in, so there is
+     * nothing to resolve. A peer asking about a file we are not holding for them
+     * gets no answer, which is what that means.
+     */
     @Test
-    void placeRequestWritesOnlyNonNullPlaceAndLogsResolverFailure() {
-        Fixture placed =
-                new Fixture(options(null, (username, endpoint, filename) -> CompletableFuture.completedFuture(9)));
+    void placeRequestAnswersOnlyForSomeoneActuallyQueued() {
+        Fixture placed = new Fixture(policy((request, context) -> new UploadPolicy.Decision.Queue(9)));
+        placed.handler
+                .handleMessageReadAsync(placed.connection.proxy, new QueueDownloadRequest(FILENAME).toByteArray())
+                .join();
+        placed.connection.outgoing.clear();
         placed.handler
                 .handleMessageReadAsync(placed.connection.proxy, new PlaceInQueueRequest(FILENAME).toByteArray())
                 .join();
@@ -423,21 +432,11 @@ class PeerMessageHandlerTest {
                 new PlaceInQueueResponse(FILENAME, 9).toByteArray(),
                 placed.connection.outgoing.getFirst().toByteArray());
 
-        Fixture absent =
-                new Fixture(options(null, (username, endpoint, filename) -> CompletableFuture.completedFuture(null)));
+        Fixture absent = new Fixture(policy((request, context) -> new UploadPolicy.Decision.Allow()));
         absent.handler
                 .handleMessageReadAsync(absent.connection.proxy, new PlaceInQueueRequest(FILENAME).toByteArray())
                 .join();
         assertTrue(absent.connection.outgoing.isEmpty());
-
-        Fixture failed = new Fixture(options(
-                null,
-                (username, endpoint, filename) ->
-                        CompletableFuture.failedFuture(new RuntimeException("place resolver"))));
-        failed.handler
-                .handleMessageReadAsync(failed.connection.proxy, new PlaceInQueueRequest(FILENAME).toByteArray())
-                .join();
-        assertTrue(failed.diagnostic.containsWarning("Failed to resolve place in queue"));
     }
 
     @Test
@@ -492,18 +491,16 @@ class PeerMessageHandlerTest {
         assertTrue(fixture.diagnostic.contains("Peer message sent: BROWSE_REQUEST"));
     }
 
-    private static SoulseekClientOptions options(EnqueueDownloadCallback enqueue, PlaceInQueueResolver place) {
-        SoulseekClientOptionsPatch patch = new SoulseekClientOptionsPatch(
-                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, enqueue, place);
-        return new SoulseekClientOptions().with(patch);
-    }
-
     /**
      * A catalog answering only what a test needs, and empty for the rest. The
      * pieces used to be four separately-configured resolvers; the point of the
      * SPI is that they are one object now, so the fixture builds one.
      */
+    /** A fixture whose policy is the one supplied. */
+    private static UploadPolicy policy(UploadPolicy value) {
+        return value;
+    }
+
     private static ShareCatalog catalog(
             Function<Username, dev.slsk.BrowseResponse> browse,
             BiFunction<Username, String, List<dev.slsk.Directory>> directory,
@@ -567,6 +564,10 @@ class PeerMessageHandlerTest {
             this(new SoulseekClientOptions(), catalog, UserProfile.empty());
         }
 
+        private Fixture(UploadPolicy policy) {
+            this(new SoulseekClientOptions(), ShareCatalog.empty(), UserProfile.empty(), policy);
+        }
+
         private Fixture(UserProfile profile) {
             this(new SoulseekClientOptions(), ShareCatalog.empty(), profile);
         }
@@ -576,7 +577,11 @@ class PeerMessageHandlerTest {
         }
 
         private Fixture(SoulseekClientOptions options, ShareCatalog catalog, UserProfile profile) {
-            client = new FakeClient(options, waiter, catalog, profile);
+            this(options, catalog, profile, UploadPolicy.standard(2, 1));
+        }
+
+        private Fixture(SoulseekClientOptions options, ShareCatalog catalog, UserProfile profile, UploadPolicy policy) {
+            client = new FakeClient(options, waiter, catalog, profile, policy);
             handler = new DefaultPeerMessageHandler(client, diagnostic);
         }
     }
@@ -586,14 +591,62 @@ class PeerMessageHandlerTest {
         private final Waiter waiter;
         private final ShareCatalog catalog;
         private final UserProfile profile;
+        private final UploadPolicy policy;
+
+        /**
+         * A real admission over this fake client. It is the thing under test as
+         * much as the handler is: bans, the queue a place refers to, and the
+         * guard around a policy that throws all live there.
+         */
+        /** Where a misbehaving policy is reported; asserted on by the tests. */
+        private final RecordingDiagnostic admissionDiagnostic = new RecordingDiagnostic();
+
+        private final dev.slsk.internal.UploadAdmission admission =
+                new dev.slsk.internal.UploadAdmission(new dev.slsk.internal.UploadAdmission.Host() {
+                    @Override
+                    public UploadPolicy uploadPolicy() {
+                        return policy;
+                    }
+
+                    @Override
+                    public Map<Integer, TransferInternal> uploads() {
+                        return Map.of();
+                    }
+
+                    @Override
+                    public boolean isPrivileged(String username) {
+                        return false;
+                    }
+
+                    @Override
+                    public dev.slsk.internal.diagnostics.DiagnosticSink diagnostic() {
+                        return admissionDiagnostic;
+                    }
+                });
         private final Map<Integer, SearchInternal> searches = new HashMap<>();
         private final Map<Integer, TransferInternal> downloads = new HashMap<>();
 
-        private FakeClient(SoulseekClientOptions options, Waiter waiter, ShareCatalog catalog, UserProfile profile) {
+        private FakeClient(
+                SoulseekClientOptions options,
+                Waiter waiter,
+                ShareCatalog catalog,
+                UserProfile profile,
+                UploadPolicy policy) {
             this.options = options;
             this.waiter = waiter;
             this.catalog = catalog;
             this.profile = profile;
+            this.policy = policy;
+        }
+
+        @Override
+        public UploadPolicy getUploadPolicy() {
+            return policy;
+        }
+
+        @Override
+        public dev.slsk.internal.UploadAdmission getUploadAdmission() {
+            return admission;
         }
 
         @Override

@@ -41,4 +41,18 @@ public interface PeerMessageHandlerClient {
      * @return the profile, never {@code null}
      */
     dev.slsk.UserProfile getProfile();
+
+    /**
+     * Returns who we serve and in what order.
+     *
+     * @return the upload policy, never {@code null}
+     */
+    dev.slsk.spi.UploadPolicy getUploadPolicy();
+
+    /**
+     * Returns what admits or refuses a peer's request.
+     *
+     * @return the admission
+     */
+    dev.slsk.internal.UploadAdmission getUploadAdmission();
 }

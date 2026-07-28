@@ -4,6 +4,7 @@
 package dev.slsk;
 
 import dev.slsk.events.UploadEvent;
+import dev.slsk.spi.UploadPolicy;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -63,6 +64,20 @@ public interface Uploads {
      * @param user who to refuse
      * @param reason recorded, and sent to them when they ask
      */
+    /**
+     * Returns who we serve and in what order.
+     *
+     * @return the policy
+     */
+    UploadPolicy policy();
+
+    /**
+     * Changes who we serve and in what order.
+     *
+     * @param policy the policy
+     */
+    void policy(UploadPolicy policy);
+
     void ban(Username user, String reason);
 
     /**

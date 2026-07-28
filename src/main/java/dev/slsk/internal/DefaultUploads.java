@@ -11,6 +11,7 @@ import dev.slsk.Upload;
 import dev.slsk.Uploads;
 import dev.slsk.Username;
 import dev.slsk.events.UploadEvent;
+import dev.slsk.spi.UploadPolicy;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -30,15 +31,15 @@ import java.util.function.Consumer;
  * user, so it belongs to the facet owning that policy. Both ban and unban are
  * idempotent, and the list is a snapshot.
  *
- * <p>The policy that consults this list, and the slot and per-user accounting
- * around it, arrive with the upload queue.
+ * <p>The list is held by the admission rather than here, because a ban is
+ * checked ahead of the policy and must survive a consumer replacing the policy.
+ * That is the difference between a default and an invariant.
  */
 final class DefaultUploads implements Uploads {
 
     private final SoulseekEngine client;
     private final EventBus<UploadEvent> events;
     private final Map<TransferId, Priority> priorities = new ConcurrentHashMap<>();
-    private final Map<Username, String> bans = new ConcurrentHashMap<>();
 
     DefaultUploads(SoulseekEngine client, EventBus<UploadEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
@@ -86,20 +87,29 @@ final class DefaultUploads implements Uploads {
     }
 
     @Override
+    public UploadPolicy policy() {
+        return client.getUploadPolicy();
+    }
+
+    @Override
+    public void policy(UploadPolicy policy) {
+        Objects.requireNonNull(policy, "policy");
+        client.setUploadPolicy(policy);
+    }
+
+    @Override
     public void ban(Username user, String reason) {
-        Objects.requireNonNull(user, "user");
-        bans.put(user, reason == null ? "" : reason);
+        client.getUploadAdmission().ban(user, reason);
     }
 
     @Override
     public void unban(Username user) {
-        Objects.requireNonNull(user, "user");
-        bans.remove(user);
+        client.getUploadAdmission().unban(user);
     }
 
     @Override
     public Map<Username, String> banned() {
-        return Map.copyOf(bans);
+        return client.getUploadAdmission().banned();
     }
 
     @Override

@@ -297,8 +297,6 @@ class SearchResponderTest {
                 new ConnectionOptions(),
                 null,
                 cache,
-                null,
-                null,
                 false);
     }
 

@@ -14,7 +14,6 @@ import dev.slsk.internal.SearchResponseCache;
 import dev.slsk.internal.SearchResponseCacheRecord;
 import dev.slsk.internal.UserEndpointCache;
 import java.net.InetAddress;
-import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 
 class SoulseekClientOptionsPatchTest {
@@ -27,8 +26,6 @@ class SoulseekClientOptionsPatchTest {
         ConnectionOptions distributed = new ConnectionOptions();
         UserEndpointCache userCache = new TestUserCache();
         SearchResponseCache searchCache = new TestSearchCache();
-        EnqueueDownloadCallback enqueue = (user, endpoint, filename) -> CompletableFuture.completedFuture(null);
-        PlaceInQueueResolver place = (user, endpoint, filename) -> CompletableFuture.completedFuture(0);
         InetAddress address = InetAddress.getByName("127.0.0.2");
 
         SoulseekClientOptionsPatch patch = new SoulseekClientOptionsPatch(
@@ -50,9 +47,7 @@ class SoulseekClientOptionsPatchTest {
                 incoming,
                 distributed,
                 userCache,
-                searchCache,
-                enqueue,
-                place);
+                searchCache);
 
         assertEquals(false, patch.getEnableListener());
         assertSame(address, patch.getListenIpAddress());
@@ -73,8 +68,6 @@ class SoulseekClientOptionsPatchTest {
         assertSame(distributed, patch.getDistributedConnectionOptions());
         assertSame(userCache, patch.getUserEndpointCache());
         assertSame(searchCache, patch.getSearchResponseCache());
-        assertSame(enqueue, patch.getEnqueueDownload());
-        assertSame(place, patch.getPlaceInQueueResolver());
     }
 
     @Test
@@ -86,7 +79,6 @@ class SoulseekClientOptionsPatchTest {
         assertNull(patch.getListenPort());
         assertNull(patch.getServerConnectionOptions());
         assertNull(patch.getTransferConnectionOptions());
-        assertNull(patch.getPlaceInQueueResolver());
     }
 
     @Test
@@ -95,7 +87,7 @@ class SoulseekClientOptionsPatchTest {
                 IllegalArgumentException.class,
                 () -> new SoulseekClientOptionsPatch(
                         null, null, 1023, null, null, -1, null, null, null, null, null, null, null, null, null, null,
-                        null, null, null, null, null));
+                        null, null, null));
 
         assertEquals("listenPort must be between 1024 and 65535", exception.getMessage());
     }
@@ -106,12 +98,12 @@ class SoulseekClientOptionsPatchTest {
                 IllegalArgumentException.class,
                 () -> new SoulseekClientOptionsPatch(
                         null, null, 65_536, null, null, null, null, null, null, null, null, null, null, null, null,
-                        null, null, null, null, null, null));
+                        null, null, null, null));
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new SoulseekClientOptionsPatch(
                         null, null, null, null, null, -1, null, null, null, null, null, null, null, null, null, null,
-                        null, null, null, null, null));
+                        null, null, null));
     }
 
     @Test

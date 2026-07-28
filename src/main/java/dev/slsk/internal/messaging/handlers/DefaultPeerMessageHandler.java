@@ -4,7 +4,6 @@
 
 package dev.slsk.internal.messaging.handlers;
 
-import dev.slsk.exceptions.DownloadEnqueueException;
 import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
@@ -433,50 +432,35 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         downloadFailedListeners.forEach(listener -> listener.handle(this, eventData));
     }
 
+    /**
+     * Asks the upload policy what to do about a peer's request.
+     *
+     * <p>Four callbacks used to answer parts of this and none of them could see
+     * the others. One decision replaces them, taken off the read loop because a
+     * policy is a consumer's code.
+     */
     private CompletableFuture<EnqueueResult> tryEnqueueDownloadAsync(
             String username, java.net.InetSocketAddress endpoint, String filename) {
-        CompletableFuture<Void> enqueue;
-        try {
-            enqueue = client.getOptions().getEnqueueDownload().enqueue(username, endpoint, filename);
-        } catch (Throwable failure) {
-            enqueue = CompletableFuture.failedFuture(failure);
-        }
-        return enqueue.handle((ignored, failure) -> {
-            if (failure == null) {
-                return new EnqueueResult(false, "");
+        return dev.slsk.internal.Catalogs.ask(() -> {
+            dev.slsk.spi.UploadPolicy.Decision decision =
+                    client.getUploadAdmission().decide(dev.slsk.Username.of(username), filename);
+            if (decision instanceof dev.slsk.spi.UploadPolicy.Decision.Deny denied) {
+                return new EnqueueResult(true, denied.message());
             }
-            Throwable cause = unwrap(failure);
-            if (cause instanceof DownloadEnqueueException) {
-                return new EnqueueResult(true, message(cause));
-            }
-            diagnostic.warning("Failed to invoke QueueDownload action: " + message(cause), cause);
-            return new EnqueueResult(true, "Enqueue failed due to internal error");
+            return new EnqueueResult(false, "");
         });
     }
 
+    /**
+     * Tells a peer where they are in our queue.
+     *
+     * <p>The queue is the one the policy put them in, so there is nothing to
+     * resolve: a peer that is not waiting gets no answer, which is what a peer
+     * asking about a file we are not holding for them should get.
+     */
     private CompletableFuture<Void> trySendPlaceInQueueAsync(MessageConnection connection, String filename) {
-        CompletableFuture<Integer> resolved;
-        try {
-            resolved = client.getOptions()
-                    .getPlaceInQueueResolver()
-                    .resolve(connection.getUsername(), connection.getIpEndpoint(), filename);
-        } catch (Throwable failure) {
-            resolved = CompletableFuture.failedFuture(failure);
-        }
-        return resolved.handle((place, failure) -> {
-                    if (failure != null) {
-                        Throwable cause = unwrap(failure);
-                        diagnostic.warning(
-                                "Failed to resolve place in queue for file " + filename
-                                        + " from " + connection.getUsername() + ": "
-                                        + message(cause),
-                                cause);
-                        return null;
-                    }
-                    return place;
-                })
-                .thenCompose(place ->
-                        place == null ? completed() : connection.writeAsync(new PlaceInQueueResponse(filename, place)));
+        Integer place = client.getUploadAdmission().place(dev.slsk.Username.of(connection.getUsername()), filename);
+        return place == null ? completed() : connection.writeAsync(new PlaceInQueueResponse(filename, place));
     }
 
     private void raiseDiagnostic(DiagnosticEvent eventData) {

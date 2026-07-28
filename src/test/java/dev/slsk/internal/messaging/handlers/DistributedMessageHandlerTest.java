@@ -227,7 +227,7 @@ class DistributedMessageHandlerTest {
         }
         SoulseekClientOptionsPatch patch = new SoulseekClientOptionsPatch(
                 null, null, null, null, null, null, null, null, false, null, null, null, null, null, null, null, null,
-                null, null, null, null);
+                null, null);
         return new SoulseekClientOptions().with(patch);
     }
 

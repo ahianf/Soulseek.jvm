@@ -7,7 +7,6 @@ package dev.slsk.internal.options;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -18,7 +17,6 @@ import dev.slsk.internal.SearchResponseCacheRecord;
 import dev.slsk.internal.UserEndpointCache;
 import dev.slsk.internal.diagnostics.DiagnosticLevel;
 import java.net.InetAddress;
-import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 
 class SoulseekClientOptionsTest {
@@ -31,8 +29,6 @@ class SoulseekClientOptionsTest {
         ConnectionOptions distributed = new ConnectionOptions();
         UserEndpointCache userCache = new TestUserCache();
         SearchResponseCache searchCache = new TestSearchCache();
-        EnqueueDownloadCallback enqueue = (user, endpoint, filename) -> CompletableFuture.completedFuture(null);
-        PlaceInQueueResolver place = (user, endpoint, filename) -> CompletableFuture.completedFuture(0);
         InetAddress address = InetAddress.getByName("127.0.0.2");
 
         SoulseekClientOptions options = new SoulseekClientOptions(
@@ -61,8 +57,6 @@ class SoulseekClientOptionsTest {
                 distributed,
                 userCache,
                 searchCache,
-                enqueue,
-                place,
                 true);
 
         assertFalse(options.isEnableListener());
@@ -90,8 +84,6 @@ class SoulseekClientOptionsTest {
         assertSame(distributed, options.getDistributedConnectionOptions());
         assertSame(userCache, options.getUserEndpointCache());
         assertSame(searchCache, options.getSearchResponseCache());
-        assertSame(enqueue, options.getEnqueueDownload());
-        assertSame(place, options.getPlaceInQueueResolver());
         assertTrue(options.isRaiseEventsAsynchronously());
         assertEquals(1, options.getMaximumConcurrentUploadsPerUser());
     }
@@ -123,8 +115,6 @@ class SoulseekClientOptionsTest {
         assertNotNull(options.getTransferConnectionOptions());
         assertNotNull(options.getIncomingConnectionOptions());
         assertNotNull(options.getDistributedConnectionOptions());
-        assertNull(options.getEnqueueDownload().enqueue("", null, "").join());
-        assertNull(options.getPlaceInQueueResolver().resolve("", null, "").join());
     }
 
     @Test
@@ -181,8 +171,6 @@ class SoulseekClientOptionsTest {
                 true,
                 null,
                 peer,
-                null,
-                null,
                 null,
                 null,
                 null,
@@ -253,8 +241,6 @@ class SoulseekClientOptionsTest {
                 false,
                 DiagnosticLevel.NONE,
                 0,
-                null,
-                null,
                 null,
                 null,
                 null,
