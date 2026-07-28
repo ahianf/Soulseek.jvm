@@ -19,4 +19,19 @@ public interface PeerMessageHandlerClient {
     Map<Integer, SearchInternal> getSearches();
 
     Map<Integer, TransferInternal> getDownloadDictionary();
+
+    /**
+     * Returns what peers are served from.
+     *
+     * @return the installed share catalog, never {@code null}
+     */
+    dev.slsk.spi.ShareCatalog getShareCatalog();
+
+    /**
+     * Returns our own logged-in username, which a peer keys our search response
+     * on.
+     *
+     * @return the logged-in username, or {@code null}
+     */
+    String getLoggedInUsername();
 }

@@ -66,6 +66,7 @@ class EngineApiTest {
             "getSearchResponder",
             "getSearches",
             "getServerConnection",
+            "getShareCatalog",
             "getTokenFactory",
             "getUploadRegistry",
             "getUploadTokenBucket",

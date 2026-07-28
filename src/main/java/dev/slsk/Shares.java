@@ -4,6 +4,7 @@
 package dev.slsk;
 
 import dev.slsk.events.ShareEvent;
+import dev.slsk.spi.ShareCatalog;
 import java.util.List;
 
 /**
@@ -59,5 +60,19 @@ public interface Shares {
      *
      * @return the event stream
      */
+    /**
+     * Replaces the built-in index entirely.
+     *
+     * <p>The scan builds an in-memory catalog that holds every path and matches
+     * a search by substring, which is right for a few thousand files and wrong
+     * for a few hundred thousand. An application with a real index — one that
+     * already knows what it is sharing, and can answer a query without a linear
+     * walk — installs it here, and {@link #rescan} stops being the thing that
+     * decides what a peer sees.
+     *
+     * @param catalog what to serve browses, searches and uploads from
+     */
+    void catalog(ShareCatalog catalog);
+
     EventStream<ShareEvent> events();
 }

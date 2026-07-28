@@ -22,4 +22,18 @@ public interface SearchResponderClient {
 
     CompletableFuture<InetSocketAddress> getUserEndpointOperation(
             String username, CancellationSignal cancellationSignal);
+
+    /**
+     * Returns what peers are served from.
+     *
+     * @return the installed share catalog, never {@code null}
+     */
+    dev.slsk.spi.ShareCatalog getShareCatalog();
+
+    /**
+     * Returns our own logged-in username, which the peer keys our response on.
+     *
+     * @return the logged-in username, or {@code null}
+     */
+    String getLoggedInUsername();
 }

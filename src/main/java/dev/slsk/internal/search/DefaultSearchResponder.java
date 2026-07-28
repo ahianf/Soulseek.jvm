@@ -6,8 +6,8 @@ package dev.slsk.internal.search;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.internal.CacheLookupResult;
+import dev.slsk.internal.Catalogs;
 import dev.slsk.internal.RawSearchResponse;
-import dev.slsk.internal.SearchQuery;
 import dev.slsk.internal.SearchResponse;
 import dev.slsk.internal.SearchResponseCache;
 import dev.slsk.internal.SearchResponseCacheRecord;
@@ -18,7 +18,6 @@ import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.events.SearchRequestEvent;
 import dev.slsk.internal.events.SearchRequestResponseEvent;
 import dev.slsk.internal.network.MessageConnection;
-import dev.slsk.internal.options.SearchResponseResolver;
 import java.net.InetSocketAddress;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -27,6 +26,17 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /** Responds to incoming search requests. */
 public final class DefaultSearchResponder implements SearchResponder {
+
+    /**
+     * The most files worth answering one peer's search with.
+     *
+     * <p>The wire has no limit; the reference clients stop well short of one.
+     * A response of ten thousand files is not read by the peer that receives it
+     * — it is discarded for being implausible — and sending it costs us the
+     * bandwidth we would rather spend uploading.
+     */
+    private static final int MAXIMUM_MATCHES = 250;
+
     private final SearchResponderClient client;
     private final DiagnosticSink diagnostic;
     private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
@@ -122,20 +132,13 @@ public final class DefaultSearchResponder implements SearchResponder {
             return CompletableFuture.failedFuture(failure);
         }
 
-        SearchResponseResolver resolver = client.getOptions().getSearchResponseResolver();
-        if (resolver == null) {
-            return CompletableFuture.completedFuture(false);
-        }
-
-        CompletableFuture<SearchResponse> resolution;
-        try {
-            resolution = Objects.requireNonNull(
-                    resolver.resolve(username, token, SearchQuery.fromText(query)),
-                    "searchResponseResolver returned null");
-        } catch (Throwable failure) {
-            warnResolution(username, token, query, failure);
-            return CompletableFuture.completedFuture(false);
-        }
+        CompletableFuture<SearchResponse> resolution = Catalogs.ask(() -> Catalogs.searchResponse(
+                client.getLoggedInUsername(),
+                token,
+                client.getShareCatalog().search(dev.slsk.Username.of(username), query, MAXIMUM_MATCHES),
+                true,
+                0,
+                0));
 
         return resolution
                 .handle((response, failure) -> {

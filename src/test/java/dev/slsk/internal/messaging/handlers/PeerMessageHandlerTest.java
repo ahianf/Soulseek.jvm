@@ -12,15 +12,18 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
+import dev.slsk.FileAttributes;
+import dev.slsk.SearchFile;
+import dev.slsk.ShareIndex;
+import dev.slsk.Username;
 import dev.slsk.exceptions.DownloadEnqueueException;
 import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
 import dev.slsk.internal.BrowseResponse;
+import dev.slsk.internal.Catalogs;
 import dev.slsk.internal.Directory;
 import dev.slsk.internal.File;
-import dev.slsk.internal.RawBrowseResponse;
-import dev.slsk.internal.RawSearchResponse;
 import dev.slsk.internal.SearchQuery;
 import dev.slsk.internal.SearchResponse;
 import dev.slsk.internal.SearchScope;
@@ -59,6 +62,8 @@ import dev.slsk.internal.options.SoulseekClientOptionsPatch;
 import dev.slsk.internal.options.UserInfoResolver;
 import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.transfer.TransferInternal;
+import dev.slsk.spi.ResolvedFile;
+import dev.slsk.spi.ShareCatalog;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -71,8 +76,11 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import org.junit.jupiter.api.Test;
 
 class PeerMessageHandlerTest {
@@ -196,62 +204,51 @@ class PeerMessageHandlerTest {
 
     @Test
     void searchRequestWritesNonemptyResponseAndSuppressesEmptyOrNull() {
-        SearchResponse response =
-                new SearchResponse("local", TOKEN, true, 100, 0, List.of(new File(1, FILENAME, 123L, "mp3")));
-        Fixture fixture = new Fixture(options(
-                (username, token, query) -> CompletableFuture.completedFuture(response), null, null, null, null, null));
+        List<SearchFile> matches = List.of(new SearchFile(FILENAME, 123L, FileAttributes.none()));
+        Fixture fixture = new Fixture(catalog(null, null, (requester, terms) -> matches));
         fixture.handler
                 .handleMessageReadAsync(fixture.connection.proxy, peerSearchRequest(TOKEN, "query"))
                 .join();
-        assertArrayEquals(response.toByteArray(), fixture.connection.bytes.getFirst());
+        assertArrayEquals(
+                Catalogs.searchResponse("me", TOKEN, matches, true, 0, 0).toByteArray(),
+                fixture.connection.bytes.getFirst());
 
-        fixture = new Fixture(options(
-                (username, token, query) ->
-                        CompletableFuture.completedFuture(new SearchResponse("local", token, true, 0, 0, List.of())),
-                null,
-                null,
-                null,
-                null,
-                null));
+        fixture = new Fixture(catalog(null, null, (requester, terms) -> List.of()));
         fixture.handler
                 .handleMessageReadAsync(fixture.connection.proxy, peerSearchRequest(TOKEN, "empty"))
                 .join();
         assertTrue(fixture.connection.bytes.isEmpty());
 
-        fixture = new Fixture(options(
-                (username, token, query) -> CompletableFuture.completedFuture(null), null, null, null, null, null));
+        fixture = new Fixture(catalog(null, null, (requester, terms) -> List.of()));
         fixture.handler
                 .handleMessageReadAsync(fixture.connection.proxy, peerSearchRequest(TOKEN, "null"))
                 .join();
-        assertTrue(fixture.connection.bytes.isEmpty());
+        assertTrue(fixture.connection.bytes.isEmpty(), "a search that matches nothing is not answered");
     }
 
+    /**
+     * The raw pre-encoded response is no longer something a catalog can return;
+     * it survives on the response-cache path, which is where a large share's
+     * encoded bytes are actually worth keeping. What a catalog returns is
+     * matches, and the handler encodes them.
+     */
     @Test
-    void rawSearchUsesExactLengthClosesStreamAndResolverFailureWarns() {
-        ClosingInputStream stream = new ClosingInputStream(new byte[] {1, 2, 3});
-        Fixture fixture = new Fixture(options(
-                (username, token, query) -> CompletableFuture.completedFuture(new RawSearchResponse(3, stream)),
-                null,
-                null,
-                null,
-                null,
-                null));
+    void searchAnswersTheCatalogsMatchesAndACatalogFailureOnlyWarns() {
+        List<SearchFile> matches = List.of(new SearchFile("shared\\hit.mp3", 42, FileAttributes.none()));
+        Fixture matched = new Fixture(catalog(null, null, (requester, terms) -> matches));
 
-        fixture.handler
-                .handleMessageReadAsync(fixture.connection.proxy, peerSearchRequest(TOKEN, "raw"))
+        matched.handler
+                .handleMessageReadAsync(matched.connection.proxy, peerSearchRequest(TOKEN, "hit"))
                 .join();
 
-        assertEquals(3L, fixture.connection.rawLength);
-        assertSame(stream, fixture.connection.rawStream);
-        assertTrue(stream.closed);
+        assertArrayEquals(
+                Catalogs.searchResponse("me", TOKEN, matches, true, 0, 0).toByteArray(),
+                matched.connection.bytes.getFirst(),
+                "the peer is answered with our username, its token, and what the catalog matched");
 
-        Fixture failed = new Fixture(options(
-                (username, token, query) -> CompletableFuture.failedFuture(new RuntimeException("search resolver")),
-                null,
-                null,
-                null,
-                null,
-                null));
+        Fixture failed = new Fixture(catalog(null, null, (requester, terms) -> {
+            throw new IllegalStateException("search catalog");
+        }));
         failed.handler
                 .handleMessageReadAsync(failed.connection.proxy, peerSearchRequest(TOKEN, "failed"))
                 .join();
@@ -259,76 +256,63 @@ class PeerMessageHandlerTest {
     }
 
     @Test
-    void browseRequestWritesResolvedAndRawResponsesAndFallsBackOnFailure() {
-        BrowseResponse response = new BrowseResponse(List.of(new Directory("shared")));
-        Fixture resolved = new Fixture(options(
-                null, (username, endpoint) -> CompletableFuture.completedFuture(response), null, null, null, null));
+    void browseWritesTheCatalogsShareAndAnswersEmptyWhenItFails() {
+        dev.slsk.Directory shared =
+                new dev.slsk.Directory("shared", List.of(new SearchFile("shared\\song.mp3", 7, FileAttributes.none())));
+        Fixture resolved = new Fixture(catalog(requester -> dev.slsk.BrowseResponse.of(List.of(shared)), null, null));
+
         resolved.handler
                 .handleMessageReadAsync(resolved.connection.proxy, new BrowseRequest().toByteArray())
                 .join();
-        assertArrayEquals(response.toByteArray(), resolved.connection.bytes.getFirst());
 
-        ClosingInputStream stream = new ClosingInputStream(new byte[] {1, 2, 3});
-        Fixture raw = new Fixture(options(
-                null,
-                (username, endpoint) -> CompletableFuture.completedFuture(new RawBrowseResponse(3, stream)),
-                null,
-                null,
-                null,
-                null));
-        raw.handler
-                .handleMessageReadAsync(raw.connection.proxy, new BrowseRequest().toByteArray())
-                .join();
-        assertEquals(3L, raw.connection.rawLength);
-        assertSame(stream, raw.connection.rawStream);
-        assertTrue(stream.closed);
+        assertArrayEquals(
+                Catalogs.browse(dev.slsk.BrowseResponse.of(List.of(shared))).toByteArray(),
+                resolved.connection.bytes.getFirst());
 
-        Fixture failed = new Fixture(options(
-                null,
-                (username, endpoint) -> CompletableFuture.failedFuture(new RuntimeException("browse resolver")),
-                null,
-                null,
+        // A catalog that throws is a bug in the application. Leaving the peer
+        // on a read that never completes would make it our bug too.
+        Fixture failed = new Fixture(catalog(
+                requester -> {
+                    throw new IllegalStateException("browse catalog");
+                },
                 null,
                 null));
         failed.handler
                 .handleMessageReadAsync(failed.connection.proxy, new BrowseRequest().toByteArray())
                 .join();
         assertEquals(1, failed.connection.bytes.size());
-        assertTrue(failed.diagnostic.containsWarning("Failed to resolve browse response"));
+        assertArrayEquals(new BrowseResponse().toByteArray(), failed.connection.bytes.getFirst());
+        assertTrue(failed.diagnostic.containsWarning("The share catalog failed to answer a browse"));
     }
 
     @Test
-    void folderRequestWritesResolvedContentsAndFailureOnlyWarns() {
-        Directory directory = new Directory("shared", List.of(new File(1, FILENAME, 123L, "mp3")));
-        Fixture resolved = new Fixture(options(
-                null,
-                null,
-                (username, endpoint, token, name) -> CompletableFuture.completedFuture(List.of(directory)),
-                null,
-                null,
-                null));
+    void folderRequestWritesTheCatalogsContentsAndAFailureOnlyWarns() {
+        dev.slsk.Directory shared =
+                new dev.slsk.Directory("shared", List.of(new SearchFile(FILENAME, 123L, FileAttributes.none())));
+        Fixture resolved = new Fixture(catalog(null, (requester, path) -> List.of(shared), null));
+
         resolved.handler
                 .handleMessageReadAsync(
                         resolved.connection.proxy, new FolderContentsRequest(TOKEN, "shared").toByteArray())
                 .join();
-        FolderContentsResponse expected = new FolderContentsResponse(TOKEN, "shared", List.of(directory));
+
+        FolderContentsResponse expected =
+                new FolderContentsResponse(TOKEN, "shared", List.of(Catalogs.directory(shared)));
         assertArrayEquals(
                 expected.toByteArray(), resolved.connection.outgoing.getFirst().toByteArray());
 
-        Fixture failed = new Fixture(options(
+        Fixture failed = new Fixture(catalog(
                 null,
-                null,
-                (username, endpoint, token, name) ->
-                        CompletableFuture.failedFuture(new RuntimeException("directory resolver")),
-                null,
-                null,
+                (requester, path) -> {
+                    throw new IllegalStateException("directory catalog");
+                },
                 null));
         failed.handler
                 .handleMessageReadAsync(
                         failed.connection.proxy, new FolderContentsRequest(TOKEN, "shared").toByteArray())
                 .join();
         assertTrue(failed.connection.outgoing.isEmpty());
-        assertTrue(failed.diagnostic.containsWarning("Failed to resolve directory contents response"));
+        assertTrue(failed.diagnostic.containsWarning("The share catalog failed to answer a folder request"));
     }
 
     @Test
@@ -569,6 +553,43 @@ class PeerMessageHandlerTest {
         return new SoulseekClientOptions().with(patch);
     }
 
+    /**
+     * A catalog answering only what a test needs, and empty for the rest. The
+     * pieces used to be four separately-configured resolvers; the point of the
+     * SPI is that they are one object now, so the fixture builds one.
+     */
+    private static ShareCatalog catalog(
+            Function<Username, dev.slsk.BrowseResponse> browse,
+            BiFunction<Username, String, List<dev.slsk.Directory>> directory,
+            BiFunction<Username, String, List<SearchFile>> search) {
+        return new ShareCatalog() {
+            @Override
+            public dev.slsk.BrowseResponse browse(Username requester) {
+                return browse == null ? dev.slsk.BrowseResponse.empty() : browse.apply(requester);
+            }
+
+            @Override
+            public List<dev.slsk.Directory> directory(Username requester, String path) {
+                return directory == null ? List.of() : directory.apply(requester, path);
+            }
+
+            @Override
+            public List<SearchFile> search(Username requester, String terms, int limit) {
+                return search == null ? List.of() : search.apply(requester, terms);
+            }
+
+            @Override
+            public Optional<ResolvedFile> resolve(Username requester, String path) {
+                return Optional.empty();
+            }
+
+            @Override
+            public ShareIndex index() {
+                return ShareIndex.empty();
+            }
+        };
+    }
+
     private static byte[] peerSearchRequest(int token, String query) {
         return new MessageBuilder()
                 .writeCode(MessageCode.Peer.SEARCH_REQUEST)
@@ -593,7 +614,15 @@ class PeerMessageHandlerTest {
         private final DefaultPeerMessageHandler handler;
 
         private Fixture(SoulseekClientOptions options) {
-            client = new FakeClient(options, waiter);
+            this(options, ShareCatalog.empty());
+        }
+
+        private Fixture(ShareCatalog catalog) {
+            this(new SoulseekClientOptions(), catalog);
+        }
+
+        private Fixture(SoulseekClientOptions options, ShareCatalog catalog) {
+            client = new FakeClient(options, waiter, catalog);
             handler = new DefaultPeerMessageHandler(client, diagnostic);
         }
     }
@@ -601,12 +630,24 @@ class PeerMessageHandlerTest {
     private static final class FakeClient implements PeerMessageHandlerClient {
         private final SoulseekClientOptions options;
         private final Waiter waiter;
+        private final ShareCatalog catalog;
         private final Map<Integer, SearchInternal> searches = new HashMap<>();
         private final Map<Integer, TransferInternal> downloads = new HashMap<>();
 
-        private FakeClient(SoulseekClientOptions options, Waiter waiter) {
+        private FakeClient(SoulseekClientOptions options, Waiter waiter, ShareCatalog catalog) {
             this.options = options;
             this.waiter = waiter;
+            this.catalog = catalog;
+        }
+
+        @Override
+        public ShareCatalog getShareCatalog() {
+            return catalog;
+        }
+
+        @Override
+        public String getLoggedInUsername() {
+            return "me";
         }
 
         @Override

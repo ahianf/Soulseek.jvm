@@ -10,6 +10,7 @@ import dev.slsk.SharedFolder;
 import dev.slsk.Shares;
 import dev.slsk.events.ShareEvent;
 import dev.slsk.internal.common.Blocking;
+import dev.slsk.spi.ShareCatalog;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,18 +18,29 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 /**
  * {@link Shares}, over the engine.
  *
- * <p>Scanning walks the configured folders and counts what it finds, then tells
- * the server. The announcement is part of the scan rather than something the
- * consumer calls afterwards, because forgetting it is easy and the symptom is
- * invisible from the inside: the share is served perfectly well while the server
- * keeps telling every peer we have nothing, which is the exact signal most
- * clients use to decline to serve us.
+ * <p>Scanning walks the configured folders, builds a catalog of what it finds,
+ * installs it as what peers are served from, and tells the server the counts.
+ *
+ * <p>The announcement is part of the scan rather than something the consumer
+ * calls afterwards, because forgetting it is easy and the symptom is invisible
+ * from the inside: the share is served perfectly well while the server keeps
+ * telling every peer we have nothing, which is the exact signal most clients use
+ * to decline to serve us.
+ *
+ * <p>Building the catalog is part of it for the mirror-image reason. A scan that
+ * counted ten thousand files and served none of them announced a share that did
+ * not exist, which is worse than announcing nothing.
+ *
+ * <p>{@link #catalog} replaces the scanned catalog outright. After that a rescan
+ * still counts and still announces — the counts are the server's business either
+ * way — but what a peer sees comes from the installed catalog.
  */
 final class DefaultShares implements Shares {
 
@@ -36,6 +48,9 @@ final class DefaultShares implements Shares {
     private final EventBus<ShareEvent> events;
     private final AtomicReference<List<SharedFolder>> folders = new AtomicReference<>(List.of());
     private final AtomicReference<ShareIndex> index = new AtomicReference<>(ShareIndex.empty());
+
+    /** Set once a consumer installs its own catalog; a rescan stops replacing it. */
+    private final AtomicBoolean installed = new AtomicBoolean();
 
     DefaultShares(SoulseekEngine client, EventBus<ShareEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
@@ -63,23 +78,28 @@ final class DefaultShares implements Shares {
                 index.get().lastScan(),
                 ShareIndex.ScanStatus.SCANNING));
 
+        ScannedShareCatalog.Builder builder = new ScannedShareCatalog.Builder();
         int directories = 0;
         int files = 0;
-        long bytes = 0;
         try {
             for (SharedFolder folder : folders.get()) {
                 signal.throwIfCancellationRequested();
                 if (!Files.isDirectory(folder.path())) {
                     continue;
                 }
-                try (Stream<Path> walk = Files.walk(folder.path())) {
+                Optional<String> shareName = builder.root(folder);
+                if (shareName.isEmpty()) {
+                    continue;
+                }
+                Path root = folder.path().toAbsolutePath().normalize();
+                try (Stream<Path> walk = Files.walk(root)) {
                     for (Path entry : walk.toList()) {
                         signal.throwIfCancellationRequested();
                         if (Files.isDirectory(entry)) {
                             directories++;
                         } else if (Files.isRegularFile(entry)) {
                             files++;
-                            bytes += Files.size(entry);
+                            builder.file(shareName.get(), root, entry, Files.size(entry));
                         }
                     }
                 }
@@ -98,17 +118,32 @@ final class DefaultShares implements Shares {
                     : new IllegalStateException("the share scan failed", failure);
         }
 
-        ShareIndex scanned =
-                new ShareIndex(directories, files, bytes, Optional.of(Instant.now()), ShareIndex.ScanStatus.READY);
+        ScannedShareCatalog scannedCatalog = builder.build(Instant.now());
+        if (!installed.get()) {
+            client.setShareCatalog(scannedCatalog);
+        }
+        ShareIndex scanned = scannedCatalog.index();
         index.set(scanned);
-        Blocking.await(client.server().setSharedCounts(directories, files));
+        // The counts announced are the catalog's, not the walk's. They differ —
+        // the walk sees empty directories and the catalog does not — and
+        // announcing one while reporting the other would leave the server and
+        // index() disagreeing about the same share.
+        Blocking.await(client.server().setSharedCounts(scanned.directoryCount(), scanned.fileCount()));
         events.publish(new ShareEvent.ScanCompleted(scanned, Instant.now()));
         return scanned;
     }
 
     @Override
+    public void catalog(ShareCatalog value) {
+        Objects.requireNonNull(value, "catalog");
+        installed.set(true);
+        client.setShareCatalog(value);
+        index.set(value.index());
+    }
+
+    @Override
     public ShareIndex index() {
-        return index.get();
+        return installed.get() ? client.getShareCatalog().index() : index.get();
     }
 
     @Override

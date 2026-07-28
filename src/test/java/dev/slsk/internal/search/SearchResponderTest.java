@@ -12,6 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
+import dev.slsk.SearchFile;
+import dev.slsk.Username;
 import dev.slsk.internal.CacheLookupResult;
 import dev.slsk.internal.File;
 import dev.slsk.internal.SearchResponse;
@@ -32,6 +34,7 @@ import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.SearchResponseResolver;
 import dev.slsk.internal.options.SoulseekClientOptions;
+import dev.slsk.spi.ShareCatalog;
 import java.lang.reflect.Proxy;
 import java.net.InetSocketAddress;
 import java.util.List;
@@ -42,6 +45,14 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class SearchResponderTest {
+    /** What the catalog matches, and what the responder must encode from it. */
+    private static final List<SearchFile> MATCHES =
+            List.of(new SearchFile("shared\\song.mp3", 42L, dev.slsk.FileAttributes.none()));
+
+    private static SearchResponse expectedResponse(int token) {
+        return dev.slsk.internal.Catalogs.searchResponse("me", token, MATCHES, true, 0, 0);
+    }
+
     private static final SearchResponse RESPONSE =
             new SearchResponse("local", 7, true, 1, 0, List.of(new File(1, "file", 2, "ext")));
 
@@ -101,25 +112,18 @@ class SearchResponderTest {
     }
 
     @Test
-    void resolverFailuresNullAndEmptyResponsesReturnFalse() {
-        RuntimeException failure = new RuntimeException("resolver");
-        Fixture throwing = fixture((user, token, query) -> CompletableFuture.failedFuture(failure), null);
+    void aCatalogThatFailsOrMatchesNothingAnswersNothing() {
+        Fixture throwing = catalogFixture(null, null);
         assertFalse(throwing.responder.tryRespondAsync("alice", 1, "q").join());
-        assertSame(failure, throwing.diagnostic.lastThrowable);
+        assertEquals("resolver", throwing.diagnostic.lastThrowable.getMessage());
 
-        Fixture nullResponse = fixture((user, token, query) -> CompletableFuture.completedFuture(null), null);
-        assertFalse(nullResponse.responder.tryRespondAsync("alice", 1, "q").join());
-
-        Fixture empty = fixture(
-                (user, token, query) ->
-                        CompletableFuture.completedFuture(new SearchResponse("x", 1, false, 0, 0, null)),
-                null);
+        Fixture empty = catalogFixture(List.of(), null);
         assertFalse(empty.responder.tryRespondAsync("alice", 1, "q").join());
     }
 
     @Test
     void resolvedResponseConnectsWritesAndRaisesDelivered() {
-        Fixture fixture = fixture((user, token, query) -> CompletableFuture.completedFuture(RESPONSE), null);
+        Fixture fixture = catalogFixture(MATCHES, null);
         AtomicReference<byte[]> written = new AtomicReference<>();
         fixture.manager.connection = messageConnection(written, CompletableFuture.completedFuture(null));
         AtomicReference<SearchRequestResponseEvent> delivered = new AtomicReference<>();
@@ -129,8 +133,10 @@ class SearchResponderTest {
 
         assertEquals("alice", fixture.manager.lastUsername);
         assertEquals(77, fixture.manager.lastSolicitationToken);
-        assertArrayEquals(RESPONSE.toByteArray(), written.get());
-        assertSame(RESPONSE, delivered.get().getSearchResponse());
+        assertArrayEquals(expectedResponse(3).toByteArray(), written.get());
+        assertArrayEquals(
+                expectedResponse(3).toByteArray(),
+                delivered.get().getSearchResponse().toByteArray());
         assertTrue(fixture.diagnostic.debug.stream().anyMatch(text -> text.startsWith("Resolved")));
         assertTrue(fixture.diagnostic.debug.stream().anyMatch(text -> text.startsWith("Sent response containing")));
     }
@@ -138,14 +144,15 @@ class SearchResponderTest {
     @Test
     void connectFailureCachesResponseAndCacheFailureIsWarning() {
         TestCache cache = new TestCache();
-        Fixture fixture = fixture((user, token, query) -> CompletableFuture.completedFuture(RESPONSE), cache);
+        Fixture fixture = catalogFixture(MATCHES, cache);
         RuntimeException connect = new RuntimeException("connect");
         fixture.manager.connectionFailure = connect;
 
         assertFalse(fixture.responder.tryRespondAsync("alice", 3, "query").join());
         assertEquals(77, cache.lastAddedToken);
         assertEquals("alice", cache.added.username());
-        assertSame(RESPONSE, cache.added.searchResponse());
+        assertArrayEquals(
+                expectedResponse(3).toByteArray(), cache.added.searchResponse().toByteArray());
 
         RuntimeException cacheFailure = new RuntimeException("cache");
         cache.throwOnAdd = cacheFailure;
@@ -221,6 +228,48 @@ class SearchResponderTest {
         TestClient client = new TestClient(options, manager, actualCache);
         RecordingDiagnostic diagnostic = new RecordingDiagnostic();
         return new Fixture(new DefaultSearchResponder(client, diagnostic), client, manager, diagnostic);
+    }
+
+    /**
+     * A responder answering from a catalog rather than a resolver.
+     *
+     * @param matches what the catalog returns for any search, or {@code null} to
+     *     make the catalog throw
+     * @param cache the response cache, or {@code null} for none
+     * @return the fixture
+     */
+    private static Fixture catalogFixture(List<SearchFile> matches, TestCache cache) {
+        Fixture fixture = fixture(null, cache);
+        fixture.client.catalog = new ShareCatalog() {
+            @Override
+            public dev.slsk.BrowseResponse browse(Username requester) {
+                return dev.slsk.BrowseResponse.empty();
+            }
+
+            @Override
+            public List<dev.slsk.Directory> directory(Username requester, String path) {
+                return List.of();
+            }
+
+            @Override
+            public List<SearchFile> search(Username requester, String terms, int limit) {
+                if (matches == null) {
+                    throw new IllegalStateException("resolver");
+                }
+                return matches;
+            }
+
+            @Override
+            public java.util.Optional<dev.slsk.spi.ResolvedFile> resolve(Username requester, String path) {
+                return java.util.Optional.empty();
+            }
+
+            @Override
+            public dev.slsk.ShareIndex index() {
+                return dev.slsk.ShareIndex.empty();
+            }
+        };
+        return fixture;
     }
 
     private static SoulseekClientOptions options(SearchResponseResolver resolver, SearchResponseCache cache) {
@@ -299,6 +348,19 @@ class SearchResponderTest {
             RecordingDiagnostic diagnostic) {}
 
     private static final class TestClient implements SearchResponderClient {
+
+        private volatile ShareCatalog catalog = ShareCatalog.empty();
+
+        @Override
+        public ShareCatalog getShareCatalog() {
+            return catalog;
+        }
+
+        @Override
+        public String getLoggedInUsername() {
+            return "me";
+        }
+
         private final SoulseekClientOptions options;
         private final TestPeerManager manager;
         private final TestCache cache;

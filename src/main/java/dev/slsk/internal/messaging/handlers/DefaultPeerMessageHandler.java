@@ -9,10 +9,10 @@ import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
 import dev.slsk.internal.BrowseResponse;
+import dev.slsk.internal.Catalogs;
 import dev.slsk.internal.Directory;
 import dev.slsk.internal.RawBrowseResponse;
 import dev.slsk.internal.RawSearchResponse;
-import dev.slsk.internal.SearchQuery;
 import dev.slsk.internal.SearchResponse;
 import dev.slsk.internal.TransferDirection;
 import dev.slsk.internal.UserInfo;
@@ -286,17 +286,17 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
 
     private CompletableFuture<Void> handleSearchRequest(MessageConnection connection, byte[] message) {
         PeerSearchRequest request = PeerSearchRequest.fromByteArray(message);
-        if (client.getOptions().getSearchResponseResolver() == null) {
-            return completed();
-        }
-        CompletableFuture<SearchResponse> resolved;
-        try {
-            resolved = client.getOptions()
-                    .getSearchResponseResolver()
-                    .resolve(connection.getUsername(), request.getToken(), SearchQuery.fromText(request.getQuery()));
-        } catch (Throwable failure) {
-            resolved = CompletableFuture.failedFuture(failure);
-        }
+        CompletableFuture<SearchResponse> resolved = Catalogs.ask(() -> Catalogs.searchResponse(
+                client.getLoggedInUsername(),
+                request.getToken(),
+                client.getShareCatalog()
+                        .search(
+                                dev.slsk.Username.of(connection.getUsername()),
+                                request.getQuery(),
+                                client.getOptions().getMaximumConcurrentSearches()),
+                true,
+                0,
+                0));
         return resolved.thenCompose(response -> {
                     if (response instanceof RawSearchResponse raw) {
                         return connection
@@ -321,25 +321,20 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     private CompletableFuture<Void> handleBrowseRequest(MessageConnection connection) {
-        CompletableFuture<BrowseResponse> resolved;
-        try {
-            resolved = client.getOptions()
-                    .getBrowseResponseResolver()
-                    .resolve(connection.getUsername(), connection.getIpEndpoint());
-        } catch (Throwable failure) {
-            resolved = CompletableFuture.failedFuture(failure);
-        }
+        CompletableFuture<BrowseResponse> resolved = Catalogs.ask(
+                () -> Catalogs.browse(client.getShareCatalog().browse(dev.slsk.Username.of(connection.getUsername()))));
         return resolved.handle((response, failure) -> {
                     if (failure == null) {
-                        return CompletableFuture.completedFuture(response);
+                        return response;
                     }
                     Throwable cause = unwrap(failure);
-                    diagnostic.warning("Failed to resolve browse response: " + message(cause), cause);
-                    return new SoulseekClientOptions()
-                            .getBrowseResponseResolver()
-                            .resolve(connection.getUsername(), connection.getIpEndpoint());
+                    // A catalog that throws is a bug in the application, not a
+                    // reason to leave a peer hanging on a read that never
+                    // completes. Answer with nothing, the same as a share we
+                    // decline to show them.
+                    diagnostic.warning("The share catalog failed to answer a browse: " + message(cause), cause);
+                    return new BrowseResponse();
                 })
-                .thenCompose(future -> future)
                 .thenCompose(response -> {
                     if (response instanceof RawBrowseResponse raw) {
                         return connection
@@ -353,22 +348,14 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
 
     private CompletableFuture<Void> handleFolderContentsRequest(MessageConnection connection, byte[] message) {
         FolderContentsRequest request = FolderContentsRequest.fromByteArray(message);
-        CompletableFuture<? extends Iterable<Directory>> resolved;
-        try {
-            resolved = client.getOptions()
-                    .getDirectoryContentsResolver()
-                    .resolve(
-                            connection.getUsername(),
-                            connection.getIpEndpoint(),
-                            request.getToken(),
-                            request.getDirectoryName());
-        } catch (Throwable failure) {
-            resolved = CompletableFuture.failedFuture(failure);
-        }
+        CompletableFuture<? extends Iterable<Directory>> resolved =
+                Catalogs.ask(() -> Catalogs.directories(client.getShareCatalog()
+                        .directory(dev.slsk.Username.of(connection.getUsername()), request.getDirectoryName())));
         return resolved.handle((directories, failure) -> {
                     if (failure != null) {
                         Throwable cause = unwrap(failure);
-                        diagnostic.warning("Failed to resolve directory contents response: " + message(cause), cause);
+                        diagnostic.warning(
+                                "The share catalog failed to answer a folder request: " + message(cause), cause);
                         return null;
                     }
                     return directories;

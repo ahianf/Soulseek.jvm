@@ -72,6 +72,7 @@ import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.search.SearchResponder;
 import dev.slsk.internal.search.SearchResponderClient;
 import dev.slsk.internal.transfer.TransferInternal;
+import dev.slsk.spi.ShareCatalog;
 import java.io.ByteArrayOutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -148,6 +149,7 @@ final class SoulseekEngine
     private final EngineEvents events = new EngineEvents(this::reportListenerFault);
 
     volatile ClientListenerFactory clientListenerFactory = SocketListener::new;
+    private volatile ShareCatalog catalog = ShareCatalog.empty();
     private final AtomicBoolean closed = new AtomicBoolean();
     /**
      * The client's single timer thread. Every component that needs delayed or
@@ -304,6 +306,28 @@ final class SoulseekEngine
     /** The channel the facets subscribe to. */
     EngineEvents events() {
         return events;
+    }
+
+    /**
+     * What peers are served from.
+     *
+     * <p>Volatile and replaceable, because {@code Shares.rescan} swaps in a new
+     * one and {@code Shares.catalog} replaces it outright, both while peers are
+     * connected. A browse in flight finishes against the catalog it started
+     * with, which is the only thing a snapshot-shaped read can promise.
+     */
+    @Override
+    public ShareCatalog getShareCatalog() {
+        return catalog;
+    }
+
+    /**
+     * Installs the catalog peers are served from.
+     *
+     * @param value the catalog, or {@code null} for the empty one
+     */
+    void setShareCatalog(ShareCatalog value) {
+        catalog = value == null ? ShareCatalog.empty() : value;
     }
 
     /** Returns whether client events are configured as asynchronous. */
