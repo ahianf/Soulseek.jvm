@@ -297,7 +297,11 @@ public class SoulseekClientOptions {
                 distributedConnectionOptions == null ? new ConnectionOptions() : distributedConnectionOptions;
 
         this.userEndpointCache = userEndpointCache;
-        this.searchResponseCache = searchResponseCache;
+        // Defaulted rather than left null: without a cache we silently answer
+        // fewer searches than we think we do, and which searches is decided by
+        // whether the peer is behind NAT.
+        this.searchResponseCache =
+                searchResponseCache == null ? new dev.slsk.internal.BoundedSearchResponseCache() : searchResponseCache;
     }
 
     /** Returns a clone with the supplied patch applied. */
