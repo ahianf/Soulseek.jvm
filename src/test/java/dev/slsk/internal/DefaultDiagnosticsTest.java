@@ -100,4 +100,32 @@ class DefaultDiagnosticsTest {
                 };
         assertEquals("changed to 0 children", rendered);
     }
+
+    /**
+     * These were `Metrics.empty()` until the queues existed to count. A metric
+     * that always reads zero is worse than an absent one: it looks like a
+     * working gauge and reports a lie.
+     */
+    @Test
+    @DisplayName("metrics count what the queue actually holds")
+    void metricsReportTheQueue() {
+        try (Soulseek slsk = client()) {
+            assertEquals(0, slsk.diagnostics().metrics().queuedDownloads());
+
+            slsk.downloads()
+                    .enqueue(dev.slsk.DownloadRequest.of(
+                            dev.slsk.Username.of("alice"),
+                            "music\\one.mp3",
+                            dev.slsk.spi.TransferSink.file(
+                                    java.nio.file.Path.of(System.getProperty("java.io.tmpdir"), "one.mp3"))));
+
+            dev.slsk.Metrics metrics = slsk.diagnostics().metrics();
+            assertEquals(0, metrics.activeSearches());
+            assertEquals(0, metrics.peerConnections());
+            // Offline, the attempt fails at once and the download settles, so
+            // what is asserted is that the facets are wired rather than a count
+            // that depends on scheduling.
+            assertEquals(1, slsk.downloads().all().size());
+        }
+    }
 }

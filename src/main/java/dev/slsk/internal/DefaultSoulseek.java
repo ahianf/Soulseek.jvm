@@ -59,6 +59,9 @@ public final class DefaultSoulseek implements Soulseek {
         this.downloads = new DefaultDownloads(client, new EventBus<>("downloads", diagnostics), store);
         this.uploads = new DefaultUploads(client, new EventBus<>("uploads", diagnostics));
         this.shares = new DefaultShares(client, new EventBus<>("shares", diagnostics));
+        // Metrics counts transfers, and the facets that hold them are built
+        // after the one that reports on them.
+        this.diagnostics.bind(downloads, uploads);
     }
 
     /**

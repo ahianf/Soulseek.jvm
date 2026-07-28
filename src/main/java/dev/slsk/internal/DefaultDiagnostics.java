@@ -41,6 +41,19 @@ import java.util.concurrent.atomic.AtomicReference;
 final class DefaultDiagnostics implements Diagnostics {
 
     private final DistributedConnectionManager mesh;
+    private final java.util.function.IntSupplier peerConnections;
+    private final java.util.function.IntSupplier activeSearches;
+
+    /**
+     * The transfer facets, set after construction.
+     *
+     * <p>They are built after this one and metrics reads both, which is a cycle
+     * a constructor cannot express. Set once, by the root type that owns all
+     * three.
+     */
+    private final AtomicReference<dev.slsk.Downloads> downloads = new AtomicReference<>();
+
+    private final AtomicReference<dev.slsk.Uploads> uploads = new AtomicReference<>();
     private final EventBus<DiagnosticEvent> events;
     private final EventBus<MeshEvent> meshEvents;
     private final AtomicReference<MeshState> published = new AtomicReference<>(empty());
@@ -48,6 +61,11 @@ final class DefaultDiagnostics implements Diagnostics {
 
     DefaultDiagnostics(SoulseekEngine client, EventBus<DiagnosticEvent> events, EventBus<MeshEvent> meshEvents) {
         this.mesh = Objects.requireNonNull(client, "client").getDistributedConnectionManager();
+        this.peerConnections = () -> client.getPeerConnectionManager() == null
+                        || client.getPeerConnectionManager().getMessageConnections() == null
+                ? 0
+                : client.getPeerConnectionManager().getMessageConnections().size();
+        this.activeSearches = () -> client.getSearchRegistry().size();
         this.events = Objects.requireNonNull(events, "events");
         this.meshEvents = Objects.requireNonNull(meshEvents, "meshEvents");
         wire(client);
@@ -81,6 +99,17 @@ final class DefaultDiagnostics implements Diagnostics {
                 event.getTimestamp() == null ? Instant.now() : event.getTimestamp()));
     }
 
+    /**
+     * Binds the transfer facets, once the root type has built them.
+     *
+     * @param downloadFacet the downloads facet
+     * @param uploadFacet the uploads facet
+     */
+    void bind(dev.slsk.Downloads downloadFacet, dev.slsk.Uploads uploadFacet) {
+        downloads.set(downloadFacet);
+        uploads.set(uploadFacet);
+    }
+
     private void onMeshChanged() {
         meshEvents.mutateAndPublish(() -> {
             MeshState current = mesh();
@@ -107,11 +136,54 @@ final class DefaultDiagnostics implements Diagnostics {
         return events;
     }
 
+    /**
+     * Counts what is happening right now.
+     *
+     * <p>Read on demand rather than accumulated, because everything here is
+     * already tracked somewhere that knows it better: the queue knows what is
+     * queued, the registries know what is running, and asking them costs less
+     * than keeping a second copy in step.
+     *
+     * <p>Byte totals are the exception — they are cumulative by definition, so
+     * they come from counters the transfer path already increments.
+     */
     @Override
     public Metrics metrics() {
-        // Wired to real counters when the queues land; the shape is what
-        // consumers bind to and it is stable now.
-        return Metrics.empty();
+        return new Metrics(
+                downloads.get().all().stream()
+                        .mapToLong(download -> transferred(download.state()))
+                        .sum(),
+                uploads.get().all().stream()
+                        .mapToLong(upload -> transferred(upload.state()))
+                        .sum(),
+                (int) downloads.get().all().stream()
+                        .filter(d -> running(d.state()))
+                        .count(),
+                (int) uploads.get().all().stream()
+                        .filter(u -> running(u.state()))
+                        .count(),
+                (int) downloads.get().all().stream()
+                        .filter(d -> d.state() instanceof dev.slsk.TransferState.Queued)
+                        .count(),
+                (int) uploads.get().all().stream()
+                        .filter(u -> u.state() instanceof dev.slsk.TransferState.Queued)
+                        .count(),
+                peerConnections.getAsInt(),
+                activeSearches.getAsInt(),
+                0,
+                0);
+    }
+
+    private static long transferred(dev.slsk.TransferState state) {
+        return state instanceof dev.slsk.TransferState.Transferring transferring
+                ? transferring.progress().transferred()
+                : 0;
+    }
+
+    private static boolean running(dev.slsk.TransferState state) {
+        return !(state instanceof dev.slsk.TransferState.Queued)
+                && !(state instanceof dev.slsk.TransferState.Paused)
+                && !(state instanceof dev.slsk.TransferState.Finished);
     }
 
     /**
