@@ -1,0 +1,118 @@
+// SPDX-FileCopyrightText: 2026 Ahian Fernandez
+// SPDX-License-Identifier: GPL-3.0-only
+
+package dev.slsk.internal;
+
+import dev.slsk.Connection;
+import dev.slsk.Soulseek;
+import dev.slsk.internal.diagnostics.DiagnosticSink;
+import dev.slsk.internal.diagnostics.GlobalDiagnostic;
+import dev.slsk.internal.options.SoulseekClientOptions;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+/**
+ * {@link Soulseek} over the {@link SoulseekClient} seam.
+ *
+ * <p>This is the facade half of "facade, then fold". Each facet is bound to the
+ * blocking client rather than to the future-shaped collaborators underneath it,
+ * because the blocking wrappers that adapt those collaborators live in {@code
+ * DefaultSoulseekClient} and moving them is a separate change from introducing
+ * the facet that will own them. The fold moves each wrapper body down into its
+ * facet and deletes the client interface; until then both exist, and only this
+ * one is exported.
+ */
+public final class DefaultSoulseek implements Soulseek {
+
+    private final SoulseekClient client;
+    private final DefaultConnection connection;
+    private final AtomicBoolean closed = new AtomicBoolean();
+
+    private DefaultSoulseek(SoulseekClient client, DefaultConnection.Credentials credentials) {
+        this.client = Objects.requireNonNull(client, "client");
+        this.connection = new DefaultConnection(client, credentials, new EventBus<>("connection", diagnostics()));
+    }
+
+    /**
+     * Where a contained listener fault is reported.
+     *
+     * <p><strong>Temporary.</strong> This routes to the process-wide {@link
+     * GlobalDiagnostic} rather than to the client's own diagnostic listeners,
+     * because the per-client sink lives behind {@code ClientContext} and the
+     * facets only hold the {@link SoulseekClient} interface. That is a real
+     * shortcoming — two clients in one JVM report through the same channel, and
+     * a per-client dispatch policy was fixed once already for exactly that
+     * reason. The fold gives facets the context, and this goes with it.
+     */
+    private static DiagnosticSink diagnostics() {
+        return new DiagnosticSink() {
+            @Override
+            public void trace(String message) {
+                GlobalDiagnostic.trace(message);
+            }
+
+            @Override
+            public void trace(String message, Throwable exception) {
+                GlobalDiagnostic.trace(message, exception);
+            }
+
+            @Override
+            public void debug(String message) {
+                GlobalDiagnostic.debug(message);
+            }
+
+            @Override
+            public void debug(String message, Throwable exception) {
+                GlobalDiagnostic.debug(message, exception);
+            }
+
+            @Override
+            public void info(String message) {
+                GlobalDiagnostic.info(message);
+            }
+
+            @Override
+            public void warning(String message) {
+                GlobalDiagnostic.warning(message);
+            }
+
+            @Override
+            public void warning(String message, Throwable exception) {
+                GlobalDiagnostic.warning(message, exception);
+            }
+        };
+    }
+
+    /**
+     * Creates a client.
+     *
+     * @param username the account to log in as
+     * @param password the account password
+     * @param minorVersion the application minor version, which the server
+     *     requires and which must be unique per client
+     * @param options the client options
+     * @return the client
+     */
+    public static Soulseek create(String username, String password, int minorVersion, SoulseekClientOptions options) {
+        SoulseekClient client =
+                options == null ? SoulseekClient.create(minorVersion) : SoulseekClient.create(minorVersion, options);
+        return new DefaultSoulseek(client, new DefaultConnection.Credentials(username, password));
+    }
+
+    @Override
+    public Connection connection() {
+        return connection;
+    }
+
+    @Override
+    public void close() {
+        if (closed.compareAndSet(false, true)) {
+            client.close();
+        }
+    }
+
+    /** The client the facets are still bound to. Removed by the fold. */
+    SoulseekClient client() {
+        return client;
+    }
+}

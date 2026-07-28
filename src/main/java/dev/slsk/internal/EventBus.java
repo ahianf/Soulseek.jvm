@@ -130,17 +130,28 @@ public final class EventBus<T> implements EventStream<T> {
      * Applies a state change and publishes the event describing it, as one step
      * with respect to {@link #attach}.
      *
-     * @param change applies the change and returns the event describing it;
-     *     invoked once, under the lock. It must not block, and must not call
-     *     back into this bus.
-     * @return how many listeners accepted the event without throwing
+     * <p>{@code change} may return {@code null} to mean "nothing actually
+     * changed, publish nothing". That is not a nicety: the underlying client
+     * raises connected, logged-in and state-changed for what is a single
+     * transition, and a consumer should see one event rather than three. The
+     * decision has to be taken under the lock, because it depends on comparing
+     * against the last state published.
+     *
+     * @param change applies the change and returns the event describing it, or
+     *     {@code null} to publish nothing. Invoked once, under the lock. It must
+     *     not block, and must not call back into this bus.
+     * @return how many listeners accepted the event without throwing; zero if
+     *     nothing was published
      */
     public int mutateAndPublish(Supplier<T> change) {
         Objects.requireNonNull(change, "change");
         T event;
         List<Registration<T>> targets;
         synchronized (gate) {
-            event = Objects.requireNonNull(change.get(), "change produced no event");
+            event = change.get();
+            if (event == null) {
+                return 0;
+            }
             targets = new ArrayList<>(registrations);
         }
         return dispatch(event, targets);
