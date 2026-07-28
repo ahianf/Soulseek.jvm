@@ -5,6 +5,7 @@ package dev.slsk.internal;
 
 import dev.slsk.Chat;
 import dev.slsk.Connection;
+import dev.slsk.Diagnostics;
 import dev.slsk.Me;
 import dev.slsk.Soulseek;
 import dev.slsk.Users;
@@ -32,16 +33,19 @@ public final class DefaultSoulseek implements Soulseek {
     private final DefaultChat chat;
     private final DefaultMe me;
     private final DefaultUsers users;
+    private final DefaultDiagnostics diagnostics;
     private final AtomicBoolean closed = new AtomicBoolean();
 
     private DefaultSoulseek(SoulseekClient client, DefaultConnection.Credentials credentials) {
         this.client = Objects.requireNonNull(client, "client");
-        DiagnosticSink diagnostics = diagnostics();
+        DiagnosticSink diagnostics = diagnosticSink();
         this.connection = new DefaultConnection(client, credentials, new EventBus<>("connection", diagnostics));
         this.chat = new DefaultChat(client, new EventBus<>("chat", diagnostics), diagnostics);
         this.me = new DefaultMe(
                 client, dev.slsk.Username.of(credentials.username()), new EventBus<>("me", diagnostics), diagnostics);
         this.users = new DefaultUsers(client, new EventBus<>("users", diagnostics), diagnostics);
+        this.diagnostics = new DefaultDiagnostics(
+                client, new EventBus<>("diagnostics", diagnostics), new EventBus<>("mesh", diagnostics));
     }
 
     /**
@@ -55,7 +59,7 @@ public final class DefaultSoulseek implements Soulseek {
      * a per-client dispatch policy was fixed once already for exactly that
      * reason. The fold gives facets the context, and this goes with it.
      */
-    private static DiagnosticSink diagnostics() {
+    private static DiagnosticSink diagnosticSink() {
         return new DiagnosticSink() {
             @Override
             public void trace(String message) {
@@ -128,6 +132,11 @@ public final class DefaultSoulseek implements Soulseek {
     @Override
     public Users users() {
         return users;
+    }
+
+    @Override
+    public Diagnostics diagnostics() {
+        return diagnostics;
     }
 
     @Override
