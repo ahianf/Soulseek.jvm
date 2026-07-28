@@ -32,7 +32,6 @@ import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDataEvent;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.internal.network.tcp.ConnectionEventListener;
-import dev.slsk.internal.options.DownloadStreamFactory;
 import dev.slsk.internal.options.TransferOptions;
 import dev.slsk.internal.options.TransferProgressUpdate;
 import dev.slsk.internal.options.TransferStateChange;
@@ -48,6 +47,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 /**
  * One download in flight: slot acquisition, the peer handshake, the read loop
@@ -64,7 +64,7 @@ final class DownloadOperation {
     private final TransferEngine engine;
 
     private final TransferInternal download;
-    private final DownloadStreamFactory outputStreamFactory;
+    private final Supplier<OutputStream> outputStreamFactory;
     private final TransferOptions transferOptions;
     private final CancellationSignal cancellationSignal;
     private final String uniqueKey;
@@ -82,7 +82,7 @@ final class DownloadOperation {
     DownloadOperation(
             TransferEngine engine,
             TransferInternal download,
-            DownloadStreamFactory outputStreamFactory,
+            Supplier<OutputStream> outputStreamFactory,
             TransferOptions transferOptions,
             CancellationSignal cancellationSignal,
             String uniqueKey) {
@@ -162,7 +162,7 @@ final class DownloadOperation {
             }
 
             bindConnectionEvents();
-            outputStream = Objects.requireNonNull(await(outputStreamFactory.openAsync()), "outputStreamFactory result");
+            outputStream = Objects.requireNonNull(outputStreamFactory.get(), "outputStreamFactory result");
             positionOutputStream();
             trackingStream = new TransferEngine.PositionTrackingOutputStream(
                     outputStream,

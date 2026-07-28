@@ -117,7 +117,7 @@ class EngineDownloadTest {
                     () -> Blocking.await(fixture.client
                             .transfers()
                             .download(DownloadRequest.toStream(
-                                            "alice", "file", (dev.slsk.internal.options.DownloadStreamFactory) null)
+                                            "alice", "file", (java.util.function.Supplier<java.io.OutputStream>) null)
                                     .build())));
 
             fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
@@ -202,8 +202,7 @@ class EngineDownloadTest {
 
             Transfer result = Blocking.await(fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream(
-                                    "alice", "remote\\file", () -> CompletableFuture.completedFuture(output))
+                    .download(DownloadRequest.toStream("alice", "remote\\file", () -> output)
                             .token(11)
                             .options(options())
                             .build()));
@@ -321,7 +320,7 @@ class EngineDownloadTest {
 
             Transfer result = Blocking.await(fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", () -> CompletableFuture.completedFuture(output))
+                    .download(DownloadRequest.toStream("alice", "file", () -> output)
                             .token(14)
                             .options(options())
                             .build()));
@@ -427,7 +426,7 @@ class EngineDownloadTest {
 
             Transfer result = Blocking.await(fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", () -> CompletableFuture.completedFuture(output))
+                    .download(DownloadRequest.toStream("alice", "file", () -> output)
                             .size(5L)
                             .startOffset(2)
                             .token(18)
@@ -684,8 +683,7 @@ class EngineDownloadTest {
             CloseTrackingOutputStream disposable = new CloseTrackingOutputStream();
             Blocking.await(fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream(
-                                    "alice", "file", () -> CompletableFuture.completedFuture(disposable))
+                    .download(DownloadRequest.toStream("alice", "file", () -> disposable)
                             .size(1L)
                             .token(28)
                             .options(options().withDisposalOptions(null, true))
@@ -697,8 +695,7 @@ class EngineDownloadTest {
             CloseTrackingOutputStream retained = new CloseTrackingOutputStream();
             Blocking.await(fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream(
-                                    "alice", "other", () -> CompletableFuture.completedFuture(retained))
+                    .download(DownloadRequest.toStream("alice", "other", () -> retained)
                             .size(1L)
                             .token(29)
                             .options(options().withDisposalOptions(null, false))
@@ -719,8 +716,7 @@ class EngineDownloadTest {
 
             Transfer transfer = Blocking.await(fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream(
-                                    "alice", "folder/file", () -> CompletableFuture.completedFuture(output))
+                    .download(DownloadRequest.toStream("alice", "folder/file", () -> output)
                             .size(1L)
                             .token(32)
                             .options(options().withDisposalOptions(null, true))
@@ -737,8 +733,8 @@ class EngineDownloadTest {
         }
     }
 
-    private static dev.slsk.internal.options.DownloadStreamFactory outputFactory() {
-        return () -> CompletableFuture.completedFuture(new ByteArrayOutputStream());
+    private static java.util.function.Supplier<java.io.OutputStream> outputFactory() {
+        return ByteArrayOutputStream::new;
     }
 
     private static TransferOptions options() {

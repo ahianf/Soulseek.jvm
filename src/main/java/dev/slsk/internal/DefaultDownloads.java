@@ -98,9 +98,13 @@ final class DefaultDownloads implements Downloads {
                             try {
                                 SinkOutputStream opened = new SinkOutputStream(request.sink(), resumeFrom);
                                 stream.set(opened);
-                                return java.util.concurrent.CompletableFuture.completedFuture(opened);
+                                return opened;
                             } catch (IOException failure) {
-                                return java.util.concurrent.CompletableFuture.failedFuture(failure);
+                                // The transfer path treats a stream it cannot
+                                // open as a failed transfer, which is what this
+                                // is; there is no separate "could not start".
+                                throw new dev.slsk.exceptions.TransferStreamException(
+                                        "Failed to open the transfer sink", failure);
                             }
                         })
                 .size(request.expectedSize() == 0 ? null : request.expectedSize())

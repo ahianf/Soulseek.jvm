@@ -4,9 +4,10 @@
 package dev.slsk.internal;
 
 import dev.slsk.CancellationSignal;
-import dev.slsk.internal.options.DownloadStreamFactory;
 import dev.slsk.internal.options.TransferOptions;
+import java.io.OutputStream;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * Everything one download needs, in one value.
@@ -35,7 +36,7 @@ public final class DownloadRequest {
     private final String username;
     private final String remoteFilename;
     private final String localFilename;
-    private final DownloadStreamFactory outputStreamFactory;
+    private final Supplier<OutputStream> outputStreamFactory;
     private final Long size;
     private final long startOffset;
     private final Integer token;
@@ -78,7 +79,7 @@ public final class DownloadRequest {
      * @param outputStreamFactory supplies the destination stream
      * @return a builder
      */
-    public static Builder toStream(String username, String remoteFilename, DownloadStreamFactory outputStreamFactory) {
+    public static Builder toStream(String username, String remoteFilename, Supplier<OutputStream> outputStreamFactory) {
         Builder builder = new Builder(username, remoteFilename);
         builder.outputStreamFactory = Objects.requireNonNull(outputStreamFactory, "outputStreamFactory");
         builder.toStream = true;
@@ -101,7 +102,7 @@ public final class DownloadRequest {
     }
 
     /** Returns the destination stream factory, or {@code null} when writing a file. */
-    public DownloadStreamFactory getOutputStreamFactory() {
+    public Supplier<OutputStream> getOutputStreamFactory() {
         return outputStreamFactory;
     }
 
@@ -140,7 +141,7 @@ public final class DownloadRequest {
         private final String username;
         private final String remoteFilename;
         private String localFilename;
-        private DownloadStreamFactory outputStreamFactory;
+        private Supplier<OutputStream> outputStreamFactory;
         private Long size;
         private long startOffset;
         private Integer token;

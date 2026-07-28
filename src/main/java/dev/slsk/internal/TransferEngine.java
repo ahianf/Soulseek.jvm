@@ -15,7 +15,6 @@ import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.messages.PlaceInQueueRequest;
 import dev.slsk.internal.messaging.messages.PlaceInQueueResponse;
-import dev.slsk.internal.options.DownloadStreamFactory;
 import dev.slsk.internal.options.PositionableInputStream;
 import dev.slsk.internal.options.PositionableOutputStream;
 import dev.slsk.internal.options.TransferOptions;
@@ -34,6 +33,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 /**
  * Download and upload orchestration: queueing, slot acquisition, the per-user
@@ -280,10 +280,9 @@ final class TransferEngine {
                 remoteFilename,
                 () -> {
                     try {
-                        return CompletableFuture.completedFuture(
-                                context.getIoAdapter().getOutputStream(localFilename, startOffset > 0));
+                        return context.getIoAdapter().getOutputStream(localFilename, startOffset > 0);
                     } catch (IOException failure) {
-                        return CompletableFuture.failedFuture(new UncheckedIOException(failure));
+                        throw new UncheckedIOException(failure);
                     }
                 },
                 size,
@@ -294,13 +293,13 @@ final class TransferEngine {
     }
     /** Downloads data to a stream created by a factory. */
     CompletableFuture<Transfer> download(
-            String requestedUsername, String remoteFilename, DownloadStreamFactory outputStreamFactory) {
+            String requestedUsername, String remoteFilename, Supplier<OutputStream> outputStreamFactory) {
         return download(
                 requestedUsername, remoteFilename, outputStreamFactory, null, 0, null, null, CancellationSignal.none());
     }
     /** Downloads stream data with an expected size. */
     CompletableFuture<Transfer> download(
-            String requestedUsername, String remoteFilename, DownloadStreamFactory outputStreamFactory, Long size) {
+            String requestedUsername, String remoteFilename, Supplier<OutputStream> outputStreamFactory, Long size) {
         return download(
                 requestedUsername, remoteFilename, outputStreamFactory, size, 0, null, null, CancellationSignal.none());
     }
@@ -308,7 +307,7 @@ final class TransferEngine {
     CompletableFuture<Transfer> download(
             String requestedUsername,
             String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
+            Supplier<OutputStream> outputStreamFactory,
             CancellationSignal cancellationSignal) {
         return download(
                 requestedUsername, remoteFilename, outputStreamFactory, null, 0, null, null, cancellationSignal);
@@ -317,7 +316,7 @@ final class TransferEngine {
     CompletableFuture<Transfer> download(
             String requestedUsername,
             String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
+            Supplier<OutputStream> outputStreamFactory,
             Long size,
             long startOffset) {
         return download(
@@ -334,7 +333,7 @@ final class TransferEngine {
     CompletableFuture<Transfer> download(
             String requestedUsername,
             String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
+            Supplier<OutputStream> outputStreamFactory,
             Long size,
             long startOffset,
             Integer token) {
@@ -352,7 +351,7 @@ final class TransferEngine {
     CompletableFuture<Transfer> download(
             String requestedUsername,
             String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
+            Supplier<OutputStream> outputStreamFactory,
             Long size,
             long startOffset,
             Integer token,
@@ -371,7 +370,7 @@ final class TransferEngine {
     CompletableFuture<Transfer> download(
             String requestedUsername,
             String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
+            Supplier<OutputStream> outputStreamFactory,
             Long size,
             long startOffset,
             Integer token,
@@ -653,13 +652,13 @@ final class TransferEngine {
     }
     /** Enqueues a stream-factory download. */
     CompletableFuture<CompletableFuture<Transfer>> enqueueDownload(
-            String requestedUsername, String remoteFilename, DownloadStreamFactory outputStreamFactory) {
+            String requestedUsername, String remoteFilename, Supplier<OutputStream> outputStreamFactory) {
         return enqueueDownload(
                 requestedUsername, remoteFilename, outputStreamFactory, null, 0, null, null, CancellationSignal.none());
     }
     /** Enqueues a stream-factory download with an expected size. */
     CompletableFuture<CompletableFuture<Transfer>> enqueueDownload(
-            String requestedUsername, String remoteFilename, DownloadStreamFactory outputStreamFactory, Long size) {
+            String requestedUsername, String remoteFilename, Supplier<OutputStream> outputStreamFactory, Long size) {
         return enqueueDownload(
                 requestedUsername, remoteFilename, outputStreamFactory, size, 0, null, null, CancellationSignal.none());
     }
@@ -667,7 +666,7 @@ final class TransferEngine {
     CompletableFuture<CompletableFuture<Transfer>> enqueueDownload(
             String requestedUsername,
             String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
+            Supplier<OutputStream> outputStreamFactory,
             Long size,
             long startOffset) {
         return enqueueDownload(
@@ -684,7 +683,7 @@ final class TransferEngine {
     CompletableFuture<CompletableFuture<Transfer>> enqueueDownload(
             String requestedUsername,
             String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
+            Supplier<OutputStream> outputStreamFactory,
             Long size,
             long startOffset,
             Integer token) {
@@ -702,7 +701,7 @@ final class TransferEngine {
     CompletableFuture<CompletableFuture<Transfer>> enqueueDownload(
             String requestedUsername,
             String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
+            Supplier<OutputStream> outputStreamFactory,
             Long size,
             long startOffset,
             Integer token,
@@ -721,7 +720,7 @@ final class TransferEngine {
     CompletableFuture<CompletableFuture<Transfer>> enqueueDownload(
             String requestedUsername,
             String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
+            Supplier<OutputStream> outputStreamFactory,
             Long size,
             long startOffset,
             Integer token,
@@ -907,7 +906,7 @@ final class TransferEngine {
     CompletableFuture<Transfer> downloadToStreamAsync(
             String requestedUsername,
             String remoteFilename,
-            DownloadStreamFactory outputStreamFactory,
+            Supplier<OutputStream> outputStreamFactory,
             Long size,
             long startOffset,
             int token,

@@ -176,6 +176,22 @@ final class DownloadQueue {
     }
 
     private final Object lock = new Object();
+
+    /**
+     * Serialises writes to the store, separately from admission.
+     *
+     * <p>The snapshot is taken inside this monitor rather than passed into it,
+     * so whichever thread enters last writes the newest state. Two threads
+     * racing — an admission on one and a completion on another — otherwise write
+     * in whatever order they are scheduled, and a store can end up believing a
+     * finished download is still starting.
+     *
+     * <p>Separate from {@link #lock} because a store is a consumer's code and
+     * may be a database. Holding the admission lock across it would let a slow
+     * write stall the queue.
+     */
+    private final Object storeLock = new Object();
+
     private final Map<TransferId, Entry> entries = new LinkedHashMap<>();
     private final Scheduler scheduler;
     private final Runner runner;
@@ -334,7 +350,7 @@ final class DownloadQueue {
         synchronized (lock) {
             entries.put(id, entry);
         }
-        store.save(entry.snapshot());
+        save(entry);
         admit();
         return entry;
     }
@@ -438,7 +454,7 @@ final class DownloadQueue {
             return;
         }
         entry.priority = priority;
-        store.save(entry.snapshot());
+        save(entry);
         admit();
     }
 
@@ -518,7 +534,7 @@ final class DownloadQueue {
             entry.startedAt = Instant.now();
             entry.attempt++;
             onStateChanged.accept(entry, new TransferState.Queued(0));
-            store.save(entry.snapshot());
+            save(entry);
             NetworkExecutor.runAsync(() -> attempt(entry));
         }
     }
@@ -589,8 +605,15 @@ final class DownloadQueue {
             entry.state = next;
             renumber();
         }
-        store.save(entry.snapshot());
+        save(entry);
         onStateChanged.accept(entry, previous);
+    }
+
+    /** Records an entry's current state, in state order. */
+    private void save(Entry entry) {
+        synchronized (storeLock) {
+            store.save(entry.snapshot());
+        }
     }
 
     private Entry entry(TransferId id) {
