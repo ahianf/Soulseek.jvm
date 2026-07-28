@@ -31,11 +31,6 @@ class SoulseekClientOptionsTest {
         ConnectionOptions distributed = new ConnectionOptions();
         UserEndpointCache userCache = new TestUserCache();
         SearchResponseCache searchCache = new TestSearchCache();
-        SearchResponseResolver searchResolver = (user, token, query) -> CompletableFuture.completedFuture(null);
-        BrowseResponseResolver browseResolver = (user, endpoint) -> CompletableFuture.completedFuture(null);
-        DirectoryContentsResolver directoryResolver =
-                (user, endpoint, token, directory) -> CompletableFuture.completedFuture(null);
-        UserInfoResolver infoResolver = (user, endpoint) -> CompletableFuture.completedFuture(null);
         EnqueueDownloadCallback enqueue = (user, endpoint, filename) -> CompletableFuture.completedFuture(null);
         PlaceInQueueResolver place = (user, endpoint, filename) -> CompletableFuture.completedFuture(0);
         InetAddress address = InetAddress.getByName("127.0.0.2");
@@ -65,11 +60,7 @@ class SoulseekClientOptionsTest {
                 incoming,
                 distributed,
                 userCache,
-                searchResolver,
                 searchCache,
-                browseResolver,
-                directoryResolver,
-                infoResolver,
                 enqueue,
                 place,
                 true);
@@ -98,11 +89,7 @@ class SoulseekClientOptionsTest {
         assertSame(incoming, options.getIncomingConnectionOptions());
         assertSame(distributed, options.getDistributedConnectionOptions());
         assertSame(userCache, options.getUserEndpointCache());
-        assertSame(searchResolver, options.getSearchResponseResolver());
         assertSame(searchCache, options.getSearchResponseCache());
-        assertSame(browseResolver, options.getBrowseResponseResolver());
-        assertSame(directoryResolver, options.getDirectoryContentsResolver());
-        assertSame(infoResolver, options.getUserInfoResolver());
         assertSame(enqueue, options.getEnqueueDownload());
         assertSame(place, options.getPlaceInQueueResolver());
         assertTrue(options.isRaiseEventsAsynchronously());
@@ -136,11 +123,6 @@ class SoulseekClientOptionsTest {
         assertNotNull(options.getTransferConnectionOptions());
         assertNotNull(options.getIncomingConnectionOptions());
         assertNotNull(options.getDistributedConnectionOptions());
-        assertNull(options.getSearchResponseResolver());
-        assertNull(options.getDirectoryContentsResolver());
-        assertEquals(
-                0, options.getBrowseResponseResolver().resolve("", null).join().getDirectoryCount());
-        assertEquals("", options.getUserInfoResolver().resolve("", null).join().getDescription());
         assertNull(options.getEnqueueDownload().enqueue("", null, "").join());
         assertNull(options.getPlaceInQueueResolver().resolve("", null, "").join());
     }
@@ -199,10 +181,6 @@ class SoulseekClientOptionsTest {
                 true,
                 null,
                 peer,
-                null,
-                null,
-                null,
-                null,
                 null,
                 null,
                 null,
@@ -275,10 +253,6 @@ class SoulseekClientOptionsTest {
                 false,
                 DiagnosticLevel.NONE,
                 0,
-                null,
-                null,
-                null,
-                null,
                 null,
                 null,
                 null,

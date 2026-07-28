@@ -5,6 +5,7 @@
 package dev.slsk.internal;
 
 import dev.slsk.CancellationSignal;
+import dev.slsk.UserProfile;
 import dev.slsk.exceptions.AddressException;
 import dev.slsk.exceptions.KickedFromServerException;
 import dev.slsk.exceptions.ListenException;
@@ -150,6 +151,7 @@ final class SoulseekEngine
 
     volatile ClientListenerFactory clientListenerFactory = SocketListener::new;
     private volatile ShareCatalog catalog = ShareCatalog.empty();
+    private volatile UserProfile profile = UserProfile.empty();
     private final AtomicBoolean closed = new AtomicBoolean();
     /**
      * The client's single timer thread. Every component that needs delayed or
@@ -328,6 +330,25 @@ final class SoulseekEngine
      */
     void setShareCatalog(ShareCatalog value) {
         catalog = value == null ? ShareCatalog.empty() : value;
+    }
+
+    /**
+     * Returns what peers are told about this account.
+     *
+     * @return the profile, never {@code null}
+     */
+    @Override
+    public UserProfile getProfile() {
+        return profile;
+    }
+
+    /**
+     * Sets what peers are told about this account.
+     *
+     * @param value the profile, or {@code null} for the empty one
+     */
+    void setProfile(UserProfile value) {
+        profile = value == null ? UserProfile.empty() : value;
     }
 
     /** Returns whether client events are configured as asynchronous. */
@@ -1141,10 +1162,6 @@ final class SoulseekEngine
                 null,
                 null,
                 patch.getIncomingConnectionOptions(),
-                null,
-                null,
-                null,
-                null,
                 null,
                 null,
                 null,

@@ -42,7 +42,6 @@ import dev.slsk.internal.messaging.messages.UserInfoResponseFactory;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.MessageEvent;
 import dev.slsk.internal.network.MessageReceivedEvent;
-import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.search.SearchInternal;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -261,26 +260,17 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     private CompletableFuture<Void> handleInfoRequest(MessageConnection connection) {
-        CompletableFuture<UserInfo> resolved;
-        try {
-            resolved = client.getOptions()
-                    .getUserInfoResolver()
-                    .resolve(connection.getUsername(), connection.getIpEndpoint());
-        } catch (Throwable failure) {
-            resolved = CompletableFuture.failedFuture(failure);
-        }
-        return resolved.handle((info, failure) -> {
-                    if (failure == null) {
-                        return CompletableFuture.completedFuture(info);
-                    }
-                    Throwable cause = unwrap(failure);
-                    diagnostic.warning("Failed to resolve user info response: " + message(cause), cause);
-                    return new SoulseekClientOptions()
-                            .getUserInfoResolver()
-                            .resolve(connection.getUsername(), connection.getIpEndpoint());
-                })
-                .thenCompose(future -> future)
-                .thenCompose(info -> connection.writeAsync(info.toByteArray()))
+        // Read rather than resolved: the profile is a value this account set,
+        // not a question to ask on every request.
+        dev.slsk.UserProfile profile = client.getProfile();
+        UserInfo info = new UserInfo(
+                profile.description(),
+                profile.uploadSlots(),
+                profile.queueLength(),
+                profile.hasFreeUploadSlot(),
+                profile.picture().orElse(null));
+        return connection
+                .writeAsync(info.toByteArray())
                 .thenRun(() -> diagnostic.info("User info sent to " + connection.getUsername()));
     }
 

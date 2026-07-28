@@ -41,6 +41,24 @@ public interface Me {
     void presence(UserPresence presence);
 
     /**
+     * Returns what other users see when they ask about this account.
+     *
+     * @return the profile
+     */
+    UserProfile profile();
+
+    /**
+     * Sets what other users see when they ask about this account.
+     *
+     * <p>Set once, served to every peer who asks. The callback this replaces
+     * was invoked per request, which every application answered with the same
+     * constant.
+     *
+     * @param profile the profile to serve
+     */
+    void profile(UserProfile profile);
+
+    /**
      * Returns how many days of privileges remain on this account.
      *
      * @param signal cancels the query

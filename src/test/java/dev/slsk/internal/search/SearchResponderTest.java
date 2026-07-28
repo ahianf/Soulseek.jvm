@@ -32,7 +32,6 @@ import dev.slsk.internal.network.PeerEndpoint;
 import dev.slsk.internal.network.TransferConnectionResult;
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.options.ConnectionOptions;
-import dev.slsk.internal.options.SearchResponseResolver;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.spi.ShareCatalog;
 import java.lang.reflect.Proxy;
@@ -59,7 +58,7 @@ class SearchResponderTest {
     @Test
     void constructorValidatesClientAndUsesSuppliedDiagnostic() {
         assertThrows(NullPointerException.class, () -> new DefaultSearchResponder(null));
-        Fixture fixture = fixture(null, null);
+        Fixture fixture = fixture(null);
         RecordingDiagnostic diagnostic = new RecordingDiagnostic();
         DefaultSearchResponder responder = new DefaultSearchResponder(fixture.client, diagnostic);
         assertSame(diagnostic, responder.getDiagnostic());
@@ -67,7 +66,7 @@ class SearchResponderTest {
 
     @Test
     void defaultDiagnosticRaisesTypedEventsAndAllowsNoListeners() {
-        Fixture fixture = fixture(null, null);
+        Fixture fixture = fixture(null);
         DefaultSearchResponder responder = new DefaultSearchResponder(fixture.client);
         AtomicReference<DiagnosticEvent> event = new AtomicReference<>();
         DiagnosticEventListener listener = (sender, args) -> event.set(args);
@@ -80,12 +79,12 @@ class SearchResponderTest {
 
     @Test
     void tryDiscardHandlesMissingFoundAndThrowingCaches() {
-        assertFalse(fixture(null, null).responder.tryDiscard(1));
+        assertFalse(fixture(null).responder.tryDiscard(1));
 
         TestCache cache = new TestCache();
         SearchResponseCacheRecord record = new SearchResponseCacheRecord("alice", 2, "q", RESPONSE);
         cache.removed = CacheLookupResult.found(record);
-        Fixture fixture = fixture(null, cache);
+        Fixture fixture = fixture(cache);
         AtomicReference<SearchRequestResponseEvent> failed = new AtomicReference<>();
         fixture.responder.addResponseDeliveryFailedListener((sender, args) -> failed.set(args));
         assertTrue(fixture.responder.tryDiscard(9));
@@ -101,7 +100,7 @@ class SearchResponderTest {
 
     @Test
     void requestEventAlwaysPrecedesNullResolverResult() {
-        Fixture fixture = fixture(null, null);
+        Fixture fixture = fixture(null);
         AtomicReference<SearchRequestEvent> request = new AtomicReference<>();
         fixture.responder.addRequestReceivedListener((sender, args) -> request.set(args));
 
@@ -162,13 +161,12 @@ class SearchResponderTest {
 
     @Test
     void endpointAndWriteFailuresReturnFalseWithoutCachingWriteFailure() {
-        Fixture endpoint =
-                fixture((user, token, query) -> CompletableFuture.completedFuture(RESPONSE), new TestCache());
+        Fixture endpoint = catalogFixture(MATCHES, new TestCache());
         endpoint.client.endpointFailure = new RuntimeException("endpoint");
         assertFalse(endpoint.responder.tryRespondAsync("alice", 3, "query").join());
         assertEquals(0, endpoint.client.cache.addCount);
 
-        Fixture write = fixture((user, token, query) -> CompletableFuture.completedFuture(RESPONSE), new TestCache());
+        Fixture write = catalogFixture(MATCHES, new TestCache());
         write.manager.connection = messageConnection(
                 new AtomicReference<>(), CompletableFuture.failedFuture(new RuntimeException("write")));
         assertFalse(write.responder.tryRespondAsync("alice", 3, "query").join());
@@ -177,10 +175,10 @@ class SearchResponderTest {
 
     @Test
     void cachedResponseHandlesMissingCacheEntryAndCacheFailure() {
-        assertFalse(fixture(null, null).responder.tryRespondAsync(1).join());
+        assertFalse(fixture(null).responder.tryRespondAsync(1).join());
 
         TestCache cache = new TestCache();
-        Fixture missing = fixture(null, cache);
+        Fixture missing = fixture(cache);
         assertFalse(missing.responder.tryRespondAsync(2).join());
 
         RuntimeException failure = new RuntimeException("cache");
@@ -193,7 +191,7 @@ class SearchResponderTest {
     void cachedResponseWritesAndRaisesDelivered() {
         TestCache cache = new TestCache();
         cache.removed = CacheLookupResult.found(new SearchResponseCacheRecord("alice", 3, "query", RESPONSE));
-        Fixture fixture = fixture(null, cache);
+        Fixture fixture = fixture(cache);
         AtomicReference<byte[]> written = new AtomicReference<>();
         fixture.manager.connection = messageConnection(written, CompletableFuture.completedFuture(null));
         AtomicInteger delivered = new AtomicInteger();
@@ -209,7 +207,7 @@ class SearchResponderTest {
     void cachedDeliveryFailureRaisesFailureEvent() {
         TestCache cache = new TestCache();
         cache.removed = CacheLookupResult.found(new SearchResponseCacheRecord("alice", 3, "query", RESPONSE));
-        Fixture fixture = fixture(null, cache);
+        Fixture fixture = fixture(cache);
         RuntimeException failure = new RuntimeException("write");
         fixture.manager.connection =
                 messageConnection(new AtomicReference<>(), CompletableFuture.failedFuture(failure));
@@ -221,9 +219,9 @@ class SearchResponderTest {
         assertSame(failure, fixture.diagnostic.lastThrowable);
     }
 
-    private static Fixture fixture(SearchResponseResolver resolver, TestCache cache) {
+    private static Fixture fixture(TestCache cache) {
         TestCache actualCache = cache;
-        SoulseekClientOptions options = options(resolver, actualCache);
+        SoulseekClientOptions options = options(actualCache);
         TestPeerManager manager = new TestPeerManager();
         TestClient client = new TestClient(options, manager, actualCache);
         RecordingDiagnostic diagnostic = new RecordingDiagnostic();
@@ -239,7 +237,7 @@ class SearchResponderTest {
      * @return the fixture
      */
     private static Fixture catalogFixture(List<SearchFile> matches, TestCache cache) {
-        Fixture fixture = fixture(null, cache);
+        Fixture fixture = fixture(cache);
         fixture.client.catalog = new ShareCatalog() {
             @Override
             public dev.slsk.BrowseResponse browse(Username requester) {
@@ -272,7 +270,7 @@ class SearchResponderTest {
         return fixture;
     }
 
-    private static SoulseekClientOptions options(SearchResponseResolver resolver, SearchResponseCache cache) {
+    private static SoulseekClientOptions options(SearchResponseCache cache) {
         return new SoulseekClientOptions(
                 true,
                 null,
@@ -298,11 +296,7 @@ class SearchResponderTest {
                 new ConnectionOptions(),
                 new ConnectionOptions(),
                 null,
-                resolver,
                 cache,
-                null,
-                null,
-                null,
                 null,
                 null,
                 false);

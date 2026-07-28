@@ -27,11 +27,6 @@ class SoulseekClientOptionsPatchTest {
         ConnectionOptions distributed = new ConnectionOptions();
         UserEndpointCache userCache = new TestUserCache();
         SearchResponseCache searchCache = new TestSearchCache();
-        SearchResponseResolver searchResolver = (user, token, query) -> CompletableFuture.completedFuture(null);
-        BrowseResponseResolver browseResolver = (user, endpoint) -> CompletableFuture.completedFuture(null);
-        DirectoryContentsResolver directoryResolver =
-                (user, endpoint, token, directory) -> CompletableFuture.completedFuture(null);
-        UserInfoResolver infoResolver = (user, endpoint) -> CompletableFuture.completedFuture(null);
         EnqueueDownloadCallback enqueue = (user, endpoint, filename) -> CompletableFuture.completedFuture(null);
         PlaceInQueueResolver place = (user, endpoint, filename) -> CompletableFuture.completedFuture(0);
         InetAddress address = InetAddress.getByName("127.0.0.2");
@@ -55,11 +50,7 @@ class SoulseekClientOptionsPatchTest {
                 incoming,
                 distributed,
                 userCache,
-                searchResolver,
                 searchCache,
-                browseResolver,
-                directoryResolver,
-                infoResolver,
                 enqueue,
                 place);
 
@@ -81,11 +72,7 @@ class SoulseekClientOptionsPatchTest {
         assertSame(incoming, patch.getIncomingConnectionOptions());
         assertSame(distributed, patch.getDistributedConnectionOptions());
         assertSame(userCache, patch.getUserEndpointCache());
-        assertSame(searchResolver, patch.getSearchResponseResolver());
         assertSame(searchCache, patch.getSearchResponseCache());
-        assertSame(browseResolver, patch.getBrowseResponseResolver());
-        assertSame(directoryResolver, patch.getDirectoryContentsResolver());
-        assertSame(infoResolver, patch.getUserInfoResolver());
         assertSame(enqueue, patch.getEnqueueDownload());
         assertSame(place, patch.getPlaceInQueueResolver());
     }
@@ -108,7 +95,7 @@ class SoulseekClientOptionsPatchTest {
                 IllegalArgumentException.class,
                 () -> new SoulseekClientOptionsPatch(
                         null, null, 1023, null, null, -1, null, null, null, null, null, null, null, null, null, null,
-                        null, null, null, null, null, null, null, null, null));
+                        null, null, null, null, null));
 
         assertEquals("listenPort must be between 1024 and 65535", exception.getMessage());
     }
@@ -119,12 +106,12 @@ class SoulseekClientOptionsPatchTest {
                 IllegalArgumentException.class,
                 () -> new SoulseekClientOptionsPatch(
                         null, null, 65_536, null, null, null, null, null, null, null, null, null, null, null, null,
-                        null, null, null, null, null, null, null, null, null, null));
+                        null, null, null, null, null, null));
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new SoulseekClientOptionsPatch(
                         null, null, null, null, null, -1, null, null, null, null, null, null, null, null, null, null,
-                        null, null, null, null, null, null, null, null, null));
+                        null, null, null, null, null));
     }
 
     @Test

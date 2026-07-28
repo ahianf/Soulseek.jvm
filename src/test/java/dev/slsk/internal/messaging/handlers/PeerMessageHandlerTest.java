@@ -15,6 +15,7 @@ import dev.slsk.CancellationSignal;
 import dev.slsk.FileAttributes;
 import dev.slsk.SearchFile;
 import dev.slsk.ShareIndex;
+import dev.slsk.UserProfile;
 import dev.slsk.Username;
 import dev.slsk.exceptions.DownloadEnqueueException;
 import dev.slsk.exceptions.MessageReadException;
@@ -52,14 +53,10 @@ import dev.slsk.internal.messaging.messages.UploadFailed;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.MessageEvent;
 import dev.slsk.internal.network.MessageReceivedEvent;
-import dev.slsk.internal.options.BrowseResponseResolver;
-import dev.slsk.internal.options.DirectoryContentsResolver;
 import dev.slsk.internal.options.EnqueueDownloadCallback;
 import dev.slsk.internal.options.PlaceInQueueResolver;
-import dev.slsk.internal.options.SearchResponseResolver;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.options.SoulseekClientOptionsPatch;
-import dev.slsk.internal.options.UserInfoResolver;
 import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.spi.ResolvedFile;
@@ -173,33 +170,40 @@ class PeerMessageHandlerTest {
         search.close();
     }
 
+    /**
+     * The profile is a value this account set, not a question asked on every
+     * request. There is no failure path left to test because there is no longer
+     * anything to fail: a peer asking about us is answered from a field.
+     */
     @Test
-    void infoRequestWritesResolvedResponseAndFailureUsesDefault() {
-        UserInfo info = new UserInfo("resolved", 2, 3, true);
-        Fixture resolved = new Fixture(
-                options(null, null, null, (username, endpoint) -> CompletableFuture.completedFuture(info), null, null));
+    void infoRequestWritesTheProfileThisAccountSet() {
+        Fixture fixture = new Fixture(new UserProfile("resolved", Optional.of(new byte[] {7}), 2, 3, true));
 
-        resolved.handler
+        fixture.handler
                 .handleMessageReadAsync(
-                        resolved.connection.proxy,
+                        fixture.connection.proxy,
                         new dev.slsk.internal.messaging.messages.UserInfoRequest().toByteArray())
                 .join();
-        assertArrayEquals(info.toByteArray(), resolved.connection.bytes.getFirst());
 
-        Fixture failed = new Fixture(options(
-                null,
-                null,
-                null,
-                (username, endpoint) -> CompletableFuture.failedFuture(new RuntimeException("info resolver")),
-                null,
-                null));
-        failed.handler
+        assertArrayEquals(
+                new UserInfo("resolved", 2, 3, true, new byte[] {7}).toByteArray(),
+                fixture.connection.bytes.getFirst());
+        assertTrue(fixture.diagnostic.contains("User info sent to"));
+    }
+
+    @Test
+    void infoRequestAnswersEvenWhenNoProfileWasSet() {
+        Fixture fixture = new Fixture(new SoulseekClientOptions());
+
+        fixture.handler
                 .handleMessageReadAsync(
-                        failed.connection.proxy,
+                        fixture.connection.proxy,
                         new dev.slsk.internal.messaging.messages.UserInfoRequest().toByteArray())
                 .join();
-        assertEquals(1, failed.connection.bytes.size());
-        assertTrue(failed.diagnostic.containsWarning("Failed to resolve user info response"));
+
+        // Silence reads as a broken client, and clients that look broken do not
+        // get served.
+        assertArrayEquals(new UserInfo("", 0, 0, false).toByteArray(), fixture.connection.bytes.getFirst());
     }
 
     @Test
@@ -318,10 +322,6 @@ class PeerMessageHandlerTest {
     @Test
     void queueDownloadSendsPlaceOrDenialWithSourceMessages() {
         Fixture queued = new Fixture(options(
-                null,
-                null,
-                null,
-                null,
                 (username, endpoint, filename) -> CompletableFuture.completedFuture(null),
                 (username, endpoint, filename) -> CompletableFuture.completedFuture(4)));
         queued.handler
@@ -332,10 +332,6 @@ class PeerMessageHandlerTest {
                 queued.connection.outgoing.getFirst().toByteArray());
 
         Fixture rejected = new Fixture(options(
-                null,
-                null,
-                null,
-                null,
                 (username, endpoint, filename) ->
                         CompletableFuture.failedFuture(new DownloadEnqueueException("No slot")),
                 null));
@@ -347,10 +343,6 @@ class PeerMessageHandlerTest {
                 rejected.connection.outgoing.getFirst().toByteArray());
 
         Fixture failed = new Fixture(options(
-                null,
-                null,
-                null,
-                null,
                 (username, endpoint, filename) -> CompletableFuture.failedFuture(new RuntimeException("enqueue")),
                 null));
         failed.handler
@@ -365,10 +357,6 @@ class PeerMessageHandlerTest {
     @Test
     void downloadTransferRequestSendsQueuedOrTwoRejectionMessages() {
         Fixture queued = new Fixture(options(
-                null,
-                null,
-                null,
-                null,
                 (username, endpoint, filename) -> CompletableFuture.completedFuture(null),
                 (username, endpoint, filename) -> CompletableFuture.completedFuture(null)));
         queued.handler
@@ -382,10 +370,6 @@ class PeerMessageHandlerTest {
                 queued.connection.outgoing.getFirst().toByteArray());
 
         Fixture rejected = new Fixture(options(
-                null,
-                null,
-                null,
-                null,
                 (username, endpoint, filename) ->
                         CompletableFuture.failedFuture(new DownloadEnqueueException("Rejected")),
                 null));
@@ -430,8 +414,8 @@ class PeerMessageHandlerTest {
 
     @Test
     void placeRequestWritesOnlyNonNullPlaceAndLogsResolverFailure() {
-        Fixture placed = new Fixture(options(
-                null, null, null, null, null, (username, endpoint, filename) -> CompletableFuture.completedFuture(9)));
+        Fixture placed =
+                new Fixture(options(null, (username, endpoint, filename) -> CompletableFuture.completedFuture(9)));
         placed.handler
                 .handleMessageReadAsync(placed.connection.proxy, new PlaceInQueueRequest(FILENAME).toByteArray())
                 .join();
@@ -439,23 +423,14 @@ class PeerMessageHandlerTest {
                 new PlaceInQueueResponse(FILENAME, 9).toByteArray(),
                 placed.connection.outgoing.getFirst().toByteArray());
 
-        Fixture absent = new Fixture(options(
-                null,
-                null,
-                null,
-                null,
-                null,
-                (username, endpoint, filename) -> CompletableFuture.completedFuture(null)));
+        Fixture absent =
+                new Fixture(options(null, (username, endpoint, filename) -> CompletableFuture.completedFuture(null)));
         absent.handler
                 .handleMessageReadAsync(absent.connection.proxy, new PlaceInQueueRequest(FILENAME).toByteArray())
                 .join();
         assertTrue(absent.connection.outgoing.isEmpty());
 
         Fixture failed = new Fixture(options(
-                null,
-                null,
-                null,
-                null,
                 null,
                 (username, endpoint, filename) ->
                         CompletableFuture.failedFuture(new RuntimeException("place resolver"))));
@@ -517,39 +492,10 @@ class PeerMessageHandlerTest {
         assertTrue(fixture.diagnostic.contains("Peer message sent: BROWSE_REQUEST"));
     }
 
-    private static SoulseekClientOptions options(
-            SearchResponseResolver search,
-            BrowseResponseResolver browse,
-            DirectoryContentsResolver directories,
-            UserInfoResolver info,
-            EnqueueDownloadCallback enqueue,
-            PlaceInQueueResolver place) {
+    private static SoulseekClientOptions options(EnqueueDownloadCallback enqueue, PlaceInQueueResolver place) {
         SoulseekClientOptionsPatch patch = new SoulseekClientOptionsPatch(
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                search,
-                null,
-                browse,
-                directories,
-                info,
-                enqueue,
-                place);
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, enqueue, place);
         return new SoulseekClientOptions().with(patch);
     }
 
@@ -618,11 +564,19 @@ class PeerMessageHandlerTest {
         }
 
         private Fixture(ShareCatalog catalog) {
-            this(new SoulseekClientOptions(), catalog);
+            this(new SoulseekClientOptions(), catalog, UserProfile.empty());
+        }
+
+        private Fixture(UserProfile profile) {
+            this(new SoulseekClientOptions(), ShareCatalog.empty(), profile);
         }
 
         private Fixture(SoulseekClientOptions options, ShareCatalog catalog) {
-            client = new FakeClient(options, waiter, catalog);
+            this(options, catalog, UserProfile.empty());
+        }
+
+        private Fixture(SoulseekClientOptions options, ShareCatalog catalog, UserProfile profile) {
+            client = new FakeClient(options, waiter, catalog, profile);
             handler = new DefaultPeerMessageHandler(client, diagnostic);
         }
     }
@@ -631,13 +585,20 @@ class PeerMessageHandlerTest {
         private final SoulseekClientOptions options;
         private final Waiter waiter;
         private final ShareCatalog catalog;
+        private final UserProfile profile;
         private final Map<Integer, SearchInternal> searches = new HashMap<>();
         private final Map<Integer, TransferInternal> downloads = new HashMap<>();
 
-        private FakeClient(SoulseekClientOptions options, Waiter waiter, ShareCatalog catalog) {
+        private FakeClient(SoulseekClientOptions options, Waiter waiter, ShareCatalog catalog, UserProfile profile) {
             this.options = options;
             this.waiter = waiter;
             this.catalog = catalog;
+            this.profile = profile;
+        }
+
+        @Override
+        public UserProfile getProfile() {
+            return profile;
         }
 
         @Override

@@ -34,4 +34,11 @@ public interface PeerMessageHandlerClient {
      * @return the logged-in username, or {@code null}
      */
     String getLoggedInUsername();
+
+    /**
+     * Returns what peers are told about this account.
+     *
+     * @return the profile, never {@code null}
+     */
+    dev.slsk.UserProfile getProfile();
 }

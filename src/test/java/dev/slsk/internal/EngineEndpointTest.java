@@ -299,10 +299,6 @@ class EngineEndpointTest {
                 null,
                 null,
                 null,
-                null,
-                null,
-                null,
-                null,
                 false);
     }
 

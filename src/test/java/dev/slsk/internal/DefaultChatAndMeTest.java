@@ -10,12 +10,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.CancellationSignal;
 import dev.slsk.Soulseek;
 import dev.slsk.UserPresence;
+import dev.slsk.UserProfile;
 import dev.slsk.Username;
 import dev.slsk.events.ChatEvent;
 import dev.slsk.events.MeEvent;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -106,5 +108,36 @@ class DefaultChatAndMeTest {
                     case MeEvent.PresenceChanged changed -> changed.from() + " -> " + changed.to();
                 };
         assertEquals("ONLINE -> AWAY", renderedMe);
+    }
+
+    /**
+     * The profile is a value, not a callback. What a peer sees is what was set,
+     * and what was set survives being read back — the old resolver could not be
+     * read back at all, so an application that wanted to render its own profile
+     * had to remember what it had configured.
+     */
+    @Test
+    @DisplayName("the profile is set once and served to every peer who asks")
+    void profileIsAValueRatherThanACallback() {
+        try (Soulseek slsk = client()) {
+            assertEquals(UserProfile.empty(), slsk.me().profile());
+
+            UserProfile mine = new UserProfile("hello", Optional.of(new byte[] {1, 2}), 4, 9, true);
+            slsk.me().profile(mine);
+
+            assertEquals(mine, slsk.me().profile());
+            assertEquals(mine, ((DefaultSoulseek) slsk).client().getProfile());
+
+            assertThrows(NullPointerException.class, () -> slsk.me().profile(null));
+            assertEquals(mine, slsk.me().profile(), "a rejected set leaves the old profile in place");
+        }
+    }
+
+    @Test
+    void aProfileRejectsCountsThatCannotBeTrue() {
+        assertThrows(IllegalArgumentException.class, () -> new UserProfile("", Optional.empty(), -1, 0, false));
+        assertThrows(IllegalArgumentException.class, () -> new UserProfile("", Optional.empty(), 0, -1, false));
+        assertThrows(NullPointerException.class, () -> new UserProfile(null, Optional.empty(), 0, 0, false));
+        assertEquals("only a description", UserProfile.of("only a description").description());
     }
 }

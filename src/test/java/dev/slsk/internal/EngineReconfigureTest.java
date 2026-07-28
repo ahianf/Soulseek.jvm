@@ -203,10 +203,6 @@ class EngineReconfigureTest {
                 null,
                 null,
                 null,
-                null,
-                null,
-                null,
-                null,
                 null);
 
         fixture.client.reconfigureOptions(patch);
@@ -332,10 +328,6 @@ class EngineReconfigureTest {
                 null,
                 incomingOptions,
                 distributedOptions,
-                null,
-                null,
-                null,
-                null,
                 null,
                 null,
                 null,

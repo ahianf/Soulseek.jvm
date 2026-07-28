@@ -4,10 +4,8 @@
 
 package dev.slsk.internal.options;
 
-import dev.slsk.internal.BrowseResponse;
 import dev.slsk.internal.SearchResponseCache;
 import dev.slsk.internal.UserEndpointCache;
-import dev.slsk.internal.UserInfo;
 import dev.slsk.internal.diagnostics.DiagnosticLevel;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -31,9 +29,7 @@ public class SoulseekClientOptions {
     private final boolean acceptPrivateRoomInvitations;
     private final boolean autoAcknowledgePrivateMessages;
     private final boolean autoAcknowledgePrivilegeNotifications;
-    private final BrowseResponseResolver browseResponseResolver;
     private final boolean deduplicateSearchRequests;
-    private final DirectoryContentsResolver directoryContentsResolver;
     private final int distributedChildLimit;
     private final ConnectionOptions distributedConnectionOptions;
     private final boolean enableDistributedNetwork;
@@ -54,12 +50,10 @@ public class SoulseekClientOptions {
     private final PlaceInQueueResolver placeInQueueResolver;
     private final boolean raiseEventsAsynchronously;
     private final SearchResponseCache searchResponseCache;
-    private final SearchResponseResolver searchResponseResolver;
     private final ConnectionOptions serverConnectionOptions;
     private final int startingToken;
     private final ConnectionOptions transferConnectionOptions;
     private final UserEndpointCache userEndpointCache;
-    private final UserInfoResolver userInfoResolver;
 
     /** Creates options with source defaults. */
     public SoulseekClientOptions() {
@@ -82,10 +76,6 @@ public class SoulseekClientOptions {
                 false,
                 DiagnosticLevel.INFO,
                 0,
-                null,
-                null,
-                null,
-                null,
                 null,
                 null,
                 null,
@@ -128,10 +118,6 @@ public class SoulseekClientOptions {
                 null,
                 null,
                 null,
-                null,
-                null,
-                null,
-                null,
                 false);
     }
 
@@ -156,10 +142,6 @@ public class SoulseekClientOptions {
                 false,
                 DiagnosticLevel.INFO,
                 0,
-                null,
-                null,
-                null,
-                null,
                 null,
                 null,
                 null,
@@ -233,10 +215,6 @@ public class SoulseekClientOptions {
                 null,
                 null,
                 null,
-                null,
-                null,
-                null,
-                null,
                 false);
     }
 
@@ -266,11 +244,7 @@ public class SoulseekClientOptions {
             ConnectionOptions incomingConnectionOptions,
             ConnectionOptions distributedConnectionOptions,
             UserEndpointCache userEndpointCache,
-            SearchResponseResolver searchResponseResolver,
             SearchResponseCache searchResponseCache,
-            BrowseResponseResolver browseResponseResolver,
-            DirectoryContentsResolver directoryContentsResolver,
-            UserInfoResolver userInfoResolver,
             EnqueueDownloadCallback enqueueDownload,
             PlaceInQueueResolver placeInQueueResolver,
             boolean raiseEventsAsynchronously) {
@@ -336,15 +310,7 @@ public class SoulseekClientOptions {
                 distributedConnectionOptions == null ? new ConnectionOptions() : distributedConnectionOptions;
 
         this.userEndpointCache = userEndpointCache;
-        this.searchResponseResolver = searchResponseResolver;
         this.searchResponseCache = searchResponseCache;
-        this.browseResponseResolver = browseResponseResolver == null
-                ? (username, endpoint) -> CompletableFuture.completedFuture(new BrowseResponse())
-                : browseResponseResolver;
-        this.directoryContentsResolver = directoryContentsResolver;
-        this.userInfoResolver = userInfoResolver == null
-                ? (username, endpoint) -> CompletableFuture.completedFuture(new UserInfo("", 0, 0, false))
-                : userInfoResolver;
         this.enqueueDownload = enqueueDownload == null
                 ? (username, endpoint, filename) -> CompletableFuture.completedFuture(null)
                 : enqueueDownload;
@@ -402,13 +368,7 @@ public class SoulseekClientOptions {
                         ? distributedConnectionOptions
                         : patch.getDistributedConnectionOptions(),
                 patch.getUserEndpointCache() == null ? userEndpointCache : patch.getUserEndpointCache(),
-                patch.getSearchResponseResolver() == null ? searchResponseResolver : patch.getSearchResponseResolver(),
                 patch.getSearchResponseCache() == null ? searchResponseCache : patch.getSearchResponseCache(),
-                patch.getBrowseResponseResolver() == null ? browseResponseResolver : patch.getBrowseResponseResolver(),
-                patch.getDirectoryContentsResolver() == null
-                        ? directoryContentsResolver
-                        : patch.getDirectoryContentsResolver(),
-                patch.getUserInfoResolver() == null ? userInfoResolver : patch.getUserInfoResolver(),
                 patch.getEnqueueDownload() == null ? enqueueDownload : patch.getEnqueueDownload(),
                 patch.getPlaceInQueueResolver() == null ? placeInQueueResolver : patch.getPlaceInQueueResolver(),
                 false);
@@ -434,19 +394,9 @@ public class SoulseekClientOptions {
         return autoAcknowledgePrivilegeNotifications;
     }
 
-    /** Returns the browse response resolver. */
-    public final BrowseResponseResolver getBrowseResponseResolver() {
-        return browseResponseResolver;
-    }
-
     /** Returns whether duplicate search requests are discarded. */
     public final boolean isDeduplicateSearchRequests() {
         return deduplicateSearchRequests;
-    }
-
-    /** Returns the directory contents resolver, or {@code null}. */
-    public final DirectoryContentsResolver getDirectoryContentsResolver() {
-        return directoryContentsResolver;
     }
 
     /** Returns the distributed child limit. */
@@ -549,11 +499,6 @@ public class SoulseekClientOptions {
         return searchResponseCache;
     }
 
-    /** Returns the search response resolver, or {@code null}. */
-    public final SearchResponseResolver getSearchResponseResolver() {
-        return searchResponseResolver;
-    }
-
     /** Returns the server connection options. */
     public final ConnectionOptions getServerConnectionOptions() {
         return serverConnectionOptions;
@@ -572,11 +517,6 @@ public class SoulseekClientOptions {
     /** Returns the user endpoint cache, or {@code null}. */
     public final UserEndpointCache getUserEndpointCache() {
         return userEndpointCache;
-    }
-
-    /** Returns the user information resolver. */
-    public final UserInfoResolver getUserInfoResolver() {
-        return userInfoResolver;
     }
 
     private static InetAddress wildcardAddress() {

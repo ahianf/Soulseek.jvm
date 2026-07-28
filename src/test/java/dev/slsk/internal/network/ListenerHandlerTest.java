@@ -225,11 +225,7 @@ class ListenerHandlerTest {
                 null,
                 null,
                 null,
-                null,
                 cache,
-                null,
-                null,
-                null,
                 null,
                 null,
                 false);

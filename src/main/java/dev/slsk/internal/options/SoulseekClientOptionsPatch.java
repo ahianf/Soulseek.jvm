@@ -14,9 +14,7 @@ public class SoulseekClientOptionsPatch {
     private final Boolean acceptPrivateRoomInvitations;
     private final Boolean autoAcknowledgePrivateMessages;
     private final Boolean autoAcknowledgePrivilegeNotifications;
-    private final BrowseResponseResolver browseResponseResolver;
     private final Boolean deduplicateSearchRequests;
-    private final DirectoryContentsResolver directoryContentsResolver;
     private final Integer distributedChildLimit;
     private final ConnectionOptions distributedConnectionOptions;
     private final Boolean enableDistributedNetwork;
@@ -30,27 +28,21 @@ public class SoulseekClientOptionsPatch {
     private final ConnectionOptions peerConnectionOptions;
     private final PlaceInQueueResolver placeInQueueResolver;
     private final SearchResponseCache searchResponseCache;
-    private final SearchResponseResolver searchResponseResolver;
     private final ConnectionOptions serverConnectionOptions;
     private final ConnectionOptions transferConnectionOptions;
     private final UserEndpointCache userEndpointCache;
-    private final UserInfoResolver userInfoResolver;
 
     /** Creates an empty patch. */
     public SoulseekClientOptionsPatch() {
         this(
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null);
+                null, null, null, null);
     }
 
     /** Creates a patch through its listener switch. */
     public SoulseekClientOptionsPatch(Boolean enableListener) {
         this(
                 enableListener,
-                null,
-                null,
-                null,
-                null,
                 null,
                 null,
                 null,
@@ -96,10 +88,6 @@ public class SoulseekClientOptionsPatch {
                 null,
                 null,
                 null,
-                null,
-                null,
-                null,
-                null,
                 null);
     }
 
@@ -109,10 +97,6 @@ public class SoulseekClientOptionsPatch {
                 enableListener,
                 listenIpAddress,
                 listenPort,
-                null,
-                null,
-                null,
-                null,
                 null,
                 null,
                 null,
@@ -158,11 +142,7 @@ public class SoulseekClientOptionsPatch {
             ConnectionOptions incomingConnectionOptions,
             ConnectionOptions distributedConnectionOptions,
             UserEndpointCache userEndpointCache,
-            SearchResponseResolver searchResponseResolver,
             SearchResponseCache searchResponseCache,
-            BrowseResponseResolver browseResponseResolver,
-            DirectoryContentsResolver directoryContentsResolver,
-            UserInfoResolver userInfoResolver,
             EnqueueDownloadCallback enqueueDownload,
             PlaceInQueueResolver placeInQueueResolver) {
         this.enableListener = enableListener;
@@ -195,11 +175,7 @@ public class SoulseekClientOptionsPatch {
         this.incomingConnectionOptions = incomingConnectionOptions;
         this.distributedConnectionOptions = distributedConnectionOptions;
         this.userEndpointCache = userEndpointCache;
-        this.searchResponseResolver = searchResponseResolver;
         this.searchResponseCache = searchResponseCache;
-        this.browseResponseResolver = browseResponseResolver;
-        this.directoryContentsResolver = directoryContentsResolver;
-        this.userInfoResolver = userInfoResolver;
         this.enqueueDownload = enqueueDownload;
         this.placeInQueueResolver = placeInQueueResolver;
     }
@@ -224,19 +200,9 @@ public class SoulseekClientOptionsPatch {
         return autoAcknowledgePrivilegeNotifications;
     }
 
-    /** Returns the browse response resolver, or {@code null}. */
-    public final BrowseResponseResolver getBrowseResponseResolver() {
-        return browseResponseResolver;
-    }
-
     /** Returns the search-request deduplication setting. */
     public final Boolean getDeduplicateSearchRequests() {
         return deduplicateSearchRequests;
-    }
-
-    /** Returns the directory contents resolver, or {@code null}. */
-    public final DirectoryContentsResolver getDirectoryContentsResolver() {
-        return directoryContentsResolver;
     }
 
     /** Returns the distributed child limit, or {@code null}. */
@@ -304,11 +270,6 @@ public class SoulseekClientOptionsPatch {
         return searchResponseCache;
     }
 
-    /** Returns the search response resolver, or {@code null}. */
-    public final SearchResponseResolver getSearchResponseResolver() {
-        return searchResponseResolver;
-    }
-
     /** Returns the server connection options, or {@code null}. */
     public final ConnectionOptions getServerConnectionOptions() {
         return serverConnectionOptions;
@@ -322,10 +283,5 @@ public class SoulseekClientOptionsPatch {
     /** Returns the user endpoint cache, or {@code null}. */
     public final UserEndpointCache getUserEndpointCache() {
         return userEndpointCache;
-    }
-
-    /** Returns the user information resolver, or {@code null}. */
-    public final UserInfoResolver getUserInfoResolver() {
-        return userInfoResolver;
     }
 }

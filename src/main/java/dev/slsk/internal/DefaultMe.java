@@ -8,6 +8,7 @@ import dev.slsk.EventStream;
 import dev.slsk.Me;
 import dev.slsk.ServerInfo;
 import dev.slsk.UserPresence;
+import dev.slsk.UserProfile;
 import dev.slsk.Username;
 import dev.slsk.events.MeEvent;
 import dev.slsk.internal.EngineEvents.Kind;
@@ -123,6 +124,17 @@ final class DefaultMe implements Me {
             case AWAY -> dev.slsk.internal.UserPresence.AWAY;
             case ONLINE -> dev.slsk.internal.UserPresence.ONLINE;
         };
+    }
+
+    @Override
+    public UserProfile profile() {
+        return client.getProfile();
+    }
+
+    @Override
+    public void profile(UserProfile value) {
+        Objects.requireNonNull(value, "profile");
+        client.setProfile(value);
     }
 
     @Override
