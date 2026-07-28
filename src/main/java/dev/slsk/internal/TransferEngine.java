@@ -18,7 +18,6 @@ import dev.slsk.internal.messaging.messages.PlaceInQueueResponse;
 import dev.slsk.internal.options.PositionableInputStream;
 import dev.slsk.internal.options.PositionableOutputStream;
 import dev.slsk.internal.options.TransferOptions;
-import dev.slsk.internal.options.UploadStreamFactory;
 import dev.slsk.internal.transfer.TransferInternal;
 import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
@@ -33,6 +32,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.LongFunction;
 import java.util.function.Supplier;
 
 /**
@@ -468,10 +468,9 @@ final class TransferEngine {
                 size,
                 ignoredOffset -> {
                     try {
-                        return CompletableFuture.completedFuture(
-                                context.getIoAdapter().getInputStream(localFilename));
+                        return context.getIoAdapter().getInputStream(localFilename);
                     } catch (IOException failure) {
-                        return CompletableFuture.failedFuture(new UncheckedIOException(failure));
+                        throw new UncheckedIOException(failure);
                     }
                 },
                 transferToken,
@@ -480,7 +479,7 @@ final class TransferEngine {
     }
     /** Uploads data supplied by an asynchronous stream factory. */
     CompletableFuture<Transfer> upload(
-            String requestedUsername, String remoteFilename, long size, UploadStreamFactory inputStreamFactory) {
+            String requestedUsername, String remoteFilename, long size, LongFunction<InputStream> inputStreamFactory) {
         return upload(
                 requestedUsername, remoteFilename, size, inputStreamFactory, null, null, CancellationSignal.none());
     }
@@ -489,7 +488,7 @@ final class TransferEngine {
             String requestedUsername,
             String remoteFilename,
             long size,
-            UploadStreamFactory inputStreamFactory,
+            LongFunction<InputStream> inputStreamFactory,
             Integer token) {
         return upload(
                 requestedUsername, remoteFilename, size, inputStreamFactory, token, null, CancellationSignal.none());
@@ -499,7 +498,7 @@ final class TransferEngine {
             String requestedUsername,
             String remoteFilename,
             long size,
-            UploadStreamFactory inputStreamFactory,
+            LongFunction<InputStream> inputStreamFactory,
             CancellationSignal cancellationSignal) {
         return upload(requestedUsername, remoteFilename, size, inputStreamFactory, null, null, cancellationSignal);
     }
@@ -508,7 +507,7 @@ final class TransferEngine {
             String requestedUsername,
             String remoteFilename,
             long size,
-            UploadStreamFactory inputStreamFactory,
+            LongFunction<InputStream> inputStreamFactory,
             TransferOptions transferOptions) {
         return upload(
                 requestedUsername,
@@ -524,7 +523,7 @@ final class TransferEngine {
             String requestedUsername,
             String remoteFilename,
             long size,
-            UploadStreamFactory inputStreamFactory,
+            LongFunction<InputStream> inputStreamFactory,
             Integer token,
             TransferOptions transferOptions) {
         return upload(
@@ -541,7 +540,7 @@ final class TransferEngine {
             String requestedUsername,
             String remoteFilename,
             long size,
-            UploadStreamFactory inputStreamFactory,
+            LongFunction<InputStream> inputStreamFactory,
             Integer token,
             TransferOptions transferOptions,
             CancellationSignal cancellationSignal) {
@@ -790,7 +789,7 @@ final class TransferEngine {
     }
     /** Enqueues a stream-factory upload. */
     CompletableFuture<CompletableFuture<Transfer>> enqueueUpload(
-            String requestedUsername, String remoteFilename, long size, UploadStreamFactory inputStreamFactory) {
+            String requestedUsername, String remoteFilename, long size, LongFunction<InputStream> inputStreamFactory) {
         return enqueueUpload(
                 requestedUsername, remoteFilename, size, inputStreamFactory, null, null, CancellationSignal.none());
     }
@@ -799,7 +798,7 @@ final class TransferEngine {
             String requestedUsername,
             String remoteFilename,
             long size,
-            UploadStreamFactory inputStreamFactory,
+            LongFunction<InputStream> inputStreamFactory,
             Integer token) {
         return enqueueUpload(
                 requestedUsername, remoteFilename, size, inputStreamFactory, token, null, CancellationSignal.none());
@@ -809,7 +808,7 @@ final class TransferEngine {
             String requestedUsername,
             String remoteFilename,
             long size,
-            UploadStreamFactory inputStreamFactory,
+            LongFunction<InputStream> inputStreamFactory,
             CancellationSignal cancellationSignal) {
         return enqueueUpload(
                 requestedUsername, remoteFilename, size, inputStreamFactory, null, null, cancellationSignal);
@@ -819,7 +818,7 @@ final class TransferEngine {
             String requestedUsername,
             String remoteFilename,
             long size,
-            UploadStreamFactory inputStreamFactory,
+            LongFunction<InputStream> inputStreamFactory,
             Integer token,
             TransferOptions transferOptions) {
         return enqueueUpload(
@@ -836,7 +835,7 @@ final class TransferEngine {
             String requestedUsername,
             String remoteFilename,
             long size,
-            UploadStreamFactory inputStreamFactory,
+            LongFunction<InputStream> inputStreamFactory,
             Integer token,
             TransferOptions transferOptions,
             CancellationSignal cancellationSignal) {
@@ -938,7 +937,7 @@ final class TransferEngine {
             String requestedUsername,
             String remoteFilename,
             long size,
-            UploadStreamFactory inputStreamFactory,
+            LongFunction<InputStream> inputStreamFactory,
             int token,
             TransferOptions transferOptions,
             CancellationSignal cancellationSignal) {

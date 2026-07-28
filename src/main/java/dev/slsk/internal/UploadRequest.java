@@ -5,8 +5,9 @@ package dev.slsk.internal;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.internal.options.TransferOptions;
-import dev.slsk.internal.options.UploadStreamFactory;
+import java.io.InputStream;
 import java.util.Objects;
+import java.util.function.LongFunction;
 
 /**
  * Everything one upload needs, in one value.
@@ -26,7 +27,7 @@ public final class UploadRequest {
     private final String username;
     private final String remoteFilename;
     private final String localFilename;
-    private final UploadStreamFactory inputStreamFactory;
+    private final LongFunction<InputStream> inputStreamFactory;
     private final long size;
     private final Integer token;
     private final TransferOptions options;
@@ -69,7 +70,7 @@ public final class UploadRequest {
      * @return a builder
      */
     public static Builder fromStream(
-            String username, String remoteFilename, long size, UploadStreamFactory inputStreamFactory) {
+            String username, String remoteFilename, long size, LongFunction<InputStream> inputStreamFactory) {
         Builder builder = new Builder(username, remoteFilename);
         builder.inputStreamFactory = Objects.requireNonNull(inputStreamFactory, "inputStreamFactory");
         builder.size = size;
@@ -93,7 +94,7 @@ public final class UploadRequest {
     }
 
     /** Returns the source stream factory, or {@code null} when reading a file. */
-    public UploadStreamFactory getInputStreamFactory() {
+    public LongFunction<InputStream> getInputStreamFactory() {
         return inputStreamFactory;
     }
 
@@ -127,7 +128,7 @@ public final class UploadRequest {
         private final String username;
         private final String remoteFilename;
         private String localFilename;
-        private UploadStreamFactory inputStreamFactory;
+        private LongFunction<InputStream> inputStreamFactory;
         private long size;
         private Integer token;
         private TransferOptions options;

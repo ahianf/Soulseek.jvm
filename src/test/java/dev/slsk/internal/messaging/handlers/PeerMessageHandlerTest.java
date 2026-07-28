@@ -639,6 +639,14 @@ class PeerMessageHandlerTest {
             this.policy = policy;
         }
 
+        /** What the handler asked us to serve; asserted on by the tests. */
+        private final List<String> served = new java.util.ArrayList<>();
+
+        @Override
+        public void serveUpload(Username user, String path) {
+            served.add(user.value() + " " + path);
+        }
+
         @Override
         public UploadPolicy getUploadPolicy() {
             return policy;

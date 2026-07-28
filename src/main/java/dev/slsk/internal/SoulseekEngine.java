@@ -401,6 +401,68 @@ final class SoulseekEngine
     }
 
     /**
+     * Serves a file to a peer whose request the policy allowed.
+     *
+     * <p>Nothing did this before 1.0. The old surface accepted the request in
+     * {@code EnqueueDownloadCallback} and left the application to call {@code
+     * upload(...)} itself, which is why "uploads are requested by peers and
+     * admitted by the upload policy" has to mean the library serves them —
+     * otherwise the capability is disposed of and nothing takes it over.
+     *
+     * <p>The bytes come from {@link ShareCatalog#resolve}, so a peer can only
+     * ever receive what the catalog agrees it may have, checked against the
+     * share root rather than trusted from the request.
+     *
+     * @param user who asked
+     * @param path the file they asked for
+     */
+    @Override
+    public void serveUpload(dev.slsk.Username user, String path) {
+        dev.slsk.internal.common.NetworkExecutor.runAsync(() -> {
+            java.util.Optional<dev.slsk.spi.ResolvedFile> resolved;
+            try {
+                resolved = catalog.resolve(user, path);
+            } catch (RuntimeException failure) {
+                diagnostic.warning("The share catalog failed to resolve " + path, failure);
+                return;
+            }
+            if (resolved.isEmpty()) {
+                // Allowed by policy but not by the catalog. One answer for every
+                // rejection, so the reply cannot become a filesystem oracle.
+                uploadAdmission.forget(user, path);
+                return;
+            }
+            dev.slsk.spi.ResolvedFile file = resolved.get();
+            try {
+                transfers
+                        .upload(
+                                user.value(),
+                                path,
+                                file.size(),
+                                offset -> {
+                                    try {
+                                        return java.nio.channels.Channels.newInputStream(file.open(offset));
+                                    } catch (java.io.IOException failure) {
+                                        throw new java.io.UncheckedIOException(failure);
+                                    }
+                                },
+                                null,
+                                null,
+                                CancellationSignal.none())
+                        .whenComplete((transfer, failure) -> {
+                            uploadAdmission.forget(user, path);
+                            if (failure == null && transfer != null) {
+                                uploadAdmission.served(user, transfer.getBytesTransferred());
+                            }
+                        });
+            } catch (RuntimeException failure) {
+                uploadAdmission.forget(user, path);
+                diagnostic.warning("Failed to start an upload of " + path + " to " + user, failure);
+            }
+        });
+    }
+
+    /**
      * Returns whether the server said a user has bought privileges.
      *
      * @param username who

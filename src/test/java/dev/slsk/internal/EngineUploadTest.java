@@ -369,16 +369,12 @@ class EngineUploadTest {
             fixture.transfer.offset = 1;
             Throwable notSeekable = failureOf(() -> Blocking.await(fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream(
-                                    "alice",
-                                    "other",
-                                    2,
-                                    offset -> CompletableFuture.completedFuture(new InputStream() {
-                                        @Override
-                                        public int read() {
-                                            return -1;
-                                        }
-                                    }))
+                    .upload(UploadRequest.fromStream("alice", "other", 2, offset -> (new InputStream() {
+                                @Override
+                                public int read() {
+                                    return -1;
+                                }
+                            }))
                             .token(34)
                             .options(options(20))
                             .build())));
@@ -570,8 +566,7 @@ class EngineUploadTest {
             CloseTrackingInputStream disposable = new CloseTrackingInputStream(new byte[] {1});
             Blocking.await(fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream(
-                                    "alice", "file", 1, offset -> CompletableFuture.completedFuture(disposable))
+                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> disposable)
                             .token(45)
                             .options(options(20).withDisposalOptions(true))
                             .build()));
@@ -580,8 +575,7 @@ class EngineUploadTest {
             CloseTrackingInputStream retained = new CloseTrackingInputStream(new byte[] {2});
             Blocking.await(fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream(
-                                    "alice", "other", 1, offset -> CompletableFuture.completedFuture(retained))
+                    .upload(UploadRequest.fromStream("alice", "other", 1, offset -> retained)
                             .token(46)
                             .options(options(20).withDisposalOptions(false))
                             .build()));
@@ -645,8 +639,8 @@ class EngineUploadTest {
         }
     }
 
-    private static CompletableFuture<InputStream> completedStream(byte[] bytes) {
-        return CompletableFuture.completedFuture(new ByteArrayInputStream(bytes));
+    private static InputStream completedStream(byte[] bytes) {
+        return new ByteArrayInputStream(bytes);
     }
 
     private static TransferInternal transfer(TransferDirection direction, String username, String filename, int token) {

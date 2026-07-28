@@ -83,6 +83,7 @@ class EngineApiTest {
             "reportBrowseProgress",
             "requireLoggedIn",
             "resolveUserEndpoint",
+            "serveUpload",
             "writeBytesToServer",
             "writeToPeer",
             "writeToServer");

@@ -55,4 +55,12 @@ public interface PeerMessageHandlerClient {
      * @return the admission
      */
     dev.slsk.internal.UploadAdmission getUploadAdmission();
+
+    /**
+     * Serves a file to a peer whose request the policy allowed.
+     *
+     * @param user who asked
+     * @param path the file they asked for
+     */
+    void serveUpload(dev.slsk.Username user, String path);
 }

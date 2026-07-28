@@ -447,6 +447,9 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
             if (decision instanceof dev.slsk.spi.UploadPolicy.Decision.Deny denied) {
                 return new EnqueueResult(true, denied.message());
             }
+            if (decision instanceof dev.slsk.spi.UploadPolicy.Decision.Allow) {
+                client.serveUpload(dev.slsk.Username.of(username), filename);
+            }
             return new EnqueueResult(false, "");
         });
     }

@@ -37,7 +37,6 @@ import dev.slsk.internal.network.tcp.ConnectionEventListener;
 import dev.slsk.internal.options.TransferOptions;
 import dev.slsk.internal.options.TransferProgressUpdate;
 import dev.slsk.internal.options.TransferStateChange;
-import dev.slsk.internal.options.UploadStreamFactory;
 import dev.slsk.internal.transfer.TransferInternal;
 import java.io.IOException;
 import java.io.InputStream;
@@ -52,6 +51,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.LongFunction;
 
 /**
  * One upload in flight: slot acquisition, the peer handshake, the write loop
@@ -66,7 +66,7 @@ final class UploadOperation {
     private final TransferEngine engine;
 
     private final TransferInternal upload;
-    private final UploadStreamFactory inputStreamFactory;
+    private final LongFunction<InputStream> inputStreamFactory;
     private final TransferOptions transferOptions;
     private final CancellationSignal cancellationSignal;
     private final String uniqueKey;
@@ -86,7 +86,7 @@ final class UploadOperation {
     UploadOperation(
             TransferEngine engine,
             TransferInternal upload,
-            UploadStreamFactory inputStreamFactory,
+            LongFunction<InputStream> inputStreamFactory,
             TransferOptions transferOptions,
             CancellationSignal cancellationSignal,
             String uniqueKey) {
@@ -223,7 +223,7 @@ final class UploadOperation {
                     .debug("Resolving input stream for upload of " + filenameOnly(upload.getFilename()) + " to "
                             + upload.getUsername());
             inputStream = Objects.requireNonNull(
-                    await(inputStreamFactory.openAsync(upload.getStartOffset())), "inputStreamFactory result");
+                    inputStreamFactory.apply(upload.getStartOffset()), "inputStreamFactory result");
             positionInputStream();
             trackingStream = new TransferEngine.PositionTrackingInputStream(
                     inputStream, determinePosition(inputStream, upload.getStartOffset()));
