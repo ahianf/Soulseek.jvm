@@ -145,6 +145,9 @@ public final class DefaultSoulseek implements Soulseek {
     @Override
     public void close() {
         if (closed.compareAndSet(false, true)) {
+            // The queue first: a transfer cancelled by a closing socket looks
+            // like a peer failure and would be retried on the way down.
+            downloads.close();
             client.close();
         }
     }

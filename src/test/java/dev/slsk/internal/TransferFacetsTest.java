@@ -4,7 +4,6 @@
 package dev.slsk.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -14,6 +13,7 @@ import dev.slsk.RejectionReason;
 import dev.slsk.Soulseek;
 import dev.slsk.TransferId;
 import dev.slsk.Username;
+import dev.slsk.exceptions.TransferNotFoundException;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -82,29 +82,24 @@ class TransferFacetsTest {
     }
 
     @Test
-    @DisplayName("queue-dependent commands are absent, not stubbed")
-    void unbuiltQueueCommandsAreNotDeclared() {
-        // pause, resume, retry and await arrive with the managed queue. Until
-        // then they are not on the interface at all, rather than present and
-        // throwing: a declared method that does not work is a stub, and a
-        // declared method that silently does nothing is worse.
+    @DisplayName("the queue-dependent commands are declared, now that the queue exists")
+    void queueCommandsAreDeclaredOnceTheyWork() {
+        // These were absent rather than stubbed while the queue was unbuilt: a
+        // declared method that does not work is a stub, and one that silently
+        // does nothing is worse. The queue exists, so they do.
         Set<String> declared = Arrays.stream(dev.slsk.Downloads.class.getMethods())
                 .map(java.lang.reflect.Method::getName)
                 .collect(java.util.stream.Collectors.toSet());
-        assertFalse(declared.contains("pause"));
-        assertFalse(declared.contains("resume"));
-        assertFalse(declared.contains("retry"));
-        assertFalse(declared.contains("await"));
-        assertTrue(declared.contains("enqueue"), "what is declared works");
-        assertTrue(declared.contains("cancel"));
-        assertTrue(declared.contains("forget"));
+        for (String command : Set.of("enqueue", "pause", "resume", "cancel", "retry", "forget", "await", "policy")) {
+            assertTrue(declared.contains(command), command + " should be declared");
+        }
     }
 
     @Test
     void unknownTransfersAreNotFound() {
         try (Soulseek slsk = client()) {
             assertTrue(slsk.downloads().find(TransferId.of("DOWNLOAD:1")).isEmpty());
-            assertThrows(IllegalArgumentException.class, () -> slsk.downloads().get(TransferId.of("DOWNLOAD:1")));
+            assertThrows(TransferNotFoundException.class, () -> slsk.downloads().get(TransferId.of("DOWNLOAD:1")));
             assertTrue(slsk.uploads().find(TransferId.of("UPLOAD:1")).isEmpty());
             assertThrows(IllegalArgumentException.class, () -> slsk.uploads().get(TransferId.of("UPLOAD:1")));
         }

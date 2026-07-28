@@ -46,6 +46,56 @@ public interface Downloads {
      *
      * @param id the download
      */
+    /**
+     * Stops a download and leaves it queued.
+     *
+     * <p>An idempotent intent: pausing an already-paused download does nothing,
+     * and pausing a finished one is a request that has been overtaken rather
+     * than an error.
+     *
+     * @param id which download
+     */
+    void pause(TransferId id);
+
+    /**
+     * Puts a paused download back in the queue.
+     *
+     * @param id which download
+     */
+    void resume(TransferId id);
+
+    /**
+     * Puts a finished download back in the queue, its attempt count reset.
+     *
+     * <p>A no-op on a download that has not finished.
+     *
+     * @param id which download
+     */
+    void retry(TransferId id);
+
+    /**
+     * Blocks until a download reaches a terminal state.
+     *
+     * @param id which download
+     * @param signal stops waiting; it does not cancel the download
+     * @return the download as it finished
+     */
+    Download await(TransferId id, CancellationSignal signal);
+
+    /**
+     * Returns how the queue is being run.
+     *
+     * @return the policy
+     */
+    DownloadPolicy policy();
+
+    /**
+     * Changes how the queue is run, with immediate effect.
+     *
+     * @param policy the policy
+     */
+    void policy(DownloadPolicy policy);
+
     void cancel(TransferId id);
 
     /**

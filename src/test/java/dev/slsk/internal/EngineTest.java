@@ -12,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.Download;
 import dev.slsk.MeshState;
 import dev.slsk.Soulseek;
 import dev.slsk.Subscription;
@@ -96,31 +95,27 @@ class EngineTest {
 
     /**
      * The engine used to project its transfer registries into {@code Transfer}
-     * lists itself. The facets do it now, and the property that mattered is
-     * theirs: what {@code all()} hands back is a snapshot, so a consumer holding
+     * lists itself. The upload facet does it now, and the property that mattered
+     * is its: what {@code all()} hands back is a snapshot, so a consumer holding
      * one is not reading a registry that mutates under it.
+     *
+     * <p>Downloads are no longer a projection of the engine's registry at all —
+     * they come from the managed queue, which is asserted where it lives.
      */
     @Test
-    void transferFacetsProjectSnapshotsOfTheLiveRegistries() {
+    void theUploadFacetProjectsASnapshotOfTheLiveRegistry() {
         Fixture fixture = new Fixture();
-        Map<Integer, TransferInternal> downloads = new HashMap<>();
         Map<Integer, TransferInternal> uploads = new HashMap<>();
-        downloads.put(1, new TransferInternal(TransferDirection.DOWNLOAD, "d", "download", 1));
         uploads.put(2, new TransferInternal(TransferDirection.UPLOAD, "u", "upload", 2));
-        fixture.client.setDownloadsForTest(downloads);
         fixture.client.setUploadsForTest(uploads);
 
         try (Soulseek slsk = DefaultSoulseek.over(fixture.client, "me", "secret")) {
-            List<Download> downloadSnapshot = slsk.downloads().all();
             List<Upload> uploadSnapshot = slsk.uploads().all();
-            assertEquals("download", downloadSnapshot.getFirst().path());
             assertEquals("upload", uploadSnapshot.getFirst().path());
 
-            downloads.clear();
             uploads.clear();
-            assertEquals(1, downloadSnapshot.size());
             assertEquals(1, uploadSnapshot.size());
-            assertEquals(List.of(), slsk.downloads().all());
+            assertEquals(List.of(), slsk.uploads().all());
         }
     }
 
