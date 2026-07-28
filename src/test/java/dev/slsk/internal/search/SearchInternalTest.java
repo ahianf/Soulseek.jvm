@@ -1,0 +1,275 @@
+// SPDX-FileCopyrightText: JP Dillingham
+// SPDX-FileCopyrightText: 2026 Ahian Fernandez
+// SPDX-License-Identifier: GPL-3.0-only
+
+package dev.slsk.internal.search;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import dev.slsk.CancellationController;
+import dev.slsk.internal.File;
+import dev.slsk.internal.Search;
+import dev.slsk.internal.SearchQuery;
+import dev.slsk.internal.SearchResponse;
+import dev.slsk.internal.SearchScope;
+import dev.slsk.internal.SearchState;
+import dev.slsk.internal.options.SearchOptions;
+import java.util.List;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.Test;
+
+class SearchInternalTest {
+    private static final File FILE = new File(1, "a", 2, "ext");
+
+    @Test
+    void instantiatesWithExpectedDataAndDefaults() {
+        SearchQuery query = new SearchQuery("foo");
+        SearchScope scope = SearchScope.getNetwork();
+        SearchOptions options = new SearchOptions();
+        try (SearchInternal search = new SearchInternal(query, scope, 42, options)) {
+            assertSame(query, search.getQuery());
+            assertSame(scope, search.getScope());
+            assertSame(options, search.getOptions());
+            assertEquals(42, search.getToken());
+            assertEquals(SearchState.NONE, search.getState());
+            assertEquals(0, search.getResponseCount());
+            assertEquals(0, search.getFileCount());
+            assertEquals(0, search.getLockedFileCount());
+            assertFalse(search.isTimeoutActive());
+        }
+
+        try (SearchInternal search = new SearchInternal(query, scope, 42)) {
+            assertNotNull(search.getOptions());
+        }
+    }
+
+    @Test
+    void closeCompleteAndCancelAreIdempotent() {
+        SearchInternal search = search(42, new SearchOptions());
+        search.complete(SearchState.TIMED_OUT);
+        search.complete(SearchState.TIMED_OUT);
+        assertTrue(search.getState().contains(SearchState.COMPLETED));
+        assertTrue(search.getState().contains(SearchState.TIMED_OUT));
+        search.close();
+        search.close();
+
+        SearchInternal cancelled = search(42, new SearchOptions());
+        cancelled.cancel();
+        cancelled.cancel();
+        assertTrue(cancelled.getState().contains(SearchState.COMPLETED));
+        assertTrue(cancelled.getState().contains(SearchState.CANCELLED));
+        assertThrows(
+                CancellationException.class, () -> cancelled.waitForCompletion().join());
+        cancelled.close();
+    }
+
+    @Test
+    void criteriaRespectFilterSwitchAndEveryThreshold() {
+        assertAccepted(new SearchOptions(1000, 250, false, 99, 0, 99), response(42, 0, 0, List.of(), List.of()));
+        assertRejected(new SearchOptions(1000, 250, true, 1, 2, 3), response(42, 3, 1, List.of(), List.of()));
+        assertRejected(new SearchOptions(1000, 250, true, 1, 2, 3), response(42, 2, 2, List.of(FILE), List.of()));
+        assertAccepted(new SearchOptions(1000, 250, true, 1, 2, 3), response(42, 3, 1, List.of(FILE), List.of()));
+    }
+
+    @Test
+    void ignoresWrongStateAndRejectedCustomResponse() {
+        AtomicInteger received = new AtomicInteger();
+        try (SearchInternal search = search(42, new SearchOptions())) {
+            search.setResponseReceived(response -> received.incrementAndGet());
+            search.setState(SearchState.COMPLETED);
+            search.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of()));
+            assertEquals(0, received.get());
+        }
+
+        SearchOptions options =
+                new SearchOptions(1000, 250, true, 0, Integer.MAX_VALUE, 0, 25_000, true, response -> false);
+        assertRejected(options, response(42, 1, 0, List.of(FILE), List.of()));
+    }
+
+    @Test
+    void rejectsMismatchedTokenBeforeDisposedCheck() {
+        SearchInternal search = search(42, new SearchOptions());
+        search.close();
+
+        IllegalArgumentException failure = assertThrows(
+                IllegalArgumentException.class,
+                () -> search.tryAddResponse(response(24, 1, 0, List.of(FILE), List.of())));
+
+        assertTrue(failure.getMessage().contains("with token 42 received response with search token 24"));
+    }
+
+    @Test
+    void filtersUnlockedAndLockedFilesBeforeAccepting() {
+        File keep = new File(1, "keep", 1, "x");
+        File remove = new File(1, "remove", 1, "x");
+        SearchOptions options =
+                new SearchOptions(1000, 250, true, 1, Integer.MAX_VALUE, 0, 25_000, true, null, file -> file == keep);
+        AtomicReference<SearchResponse> accepted = new AtomicReference<>();
+
+        try (SearchInternal search = search(42, options)) {
+            search.setState(SearchState.IN_PROGRESS);
+            search.setResponseReceived(accepted::set);
+            search.tryAddResponse(response(42, 1, 0, List.of(keep, remove), List.of(keep, remove)));
+
+            assertEquals(List.of(keep), accepted.get().getFiles());
+            assertEquals(List.of(keep), accepted.get().getLockedFiles());
+            assertEquals(1, search.getResponseCount());
+            assertEquals(1, search.getFileCount());
+            assertEquals(1, search.getLockedFileCount());
+        }
+    }
+
+    @Test
+    void rejectsResponseWhenFileFilterDropsBelowMinimum() {
+        SearchOptions options =
+                new SearchOptions(1000, 250, true, 1, Integer.MAX_VALUE, 0, 25_000, true, null, file -> false);
+        assertRejected(options, response(42, 1, 0, List.of(), List.of(FILE)));
+    }
+
+    @Test
+    void invokesComposedCallbacksInOrderAndResetsTimeout() {
+        StringBuilder order = new StringBuilder();
+        try (SearchInternal search = search(42, new SearchOptions(1000))) {
+            search.setState(SearchState.IN_PROGRESS);
+            search.addResponseReceived(response -> order.append('a'));
+            search.addResponseReceived(response -> order.append('b'));
+            search.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of()));
+
+            assertEquals("ab", order.toString());
+            assertTrue(search.isTimeoutActive());
+        }
+    }
+
+    @Test
+    void returnsWithoutCallbackAfterCloseAndSwallowsDisposedFailure() {
+        AtomicInteger count = new AtomicInteger();
+        SearchInternal search = search(42, new SearchOptions());
+        search.setState(SearchState.IN_PROGRESS);
+        search.setResponseReceived(response -> count.incrementAndGet());
+        search.close();
+        search.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of()));
+        assertEquals(0, count.get());
+
+        try (SearchInternal second = search(42, new SearchOptions())) {
+            second.setState(SearchState.IN_PROGRESS);
+            second.setResponseReceived(response -> {
+                throw new IllegalStateException("disposed");
+            });
+            second.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of()));
+            assertEquals(1, second.getResponseCount());
+        }
+    }
+
+    @Test
+    void responseLimitWinsWhenBothLimitsAreReached() {
+        SearchOptions options = new SearchOptions(1000, 1, false, 1, Integer.MAX_VALUE, 0, 1);
+        try (SearchInternal search = search(42, options)) {
+            search.setState(SearchState.IN_PROGRESS);
+            search.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of()));
+            search.waitForCompletion().join();
+            assertTrue(search.getState().contains(SearchState.RESPONSE_LIMIT_REACHED));
+            assertFalse(search.getState().contains(SearchState.FILE_LIMIT_REACHED));
+        }
+    }
+
+    @Test
+    void fileLimitCompletesSearch() {
+        SearchOptions options = new SearchOptions(1000, 2, false, 1, Integer.MAX_VALUE, 0, 1);
+        try (SearchInternal search = search(42, options)) {
+            search.setState(SearchState.IN_PROGRESS);
+            search.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of()));
+            search.waitForCompletion().join();
+            assertTrue(search.getState().contains(SearchState.FILE_LIMIT_REACHED));
+        }
+    }
+
+    @Test
+    void waitCompletesAndCallerCancellationDoesNotCancelSearch() {
+        try (SearchInternal search = search(42, new SearchOptions())) {
+            var wait = search.waitForCompletion();
+            search.complete(SearchState.TIMED_OUT);
+            assertNull(wait.join());
+        }
+
+        try (SearchInternal search = search(42, new SearchOptions());
+                CancellationController source = new CancellationController()) {
+            var wait = search.waitForCompletion(source.getSignal());
+            source.cancel();
+            assertThrows(CancellationException.class, wait::join);
+            assertEquals(SearchState.NONE, search.getState());
+        }
+    }
+
+    @Test
+    void timerStartsOnlyOnTransitionsIntoInProgressAndTimesOut() throws Exception {
+        SearchOptions options = new SearchOptions(40);
+        try (SearchInternal search = search(42, options)) {
+            assertFalse(search.isTimeoutActive());
+            search.setState(SearchState.REQUESTED);
+            search.setState(SearchState.QUEUED);
+            assertFalse(search.isTimeoutActive());
+            search.setState(SearchState.IN_PROGRESS);
+            assertTrue(search.isTimeoutActive());
+            search.setState(SearchState.IN_PROGRESS);
+            assertTrue(search.isTimeoutActive());
+            search.waitForCompletion().join();
+            assertTrue(search.getState().contains(SearchState.COMPLETED));
+            assertTrue(search.getState().contains(SearchState.TIMED_OUT));
+            assertFalse(search.isTimeoutActive());
+        }
+    }
+
+    @Test
+    void snapshotCopiesCurrentMutableState() {
+        try (SearchInternal search = search(42, new SearchOptions())) {
+            search.setState(SearchState.IN_PROGRESS);
+            search.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of(FILE)));
+            Search snapshot = search.toSearch();
+            assertSame(search.getQuery(), snapshot.getQuery());
+            assertSame(search.getScope(), snapshot.getScope());
+            assertEquals(42, snapshot.getToken());
+            assertEquals(SearchState.IN_PROGRESS, snapshot.getState());
+            assertEquals(1, snapshot.getResponseCount());
+            assertEquals(1, snapshot.getFileCount());
+            assertEquals(1, snapshot.getLockedFileCount());
+        }
+    }
+
+    @Test
+    void rejectsNonpositiveTimeoutLikeSystemTimer() {
+        assertThrows(IllegalArgumentException.class, () -> search(42, new SearchOptions(0)));
+    }
+
+    private static SearchInternal search(int token, SearchOptions options) {
+        return new SearchInternal(new SearchQuery("foo"), SearchScope.getNetwork(), token, options);
+    }
+
+    private static SearchResponse response(
+            int token, int uploadSpeed, int queueLength, List<File> files, List<File> lockedFiles) {
+        return new SearchResponse("user", token, true, uploadSpeed, queueLength, files, lockedFiles);
+    }
+
+    private static void assertAccepted(SearchOptions options, SearchResponse response) {
+        try (SearchInternal search = search(42, options)) {
+            search.setState(SearchState.IN_PROGRESS);
+            search.tryAddResponse(response);
+            assertEquals(1, search.getResponseCount());
+        }
+    }
+
+    private static void assertRejected(SearchOptions options, SearchResponse response) {
+        try (SearchInternal search = search(42, options)) {
+            search.setState(SearchState.IN_PROGRESS);
+            search.tryAddResponse(response);
+            assertEquals(0, search.getResponseCount());
+        }
+    }
+}

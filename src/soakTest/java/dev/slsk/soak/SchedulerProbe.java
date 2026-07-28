@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
  */
 public final class SchedulerProbe {
 
-    private static final String TIMER_OWNER = "dev.slsk.network.tcp.SocketConnection";
+    private static final String TIMER_OWNER = "dev.slsk.internal.network.tcp.SocketConnection";
     private static final String TIMER_FIELD = "TIMER_EXECUTOR";
 
     private SchedulerProbe() {}

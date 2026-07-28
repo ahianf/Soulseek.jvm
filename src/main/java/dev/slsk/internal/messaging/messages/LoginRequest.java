@@ -1,0 +1,61 @@
+// SPDX-FileCopyrightText: JP Dillingham
+// SPDX-FileCopyrightText: 2026 Ahian Fernandez
+// SPDX-License-Identifier: GPL-3.0-only
+
+package dev.slsk.internal.messaging.messages;
+
+import dev.slsk.internal.common.CommonUtils;
+import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.messaging.MessageBuilder;
+import dev.slsk.internal.messaging.MessageCode;
+
+/** Logs in to the Soulseek server. */
+public final class LoginRequest implements OutgoingMessage {
+    private final String hash;
+    private final int minorVersion;
+    private final String password;
+    private final String username;
+
+    public LoginRequest(int minorVersion, String username, String password) {
+        this.minorVersion = minorVersion;
+        this.username = username;
+        this.password = password;
+        hash = CommonUtils.toMd5Hash(nullToEmpty(username) + nullToEmpty(password));
+    }
+
+    public String getHash() {
+        return hash;
+    }
+
+    public int getMinorVersion() {
+        return minorVersion;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public int getVersion() {
+        return Constants.MAJOR_VERSION;
+    }
+
+    @Override
+    public byte[] toByteArray() {
+        return new MessageBuilder()
+                .writeCode(MessageCode.Server.LOGIN)
+                .writeString(username)
+                .writeString(password)
+                .writeInteger(Constants.MAJOR_VERSION)
+                .writeString(hash)
+                .writeInteger(minorVersion)
+                .build();
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
+    }
+}

@@ -7,8 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
-import dev.slsk.network.tcp.SocketConnection;
-import dev.slsk.options.ConnectionOptions;
+import dev.slsk.internal.network.tcp.SocketConnection;
+import dev.slsk.internal.options.ConnectionOptions;
 import java.io.OutputStream;
 import java.util.Locale;
 import org.junit.jupiter.api.DisplayName;

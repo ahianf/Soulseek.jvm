@@ -1,0 +1,22 @@
+// SPDX-FileCopyrightText: JP Dillingham
+// SPDX-FileCopyrightText: 2026 Ahian Fernandez
+// SPDX-License-Identifier: GPL-3.0-only
+
+package dev.slsk.internal.messaging.handlers;
+
+import dev.slsk.internal.common.Waiter;
+import dev.slsk.internal.options.SoulseekClientOptions;
+import dev.slsk.internal.search.SearchInternal;
+import dev.slsk.internal.transfer.TransferInternal;
+import java.util.Map;
+
+/** Internal client state consumed by the peer message handler. */
+public interface PeerMessageHandlerClient {
+    SoulseekClientOptions getOptions();
+
+    Waiter getWaiter();
+
+    Map<Integer, SearchInternal> getSearches();
+
+    Map<Integer, TransferInternal> getDownloadDictionary();
+}

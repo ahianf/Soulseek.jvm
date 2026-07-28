@@ -5,7 +5,7 @@ package dev.slsk.bench;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.CancellationSubscription;
-import dev.slsk.common.NetworkExecutor;
+import dev.slsk.internal.common.NetworkExecutor;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;

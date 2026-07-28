@@ -3,9 +3,9 @@
 
 package dev.slsk.bench;
 
-import dev.slsk.messaging.MessageBuilder;
-import dev.slsk.messaging.MessageCode;
-import dev.slsk.messaging.MessageReader;
+import dev.slsk.internal.messaging.MessageBuilder;
+import dev.slsk.internal.messaging.MessageCode;
+import dev.slsk.internal.messaging.MessageReader;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;

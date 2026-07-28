@@ -5,7 +5,7 @@ package dev.slsk.soak;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.SoulseekClient;
+import dev.slsk.internal.SoulseekClient;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;

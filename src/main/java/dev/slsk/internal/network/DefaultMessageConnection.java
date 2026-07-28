@@ -1,0 +1,305 @@
+// SPDX-FileCopyrightText: JP Dillingham
+// SPDX-FileCopyrightText: 2026 Ahian Fernandez
+// SPDX-License-Identifier: GPL-3.0-only
+
+package dev.slsk.internal.network;
+
+import dev.slsk.CancellationSignal;
+import dev.slsk.exceptions.MessageException;
+import dev.slsk.internal.common.CommonUtils;
+import dev.slsk.internal.common.NetworkExecutor;
+import dev.slsk.internal.messaging.messages.OutgoingMessage;
+import dev.slsk.internal.network.tcp.ConnectionDataEvent;
+import dev.slsk.internal.network.tcp.ConnectionEventListener;
+import dev.slsk.internal.network.tcp.ConnectionKey;
+import dev.slsk.internal.network.tcp.SocketConnection;
+import dev.slsk.internal.network.tcp.TcpClient;
+import dev.slsk.internal.options.ConnectionOptions;
+import java.io.ByteArrayOutputStream;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+/** Provides framed client connections to the Soulseek network. */
+public final class DefaultMessageConnection extends SocketConnection implements MessageConnection {
+
+    private final CopyOnWriteArrayList<MessageConnectionEventListener<MessageDataEvent>> messageDataReadListeners =
+            new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<MessageConnectionEventListener<MessageEvent>> messageReadListeners =
+            new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<MessageConnectionEventListener<MessageReceivedEvent>> messageReceivedListeners =
+            new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<MessageConnectionEventListener<MessageEvent>> messageWrittenListeners =
+            new CopyOnWriteArrayList<>();
+
+    private final int codeLength;
+    private final String username;
+    private volatile boolean readingContinuously;
+
+    /** Creates a server connection with source defaults. */
+    public DefaultMessageConnection(InetSocketAddress ipEndpoint) {
+        this(ipEndpoint, null, 4, null);
+    }
+
+    /** Creates a server connection. */
+    public DefaultMessageConnection(
+            InetSocketAddress ipEndpoint, ConnectionOptions options, int codeLength, TcpClient tcpClient) {
+        super(ipEndpoint, options, tcpClient);
+        this.codeLength = codeLength;
+        username = "";
+        bindConnectedReadLoop();
+    }
+
+    /** Creates a peer connection with source defaults. */
+    public DefaultMessageConnection(String username, InetSocketAddress ipEndpoint) {
+        this(username, ipEndpoint, null, 4, null);
+    }
+
+    /** Creates a peer connection. */
+    public DefaultMessageConnection(
+            String username,
+            InetSocketAddress ipEndpoint,
+            ConnectionOptions options,
+            int codeLength,
+            TcpClient tcpClient) {
+        super(ipEndpoint, options, tcpClient);
+        this.codeLength = codeLength;
+        if (isNullOrWhiteSpace(username)) {
+            throw new IllegalArgumentException(
+                    "The username must not be a null or empty string, " + "or one consisting only of whitespace");
+        }
+        this.username = username;
+        bindConnectedReadLoop();
+    }
+
+    @Override
+    public void addMessageDataReadListener(MessageConnectionEventListener<MessageDataEvent> listener) {
+        messageDataReadListeners.add(Objects.requireNonNull(listener, "listener"));
+    }
+
+    @Override
+    public void removeMessageDataReadListener(MessageConnectionEventListener<MessageDataEvent> listener) {
+        messageDataReadListeners.remove(listener);
+    }
+
+    @Override
+    public void addMessageReadListener(MessageConnectionEventListener<MessageEvent> listener) {
+        messageReadListeners.add(Objects.requireNonNull(listener, "listener"));
+    }
+
+    @Override
+    public void removeMessageReadListener(MessageConnectionEventListener<MessageEvent> listener) {
+        messageReadListeners.remove(listener);
+    }
+
+    @Override
+    public void addMessageReceivedListener(MessageConnectionEventListener<MessageReceivedEvent> listener) {
+        messageReceivedListeners.add(Objects.requireNonNull(listener, "listener"));
+    }
+
+    @Override
+    public void removeMessageReceivedListener(MessageConnectionEventListener<MessageReceivedEvent> listener) {
+        messageReceivedListeners.remove(listener);
+    }
+
+    @Override
+    public void addMessageWrittenListener(MessageConnectionEventListener<MessageEvent> listener) {
+        messageWrittenListeners.add(Objects.requireNonNull(listener, "listener"));
+    }
+
+    @Override
+    public void removeMessageWrittenListener(MessageConnectionEventListener<MessageEvent> listener) {
+        messageWrittenListeners.remove(listener);
+    }
+
+    @Override
+    public int getCodeLength() {
+        return codeLength;
+    }
+
+    @Override
+    public boolean isServerConnection() {
+        return username.isEmpty();
+    }
+
+    @Override
+    public ConnectionKey getKey() {
+        return new ConnectionKey(username, getIpEndpoint());
+    }
+
+    @Override
+    public boolean isReadingContinuously() {
+        return readingContinuously;
+    }
+
+    @Override
+    public String getUsername() {
+        return username;
+    }
+
+    @Override
+    public void startReadingContinuously() {
+        if (!readingContinuously) {
+            watchReadLoop(readContinuouslyAsync());
+        }
+    }
+
+    /**
+     * Routes a read-loop failure into the connection's own failure channel.
+     *
+     * <p>This loop used to be started with a helper that attached
+     * {@code exceptionally(e -> null)} and dropped the throwable on the floor —
+     * on the single most important loop in the library. Most failures already
+     * disconnect on the way out of {@code readInternal}, but anything else, a
+     * throwing listener included, vanished without trace.
+     *
+     * <p>Disconnecting is the right channel rather than a log line: it is what
+     * {@code ConnectionDisconnectedEvent} and {@code waitForDisconnect} already
+     * report, so the failure reaches whoever owns the connection. When the
+     * connection has already gone down, this is a no-op and the original reason
+     * is preserved.
+     */
+    private void watchReadLoop(CompletableFuture<Void> loop) {
+        loop.whenComplete((ignored, failure) -> {
+            if (failure == null || isDisposed()) {
+                return;
+            }
+            Throwable actual =
+                    failure instanceof CompletionException && failure.getCause() != null ? failure.getCause() : failure;
+            Exception reported =
+                    actual instanceof Exception exception ? exception : new MessageException(actual.toString(), actual);
+            disconnect("Read loop failed: " + reported.getMessage(), reported);
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> writeAsync(OutgoingMessage message, CancellationSignal cancellationSignal) {
+        if (message == null) {
+            throw new IllegalArgumentException("The specified message is null");
+        }
+        byte[] bytes;
+        try {
+            bytes = message.toByteArray();
+        } catch (Exception exception) {
+            throw new MessageException("Failed to convert the message to a byte array", exception);
+        }
+        CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
+        return super.writeAsync(bytes, token).thenRun(() -> raiseMessageWritten(bytes, token));
+    }
+
+    CompletableFuture<Void> readContinuouslyAsync() {
+        synchronized (this) {
+            if (readingContinuously) {
+                return CompletableFuture.completedFuture(null);
+            }
+            readingContinuously = true;
+        }
+        return NetworkExecutor.runAsync(() -> {
+            // Holds the code of the message currently being read, so the scoped
+            // progress listener can label its events. Confined to this loop's
+            // single thread.
+            byte[][] codeHolder = new byte[1][];
+            ConnectionEventListener<ConnectionDataEvent> payloadProgress = (sender, args) ->
+                    raiseMessageDataRead(codeHolder[0], args.getCurrentLength(), args.getTotalLength());
+            try {
+                while (!isDisposed()) {
+                    ByteArrayOutputStream message = new ByteArrayOutputStream();
+                    // Read on this thread. Each of these used to dispatch onto
+                    // a fresh virtual thread and block on the future, three
+                    // times per frame, on the path that carries distributed
+                    // search traffic.
+                    byte[] lengthBytes = read(4, null, CancellationSignal.none());
+                    int length = ByteBuffer.wrap(lengthBytes)
+                            .order(ByteOrder.LITTLE_ENDIAN)
+                            .getInt();
+                    message.writeBytes(lengthBytes);
+
+                    byte[] codeBytes = read(codeLength, null, CancellationSignal.none());
+                    codeHolder[0] = codeBytes;
+                    message.writeBytes(codeBytes);
+
+                    raiseMessageDataRead(codeBytes, 0, length - codeLength);
+                    raiseMessageReceived(length, codeBytes);
+
+                    // Passed to the read rather than added to the shared
+                    // listener list and removed afterwards, which cost two
+                    // CopyOnWriteArrayList copies per message.
+                    byte[] payload = read(length - codeLength, payloadProgress, CancellationSignal.none());
+                    message.writeBytes(payload);
+                    raiseMessageRead(message.toByteArray());
+                }
+            } catch (RuntimeException | Error unchecked) {
+                throw unchecked;
+            } catch (Exception checked) {
+                // The loop body is a Runnable, so a checked failure (a lapsed
+                // deadline, say) is wrapped here. watchReadLoop unwraps it
+                // again before reporting the cause.
+                throw new CompletionException(checked);
+            } finally {
+                readingContinuously = false;
+            }
+        });
+    }
+
+    private void bindConnectedReadLoop() {
+        addConnectedListener((sender, args) -> watchReadLoop(readContinuouslyAsync()));
+    }
+
+    private void raiseMessageDataRead(byte[] code, long currentLength, long totalLength) {
+        MessageDataEvent eventData = new MessageDataEvent(code, currentLength, totalLength);
+        dispatch(
+                () -> {
+                    for (MessageConnectionEventListener<MessageDataEvent> listener : messageDataReadListeners) {
+                        listener.handle(this, eventData);
+                    }
+                },
+                CancellationSignal.none());
+    }
+
+    private void raiseMessageReceived(long length, byte[] code) {
+        MessageReceivedEvent eventData = new MessageReceivedEvent(length, code);
+        for (MessageConnectionEventListener<MessageReceivedEvent> listener : messageReceivedListeners) {
+            listener.handle(this, eventData);
+        }
+    }
+
+    private void raiseMessageRead(byte[] message) {
+        MessageEvent eventData = new MessageEvent(message);
+        dispatch(
+                () -> {
+                    for (MessageConnectionEventListener<MessageEvent> listener : messageReadListeners) {
+                        listener.handle(this, eventData);
+                    }
+                },
+                CancellationSignal.none());
+    }
+
+    private void raiseMessageWritten(byte[] message, CancellationSignal cancellationSignal) {
+        MessageEvent eventData = new MessageEvent(message);
+        dispatch(
+                () -> {
+                    for (MessageConnectionEventListener<MessageEvent> listener : messageWrittenListeners) {
+                        listener.handle(this, eventData);
+                    }
+                },
+                cancellationSignal);
+    }
+
+    private void dispatch(Runnable event, CancellationSignal cancellationSignal) {
+        if (getOptions().isRaiseEventsAsynchronously()) {
+            if (!cancellationSignal.isCancellationRequested()) {
+                NetworkExecutor.runAsync(event);
+            }
+        } else {
+            event.run();
+        }
+    }
+
+    private static boolean isNullOrWhiteSpace(String value) {
+        return CommonUtils.isNullOrWhiteSpace(value);
+    }
+}

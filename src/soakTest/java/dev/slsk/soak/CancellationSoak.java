@@ -8,9 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationController;
-import dev.slsk.network.tcp.ConnectionState;
-import dev.slsk.network.tcp.SocketConnection;
-import dev.slsk.options.ConnectionOptions;
+import dev.slsk.internal.network.tcp.ConnectionState;
+import dev.slsk.internal.network.tcp.SocketConnection;
+import dev.slsk.internal.options.ConnectionOptions;
 import java.io.OutputStream;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;

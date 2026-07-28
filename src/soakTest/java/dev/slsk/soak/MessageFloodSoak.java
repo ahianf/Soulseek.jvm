@@ -6,8 +6,8 @@ package dev.slsk.soak;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
-import dev.slsk.network.DefaultMessageConnection;
-import dev.slsk.options.ConnectionOptions;
+import dev.slsk.internal.network.DefaultMessageConnection;
+import dev.slsk.internal.options.ConnectionOptions;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
