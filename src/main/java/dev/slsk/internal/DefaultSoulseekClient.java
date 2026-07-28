@@ -16,10 +16,10 @@ import dev.slsk.exceptions.AddressException;
 import dev.slsk.exceptions.KickedFromServerException;
 import dev.slsk.exceptions.ListenException;
 import dev.slsk.exceptions.LoginRejectedException;
-import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
+import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.common.DefaultWaiter;
 import dev.slsk.internal.common.IOAdapter;
 import dev.slsk.internal.common.Scheduler;
@@ -63,7 +63,6 @@ import dev.slsk.internal.network.ListenerHandlerClient;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.PeerConnectionManager;
 import dev.slsk.internal.network.PeerConnectionManagerClient;
-import dev.slsk.internal.network.PeerEndpoint;
 import dev.slsk.internal.network.tcp.Listener;
 import dev.slsk.internal.network.tcp.SocketListener;
 import dev.slsk.internal.options.BrowseOptions;
@@ -92,12 +91,11 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
 
 /**
  * A client for the Soulseek file-sharing network.
  */
-final class DefaultSoulseekClient extends ClientOperations
+final class DefaultSoulseekClient extends ClientEventSupport
         implements AutoCloseable,
                 ClientContext,
                 DistributedConnectionManagerClient,
@@ -293,34 +291,6 @@ final class DefaultSoulseekClient extends ClientOperations
         return address;
     }
 
-    /** Returns distributed-network state as an immutable snapshot. */
-    public final DistributedNetworkInfo getDistributedNetwork() {
-        PeerEndpoint parent = distributedConnectionManager.getParent();
-        List<DistributedPeer> children = distributedConnectionManager.getChildren() == null
-                ? null
-                : distributedConnectionManager.getChildren().stream()
-                        .map(peer -> new DistributedPeer(peer.username(), peer.ipEndpoint()))
-                        .toList();
-        DistributedPeer parentSnapshot = parent == null
-                ? new DistributedPeer("", null)
-                : new DistributedPeer(parent.username(), parent.ipEndpoint());
-        return new DistributedNetworkInfo(
-                distributedConnectionManager.getAverageBroadcastLatency(),
-                distributedConnectionManager.getBranchLevel(),
-                distributedConnectionManager.getBranchRoot(),
-                distributedConnectionManager.isBranchRoot(),
-                distributedConnectionManager.getChildLimit(),
-                distributedConnectionManager.canAcceptChildren(),
-                children,
-                parentSnapshot,
-                distributedConnectionManager.hasParent());
-    }
-
-    /** Returns a snapshot of active downloads. */
-    public final List<Transfer> getDownloads() {
-        return downloads.values().stream().map(TransferInternal::toTransfer).toList();
-    }
-
     /** Returns the connected server IP address, or {@code null}. */
     public final InetAddress getIpAddress() {
         return ipEndpoint == null ? null : ipEndpoint.getAddress();
@@ -351,11 +321,6 @@ final class DefaultSoulseekClient extends ClientOperations
     @Override
     public final SoulseekClientState getState() {
         return state;
-    }
-
-    /** Returns a snapshot of active uploads. */
-    public final List<Transfer> getUploads() {
-        return uploads.values().stream().map(TransferInternal::toTransfer).toList();
     }
 
     /** Returns the logged-in username, or {@code null}. */
@@ -1024,154 +989,6 @@ final class DefaultSoulseekClient extends ClientOperations
         }
     }
 
-    /**
-     * Waits for an internal operation and presents its failure the way a
-     * blocking API should.
-     *
-     * <p>{@code join()} wraps everything in {@link CompletionException}, which
-     * is an artifact of the async layer and has no business reaching a caller
-     * of a blocking method. This unwraps it and rethrows the real cause.
-     *
-     * <p>A lapsed deadline arrives as the checked
-     * {@link java.util.concurrent.TimeoutException}. Declaring that on every
-     * operation that talks to the server would put a checked exception on most
-     * of the public surface, which is the ceremony this API exists to remove;
-     * the rest of the hierarchy is already unchecked. It is therefore mapped to
-     * {@link NoResponseException}, which already means "an expected response
-     * was not received" and is the semantically correct member of the existing
-     * hierarchy. Recorded as D11 in docs/fork-divergence.md.
-     */
-    @Override
-    <T> T unwrapped(CompletableFuture<T> operation) {
-        try {
-            return operation.join();
-        } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
-            if (cause instanceof TimeoutException) {
-                throw new NoResponseException(cause.getMessage(), cause);
-            }
-            if (cause instanceof RuntimeException runtime) {
-                throw runtime;
-            }
-            if (cause instanceof Error error) {
-                throw error;
-            }
-            throw new SoulseekClientException(cause.getMessage(), cause);
-        }
-    }
-
-    public Transfer download(DownloadRequest request) {
-        Objects.requireNonNull(request, "request");
-        return unwrapped(
-                !request.isToStream()
-                        ? transfers.download(
-                                request.getUsername(),
-                                request.getRemoteFilename(),
-                                request.getLocalFilename(),
-                                request.getSize(),
-                                request.getStartOffset(),
-                                request.getToken(),
-                                request.getOptions(),
-                                request.getCancellationSignal())
-                        : transfers.download(
-                                request.getUsername(),
-                                request.getRemoteFilename(),
-                                request.getOutputStreamFactory(),
-                                request.getSize(),
-                                request.getStartOffset(),
-                                request.getToken(),
-                                request.getOptions(),
-                                request.getCancellationSignal()));
-    }
-
-    public TransferHandle enqueueDownload(DownloadRequest request) {
-        Objects.requireNonNull(request, "request");
-        return new TransferHandle(unwrapped(
-                !request.isToStream()
-                        ? transfers.enqueueDownload(
-                                request.getUsername(),
-                                request.getRemoteFilename(),
-                                request.getLocalFilename(),
-                                request.getSize(),
-                                request.getStartOffset(),
-                                request.getToken(),
-                                request.getOptions(),
-                                request.getCancellationSignal())
-                        : transfers.enqueueDownload(
-                                request.getUsername(),
-                                request.getRemoteFilename(),
-                                request.getOutputStreamFactory(),
-                                request.getSize(),
-                                request.getStartOffset(),
-                                request.getToken(),
-                                request.getOptions(),
-                                request.getCancellationSignal())));
-    }
-
-    public Transfer upload(UploadRequest request) {
-        Objects.requireNonNull(request, "request");
-        return unwrapped(
-                !request.isFromStream()
-                        ? transfers.upload(
-                                request.getUsername(),
-                                request.getRemoteFilename(),
-                                request.getLocalFilename(),
-                                request.getToken(),
-                                request.getOptions(),
-                                request.getCancellationSignal())
-                        : transfers.upload(
-                                request.getUsername(),
-                                request.getRemoteFilename(),
-                                request.getSize(),
-                                request.getInputStreamFactory(),
-                                request.getToken(),
-                                request.getOptions(),
-                                request.getCancellationSignal()));
-    }
-
-    public TransferHandle enqueueUpload(UploadRequest request) {
-        Objects.requireNonNull(request, "request");
-        return new TransferHandle(unwrapped(
-                !request.isFromStream()
-                        ? transfers.enqueueUpload(
-                                request.getUsername(),
-                                request.getRemoteFilename(),
-                                request.getLocalFilename(),
-                                request.getToken(),
-                                request.getOptions(),
-                                request.getCancellationSignal())
-                        : transfers.enqueueUpload(
-                                request.getUsername(),
-                                request.getRemoteFilename(),
-                                request.getSize(),
-                                request.getInputStreamFactory(),
-                                request.getToken(),
-                                request.getOptions(),
-                                request.getCancellationSignal())));
-    }
-
-    public SearchResult search(SearchRequest request) {
-        Objects.requireNonNull(request, "request");
-        return unwrapped(searchCoordinator.search(
-                request.getQuery(),
-                request.getScope(),
-                request.getToken(),
-                request.getOptions(),
-                request.getCancellationSignal()));
-    }
-
-    public Search search(SearchRequest request, Consumer<SearchResponse> responseHandler) {
-        Objects.requireNonNull(request, "request");
-        Objects.requireNonNull(responseHandler, "responseHandler");
-        return unwrapped(searchCoordinator.search(
-                request.getQuery(),
-                responseHandler,
-                request.getScope(),
-                request.getToken(),
-                request.getOptions(),
-                request.getCancellationSignal()));
-    }
-
     // ---- ClientContext, the seam the components delegate through ----------
 
     /** The periodic endpoint-semaphore sweep; exposed for tests. */
@@ -1388,77 +1205,46 @@ final class DefaultSoulseekClient extends ClientOperations
     }
 
     public void connect(String username, String password) {
-        unwrapped(connectOperation(username, password));
+        Blocking.await(connectOperation(username, password));
     }
 
     public void connect(String username, String password, CancellationSignal cancellationSignal) {
-        unwrapped(connectOperation(username, password, cancellationSignal));
+        Blocking.await(connectOperation(username, password, cancellationSignal));
     }
 
     public void connect(String address, int port, String username, String password) {
-        unwrapped(connectOperation(address, port, username, password));
+        Blocking.await(connectOperation(address, port, username, password));
     }
 
     public void connect(
             String address, int port, String username, String password, CancellationSignal cancellationSignal) {
-        unwrapped(connectOperation(address, port, username, password, cancellationSignal));
-    }
-
-    public List<Directory> getDirectoryContents(String username, String directoryName) {
-        return unwrapped(users.getDirectoryContents(username, directoryName));
-    }
-
-    public List<Directory> getDirectoryContents(String username, String directoryName, int token) {
-        return unwrapped(users.getDirectoryContents(username, directoryName, token));
-    }
-
-    public List<Directory> getDirectoryContents(
-            String username, String directoryName, CancellationSignal cancellationSignal) {
-        return unwrapped(users.getDirectoryContents(username, directoryName, cancellationSignal));
-    }
-
-    public List<Directory> getDirectoryContents(
-            String username, String directoryName, Integer token, CancellationSignal cancellationSignal) {
-        return unwrapped(users.getDirectoryContents(username, directoryName, token, cancellationSignal));
-    }
-
-    public InetSocketAddress getUserEndpoint(String username) {
-        return unwrapped(users.getUserEndpoint(username));
-    }
-
-    public InetSocketAddress getUserEndpoint(String username, CancellationSignal cancellationSignal) {
-        return unwrapped(users.getUserEndpoint(username, cancellationSignal));
+        Blocking.await(connectOperation(address, port, username, password, cancellationSignal));
     }
 
     public Boolean reconfigureOptions(SoulseekClientOptionsPatch patch) {
-        return unwrapped(reconfigureOptionsOperation(patch));
+        return Blocking.await(reconfigureOptionsOperation(patch));
     }
 
     public Boolean reconfigureOptions(SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
-        return unwrapped(reconfigureOptionsOperation(patch, cancellationSignal));
+        return Blocking.await(reconfigureOptionsOperation(patch, cancellationSignal));
     }
 
-    @Override
     RoomRegistry rooms() {
         return rooms;
     }
 
-    @Override
     UserDirectory users() {
         return users;
     }
 
-    @Override
     ServerSession server() {
         return server;
     }
 
-    @Override
     SearchCoordinator searchCoordinator() {
         return searchCoordinator;
     }
 
-    @Override
     TransferEngine transfers() {
         return transfers;
     }

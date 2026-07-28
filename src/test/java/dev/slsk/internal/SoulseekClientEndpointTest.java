@@ -15,6 +15,7 @@ import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.UserEndpointCacheException;
 import dev.slsk.exceptions.UserEndpointException;
 import dev.slsk.exceptions.UserOfflineException;
+import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticLevel;
@@ -41,10 +42,14 @@ class SoulseekClientEndpointTest {
     void validatesArgumentsAndLoginState() {
         Fixture fixture = new Fixture(null);
         for (String bad : new String[] {null, "", " ", "\t"}) {
-            assertThrows(IllegalArgumentException.class, () -> fixture.client.getUserEndpoint(bad));
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> Blocking.await(fixture.client.users().getUserEndpoint(bad)));
         }
         fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
-        assertThrows(IllegalStateException.class, () -> fixture.client.getUserEndpoint("alice"));
+        assertThrows(
+                IllegalStateException.class,
+                () -> Blocking.await(fixture.client.users().getUserEndpoint("alice")));
         fixture.close();
     }
 
@@ -55,7 +60,7 @@ class SoulseekClientEndpointTest {
         CancellationController source = new CancellationController();
         CancellationSignal token = source.getSignal();
 
-        InetSocketAddress actual = fixture.client.getUserEndpoint("alice", token);
+        InetSocketAddress actual = Blocking.await(fixture.client.users().getUserEndpoint("alice", token));
 
         assertEquals(ENDPOINT, actual);
         assertEquals(new WaitKey(MessageCode.Server.GET_PEER_ADDRESS, "alice"), fixture.waiter.key);
@@ -75,23 +80,31 @@ class SoulseekClientEndpointTest {
         UserOfflineException offline = new UserOfflineException("offline");
         fixture.waiter.result = CompletableFuture.completedFuture(
                 new UserAddressResponse("alice", new InetSocketAddress("0.0.0.0", 0)));
-        assertInstanceOf(UserOfflineException.class, failureOf(() -> fixture.client.getUserEndpoint("alice")));
+        assertInstanceOf(
+                UserOfflineException.class,
+                failureOf(() -> Blocking.await(fixture.client.users().getUserEndpoint("alice"))));
 
         TimeoutException timeout = new TimeoutException("timed out");
         fixture.waiter.result = CompletableFuture.failedFuture(timeout);
         assertSame(
                 timeout,
-                assertInstanceOf(NoResponseException.class, failureOf(() -> fixture.client.getUserEndpoint("bob")))
+                assertInstanceOf(
+                                NoResponseException.class,
+                                failureOf(() ->
+                                        Blocking.await(fixture.client.users().getUserEndpoint("bob"))))
                         .getCause());
 
         CancellationException cancellation = new CancellationException("cancelled");
         fixture.waiter.result = CompletableFuture.failedFuture(cancellation);
-        assertSame(cancellation, failureOf(() -> fixture.client.getUserEndpoint("carol")));
+        assertSame(
+                cancellation,
+                failureOf(() -> Blocking.await(fixture.client.users().getUserEndpoint("carol"))));
 
         RuntimeException expected = new RuntimeException("wait failed");
         fixture.waiter.synchronousFailure = expected;
-        UserEndpointException mapped =
-                assertInstanceOf(UserEndpointException.class, failureOf(() -> fixture.client.getUserEndpoint("dave")));
+        UserEndpointException mapped = assertInstanceOf(
+                UserEndpointException.class,
+                failureOf(() -> Blocking.await(fixture.client.users().getUserEndpoint("dave"))));
         assertSame(expected, mapped.getCause());
         fixture.close();
     }
@@ -102,14 +115,14 @@ class SoulseekClientEndpointTest {
         cache.value = CacheLookupResult.found(ENDPOINT);
         Fixture fixture = new Fixture(cache);
 
-        assertEquals(ENDPOINT, fixture.client.getUserEndpoint("alice"));
+        assertEquals(ENDPOINT, Blocking.await(fixture.client.users().getUserEndpoint("alice")));
         assertEquals(0, fixture.connection.writes);
         assertEquals(0, fixture.waiter.registrations);
 
         cache.value = CacheLookupResult.notFound();
         InetSocketAddress second = new InetSocketAddress(InetAddress.getLoopbackAddress(), 46002);
         fixture.waiter.result = CompletableFuture.completedFuture(new UserAddressResponse("bob", second));
-        assertEquals(second, fixture.client.getUserEndpoint("bob"));
+        assertEquals(second, Blocking.await(fixture.client.users().getUserEndpoint("bob")));
         assertEquals("bob", cache.updatedUsername);
         assertEquals(second, cache.updatedEndpoint);
         fixture.close();
@@ -121,8 +134,9 @@ class SoulseekClientEndpointTest {
         RuntimeException readFailure = new RuntimeException("read failed");
         readCache.readFailure = readFailure;
         Fixture readFixture = new Fixture(readCache);
-        UserEndpointCacheException readMapped =
-                assertThrows(UserEndpointCacheException.class, () -> readFixture.client.getUserEndpoint("alice"));
+        UserEndpointCacheException readMapped = assertThrows(
+                UserEndpointCacheException.class,
+                () -> Blocking.await(readFixture.client.users().getUserEndpoint("alice")));
         assertSame(readFailure, readMapped.getCause());
         readFixture.close();
 
@@ -133,7 +147,8 @@ class SoulseekClientEndpointTest {
         Fixture updateFixture = new Fixture(updateCache);
         updateFixture.waiter.result = CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT));
         UserEndpointCacheException updateMapped = assertInstanceOf(
-                UserEndpointCacheException.class, failureOf(() -> updateFixture.client.getUserEndpoint("alice")));
+                UserEndpointCacheException.class,
+                failureOf(() -> Blocking.await(updateFixture.client.users().getUserEndpoint("alice"))));
         assertSame(updateFailure, updateMapped.getCause());
         updateFixture.close();
     }
@@ -152,8 +167,10 @@ class SoulseekClientEndpointTest {
         // response.
         java.util.concurrent.atomic.AtomicReference<InetSocketAddress> first = new AtomicReference<>();
         java.util.concurrent.atomic.AtomicReference<InetSocketAddress> second = new AtomicReference<>();
-        Thread firstCaller = Thread.ofVirtual().start(() -> first.set(fixture.client.getUserEndpoint("alice")));
-        Thread secondCaller = Thread.ofVirtual().start(() -> second.set(fixture.client.getUserEndpoint("alice")));
+        Thread firstCaller = Thread.ofVirtual()
+                .start(() -> first.set(Blocking.await(fixture.client.users().getUserEndpoint("alice"))));
+        Thread secondCaller = Thread.ofVirtual()
+                .start(() -> second.set(Blocking.await(fixture.client.users().getUserEndpoint("alice"))));
 
         // Both callers run on their own threads; wait for the write as well as
         // the registration before asserting on either.
@@ -176,12 +193,12 @@ class SoulseekClientEndpointTest {
         Fixture fixture = new Fixture(cache);
         fixture.waiter.result = CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT));
 
-        assertEquals(ENDPOINT, fixture.client.getUserEndpoint("alice"));
+        assertEquals(ENDPOINT, Blocking.await(fixture.client.users().getUserEndpoint("alice")));
         assertEquals(1, fixture.connection.writes);
 
         // The second caller reads the value the first stored rather than repeating the request.
         cache.value = CacheLookupResult.found(ENDPOINT);
-        assertEquals(ENDPOINT, fixture.client.getUserEndpoint("alice"));
+        assertEquals(ENDPOINT, Blocking.await(fixture.client.users().getUserEndpoint("alice")));
         assertEquals(1, fixture.connection.writes);
 
         // The idle per-user semaphore is reclaimed, matching the source's periodic sweep.
@@ -200,13 +217,14 @@ class SoulseekClientEndpointTest {
         java.util.concurrent.atomic.AtomicReference<InetSocketAddress> second = new AtomicReference<>();
         Thread firstCaller = Thread.ofVirtual().start(() -> {
             try {
-                fixture.client.getUserEndpoint("alice", firstSource.getSignal());
+                Blocking.await(fixture.client.users().getUserEndpoint("alice", firstSource.getSignal()));
             } catch (RuntimeException cancelled) {
                 // Expected; this caller is the one being cancelled.
             }
         });
         Thread secondCaller = Thread.ofVirtual()
-                .start(() -> second.set(fixture.client.getUserEndpoint("alice", CancellationSignal.none())));
+                .start(() -> second.set(
+                        Blocking.await(fixture.client.users().getUserEndpoint("alice", CancellationSignal.none()))));
 
         awaitValue(() -> fixture.waiter.registrations == 2);
         firstSource.cancel();

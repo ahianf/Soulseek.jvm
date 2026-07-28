@@ -76,6 +76,121 @@ final class TransferEngine {
     }
 
     /** Downloads a remote file to a local file. */
+    /**
+     * Downloads what the request describes.
+     *
+     * <p>The request object carries both shapes — to a file, or to a stream —
+     * and choosing between them is a property of the request, not of the
+     * caller. The client used to make that choice in a blocking wrapper on its
+     * way here; the choice belongs with the engine that acts on it.
+     *
+     * @param request the download to perform
+     * @return the completed transfer
+     */
+    CompletableFuture<Transfer> download(DownloadRequest request) {
+        java.util.Objects.requireNonNull(request, "request");
+        return request.isToStream()
+                ? download(
+                        request.getUsername(),
+                        request.getRemoteFilename(),
+                        request.getOutputStreamFactory(),
+                        request.getSize(),
+                        request.getStartOffset(),
+                        request.getToken(),
+                        request.getOptions(),
+                        request.getCancellationSignal())
+                : download(
+                        request.getUsername(),
+                        request.getRemoteFilename(),
+                        request.getLocalFilename(),
+                        request.getSize(),
+                        request.getStartOffset(),
+                        request.getToken(),
+                        request.getOptions(),
+                        request.getCancellationSignal());
+    }
+
+    /**
+     * Asks a peer to queue what the request describes.
+     *
+     * @param request the download to enqueue
+     * @return an operation completing with the transfer's own completion
+     */
+    CompletableFuture<CompletableFuture<Transfer>> enqueueDownload(DownloadRequest request) {
+        java.util.Objects.requireNonNull(request, "request");
+        return request.isToStream()
+                ? enqueueDownload(
+                        request.getUsername(),
+                        request.getRemoteFilename(),
+                        request.getOutputStreamFactory(),
+                        request.getSize(),
+                        request.getStartOffset(),
+                        request.getToken(),
+                        request.getOptions(),
+                        request.getCancellationSignal())
+                : enqueueDownload(
+                        request.getUsername(),
+                        request.getRemoteFilename(),
+                        request.getLocalFilename(),
+                        request.getSize(),
+                        request.getStartOffset(),
+                        request.getToken(),
+                        request.getOptions(),
+                        request.getCancellationSignal());
+    }
+
+    /**
+     * Uploads what the request describes.
+     *
+     * @param request the upload to perform
+     * @return the completed transfer
+     */
+    CompletableFuture<Transfer> upload(UploadRequest request) {
+        java.util.Objects.requireNonNull(request, "request");
+        return request.isFromStream()
+                ? upload(
+                        request.getUsername(),
+                        request.getRemoteFilename(),
+                        request.getSize(),
+                        request.getInputStreamFactory(),
+                        request.getToken(),
+                        request.getOptions(),
+                        request.getCancellationSignal())
+                : upload(
+                        request.getUsername(),
+                        request.getRemoteFilename(),
+                        request.getLocalFilename(),
+                        request.getToken(),
+                        request.getOptions(),
+                        request.getCancellationSignal());
+    }
+
+    /**
+     * Offers a peer what the request describes.
+     *
+     * @param request the upload to enqueue
+     * @return an operation completing with the transfer's own completion
+     */
+    CompletableFuture<CompletableFuture<Transfer>> enqueueUpload(UploadRequest request) {
+        java.util.Objects.requireNonNull(request, "request");
+        return request.isFromStream()
+                ? enqueueUpload(
+                        request.getUsername(),
+                        request.getRemoteFilename(),
+                        request.getSize(),
+                        request.getInputStreamFactory(),
+                        request.getToken(),
+                        request.getOptions(),
+                        request.getCancellationSignal())
+                : enqueueUpload(
+                        request.getUsername(),
+                        request.getRemoteFilename(),
+                        request.getLocalFilename(),
+                        request.getToken(),
+                        request.getOptions(),
+                        request.getCancellationSignal());
+    }
+
     CompletableFuture<Transfer> download(String requestedUsername, String remoteFilename, String localFilename) {
         return download(
                 requestedUsername, remoteFilename, localFilename, null, 0, null, null, CancellationSignal.none());

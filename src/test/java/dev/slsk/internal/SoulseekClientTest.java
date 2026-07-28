@@ -11,6 +11,11 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.slsk.Download;
+import dev.slsk.MeshState;
+import dev.slsk.Soulseek;
+import dev.slsk.Upload;
+import dev.slsk.Username;
 import dev.slsk.exceptions.KickedFromServerException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
@@ -47,6 +52,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -73,29 +79,44 @@ class SoulseekClientTest {
     }
 
     @Test
-    void endpointAndTransferPropertiesReturnSnapshots() {
+    void endpointPropertiesReportWhatTheConnectionRecorded() {
         Fixture fixture = new Fixture();
         fixture.client.setIpEndpointForTest(ENDPOINT);
+
+        assertEquals(ENDPOINT, fixture.client.getIpEndpoint());
+        assertEquals(ENDPOINT.getAddress(), fixture.client.getIpAddress());
+        assertEquals(ENDPOINT.getPort(), fixture.client.getPort());
+        fixture.close();
+    }
+
+    /**
+     * The engine used to project its transfer registries into {@code Transfer}
+     * lists itself. The facets do it now, and the property that mattered is
+     * theirs: what {@code all()} hands back is a snapshot, so a consumer holding
+     * one is not reading a registry that mutates under it.
+     */
+    @Test
+    void transferFacetsProjectSnapshotsOfTheLiveRegistries() {
+        Fixture fixture = new Fixture();
         Map<Integer, TransferInternal> downloads = new HashMap<>();
         Map<Integer, TransferInternal> uploads = new HashMap<>();
         downloads.put(1, new TransferInternal(TransferDirection.DOWNLOAD, "d", "download", 1));
         uploads.put(2, new TransferInternal(TransferDirection.UPLOAD, "u", "upload", 2));
         fixture.client.setDownloadsForTest(downloads);
         fixture.client.setUploadsForTest(uploads);
-        List<Transfer> downloadSnapshot = fixture.client.getDownloads();
-        List<Transfer> uploadSnapshot = fixture.client.getUploads();
 
-        assertEquals(ENDPOINT, fixture.client.getIpEndpoint());
-        assertEquals(ENDPOINT.getAddress(), fixture.client.getIpAddress());
-        assertEquals(ENDPOINT.getPort(), fixture.client.getPort());
-        assertEquals("download", fixture.client.getDownloads().getFirst().getFilename());
-        assertEquals("upload", fixture.client.getUploads().getFirst().getFilename());
+        try (Soulseek slsk = DefaultSoulseek.over(fixture.client, "me", "secret")) {
+            List<Download> downloadSnapshot = slsk.downloads().all();
+            List<Upload> uploadSnapshot = slsk.uploads().all();
+            assertEquals("download", downloadSnapshot.getFirst().path());
+            assertEquals("upload", uploadSnapshot.getFirst().path());
 
-        downloads.clear();
-        uploads.clear();
-        assertEquals(1, downloadSnapshot.size());
-        assertEquals(1, uploadSnapshot.size());
-        fixture.close();
+            downloads.clear();
+            uploads.clear();
+            assertEquals(1, downloadSnapshot.size());
+            assertEquals(1, uploadSnapshot.size());
+            assertEquals(List.of(), slsk.downloads().all());
+        }
     }
 
     @Test
@@ -241,15 +262,19 @@ class SoulseekClientTest {
         fixture.distributed.children = List.of(new PeerEndpoint("child", ENDPOINT));
         fixture.distributed.averageLatency = 12.5;
 
-        DistributedNetworkInfo info = fixture.client.getDistributedNetwork();
+        // The engine used to assemble a DistributedNetworkInfo for this; the
+        // Diagnostics facet reads the manager directly, so that is what the
+        // mesh snapshot has to reflect.
+        try (Soulseek slsk = DefaultSoulseek.over(fixture.client, "me", "secret")) {
+            MeshState mesh = slsk.diagnostics().mesh();
 
-        assertEquals(2, info.getBranchLevel());
-        assertEquals("root", info.getBranchRoot());
-        assertTrue(info.isBranchRoot());
-        assertEquals("parent", info.getParent().username());
-        assertEquals("child", info.getChildren().getFirst().username());
-        assertEquals(12.5, info.getAverageBroadcastLatency());
-        fixture.close();
+            assertEquals(2, mesh.branchLevel());
+            assertEquals(Optional.of(Username.of("root")), mesh.branchRoot());
+            assertTrue(mesh.isBranchRoot());
+            assertTrue(mesh.hasParent());
+            assertEquals(Optional.of(Username.of("parent")), mesh.parent());
+            assertEquals(List.of(Username.of("child")), mesh.children());
+        }
     }
 
     @Test

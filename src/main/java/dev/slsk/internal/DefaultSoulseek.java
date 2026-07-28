@@ -75,6 +75,23 @@ public final class DefaultSoulseek implements Soulseek {
         return new DefaultSoulseek(client, new DefaultConnection.Credentials(username, password));
     }
 
+    /**
+     * Wraps an engine the caller has already configured.
+     *
+     * <p>{@link #create} builds its own, which is right for a consumer and
+     * useless for a test that has to drive a probe connection or a stubbed
+     * connection manager. Package-private, because nothing outside this package
+     * can get hold of an engine to pass one.
+     *
+     * @param client the engine to bind the facets to
+     * @param username the account the facets should report as ours
+     * @param password the account password
+     * @return the client
+     */
+    static Soulseek over(DefaultSoulseekClient client, String username, String password) {
+        return new DefaultSoulseek(client, new DefaultConnection.Credentials(username, password));
+    }
+
     @Override
     public Connection connection() {
         return connection;

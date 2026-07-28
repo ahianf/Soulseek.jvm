@@ -11,6 +11,8 @@ import dev.slsk.Metrics;
 import dev.slsk.Username;
 import dev.slsk.events.DiagnosticEvent;
 import dev.slsk.events.MeshEvent;
+import dev.slsk.internal.network.DistributedConnectionManager;
+import dev.slsk.internal.network.PeerEndpoint;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -35,24 +37,24 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 final class DefaultDiagnostics implements Diagnostics {
 
-    private final DefaultSoulseekClient client;
+    private final DistributedConnectionManager mesh;
     private final EventBus<DiagnosticEvent> events;
     private final EventBus<MeshEvent> meshEvents;
     private final AtomicReference<MeshState> published = new AtomicReference<>(empty());
     private final AtomicBoolean tracing = new AtomicBoolean();
 
     DefaultDiagnostics(DefaultSoulseekClient client, EventBus<DiagnosticEvent> events, EventBus<MeshEvent> meshEvents) {
-        this.client = Objects.requireNonNull(client, "client");
+        this.mesh = Objects.requireNonNull(client, "client").getDistributedConnectionManager();
         this.events = Objects.requireNonNull(events, "events");
         this.meshEvents = Objects.requireNonNull(meshEvents, "meshEvents");
-        wire();
+        wire(client);
     }
 
     private static MeshState empty() {
         return new MeshState(false, Optional.empty(), List.of(), false, 0, Optional.empty());
     }
 
-    private void wire() {
+    private void wire(DefaultSoulseekClient client) {
         client.addDiagnosticGeneratedListener((sender, event) -> {
             if (event == null) {
                 return;
@@ -106,26 +108,30 @@ final class DefaultDiagnostics implements Diagnostics {
         return Metrics.empty();
     }
 
+    /**
+     * Reads the mesh straight off the connection manager.
+     *
+     * <p>The engine used to assemble a {@code DistributedNetworkInfo} for this,
+     * a snapshot of nine fields of which a consumer wants six. Reading the
+     * manager here skips the intermediate entirely; the info type stays because
+     * the manager still raises one on every state change.
+     */
     @Override
     public MeshState mesh() {
-        DistributedNetworkInfo info = client.getDistributedNetwork();
-        if (info == null) {
-            return empty();
-        }
-        DistributedPeer parent = info.getParent();
-        List<Username> children = info.getChildren() == null
+        PeerEndpoint parent = mesh.getParent();
+        List<Username> children = mesh.getChildren() == null
                 ? List.of()
-                : info.getChildren().stream()
+                : mesh.getChildren().stream()
                         .filter(child -> child != null && isName(child.username()))
                         .map(child -> Username.of(child.username()))
                         .toList();
         return new MeshState(
-                info.hasParent(),
+                mesh.hasParent(),
                 user(parent == null ? null : parent.username()),
                 children,
-                info.isBranchRoot(),
-                info.getBranchLevel(),
-                user(info.getBranchRoot()));
+                mesh.isBranchRoot(),
+                mesh.getBranchLevel(),
+                user(mesh.getBranchRoot()));
     }
 
     /**

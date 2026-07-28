@@ -13,6 +13,7 @@ import dev.slsk.Priority;
 import dev.slsk.TransferId;
 import dev.slsk.Username;
 import dev.slsk.events.DownloadEvent;
+import dev.slsk.internal.common.Blocking;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -91,7 +92,7 @@ final class DefaultDownloads implements Downloads {
                 .build();
         TransferId id = TransferId.of("DOWNLOAD:" + token);
         metadata.put(id, new Metadata(request.priority(), request.tags(), cancellation));
-        client.enqueueDownload(internal);
+        Blocking.await(client.transfers().enqueueDownload(internal));
         events.publish(new DownloadEvent.Enqueued(get(id), java.time.Instant.now()));
         return id;
     }
@@ -157,10 +158,10 @@ final class DefaultDownloads implements Downloads {
 
     @Override
     public List<Download> all() {
-        List<Transfer> transfers = client.getDownloads();
-        return transfers == null
-                ? List.of()
-                : transfers.stream().map(this::project).toList();
+        return client.getDownloadRegistry().values().stream()
+                .map(dev.slsk.internal.transfer.TransferInternal::toTransfer)
+                .map(this::project)
+                .toList();
     }
 
     @Override

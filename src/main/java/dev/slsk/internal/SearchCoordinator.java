@@ -57,6 +57,47 @@ final class SearchCoordinator {
      * @param query the search query
      * @return the completed search and collected responses
      */
+    /**
+     * Searches as the request describes and collects accepted responses.
+     *
+     * <p>The request object is how a caller states a search; unpacking it into
+     * five positional arguments was a blocking wrapper's job on the client, and
+     * the client is gone.
+     *
+     * @param request the search to perform
+     * @return the completed search and collected responses
+     */
+    CompletableFuture<SearchResult> search(dev.slsk.internal.SearchRequest request) {
+        // Qualified: this file also talks to the wire message of the same name.
+        java.util.Objects.requireNonNull(request, "request");
+        return search(
+                request.getQuery(),
+                request.getScope(),
+                request.getToken(),
+                request.getOptions(),
+                request.getCancellationSignal());
+    }
+
+    /**
+     * Searches as the request describes, streaming each accepted response.
+     *
+     * @param request the search to perform
+     * @param responseHandler receives each accepted response
+     * @return the completed search
+     */
+    CompletableFuture<Search> search(
+            dev.slsk.internal.SearchRequest request, Consumer<SearchResponse> responseHandler) {
+        java.util.Objects.requireNonNull(request, "request");
+        java.util.Objects.requireNonNull(responseHandler, "responseHandler");
+        return search(
+                request.getQuery(),
+                responseHandler,
+                request.getScope(),
+                request.getToken(),
+                request.getOptions(),
+                request.getCancellationSignal());
+    }
+
     CompletableFuture<SearchResult> search(SearchQuery query) {
         return search(query, null, null, null, CancellationSignal.none());
     }

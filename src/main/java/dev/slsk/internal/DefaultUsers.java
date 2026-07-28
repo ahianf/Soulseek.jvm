@@ -13,6 +13,7 @@ import dev.slsk.Username;
 import dev.slsk.Users;
 import dev.slsk.Watch;
 import dev.slsk.events.UserEvent;
+import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import java.net.InetSocketAddress;
 import java.time.Instant;
@@ -41,7 +42,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 final class DefaultUsers implements Users {
 
-    private final DefaultSoulseekClient client;
+    private final UserDirectory directory;
     private final EventBus<UserEvent> events;
     private final DiagnosticSink diagnostics;
 
@@ -49,7 +50,7 @@ final class DefaultUsers implements Users {
     private final Map<Username, Registration> watches = new ConcurrentHashMap<>();
 
     DefaultUsers(DefaultSoulseekClient client, EventBus<UserEvent> events, DiagnosticSink diagnostics) {
-        this.client = Objects.requireNonNull(client, "client");
+        this.directory = Objects.requireNonNull(client, "client").users();
         this.events = Objects.requireNonNull(events, "events");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
         client.addLoggedInListener((sender, ignored) -> reregister());
@@ -74,7 +75,7 @@ final class DefaultUsers implements Users {
     private void reregister() {
         for (Username user : Set.copyOf(watches.keySet())) {
             try {
-                client.watchUser(user.value());
+                Blocking.await(directory.watchUser(user.value()));
             } catch (RuntimeException exception) {
                 diagnostics.warning("Failed to re-register the watch on " + user + " after login", exception);
             }
@@ -117,7 +118,7 @@ final class DefaultUsers implements Users {
     public UserInfo info(Username user, CancellationSignal signal) {
         Objects.requireNonNull(user, "user");
         Objects.requireNonNull(signal, "signal");
-        dev.slsk.internal.UserInfo source = client.getUserInfo(user.value(), signal);
+        dev.slsk.internal.UserInfo source = Blocking.await(directory.getUserInfo(user.value(), signal));
         return new UserInfo(
                 user,
                 source.getDescription() == null ? "" : source.getDescription(),
@@ -131,21 +132,21 @@ final class DefaultUsers implements Users {
     public UserStatistics statistics(Username user, CancellationSignal signal) {
         Objects.requireNonNull(user, "user");
         Objects.requireNonNull(signal, "signal");
-        return statistics(client.getUserStatistics(user.value(), signal));
+        return statistics(Blocking.await(directory.getUserStatistics(user.value(), signal)));
     }
 
     @Override
     public UserStatus status(Username user, CancellationSignal signal) {
         Objects.requireNonNull(user, "user");
         Objects.requireNonNull(signal, "signal");
-        return status(client.getUserStatus(user.value(), signal));
+        return status(Blocking.await(directory.getUserStatus(user.value(), signal)));
     }
 
     @Override
     public InetSocketAddress endpoint(Username user, CancellationSignal signal) {
         Objects.requireNonNull(user, "user");
         Objects.requireNonNull(signal, "signal");
-        return client.getUserEndpoint(user.value(), signal);
+        return Blocking.await(directory.getUserEndpoint(user.value(), signal));
     }
 
     @Override
@@ -155,7 +156,7 @@ final class DefaultUsers implements Users {
             Registration current = existing;
             if (current == null) {
                 current = new Registration(new UserStatus(key, UserPresence.OFFLINE, false));
-                dev.slsk.internal.UserData data = client.watchUser(key.value());
+                dev.slsk.internal.UserData data = Blocking.await(directory.watchUser(key.value()));
                 if (data != null) {
                     current.status = new UserStatus(key, presence(data.getStatus()), false);
                 }
@@ -208,7 +209,7 @@ final class DefaultUsers implements Users {
                     return current;
                 }
                 try {
-                    client.unwatchUser(key.value());
+                    Blocking.await(directory.unwatchUser(key.value()));
                 } catch (RuntimeException exception) {
                     diagnostics.warning("Failed to release the watch on " + key, exception);
                 }

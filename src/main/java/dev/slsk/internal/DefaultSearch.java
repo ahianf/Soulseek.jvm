@@ -20,6 +20,7 @@ import dev.slsk.SearchSnapshot;
 import dev.slsk.SearchStatus;
 import dev.slsk.Username;
 import dev.slsk.events.SearchEvent;
+import dev.slsk.internal.common.Blocking;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -48,12 +49,14 @@ import java.util.function.Consumer;
 final class DefaultSearch implements Search {
 
     private final DefaultSoulseekClient client;
+    private final SearchCoordinator coordinator;
     private final EventBus<SearchEvent> events;
     private final Map<SearchId, State> searches = new ConcurrentHashMap<>();
     private final AtomicLong revisions = new AtomicLong();
 
     DefaultSearch(DefaultSoulseekClient client, EventBus<SearchEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
+        this.coordinator = client.searchCoordinator();
         this.events = Objects.requireNonNull(events, "events");
         wire();
     }
@@ -204,13 +207,13 @@ final class DefaultSearch implements Search {
         Instant began = Instant.now();
         SearchStatus status;
         try {
-            SearchRequest request = SearchRequest.of(dev.slsk.internal.SearchQuery.fromText(query.terms()))
-                    .scope(scope(query.scope()))
-                    .token(token)
-                    .options(options(query))
-                    .cancellation(signal)
-                    .build();
-            client.search(request, source -> accept(state, source, query.filters()));
+            Blocking.await(coordinator.search(
+                    dev.slsk.internal.SearchQuery.fromText(query.terms()),
+                    source -> accept(state, source, query.filters()),
+                    scope(query.scope()),
+                    token,
+                    options(query),
+                    signal));
             status = SearchStatus.COMPLETED;
         } catch (RuntimeException exception) {
             status = signal.isCancellationRequested() ? SearchStatus.CANCELLED : SearchStatus.TIMED_OUT;

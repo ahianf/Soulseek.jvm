@@ -22,6 +22,7 @@ import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferException;
 import dev.slsk.exceptions.TransferRejectedException;
+import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
@@ -75,39 +76,51 @@ class SoulseekClientUploadTest {
             for (String bad : new String[] {null, "", " ", "\t"}) {
                 assertThrows(
                         IllegalArgumentException.class,
-                        () -> fixture.client.upload(
-                                UploadRequest.fromStream(bad, "file", 0, offset -> completedStream(new byte[0]))
-                                        .build()));
+                        () -> Blocking.await(fixture.client
+                                .transfers()
+                                .upload(UploadRequest.fromStream(bad, "file", 0, offset -> completedStream(new byte[0]))
+                                        .build())));
                 assertThrows(
                         IllegalArgumentException.class,
-                        () -> fixture.client.upload(
-                                UploadRequest.fromStream("alice", bad, 0, offset -> completedStream(new byte[0]))
-                                        .build()));
+                        () -> Blocking.await(fixture.client
+                                .transfers()
+                                .upload(UploadRequest.fromStream(
+                                                "alice", bad, 0, offset -> completedStream(new byte[0]))
+                                        .build())));
                 assertThrows(
                         IllegalArgumentException.class,
-                        () -> fixture.client.upload(
-                                UploadRequest.fromFile("alice", "file", bad).build()));
+                        () -> Blocking.await(fixture.client
+                                .transfers()
+                                .upload(UploadRequest.fromFile("alice", "file", bad)
+                                        .build())));
             }
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> fixture.client.upload(
-                            UploadRequest.fromStream("alice", "file", -1, offset -> completedStream(new byte[0]))
-                                    .build()));
+                    () -> Blocking.await(fixture.client
+                            .transfers()
+                            .upload(UploadRequest.fromStream(
+                                            "alice", "file", -1, offset -> completedStream(new byte[0]))
+                                    .build())));
             assertThrows(
                     NullPointerException.class,
-                    () -> fixture.client.upload(
-                            UploadRequest.fromStream("alice", "file", 0, null).build()));
+                    () -> Blocking.await(fixture.client
+                            .transfers()
+                            .upload(UploadRequest.fromStream("alice", "file", 0, null)
+                                    .build())));
             assertThrows(
                     UncheckedIOException.class,
-                    () -> fixture.client.upload(UploadRequest.fromFile("alice", "file", "/missing/upload-file")
-                            .build()));
+                    () -> Blocking.await(fixture.client
+                            .transfers()
+                            .upload(UploadRequest.fromFile("alice", "file", "/missing/upload-file")
+                                    .build())));
 
             fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
             assertThrows(
                     IllegalStateException.class,
-                    () -> fixture.client.upload(
-                            UploadRequest.fromStream("alice", "file", 0, offset -> completedStream(new byte[0]))
-                                    .build()));
+                    () -> Blocking.await(fixture.client
+                            .transfers()
+                            .upload(UploadRequest.fromStream("alice", "file", 0, offset -> completedStream(new byte[0]))
+                                    .build())));
         }
     }
 
@@ -117,12 +130,13 @@ class SoulseekClientUploadTest {
             CancellationController source = new CancellationController();
             fixture.transfer.size = 0;
 
-            Transfer result = fixture.client.upload(
-                    UploadRequest.fromStream("alice", "empty", 0, offset -> completedStream(new byte[0]))
+            Transfer result = Blocking.await(fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream("alice", "empty", 0, offset -> completedStream(new byte[0]))
                             .token(41)
                             .options(options(20))
                             .cancellation(source.getSignal())
-                            .build());
+                            .build()));
 
             assertEquals(0, result.getSize());
             assertSame(source.getSignal(), fixture.message.lastToken);
@@ -137,10 +151,12 @@ class SoulseekClientUploadTest {
         byte[] bytes = new byte[] {5, 4, 3, 2, 1};
         Files.write(file, bytes);
         try (Fixture fixture = new Fixture()) {
-            Transfer result = fixture.client.upload(UploadRequest.fromFile("alice", "remote", file.toString())
-                    .token(7)
-                    .options(options(20))
-                    .build());
+            Transfer result = Blocking.await(fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromFile("alice", "remote", file.toString())
+                            .token(7)
+                            .options(options(20))
+                            .build()));
 
             assertEquals(bytes.length, result.getSize());
             assertArrayEquals(bytes, fixture.transfer.written.toByteArray());
@@ -155,19 +171,23 @@ class SoulseekClientUploadTest {
             fixture.client.getUploadsInternal().put(8, transfer(TransferDirection.UPLOAD, "other", "other", 8));
             assertThrows(
                     DuplicateTokenException.class,
-                    () -> fixture.client.upload(
-                            UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+                    () -> Blocking.await(fixture.client
+                            .transfers()
+                            .upload(UploadRequest.fromStream(
+                                            "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                                     .token(8)
-                                    .build()));
+                                    .build())));
 
             fixture.client.getUploadsInternal().clear();
             fixture.client.getDownloadDictionary().put(9, transfer(TransferDirection.DOWNLOAD, "other", "other", 9));
             assertThrows(
                     DuplicateTokenException.class,
-                    () -> fixture.client.upload(
-                            UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+                    () -> Blocking.await(fixture.client
+                            .transfers()
+                            .upload(UploadRequest.fromStream(
+                                            "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                                     .token(9)
-                                    .build()));
+                                    .build())));
         }
     }
 
@@ -177,19 +197,23 @@ class SoulseekClientUploadTest {
             fixture.client.getUploadsInternal().put(8, transfer(TransferDirection.UPLOAD, "alice", "file", 8));
             assertThrows(
                     DuplicateTransferException.class,
-                    () -> fixture.client.upload(
-                            UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+                    () -> Blocking.await(fixture.client
+                            .transfers()
+                            .upload(UploadRequest.fromStream(
+                                            "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                                     .token(9)
-                                    .build()));
+                                    .build())));
 
             fixture.client.getUploadsInternal().clear();
             fixture.client.getUniqueKeys().put("Upload:alice:file", true);
             assertThrows(
                     DuplicateTransferException.class,
-                    () -> fixture.client.upload(
-                            UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+                    () -> Blocking.await(fixture.client
+                            .transfers()
+                            .upload(UploadRequest.fromStream(
+                                            "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                                     .token(9)
-                                    .build()));
+                                    .build())));
         }
     }
 
@@ -199,11 +223,12 @@ class SoulseekClientUploadTest {
             fixture.client.getUploadsInternal().put(8, transfer(TransferDirection.UPLOAD, "alice", "other", 8));
             fixture.client.getUploadsInternal().put(9, transfer(TransferDirection.UPLOAD, "other", "file", 9));
 
-            Transfer result = fixture.client.upload(
-                    UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+            Transfer result = Blocking.await(fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(10)
                             .options(options(20))
-                            .build());
+                            .build()));
 
             assertTrue(result.getState().contains(TransferState.SUCCEEDED));
         }
@@ -215,11 +240,13 @@ class SoulseekClientUploadTest {
             CompletableFuture<Void> slot = new CompletableFuture<>();
             TransferOptions options = options(20, (transfer, token) -> slot, null, null, null, null);
 
-            TransferHandle upload = fixture.client.enqueueUpload(
-                    UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
-                            .token(12)
-                            .options(options)
-                            .build());
+            TransferHandle upload = new TransferHandle(Blocking.await(fixture.client
+                    .transfers()
+                    .enqueueUpload(
+                            UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+                                    .token(12)
+                                    .options(options)
+                                    .build())));
 
             assertFalse(upload.isDone());
             assertTrue(fixture.client.getUploadsInternal().containsKey(12));
@@ -247,11 +274,13 @@ class SoulseekClientUploadTest {
                     change -> optionStates.add(change.transfer().getState()),
                     null);
 
-            Transfer result = fixture.client.upload(
-                    UploadRequest.fromStream("alice", "remote\\file", bytes.length, offset -> completedStream(bytes))
+            Transfer result = Blocking.await(fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream(
+                                    "alice", "remote\\file", bytes.length, offset -> completedStream(bytes))
                             .token(22)
                             .options(options)
-                            .build());
+                            .build()));
 
             List<TransferState> expected = List.of(
                     TransferState.QUEUED.or(TransferState.LOCALLY),
@@ -282,11 +311,12 @@ class SoulseekClientUploadTest {
             fixture.transfer.offset = 2;
             byte[] bytes = new byte[] {1, 2, 3, 4, 5};
 
-            Transfer result = fixture.client.upload(
-                    UploadRequest.fromStream("alice", "file", bytes.length, offset -> completedStream(bytes))
+            Transfer result = Blocking.await(fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream("alice", "file", bytes.length, offset -> completedStream(bytes))
                             .token(31)
                             .options(options(20))
-                            .build());
+                            .build()));
 
             assertEquals(2, result.getStartOffset());
             assertEquals(3, fixture.transfer.writeLength);
@@ -300,11 +330,13 @@ class SoulseekClientUploadTest {
         try (Fixture fixture = new Fixture()) {
             fixture.transfer.offset = 3;
 
-            Transfer result = fixture.client.upload(UploadRequest.fromStream(
-                            "alice", "file", 3, offset -> completedStream(new byte[] {1, 2, 3}))
-                    .token(32)
-                    .options(options(20))
-                    .build());
+            Transfer result = Blocking.await(fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream(
+                                    "alice", "file", 3, offset -> completedStream(new byte[] {1, 2, 3}))
+                            .token(32)
+                            .options(options(20))
+                            .build()));
 
             assertEquals(0, fixture.transfer.writeCalls);
             assertEquals(3, result.getBytesTransferred());
@@ -315,28 +347,32 @@ class SoulseekClientUploadTest {
     void rejectsOffsetBeyondSizeAndNonSeekableResume() {
         try (Fixture fixture = new Fixture()) {
             fixture.transfer.offset = 4;
-            Throwable tooLong = failureOf(() -> fixture.client.upload(UploadRequest.fromStream(
-                            "alice", "file", 3, offset -> completedStream(new byte[] {1, 2, 3}))
-                    .token(33)
-                    .options(options(20))
-                    .build()));
+            Throwable tooLong = failureOf(() -> Blocking.await(fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream(
+                                    "alice", "file", 3, offset -> completedStream(new byte[] {1, 2, 3}))
+                            .token(33)
+                            .options(options(20))
+                            .build())));
             assertInstanceOf(SoulseekClientException.class, tooLong);
             assertInstanceOf(TransferException.class, tooLong.getCause());
 
             fixture.transfer.offset = 1;
-            Throwable notSeekable = failureOf(() -> fixture.client.upload(UploadRequest.fromStream(
-                            "alice",
-                            "other",
-                            2,
-                            offset -> CompletableFuture.completedFuture(new InputStream() {
-                                @Override
-                                public int read() {
-                                    return -1;
-                                }
-                            }))
-                    .token(34)
-                    .options(options(20))
-                    .build()));
+            Throwable notSeekable = failureOf(() -> Blocking.await(fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream(
+                                    "alice",
+                                    "other",
+                                    2,
+                                    offset -> CompletableFuture.completedFuture(new InputStream() {
+                                        @Override
+                                        public int read() {
+                                            return -1;
+                                        }
+                                    }))
+                            .token(34)
+                            .options(options(20))
+                            .build())));
             assertInstanceOf(SoulseekClientException.class, notSeekable);
         }
     }
@@ -347,11 +383,13 @@ class SoulseekClientUploadTest {
             fixture.transfer.offset = 1;
             TransferOptions options = new TransferOptions(null, null, null, null, null, null, 20, false);
 
-            Transfer result = fixture.client.upload(UploadRequest.fromStream(
-                            "alice", "file", 3, offset -> completedStream(new byte[] {9, 8, 7}))
-                    .token(35)
-                    .options(options)
-                    .build());
+            Transfer result = Blocking.await(fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream(
+                                    "alice", "file", 3, offset -> completedStream(new byte[] {9, 8, 7}))
+                            .token(35)
+                            .options(options)
+                            .build()));
 
             assertArrayEquals(new byte[] {9, 8}, fixture.transfer.written.toByteArray());
             assertEquals(3, result.getBytesTransferred());
@@ -375,11 +413,13 @@ class SoulseekClientUploadTest {
                     null);
             fixture.transfer.maximumActualPerIteration = 2;
 
-            fixture.client.upload(UploadRequest.fromStream(
-                            "alice", "file", 5, offset -> completedStream(new byte[] {1, 2, 3, 4, 5}))
-                    .token(36)
-                    .options(options)
-                    .build());
+            Blocking.await(fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream(
+                                    "alice", "file", 5, offset -> completedStream(new byte[] {1, 2, 3, 4, 5}))
+                            .token(36)
+                            .options(options)
+                            .build()));
 
             assertFalse(governorRequests.isEmpty());
             assertFalse(reports.isEmpty());
@@ -398,11 +438,12 @@ class SoulseekClientUploadTest {
                 }
             });
 
-            Throwable failure = failureOf(() -> fixture.client.upload(
-                    UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+            Throwable failure = failureOf(() -> Blocking.await(fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(40)
                             .options(options(20))
-                            .build()));
+                            .build())));
 
             assertInstanceOf(TransferRejectedException.class, failure);
             assertEquals(1, terminal.size());
@@ -430,11 +471,12 @@ class SoulseekClientUploadTest {
                     },
                     transfer -> released.incrementAndGet());
 
-            Throwable failure = failureOf(() -> fixture.client.upload(
-                    UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+            Throwable failure = failureOf(() -> Blocking.await(fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(41)
                             .options(options)
-                            .build()));
+                            .build())));
 
             // Cancellation surfaces as CancellationException; the exact
             // instance was observable only while the future was the return
@@ -464,11 +506,12 @@ class SoulseekClientUploadTest {
                     },
                     null);
 
-            Throwable failure = failureOf(() -> fixture.client.upload(
-                    UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+            Throwable failure = failureOf(() -> Blocking.await(fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(42)
                             .options(options)
-                            .build()));
+                            .build())));
 
             assertSame(
                     timeout,
@@ -481,8 +524,9 @@ class SoulseekClientUploadTest {
     void slotFailureIsWrappedAndAcquiredSlotIsReleased() {
         try (Fixture fixture = new Fixture()) {
             RuntimeException slotFailure = new RuntimeException("slot failed");
-            Throwable failure = failureOf(() -> fixture.client.upload(
-                    UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+            Throwable failure = failureOf(() -> Blocking.await(fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(43)
                             .options(options(
                                     20,
@@ -491,19 +535,20 @@ class SoulseekClientUploadTest {
                                     null,
                                     null,
                                     null))
-                            .build()));
+                            .build())));
             SoulseekClientException mapped = assertInstanceOf(SoulseekClientException.class, failure);
             assertInstanceOf(TransferException.class, mapped.getCause());
 
             AtomicInteger released = new AtomicInteger();
-            fixture.client.upload(
-                    UploadRequest.fromStream("alice", "other", 1, offset -> completedStream(new byte[] {1}))
+            Blocking.await(fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream("alice", "other", 1, offset -> completedStream(new byte[] {1}))
                             .token(44)
                             .options(options(20, null, null, null, null, transfer -> {
                                 released.incrementAndGet();
                                 throw new RuntimeException("ignored");
                             }))
-                            .build());
+                            .build()));
             assertEquals(1, released.get());
         }
     }
@@ -512,19 +557,23 @@ class SoulseekClientUploadTest {
     void streamDisposalOptionIsHonored() {
         try (Fixture fixture = new Fixture()) {
             CloseTrackingInputStream disposable = new CloseTrackingInputStream(new byte[] {1});
-            fixture.client.upload(UploadRequest.fromStream(
-                            "alice", "file", 1, offset -> CompletableFuture.completedFuture(disposable))
-                    .token(45)
-                    .options(options(20).withDisposalOptions(true))
-                    .build());
+            Blocking.await(fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream(
+                                    "alice", "file", 1, offset -> CompletableFuture.completedFuture(disposable))
+                            .token(45)
+                            .options(options(20).withDisposalOptions(true))
+                            .build()));
             assertTrue(disposable.closed.get());
 
             CloseTrackingInputStream retained = new CloseTrackingInputStream(new byte[] {2});
-            fixture.client.upload(
-                    UploadRequest.fromStream("alice", "other", 1, offset -> CompletableFuture.completedFuture(retained))
+            Blocking.await(fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream(
+                                    "alice", "other", 1, offset -> CompletableFuture.completedFuture(retained))
                             .token(46)
                             .options(options(20).withDisposalOptions(false))
-                            .build());
+                            .build()));
             assertFalse(retained.closed.get());
         }
     }
@@ -533,21 +582,23 @@ class SoulseekClientUploadTest {
     void malformedOffsetAndWriteFailureAreWrappedAndCleanedUp() {
         try (Fixture fixture = new Fixture()) {
             fixture.transfer.offsetBytes = new byte[] {1, 2};
-            Throwable malformed = failureOf(() -> fixture.client.upload(
-                    UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+            Throwable malformed = failureOf(() -> Blocking.await(fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(47)
                             .options(options(20))
-                            .build()));
+                            .build())));
             assertInstanceOf(SoulseekClientException.class, malformed);
             assertFalse(fixture.client.getUploadsInternal().containsKey(47));
 
             fixture.transfer.offsetBytes = null;
             fixture.transfer.writeFailure = new IOException("write failed");
-            Throwable write = failureOf(() -> fixture.client.upload(
-                    UploadRequest.fromStream("alice", "other", 1, offset -> completedStream(new byte[] {1}))
+            Throwable write = failureOf(() -> Blocking.await(fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream("alice", "other", 1, offset -> completedStream(new byte[] {1}))
                             .token(48)
                             .options(options(20))
-                            .build()));
+                            .build())));
             assertInstanceOf(SoulseekClientException.class, write);
             assertSame(fixture.transfer.writeFailure, write.getCause());
             assertFalse(fixture.client.getUniqueKeys().containsKey("Upload:alice:other"));
@@ -566,11 +617,12 @@ class SoulseekClientUploadTest {
                 }
             });
 
-            Throwable failure = failureOf(() -> fixture.client.upload(
-                    UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+            Throwable failure = failureOf(() -> Blocking.await(fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(49)
                             .options(options(20))
-                            .build()));
+                            .build())));
 
             SoulseekClientException mapped = assertInstanceOf(SoulseekClientException.class, failure);
             ConnectionException connection = assertInstanceOf(ConnectionException.class, mapped.getCause());

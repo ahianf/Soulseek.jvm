@@ -11,6 +11,7 @@ import dev.slsk.EventStream;
 import dev.slsk.ServerAddress;
 import dev.slsk.ServerInfo;
 import dev.slsk.events.ConnectionEvent;
+import dev.slsk.internal.common.Blocking;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -38,6 +39,7 @@ import java.util.function.Consumer;
 final class DefaultConnection implements Connection {
 
     private final DefaultSoulseekClient client;
+    private final ServerSession server;
     private final Credentials credentials;
     private final EventBus<ConnectionEvent> events;
 
@@ -49,6 +51,7 @@ final class DefaultConnection implements Connection {
 
     DefaultConnection(DefaultSoulseekClient client, Credentials credentials, EventBus<ConnectionEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
+        this.server = client.server();
         this.credentials = Objects.requireNonNull(credentials, "credentials");
         this.events = Objects.requireNonNull(events, "events");
         wire();
@@ -158,7 +161,7 @@ final class DefaultConnection implements Connection {
     @Override
     public Duration ping(CancellationSignal signal) {
         Objects.requireNonNull(signal, "signal");
-        Long milliseconds = client.pingServer(signal);
+        Long milliseconds = Blocking.await(server.pingServer(signal));
         return Duration.ofMillis(milliseconds == null ? 0L : milliseconds);
     }
 

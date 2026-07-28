@@ -10,6 +10,7 @@ import dev.slsk.ServerInfo;
 import dev.slsk.UserPresence;
 import dev.slsk.Username;
 import dev.slsk.events.MeEvent;
+import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import java.time.Instant;
 import java.util.List;
@@ -35,6 +36,8 @@ import java.util.concurrent.atomic.AtomicReference;
 final class DefaultMe implements Me {
 
     private final DefaultSoulseekClient client;
+    private final ServerSession server;
+    private final UserDirectory users;
     private final EventBus<MeEvent> events;
     private final DiagnosticSink diagnostics;
     private final Username username;
@@ -44,6 +47,8 @@ final class DefaultMe implements Me {
 
     DefaultMe(DefaultSoulseekClient client, Username username, EventBus<MeEvent> events, DiagnosticSink diagnostics) {
         this.client = Objects.requireNonNull(client, "client");
+        this.server = client.server();
+        this.users = client.users();
         this.username = Objects.requireNonNull(username, "username");
         this.events = Objects.requireNonNull(events, "events");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
@@ -67,7 +72,7 @@ final class DefaultMe implements Me {
                     event.getUsername() == null ? null : Username.of(event.getUsername()), Instant.now()));
             if (event.isRequiresAcknowlegement() && event.getId() != null) {
                 try {
-                    client.acknowledgePrivilegeNotification(event.getId());
+                    Blocking.await(server.acknowledgePrivilegeNotification(event.getId()));
                 } catch (RuntimeException exception) {
                     diagnostics.warning("Failed to acknowledge privilege notification " + event.getId(), exception);
                 }
@@ -93,7 +98,7 @@ final class DefaultMe implements Me {
         if (previous == value) {
             return;
         }
-        client.setStatus(map(value));
+        Blocking.await(server.setStatus(map(value)));
         events.publish(new MeEvent.PresenceChanged(previous, value, Instant.now()));
     }
 
@@ -108,7 +113,7 @@ final class DefaultMe implements Me {
     @Override
     public int privileges(CancellationSignal signal) {
         Objects.requireNonNull(signal, "signal");
-        Integer days = client.getPrivileges(signal);
+        Integer days = Blocking.await(server.getPrivileges(signal));
         return days == null ? 0 : days;
     }
 
@@ -119,14 +124,14 @@ final class DefaultMe implements Me {
         if (days <= 0) {
             throw new IllegalArgumentException("days must be positive: " + days);
         }
-        client.grantUserPrivileges(to.value(), days, signal);
+        Blocking.await(users.grantUserPrivileges(to.value(), days, signal));
     }
 
     @Override
     public void changePassword(String newPassword, CancellationSignal signal) {
         Objects.requireNonNull(newPassword, "newPassword");
         Objects.requireNonNull(signal, "signal");
-        client.changePassword(newPassword, signal);
+        Blocking.await(server.changePassword(newPassword, signal));
     }
 
     @Override
@@ -134,7 +139,7 @@ final class DefaultMe implements Me {
         if (bytesPerSecond < 0) {
             throw new IllegalArgumentException("bytesPerSecond must not be negative: " + bytesPerSecond);
         }
-        client.sendUploadSpeed((int) Math.min(bytesPerSecond, Integer.MAX_VALUE));
+        Blocking.await(server.sendUploadSpeed((int) Math.min(bytesPerSecond, Integer.MAX_VALUE)));
     }
 
     @Override

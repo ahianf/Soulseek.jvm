@@ -61,10 +61,10 @@ final class DefaultUploads implements Uploads {
 
     @Override
     public List<Upload> all() {
-        List<Transfer> transfers = client.getUploads();
-        return transfers == null
-                ? List.of()
-                : transfers.stream().map(this::project).toList();
+        return client.getUploadRegistry().values().stream()
+                .map(dev.slsk.internal.transfer.TransferInternal::toTransfer)
+                .map(this::project)
+                .toList();
     }
 
     @Override

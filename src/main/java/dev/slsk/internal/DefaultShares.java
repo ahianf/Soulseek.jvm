@@ -9,6 +9,7 @@ import dev.slsk.ShareIndex;
 import dev.slsk.SharedFolder;
 import dev.slsk.Shares;
 import dev.slsk.events.ShareEvent;
+import dev.slsk.internal.common.Blocking;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -100,7 +101,7 @@ final class DefaultShares implements Shares {
         ShareIndex scanned =
                 new ShareIndex(directories, files, bytes, Optional.of(Instant.now()), ShareIndex.ScanStatus.READY);
         index.set(scanned);
-        client.setSharedCounts(directories, files);
+        Blocking.await(client.server().setSharedCounts(directories, files));
         events.publish(new ShareEvent.ScanCompleted(scanned, Instant.now()));
         return scanned;
     }

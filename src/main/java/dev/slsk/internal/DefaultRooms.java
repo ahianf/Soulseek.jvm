@@ -17,6 +17,7 @@ import dev.slsk.UserPresence;
 import dev.slsk.UserStatistics;
 import dev.slsk.Username;
 import dev.slsk.events.RoomEvent;
+import dev.slsk.internal.common.Blocking;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -49,14 +50,18 @@ import java.util.stream.Collectors;
 final class DefaultRooms implements Rooms {
 
     private final DefaultSoulseekClient client;
+    private final RoomRegistry registry;
+    private final ServerSession server;
     private final EventBus<RoomEvent> events;
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
     private final PrivateRooms privateRooms;
 
     DefaultRooms(DefaultSoulseekClient client, EventBus<RoomEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
+        this.registry = client.rooms();
+        this.server = client.server();
         this.events = Objects.requireNonNull(events, "events");
-        this.privateRooms = new DefaultPrivateRooms(client);
+        this.privateRooms = new DefaultPrivateRooms(registry);
         wire();
     }
 
@@ -277,14 +282,14 @@ final class DefaultRooms implements Rooms {
     @Override
     public RoomList list(CancellationSignal signal) {
         Objects.requireNonNull(signal, "signal");
-        return roomList(client.getRoomList(signal));
+        return roomList(Blocking.await(registry.getRoomList(signal)));
     }
 
     @Override
     public Room join(String name, CancellationSignal signal) {
         Objects.requireNonNull(name, "room");
         Objects.requireNonNull(signal, "signal");
-        Room joined = room(client.joinRoom(name, signal));
+        Room joined = room(Blocking.await(registry.joinRoom(name, signal)));
         events.mutateAndPublish(() -> {
             rooms.put(name, joined);
             return new RoomEvent.Joined(name, joined, Instant.now());
@@ -296,7 +301,7 @@ final class DefaultRooms implements Rooms {
     public void leave(String name) {
         Objects.requireNonNull(name, "room");
         if (rooms.containsKey(name)) {
-            client.leaveRoom(name);
+            Blocking.await(registry.leaveRoom(name));
             events.mutateAndPublish(() -> {
                 rooms.remove(name);
                 return new RoomEvent.Left(name, Instant.now());
@@ -308,14 +313,14 @@ final class DefaultRooms implements Rooms {
     public void say(String name, String message) {
         Objects.requireNonNull(name, "room");
         Objects.requireNonNull(message, "message");
-        client.sendRoomMessage(name, message);
+        Blocking.await(registry.sendRoomMessage(name, message));
     }
 
     @Override
     public void setTicker(String name, String message) {
         Objects.requireNonNull(name, "room");
         Objects.requireNonNull(message, "message");
-        client.setRoomTicker(name, message);
+        Blocking.await(registry.setRoomTicker(name, message));
     }
 
     @Override
@@ -335,12 +340,12 @@ final class DefaultRooms implements Rooms {
 
     @Override
     public void startPublicChat() {
-        client.startPublicChat();
+        Blocking.await(server.startPublicChat());
     }
 
     @Override
     public void stopPublicChat() {
-        client.stopPublicChat();
+        Blocking.await(server.stopPublicChat());
     }
 
     @Override
@@ -358,37 +363,37 @@ final class DefaultRooms implements Rooms {
         return events.attach(this::joined, listener);
     }
 
-    /** {@link PrivateRooms} over the same seam. */
-    private record DefaultPrivateRooms(DefaultSoulseekClient client) implements PrivateRooms {
+    /** {@link PrivateRooms} over the same registry. */
+    private record DefaultPrivateRooms(RoomRegistry registry) implements PrivateRooms {
 
         @Override
         public void addMember(String room, Username user, CancellationSignal signal) {
-            client.addPrivateRoomMember(require(room), user.value(), require(signal));
+            Blocking.await(registry.addPrivateRoomMember(require(room), user.value(), require(signal)));
         }
 
         @Override
         public void removeMember(String room, Username user, CancellationSignal signal) {
-            client.removePrivateRoomMember(require(room), user.value(), require(signal));
+            Blocking.await(registry.removePrivateRoomMember(require(room), user.value(), require(signal)));
         }
 
         @Override
         public void addOperator(String room, Username user, CancellationSignal signal) {
-            client.addPrivateRoomModerator(require(room), user.value(), require(signal));
+            Blocking.await(registry.addPrivateRoomModerator(require(room), user.value(), require(signal)));
         }
 
         @Override
         public void removeOperator(String room, Username user, CancellationSignal signal) {
-            client.removePrivateRoomModerator(require(room), user.value(), require(signal));
+            Blocking.await(registry.removePrivateRoomModerator(require(room), user.value(), require(signal)));
         }
 
         @Override
         public void dropMembership(String room, CancellationSignal signal) {
-            client.dropPrivateRoomMembership(require(room), require(signal));
+            Blocking.await(registry.dropPrivateRoomMembership(require(room), require(signal)));
         }
 
         @Override
         public void dropOwnership(String room, CancellationSignal signal) {
-            client.dropPrivateRoomOwnership(require(room), require(signal));
+            Blocking.await(registry.dropPrivateRoomOwnership(require(room), require(signal)));
         }
 
         private static <T> T require(T value) {

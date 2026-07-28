@@ -6,6 +6,7 @@ package dev.slsk.internal;
 import dev.slsk.CancellationSignal;
 import dev.slsk.CancellationSubscription;
 import dev.slsk.exceptions.SoulseekClientException;
+import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.NetworkExecutor;
 import java.util.concurrent.CancellationException;
@@ -62,11 +63,7 @@ final class ClientSupport {
     }
 
     static Throwable unwrap(Throwable failure) {
-        Throwable current = failure;
-        while (current instanceof CompletionException && current.getCause() != null) {
-            current = current.getCause();
-        }
-        return current;
+        return Blocking.unwrap(failure);
     }
     /**
      * Acquires a permit, completing when one is available.

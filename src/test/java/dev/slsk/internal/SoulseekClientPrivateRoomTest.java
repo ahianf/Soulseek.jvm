@@ -15,6 +15,7 @@ import dev.slsk.CancellationController;
 import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
+import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.messaging.MessageCode;
@@ -46,27 +47,27 @@ class SoulseekClientPrivateRoomTest {
             CancellationSignal token = source.getSignal();
             List<Case> cases = List.of(
                     new Case(
-                            () -> client.addPrivateRoomMember("room", "member", token),
+                            () -> Blocking.await(client.rooms().addPrivateRoomMember("room", "member", token)),
                             new PrivateRoomAddUser("room", "member"),
                             new WaitKey(MessageCode.Server.PRIVATE_ROOM_ADD_USER, "room", "member")),
                     new Case(
-                            () -> client.addPrivateRoomModerator("room", "moderator", token),
+                            () -> Blocking.await(client.rooms().addPrivateRoomModerator("room", "moderator", token)),
                             new PrivateRoomAddOperator("room", "moderator"),
                             new WaitKey(MessageCode.Server.PRIVATE_ROOM_ADD_OPERATOR, "room", "moderator")),
                     new Case(
-                            () -> client.removePrivateRoomMember("room", "member", token),
+                            () -> Blocking.await(client.rooms().removePrivateRoomMember("room", "member", token)),
                             new PrivateRoomRemoveUser("room", "member"),
                             new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVE_USER, "room", "member")),
                     new Case(
-                            () -> client.removePrivateRoomModerator("room", "moderator", token),
+                            () -> Blocking.await(client.rooms().removePrivateRoomModerator("room", "moderator", token)),
                             new PrivateRoomRemoveOperator("room", "moderator"),
                             new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVE_OPERATOR, "room", "moderator")),
                     new Case(
-                            () -> client.dropPrivateRoomMembership("room", token),
+                            () -> Blocking.await(client.rooms().dropPrivateRoomMembership("room", token)),
                             new PrivateRoomDropMembershipCommand("room"),
                             new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVED, "room")),
                     new Case(
-                            () -> client.dropPrivateRoomOwnership("room", token),
+                            () -> Blocking.await(client.rooms().dropPrivateRoomOwnership("room", token)),
                             new PrivateRoomDropOwnershipCommand("room"),
                             new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVED, "room")));
 
@@ -97,23 +98,45 @@ class SoulseekClientPrivateRoomTest {
         ConnectionProbe connection = new ConnectionProbe(new ArrayList<>());
         try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
             for (String bad : new String[] {null, "", " ", "\t"}) {
-                assertThrows(IllegalArgumentException.class, () -> client.addPrivateRoomMember(bad, "user"));
-                assertThrows(IllegalArgumentException.class, () -> client.addPrivateRoomMember("room", bad));
-                assertThrows(IllegalArgumentException.class, () -> client.addPrivateRoomModerator(bad, "user"));
-                assertThrows(IllegalArgumentException.class, () -> client.addPrivateRoomModerator("room", bad));
-                assertThrows(IllegalArgumentException.class, () -> client.removePrivateRoomMember(bad, "user"));
-                assertThrows(IllegalArgumentException.class, () -> client.removePrivateRoomMember("room", bad));
-                assertThrows(IllegalArgumentException.class, () -> client.removePrivateRoomModerator(bad, "user"));
-                assertThrows(IllegalArgumentException.class, () -> client.removePrivateRoomModerator("room", bad));
-                assertThrows(IllegalArgumentException.class, () -> client.dropPrivateRoomMembership(bad));
-                assertThrows(IllegalArgumentException.class, () -> client.dropPrivateRoomOwnership(bad));
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> Blocking.await(client.rooms().addPrivateRoomMember(bad, "user")));
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> Blocking.await(client.rooms().addPrivateRoomMember("room", bad)));
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> Blocking.await(client.rooms().addPrivateRoomModerator(bad, "user")));
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> Blocking.await(client.rooms().addPrivateRoomModerator("room", bad)));
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> Blocking.await(client.rooms().removePrivateRoomMember(bad, "user")));
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> Blocking.await(client.rooms().removePrivateRoomMember("room", bad)));
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> Blocking.await(client.rooms().removePrivateRoomModerator(bad, "user")));
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> Blocking.await(client.rooms().removePrivateRoomModerator("room", bad)));
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> Blocking.await(client.rooms().dropPrivateRoomMembership(bad)));
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> Blocking.await(client.rooms().dropPrivateRoomOwnership(bad)));
             }
 
             client.setStateForTest(SoulseekClientState.DISCONNECTED);
             for (Operation operation : operations(client)) {
                 assertThrows(IllegalStateException.class, operation::run);
             }
-            assertThrows(IllegalArgumentException.class, () -> client.addPrivateRoomMember(null, "user"));
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> Blocking.await(client.rooms().addPrivateRoomMember(null, "user")));
         }
     }
 
@@ -180,7 +203,8 @@ class SoulseekClientPrivateRoomTest {
             waiter.synchronousFailure = expected;
 
             SoulseekClientException mapped = assertInstanceOf(
-                    SoulseekClientException.class, failureOf(() -> client.addPrivateRoomMember("room", "user")));
+                    SoulseekClientException.class,
+                    failureOf(() -> Blocking.await(client.rooms().addPrivateRoomMember("room", "user"))));
 
             assertSame(expected, mapped.getCause());
             assertEquals(0, connection.writeCount);
@@ -213,12 +237,12 @@ class SoulseekClientPrivateRoomTest {
 
     private static List<Operation> operations(DefaultSoulseekClient client) {
         return List.of(
-                () -> client.addPrivateRoomMember("room", "user"),
-                () -> client.addPrivateRoomModerator("room", "user"),
-                () -> client.removePrivateRoomMember("room", "user"),
-                () -> client.removePrivateRoomModerator("room", "user"),
-                () -> client.dropPrivateRoomMembership("room"),
-                () -> client.dropPrivateRoomOwnership("room"));
+                () -> Blocking.await(client.rooms().addPrivateRoomMember("room", "user")),
+                () -> Blocking.await(client.rooms().addPrivateRoomModerator("room", "user")),
+                () -> Blocking.await(client.rooms().removePrivateRoomMember("room", "user")),
+                () -> Blocking.await(client.rooms().removePrivateRoomModerator("room", "user")),
+                () -> Blocking.await(client.rooms().dropPrivateRoomMembership("room")),
+                () -> Blocking.await(client.rooms().dropPrivateRoomOwnership("room")));
     }
 
     /** Waits for the background caller to record {@code count} steps. */

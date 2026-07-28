@@ -35,10 +35,9 @@ import org.junit.jupiter.api.Test;
  * for: the context the extracted collaborators delegate through, and the
  * accessors the message handlers reach it by. {@link #ENGINE} is what it
  * genuinely owns: the connection lifecycle and the state that goes with it.
- * {@link #AWAITING_A_FACET} is the residue — blocking operations that have a
- * facet waiting to take them, and every one that moves comes off this list.
- * When the list is empty and the listener pairs are gone, {@code
- * ClientOperations} and {@code ClientEventSupport} follow.
+ * {@link #AWAITING_A_FACET} is the residue — blocking operations with a facet
+ * waiting to take them — and it is now empty. What is left to remove is the
+ * listener registry, which goes when the facets stop subscribing through it.
  */
 class SoulseekClientApiTest {
 
@@ -94,56 +93,18 @@ class SoulseekClientApiTest {
             "getPort",
             "getServerInfo",
             "getState",
-            "getUsername");
+            "getUsername",
+            "reconfigureOptions");
 
     /**
-     * Blocking operations with a facet waiting to take them. This set only ever
-     * shrinks; when it is empty the fold is done.
+     * Blocking operations with a facet waiting to take them.
+     *
+     * <p><strong>Empty, and that is the assertion.</strong> Every wrapper that
+     * stood between a caller and a collaborator now lives in the facet that owns
+     * it, and {@code ClientOperations} is deleted. What remains below is the
+     * engine and the seam; the listener pairs are the last thing on the list.
      */
-    private static final Set<String> AWAITING_A_FACET = Set.of(
-            "acknowledgePrivateMessage",
-            "acknowledgePrivilegeNotification",
-            "addPrivateRoomMember",
-            "addPrivateRoomModerator",
-            "browse",
-            "changePassword",
-            "connectToUser",
-            "download",
-            "dropPrivateRoomMembership",
-            "dropPrivateRoomOwnership",
-            "enqueueDownload",
-            "enqueueUpload",
-            "getDirectoryContents",
-            "getDistributedNetwork",
-            "getDownloadPlaceInQueue",
-            "getDownloads",
-            "getPrivileges",
-            "getRoomList",
-            "getUploads",
-            "getUserEndpoint",
-            "getUserInfo",
-            "getUserPrivileged",
-            "getUserStatistics",
-            "getUserStatus",
-            "grantUserPrivileges",
-            "joinRoom",
-            "leaveRoom",
-            "pingServer",
-            "reconfigureOptions",
-            "removePrivateRoomMember",
-            "removePrivateRoomModerator",
-            "search",
-            "sendPrivateMessage",
-            "sendRoomMessage",
-            "sendUploadSpeed",
-            "setRoomTicker",
-            "setSharedCounts",
-            "setStatus",
-            "startPublicChat",
-            "stopPublicChat",
-            "unwatchUser",
-            "upload",
-            "watchUser");
+    private static final Set<String> AWAITING_A_FACET = Set.of();
 
     private static Set<String> publicInstanceMethodNames() {
         return Arrays.stream(DefaultSoulseekClient.class.getMethods())
@@ -155,7 +116,7 @@ class SoulseekClientApiTest {
 
     @Test
     @DisplayName("the engine carries the seam, the lifecycle, and nothing unaccounted for")
-    void everyPublicMethodIsSeamLifecycleOrAwaitingAFacet() {
+    void everyPublicMethodIsSeamOrLifecycle() {
         Set<String> observed = publicInstanceMethodNames();
         // Not "endsWith(Listener)": getListener() is the engine's own accessor
         // for the incoming-connection listener, not an event registration.
@@ -169,15 +130,19 @@ class SoulseekClientApiTest {
     }
 
     @Test
-    @DisplayName("no operation is lost on the way to a facet")
-    void everyAwaitedOperationStillExists() {
-        Set<String> observed = publicInstanceMethodNames();
-        Set<String> vanished = new TreeSet<>(AWAITING_A_FACET);
-        vanished.removeAll(observed);
+    @DisplayName("the engine offers no blocking operation of its own")
+    void noBlockingOperationSurvivesOnTheEngine() {
         assertTrue(
-                vanished.isEmpty(),
-                "these were listed as awaiting a facet but are simply gone; a fold moves a body, "
-                        + "it does not delete one: " + vanished);
+                AWAITING_A_FACET.isEmpty(), "the fold is not finished; these still have no facet: " + AWAITING_A_FACET);
+
+        // The five collaborators are how a facet reaches the network now. They
+        // are package-private, so a facet can hold one and nothing else can.
+        for (String accessor : Set.of("rooms", "users", "server", "searchCoordinator", "transfers")) {
+            assertThrows(
+                    NoSuchMethodException.class,
+                    () -> DefaultSoulseekClient.class.getMethod(accessor),
+                    accessor + "() must stay package-private: it hands out a collaborator");
+        }
     }
 
     @Test

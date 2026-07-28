@@ -8,6 +8,7 @@ import dev.slsk.Chat;
 import dev.slsk.EventStream;
 import dev.slsk.Username;
 import dev.slsk.events.ChatEvent;
+import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import java.time.Instant;
 import java.util.Objects;
@@ -31,12 +32,12 @@ import java.util.Objects;
  */
 final class DefaultChat implements Chat {
 
-    private final DefaultSoulseekClient client;
+    private final ServerSession server;
     private final EventBus<ChatEvent> events;
     private final DiagnosticSink diagnostics;
 
     DefaultChat(DefaultSoulseekClient client, EventBus<ChatEvent> events, DiagnosticSink diagnostics) {
-        this.client = Objects.requireNonNull(client, "client");
+        this.server = Objects.requireNonNull(client, "client").server();
         this.events = Objects.requireNonNull(events, "events");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
         client.addPrivateMessageReceivedListener((sender, event) -> onMessage(event));
@@ -60,7 +61,7 @@ final class DefaultChat implements Chat {
             return;
         }
         try {
-            client.acknowledgePrivateMessage(event.getId());
+            Blocking.await(server.acknowledgePrivateMessage(event.getId()));
         } catch (RuntimeException exception) {
             diagnostics.warning("Failed to acknowledge private message " + event.getId(), exception);
         }
@@ -71,7 +72,7 @@ final class DefaultChat implements Chat {
         Objects.requireNonNull(to, "to");
         Objects.requireNonNull(message, "message");
         Objects.requireNonNull(signal, "signal");
-        client.sendPrivateMessage(to.value(), message, signal);
+        Blocking.await(server.sendPrivateMessage(to.value(), message, signal));
     }
 
     @Override
