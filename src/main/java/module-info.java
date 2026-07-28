@@ -16,5 +16,6 @@
  */
 module dev.slsk.soulseek {
     exports dev.slsk;
+    exports dev.slsk.events;
     exports dev.slsk.exceptions;
 }
