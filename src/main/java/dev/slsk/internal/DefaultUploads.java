@@ -80,6 +80,12 @@ final class DefaultUploads implements Uploads {
     }
 
     @Override
+    public void cancel(TransferId id) {
+        Objects.requireNonNull(id, "id");
+        client.cancelUpload(id);
+    }
+
+    @Override
     public void prioritize(TransferId id, Priority priority) {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(priority, "priority");

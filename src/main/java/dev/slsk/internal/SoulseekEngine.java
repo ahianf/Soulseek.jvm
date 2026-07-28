@@ -158,6 +158,16 @@ final class SoulseekEngine
     private volatile UploadAdmission uploadAdmission = new UploadAdmission(this);
 
     /**
+     * How a running upload is stopped.
+     *
+     * <p>Uploads are started by us on a peer's behalf, so nothing outside holds
+     * a signal for one. Keeping the controller here is what makes
+     * {@code Uploads.cancel} able to do anything at all.
+     */
+    private final java.util.Map<dev.slsk.TransferId, dev.slsk.CancellationController> uploadCancellations =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
      * Who the server said has bought privileges.
      *
      * <p>Sent once on login as a list, and the only way to know: there is no
@@ -401,6 +411,21 @@ final class SoulseekEngine
     }
 
     /**
+     * Stops a running upload. A no-op for one that has already finished.
+     *
+     * @param id which upload
+     * @return whether there was one to stop
+     */
+    boolean cancelUpload(dev.slsk.TransferId id) {
+        dev.slsk.CancellationController cancellation = uploadCancellations.remove(id);
+        if (cancellation == null) {
+            return false;
+        }
+        cancellation.cancel();
+        return true;
+    }
+
+    /**
      * Applies a download rate ceiling.
      *
      * <p>The bucket refills ten times a second, so its capacity is a tenth of
@@ -448,6 +473,10 @@ final class SoulseekEngine
                 return;
             }
             dev.slsk.spi.ResolvedFile file = resolved.get();
+            int token = getNextToken();
+            dev.slsk.TransferId id = dev.slsk.TransferId.of("UPLOAD:" + token);
+            dev.slsk.CancellationController cancellation = new dev.slsk.CancellationController();
+            uploadCancellations.put(id, cancellation);
             try {
                 transfers
                         .upload(
@@ -461,16 +490,18 @@ final class SoulseekEngine
                                         throw new java.io.UncheckedIOException(failure);
                                     }
                                 },
+                                token,
                                 null,
-                                null,
-                                CancellationSignal.none())
+                                cancellation.getSignal())
                         .whenComplete((transfer, failure) -> {
+                            uploadCancellations.remove(id);
                             uploadAdmission.forget(user, path);
                             if (failure == null && transfer != null) {
                                 uploadAdmission.served(user, transfer.getBytesTransferred());
                             }
                         });
             } catch (RuntimeException failure) {
+                uploadCancellations.remove(id);
                 uploadAdmission.forget(user, path);
                 diagnostic.warning("Failed to start an upload of " + path + " to " + user, failure);
             }

@@ -56,6 +56,17 @@ public interface Uploads {
      * @param id the upload
      * @param priority its new priority
      */
+    /**
+     * Stops an upload.
+     *
+     * <p>An idempotent intent: cancelling an upload that already finished is a
+     * request that has been overtaken, not an error. The peer is told, so their
+     * client stops waiting rather than timing out.
+     *
+     * @param id which upload
+     */
+    void cancel(TransferId id);
+
     void prioritize(TransferId id, Priority priority);
 
     /**
