@@ -97,4 +97,29 @@ class SoulseekBuilderTest {
         assertThrows(NullPointerException.class, () -> Soulseek.builder().profile(null));
         assertThrows(NullPointerException.class, () -> Soulseek.builder().transferStore(null));
     }
+
+    /**
+     * The `tenine` migration found these missing: five timeouts had been raised
+     * from the library's defaults, each with a recorded reason, and the 1.0
+     * builder had nowhere to put them. Three named settings cover what actually
+     * mattered, without exporting a seven-field options record.
+     */
+    @Test
+    @DisplayName("the timeouts a real consumer had to raise are settable")
+    void theTimeoutsThatMatterAreSettable() {
+        try (Soulseek slsk = minimal()
+                .peerTimeout(Duration.ofSeconds(90))
+                .transferTimeout(Duration.ofSeconds(120))
+                .messageTimeout(Duration.ofSeconds(15))
+                .build()) {
+            assertEquals(Username.of("alice"), slsk.me().username());
+        }
+    }
+
+    @Test
+    void rejectsTimeoutsThatCannotMeanAnything() {
+        assertThrows(IllegalArgumentException.class, () -> Soulseek.builder().peerTimeout(Duration.ZERO));
+        assertThrows(IllegalArgumentException.class, () -> Soulseek.builder().transferTimeout(Duration.ofSeconds(-1)));
+        assertThrows(NullPointerException.class, () -> Soulseek.builder().messageTimeout(null));
+    }
 }

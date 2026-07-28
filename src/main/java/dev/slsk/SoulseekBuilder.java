@@ -7,6 +7,7 @@ import dev.slsk.spi.ShareCatalog;
 import dev.slsk.spi.TransferStore;
 import dev.slsk.spi.UploadPolicy;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -37,6 +38,9 @@ public final class SoulseekBuilder {
     private TransferStore transferStore = TransferStore.inMemory();
     private ShareCatalog catalog;
     private UserProfile profile = UserProfile.empty();
+    private Duration peerTimeout = Duration.ofSeconds(60);
+    private Duration transferTimeout = Duration.ofSeconds(60);
+    private Duration messageTimeout = Duration.ofSeconds(10);
 
     SoulseekBuilder() {}
 
@@ -161,6 +165,61 @@ public final class SoulseekBuilder {
     }
 
     /**
+     * How long a peer connection may sit idle before it is dropped.
+     *
+     * <p>Load-bearing, and not only as a connection setting: the same budget
+     * bounds the wait for a peer's transfer acknowledgement, and that wait is
+     * registered before the request is written. On a congested write queue a
+     * short budget can be spent before the request even leaves, and the download
+     * then reports a timeout the peer was never asked about.
+     *
+     * @param value the idle budget
+     * @return this builder
+     */
+    public SoulseekBuilder peerTimeout(Duration value) {
+        this.peerTimeout = positive(value, "peerTimeout");
+        return this;
+    }
+
+    /**
+     * How long an established transfer may move no bytes before it is dropped.
+     *
+     * <p>The default is generous on purpose. A congested uploader splitting its
+     * line several ways can stall for a long time and still be working; the
+     * reference clients put no such timer on an active transfer at all.
+     *
+     * @param value the stall budget
+     * @return this builder
+     */
+    public SoulseekBuilder transferTimeout(Duration value) {
+        this.transferTimeout = positive(value, "transferTimeout");
+        return this;
+    }
+
+    /**
+     * How long to wait for a server response before giving up on it.
+     *
+     * <p>Bounds a peer-address lookup among other things. A server under load
+     * can miss a short budget, and losing that race used to kill the download
+     * that was waiting on it.
+     *
+     * @param value the response budget
+     * @return this builder
+     */
+    public SoulseekBuilder messageTimeout(Duration value) {
+        this.messageTimeout = positive(value, "messageTimeout");
+        return this;
+    }
+
+    private static Duration positive(Duration value, String name) {
+        Objects.requireNonNull(value, name);
+        if (value.isNegative() || value.isZero()) {
+            throw new IllegalArgumentException(name + " must be positive: " + value);
+        }
+        return value;
+    }
+
+    /**
      * Sets how much the library says about what it is doing.
      *
      * @param level the level
@@ -195,6 +254,9 @@ public final class SoulseekBuilder {
                 uploads,
                 transferStore,
                 catalog,
-                profile);
+                profile,
+                peerTimeout,
+                transferTimeout,
+                messageTimeout);
     }
 }

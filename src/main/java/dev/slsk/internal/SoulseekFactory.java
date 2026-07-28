@@ -8,7 +8,9 @@ import dev.slsk.DownloadPolicy;
 import dev.slsk.SharedFolder;
 import dev.slsk.Soulseek;
 import dev.slsk.UserProfile;
+import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.SoulseekClientOptions;
+import dev.slsk.internal.options.SoulseekClientOptionsPatch;
 import dev.slsk.spi.ShareCatalog;
 import dev.slsk.spi.TransferStore;
 import dev.slsk.spi.UploadPolicy;
@@ -41,6 +43,9 @@ public final class SoulseekFactory {
      * @param store where the download queue survives a restart
      * @param catalog a catalog of your own, or {@code null} for the scanned one
      * @param profile what peers are told about this account
+     * @param peerTimeout how long a peer connection may sit idle
+     * @param transferTimeout how long a transfer may move no bytes
+     * @param messageTimeout how long to wait for a server response
      * @return the client
      */
     public static Soulseek create(
@@ -54,9 +59,38 @@ public final class SoulseekFactory {
             UploadPolicy uploads,
             TransferStore store,
             ShareCatalog catalog,
-            UserProfile profile) {
-        SoulseekClientOptions options = new SoulseekClientOptions(
-                true, InetAddress.getLoopbackAddress(), listenPort, 5_000, level(diagnostics));
+            UserProfile profile,
+            java.time.Duration peerTimeout,
+            java.time.Duration transferTimeout,
+            java.time.Duration messageTimeout) {
+        SoulseekClientOptions base = new SoulseekClientOptions(
+                true,
+                InetAddress.getLoopbackAddress(),
+                listenPort,
+                (int) messageTimeout.toMillis(),
+                level(diagnostics));
+        // The peer and transfer budgets are per-connection rather than global,
+        // so they arrive as connection options rather than as top-level ones.
+        SoulseekClientOptions options = base.with(new SoulseekClientOptionsPatch(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                connection(peerTimeout),
+                connection(transferTimeout),
+                null,
+                null,
+                null,
+                null));
         Soulseek client = DefaultSoulseek.create(username, password, minorVersion, options, store);
 
         client.me().profile(profile);
@@ -69,6 +103,16 @@ public final class SoulseekFactory {
             client.shares().catalog(catalog);
         }
         return client;
+    }
+
+    /** A connection's options, with only its idle budget changed. */
+    private static ConnectionOptions connection(java.time.Duration idle) {
+        return new ConnectionOptions(
+                ConnectionOptions.DEFAULT_READ_BUFFER_SIZE,
+                ConnectionOptions.DEFAULT_WRITE_BUFFER_SIZE,
+                ConnectionOptions.DEFAULT_WRITE_QUEUE_SIZE,
+                ConnectionOptions.DEFAULT_CONNECT_TIMEOUT,
+                (int) idle.toMillis());
     }
 
     /** The public level, as the internal sink spells it. */
