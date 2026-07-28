@@ -425,4 +425,105 @@ class DownloadQueueTest {
         runner.releaseAll();
         queue.close();
     }
+
+    @Test
+    @DisplayName("a running transfer's own states reach the snapshot")
+    void observedStatesAreRecordedWhileRunning() {
+        GatedRunner runner = new GatedRunner();
+        DownloadQueue queue = queue(runner);
+
+        TransferId id = TransferId.of("one");
+        queue.enqueue(id, request("alice", "music\\one.mp3"));
+        awaitStarted(runner, 1);
+
+        queue.observed(id, new TransferState.QueuedRemotely(java.util.OptionalInt.of(4), java.time.Instant.now()));
+        assertInstanceOf(
+                TransferState.QueuedRemotely.class,
+                queue.find(id).orElseThrow().snapshot().state());
+
+        runner.releaseAll();
+        awaitTerminal(queue, id);
+
+        // A state arriving late must not resurrect something already finished.
+        queue.observed(id, new TransferState.Transferring(dev.slsk.Progress.none(100)));
+        assertInstanceOf(
+                TransferState.Finished.class,
+                queue.find(id).orElseThrow().snapshot().state());
+        queue.close();
+    }
+
+    @Test
+    @DisplayName("the peer's queue position is polled, and only a change is published")
+    void positionsArePolledAndOnlyChangesPublished() {
+        GatedRunner runner = new GatedRunner();
+        DownloadQueue queue = queue(runner);
+        queue.policy(DownloadPolicy.defaults().queuePositionPollInterval(Duration.ofMillis(20)));
+
+        List<java.util.OptionalInt> published = new CopyOnWriteArrayList<>();
+        queue.onPositionChanged((entry, place) -> published.add(place));
+
+        AtomicInteger asked = new AtomicInteger();
+        List<Integer> answers = List.of(7, 7, 3);
+        queue.positionProbe(entry -> {
+            int index = Math.min(asked.getAndIncrement(), answers.size() - 1);
+            return java.util.OptionalInt.of(answers.get(index));
+        });
+
+        TransferId id = TransferId.of("one");
+        queue.enqueue(id, request("alice", "music\\one.mp3"));
+        awaitStarted(runner, 1);
+        queue.observed(id, new TransferState.QueuedRemotely(java.util.OptionalInt.empty(), java.time.Instant.now()));
+
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (published.size() < 2 && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+
+        // Three answers, two of them the same: a consumer hears twice, not
+        // three times. A position that has not moved is not news.
+        assertEquals(List.of(java.util.OptionalInt.of(7), java.util.OptionalInt.of(3)), published);
+
+        runner.releaseAll();
+        queue.close();
+    }
+
+    @Test
+    @DisplayName("a peer that will not answer does not stop the others being asked")
+    void aFailingProbeDoesNotStopThePoll() {
+        GatedRunner runner = new GatedRunner();
+        DownloadQueue queue = queue(runner);
+        queue.policy(DownloadPolicy.defaults()
+                .maxConcurrent(2)
+                .maxConcurrentPerUser(1)
+                .queuePositionPollInterval(Duration.ofMillis(20)));
+
+        List<TransferId> polled = new CopyOnWriteArrayList<>();
+        queue.positionProbe(entry -> {
+            polled.add(entry.id());
+            if (entry.user().equals(Username.of("alice"))) {
+                throw new IllegalStateException("alice is not answering");
+            }
+            return java.util.OptionalInt.of(2);
+        });
+
+        TransferId alice = TransferId.of("alice-one");
+        TransferId bob = TransferId.of("bob-one");
+        queue.enqueue(alice, request("alice", "music\\one.mp3"));
+        queue.enqueue(bob, request("bob", "music\\two.mp3"));
+        awaitStarted(runner, 2);
+        queue.observed(alice, new TransferState.QueuedRemotely(java.util.OptionalInt.empty(), java.time.Instant.now()));
+        queue.observed(bob, new TransferState.QueuedRemotely(java.util.OptionalInt.empty(), java.time.Instant.now()));
+
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (!polled.contains(bob) && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertTrue(polled.contains(bob), "bob was never asked");
+        assertInstanceOf(
+                TransferState.QueuedRemotely.class,
+                queue.find(bob).orElseThrow().snapshot().state());
+
+        runner.releaseAll();
+        queue.close();
+    }
 }

@@ -52,6 +52,23 @@ import java.util.function.BiConsumer;
  */
 final class DownloadQueue {
 
+    /**
+     * Asks a peer where we are in its queue.
+     *
+     * <p>Separate from {@link Runner} because it is asked <em>while</em> a run
+     * is in flight, on the scheduler rather than on the transfer's own thread.
+     */
+    @FunctionalInterface
+    interface PositionProbe {
+        /**
+         * Returns the peer's place-in-queue for one download.
+         *
+         * @param entry which download
+         * @return the position, or empty if the peer did not say
+         */
+        java.util.OptionalInt place(Entry entry);
+    }
+
     /** What actually moves the bytes. */
     @FunctionalInterface
     interface Runner {
@@ -125,7 +142,7 @@ final class DownloadQueue {
             return state instanceof TransferState.Finished;
         }
 
-        private boolean isRunning() {
+        boolean isRunning() {
             return !(state instanceof TransferState.Queued)
                     && !(state instanceof TransferState.Paused)
                     && !isTerminal();
@@ -144,6 +161,12 @@ final class DownloadQueue {
     /** Called with (entry, when the next attempt is due) before a retry waits. */
     private volatile BiConsumer<Entry, Instant> onRetryScheduled = (entry, at) -> {};
 
+    /** How the peer's place-in-queue is asked for; nothing polls until one is set. */
+    private volatile PositionProbe probe;
+
+    /** The running poll, cancelled and replaced whenever the interval changes. */
+    private volatile java.util.concurrent.ScheduledFuture<?> poll;
+
     private volatile DownloadPolicy policy = DownloadPolicy.defaults();
     private final AtomicBoolean closed = new AtomicBoolean();
 
@@ -153,6 +176,18 @@ final class DownloadQueue {
         this.runner = Objects.requireNonNull(runner, "runner");
         this.store = Objects.requireNonNull(store, "store");
         this.onStateChanged = Objects.requireNonNull(onStateChanged, "onStateChanged");
+    }
+
+    /** Called with (entry, the peer's new position) when a poll finds a change. */
+    private volatile BiConsumer<Entry, java.util.OptionalInt> onPositionChanged = (entry, place) -> {};
+
+    /**
+     * Sets who hears about a queue-position change.
+     *
+     * @param listener called when a poll finds the peer has moved us
+     */
+    void onPositionChanged(BiConsumer<Entry, java.util.OptionalInt> listener) {
+        onPositionChanged = Objects.requireNonNull(listener, "listener");
     }
 
     /**
@@ -173,10 +208,97 @@ final class DownloadQueue {
     }
 
     void policy(DownloadPolicy value) {
+        DownloadPolicy previous = policy;
         policy = Objects.requireNonNull(value, "policy");
+        if (!previous.queuePositionPollInterval().equals(value.queuePositionPollInterval())) {
+            startPolling();
+        }
         // A raised cap should take effect now rather than at the next
         // completion, or widening the queue does nothing until something ends.
         admit();
+    }
+
+    /**
+     * Sets how the peer's place-in-queue is asked for, and starts asking.
+     *
+     * @param value the probe
+     */
+    void positionProbe(PositionProbe value) {
+        probe = Objects.requireNonNull(value, "probe");
+        startPolling();
+    }
+
+    /**
+     * Records a state the engine reported for a running download.
+     *
+     * <p>The queue owns {@code Queued}, {@code Paused} and {@code Finished};
+     * everything between them belongs to the transfer itself, and without this
+     * a download would read as {@code Requesting} for its entire life. Applied
+     * only while the queue believes the download is running, so a state arriving
+     * late cannot resurrect something already cancelled.
+     *
+     * @param id which download
+     * @param observed what the engine says it is doing
+     */
+    void observed(TransferId id, TransferState observed) {
+        Entry entry = entry(id);
+        if (entry == null || !entry.isRunning() || observed instanceof TransferState.Finished) {
+            return;
+        }
+        transition(entry, observed);
+    }
+
+    /**
+     * Restarts the queue-position poll.
+     *
+     * <p>One timer for the whole queue rather than one per download: a hundred
+     * queued transfers against ten peers is ten questions every thirty seconds,
+     * not a hundred timers.
+     */
+    private void startPolling() {
+        java.util.concurrent.ScheduledFuture<?> existing = poll;
+        if (existing != null) {
+            existing.cancel(false);
+        }
+        if (probe == null || closed.get()) {
+            return;
+        }
+        long millis = Math.max(1, policy.queuePositionPollInterval().toMillis());
+        poll = scheduler.scheduleAtFixedRate(this::pollPositions, millis, millis, TimeUnit.MILLISECONDS);
+    }
+
+    /** Asks each remotely-queued peer where we are, and publishes any change. */
+    private void pollPositions() {
+        PositionProbe current = probe;
+        if (current == null || closed.get()) {
+            return;
+        }
+        List<Entry> waiting = new ArrayList<>();
+        synchronized (lock) {
+            for (Entry entry : entries.values()) {
+                if (entry.state instanceof TransferState.QueuedRemotely) {
+                    waiting.add(entry);
+                }
+            }
+        }
+        for (Entry entry : waiting) {
+            java.util.OptionalInt place;
+            try {
+                place = current.place(entry);
+            } catch (RuntimeException unreachable) {
+                // A peer that will not answer is not a reason to stop asking the
+                // rest, and the position we have is still the last one it gave.
+                continue;
+            }
+            if (!(entry.state instanceof TransferState.QueuedRemotely known)) {
+                continue;
+            }
+            if (known.position().equals(place)) {
+                continue;
+            }
+            transition(entry, new TransferState.QueuedRemotely(place, Instant.now()));
+            onPositionChanged.accept(entry, place);
+        }
     }
 
     // --- intents -----------------------------------------------------------
@@ -295,6 +417,10 @@ final class DownloadQueue {
     void close() {
         if (!closed.compareAndSet(false, true)) {
             return;
+        }
+        java.util.concurrent.ScheduledFuture<?> existing = poll;
+        if (existing != null) {
+            existing.cancel(false);
         }
         List<Entry> live;
         synchronized (lock) {

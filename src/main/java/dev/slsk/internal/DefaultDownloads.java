@@ -71,7 +71,11 @@ final class DefaultDownloads implements Downloads {
         this.queue = new DownloadQueue(client.getScheduler(), this::fetch, store, this::publish);
         this.queue.onRetryScheduled((entry, nextAttemptAt) -> events.publish(
                 new DownloadEvent.RetryScheduled(entry.id(), entry.attempt() + 1, nextAttemptAt, Instant.now())));
+        this.queue.onPositionChanged((entry, place) ->
+                events.publish(new DownloadEvent.QueuePositionChanged(entry.id(), place, Instant.now())));
+        this.queue.positionProbe(this::place);
         client.events().on(EngineEvents.Kind.TRANSFER_PROGRESS_UPDATED, this::onProgress);
+        client.events().on(EngineEvents.Kind.TRANSFER_STATE_CHANGED, this::onTransferState);
     }
 
     /**
@@ -116,6 +120,44 @@ final class DefaultDownloads implements Downloads {
         } finally {
             running.remove(token);
             progress.forget(entry.id());
+        }
+    }
+
+    /**
+     * Asks a peer where we are in its queue.
+     *
+     * <p>The old surface made this the consumer's job, which meant every
+     * application wrote a timer, a concurrency guard and a "did it change?"
+     * comparison — {@code tenine} had a hundred and fourteen lines of it. The
+     * library polls because the library already knows which downloads are
+     * remotely queued and which peer to ask.
+     */
+    private java.util.OptionalInt place(DownloadQueue.Entry entry) {
+        try {
+            Integer position = Blocking.await(client.transfers()
+                    .getDownloadPlaceInQueue(
+                            entry.user().value(), entry.request().path()));
+            return position == null ? java.util.OptionalInt.empty() : java.util.OptionalInt.of(position);
+        } catch (RuntimeException unreachable) {
+            return java.util.OptionalInt.empty();
+        }
+    }
+
+    /**
+     * Records what the engine says a running transfer is doing.
+     *
+     * <p>The queue owns queued, paused and finished; everything between them
+     * belongs to the transfer, and without this a download would read as
+     * {@code Requesting} from the moment it was admitted to the moment it ended.
+     */
+    private void onTransferState(dev.slsk.internal.events.TransferStateChangedEvent event) {
+        if (event == null || event.getTransfer() == null) {
+            return;
+        }
+        Transfer transfer = event.getTransfer();
+        TransferId id = running.get(transfer.getToken());
+        if (id != null) {
+            queue.observed(id, Transfers.state(transfer));
         }
     }
 
