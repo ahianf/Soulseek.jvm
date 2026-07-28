@@ -3,12 +3,10 @@
 
 package dev.slsk.internal;
 
-import static dev.slsk.internal.ClientSupport.mapClientFailure;
-import static dev.slsk.internal.ClientSupport.requireNonEmpty;
-import static dev.slsk.internal.ClientSupport.requireText;
-
 import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.SoulseekClientException;
+import dev.slsk.internal.common.CommonUtils;
+import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.messages.AcknowledgePrivateMessageCommand;
@@ -50,7 +48,7 @@ final class ServerSession {
             throw new IllegalArgumentException("The private message ID must be greater than zero");
         }
         context.requireLoggedIn("acknowledge private messages");
-        CompletableFuture<Void> write = mapClientFailure(
+        CompletableFuture<Void> write = Failures.map(
                 context.writeToServer(
                         new AcknowledgePrivateMessageCommand(privateMessageId),
                         context.defaultToken(cancellationSignal)),
@@ -69,7 +67,7 @@ final class ServerSession {
             throw new IllegalArgumentException("The privilege notification ID must be greater than zero");
         }
         context.requireLoggedIn("acknowledge privilege notifications");
-        return mapClientFailure(
+        return Failures.map(
                 context.writeToServer(
                         new AcknowledgePrivilegeNotificationCommand(privilegeNotificationId),
                         context.defaultToken(cancellationSignal)),
@@ -81,7 +79,7 @@ final class ServerSession {
     }
 
     CompletableFuture<Void> changePassword(String password, CancellationSignal cancellationSignal) {
-        requireText(password, "password");
+        CommonUtils.requireText(password, "password");
         context.requireLoggedIn("change a password");
         return context.executeCorrelatedRequest(
                         new NewPassword(password),
@@ -124,14 +122,14 @@ final class ServerSession {
         try {
             wait = context.getWaiter().waitAsync(new WaitKey(MessageCode.Server.PING), null, token);
         } catch (Throwable failure) {
-            return mapClientFailure(CompletableFuture.failedFuture(failure), "Failed to ping the server: ");
+            return Failures.map(CompletableFuture.failedFuture(failure), "Failed to ping the server: ");
         }
         long started = System.nanoTime();
         CompletableFuture<Void> responseWait = wait;
         CompletableFuture<Long> operation = context.writeToServer(new ServerPing(), token)
                 .thenCompose(ignored -> responseWait)
                 .thenApply(ignored -> TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
-        return mapClientFailure(operation, "Failed to ping the server: ");
+        return Failures.map(operation, "Failed to ping the server: ");
     }
 
     CompletableFuture<Void> sendPrivateMessage(String requestedUsername, String message) {
@@ -140,10 +138,10 @@ final class ServerSession {
 
     CompletableFuture<Void> sendPrivateMessage(
             String requestedUsername, String message, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
-        requireNonEmpty(message, "message");
+        CommonUtils.requireText(requestedUsername, "username");
+        CommonUtils.requireNonEmpty(message, "message");
         context.requireLoggedIn("send a private message");
-        return mapClientFailure(
+        return Failures.map(
                 context.writeToServer(
                         new PrivateMessageCommand(requestedUsername, message),
                         context.defaultToken(cancellationSignal)),
@@ -159,7 +157,7 @@ final class ServerSession {
         if (speed <= 0) {
             throw new IllegalArgumentException("The upload speed must be greater than zero");
         }
-        return mapClientFailure(
+        return Failures.map(
                 context.writeToServer(new SendUploadSpeedCommand(speed), context.defaultToken(cancellationSignal)),
                 "Failed to set upload speed: ");
     }
@@ -176,7 +174,7 @@ final class ServerSession {
             throw new IllegalArgumentException("The file count must be equal to or greater than zero");
         }
         context.requireLoggedIn("set shared counts");
-        return mapClientFailure(
+        return Failures.map(
                 context.writeToServer(
                         new SetSharedCountsCommand(directories, files), context.defaultToken(cancellationSignal)),
                 "Failed to set shared counts to " + directories + " directories and " + files + " files: ");
@@ -188,7 +186,7 @@ final class ServerSession {
 
     CompletableFuture<Void> setStatus(UserPresence status, CancellationSignal cancellationSignal) {
         context.requireLoggedIn("set online status");
-        return mapClientFailure(
+        return Failures.map(
                 context.writeToServer(new SetOnlineStatusCommand(status), context.defaultToken(cancellationSignal)),
                 "Failed to set user status to " + status + ": ");
     }
@@ -199,7 +197,7 @@ final class ServerSession {
 
     CompletableFuture<Void> startPublicChat(CancellationSignal cancellationSignal) {
         context.requireLoggedIn("start public chat");
-        return mapClientFailure(
+        return Failures.map(
                 context.writeToServer(new StartPublicChatCommand(), context.defaultToken(cancellationSignal)),
                 "Failed to start public chat: ");
     }
@@ -210,7 +208,7 @@ final class ServerSession {
 
     CompletableFuture<Void> stopPublicChat(CancellationSignal cancellationSignal) {
         context.requireLoggedIn("stop public chat");
-        return mapClientFailure(
+        return Failures.map(
                 context.writeToServer(new StopPublicChatCommand(), context.defaultToken(cancellationSignal)),
                 "Failed to stop public chat: ");
     }

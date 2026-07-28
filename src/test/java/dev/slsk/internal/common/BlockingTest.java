@@ -101,17 +101,9 @@ class BlockingTest {
     void unwrapsNestedCompletionExceptions() {
         IllegalArgumentException cause = new IllegalArgumentException("bad");
         Throwable nested = new CompletionException(new CompletionException(cause));
-        assertSame(cause, Blocking.unwrap(nested));
         assertSame(
                 cause,
                 assertThrows(
                         IllegalArgumentException.class, () -> Blocking.await(CompletableFuture.failedFuture(nested))));
-    }
-
-    @Test
-    @DisplayName("a failure that is not a completion wrapper is returned as it stands")
-    void leavesOrdinaryFailuresAlone() {
-        IllegalStateException failure = new IllegalStateException("plain");
-        assertSame(failure, Blocking.unwrap(failure));
     }
 }

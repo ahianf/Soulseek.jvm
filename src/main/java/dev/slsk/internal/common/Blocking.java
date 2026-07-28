@@ -50,7 +50,7 @@ public final class Blocking {
         try {
             return operation.join();
         } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
+            Throwable cause = Failures.unwrap(failure);
             if (cause instanceof TimeoutException) {
                 throw new NoResponseException(cause.getMessage(), cause);
             }
@@ -62,19 +62,5 @@ public final class Blocking {
             }
             throw new SoulseekClientException(cause.getMessage(), cause);
         }
-    }
-
-    /**
-     * Strips the {@link CompletionException} wrappers off a failure.
-     *
-     * @param failure the failure to unwrap
-     * @return the innermost cause that is not a completion wrapper
-     */
-    public static Throwable unwrap(Throwable failure) {
-        Throwable current = failure;
-        while (current instanceof CompletionException && current.getCause() != null) {
-            current = current.getCause();
-        }
-        return current;
     }
 }

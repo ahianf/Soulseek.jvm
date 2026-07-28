@@ -3,9 +3,6 @@
 
 package dev.slsk.internal;
 
-import static dev.slsk.internal.ClientSupport.acquirePermit;
-import static dev.slsk.internal.ClientSupport.failureMessage;
-import static dev.slsk.internal.ClientSupport.unwrap;
 import static dev.slsk.internal.TransferEngine.await;
 import static dev.slsk.internal.TransferEngine.determinePosition;
 import static dev.slsk.internal.TransferEngine.filenameOnly;
@@ -21,6 +18,8 @@ import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferStreamException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.common.Failures;
+import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.events.TransferProgressUpdatedEvent;
 import dev.slsk.internal.events.TransferStateChangedEvent;
@@ -101,14 +100,14 @@ final class UploadOperation {
 
     Transfer execute() {
         try {
-            await(acquirePermit(engine.uploadSemaphoreSyncRoot, cancellationSignal));
+            await(Permits.acquire(engine.uploadSemaphoreSyncRoot, cancellationSignal));
             CompletableFuture<Void> perUserWait;
             try {
                 perUserSemaphore = engine.uploadSemaphores.computeIfAbsent(
                         upload.getUsername(),
                         ignored ->
                                 new Semaphore(engine.context.getClientOptions().getMaximumConcurrentUploadsPerUser()));
-                perUserWait = acquirePermit(perUserSemaphore, cancellationSignal);
+                perUserWait = Permits.acquire(perUserSemaphore, cancellationSignal);
             } finally {
                 engine.uploadSemaphoreSyncRoot.release();
             }
@@ -132,7 +131,7 @@ final class UploadOperation {
                                 + filenameOnly(upload.getFilename()) + " to "
                                 + upload.getUsername() + " acquired");
             } catch (Throwable failure) {
-                Throwable cause = unwrap(failure);
+                Throwable cause = Failures.unwrap(failure);
                 if (cause instanceof CancellationException) {
                     throw cause;
                 }
@@ -140,11 +139,11 @@ final class UploadOperation {
                         "Failed to acquire an upload slot for file "
                                 + filenameOnly(upload.getFilename())
                                 + " to " + upload.getUsername() + ": "
-                                + failureMessage(cause),
+                                + Failures.message(cause),
                         cause);
             }
 
-            await(acquirePermit(engine.globalUploadSemaphore, cancellationSignal));
+            await(Permits.acquire(engine.globalUploadSemaphore, cancellationSignal));
             globalPermit.set(true);
             engine.context
                     .getDiagnostic()
@@ -238,7 +237,7 @@ final class UploadOperation {
             updateState(TransferState.COMPLETED.or(TransferState.SUCCEEDED));
             return upload.toTransfer();
         } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
+            Throwable cause = Failures.unwrap(failure);
             handleFailure(cause);
             throw new CompletionException(mapUploadFailure(cause));
         } finally {
@@ -271,16 +270,16 @@ final class UploadOperation {
             upload.setStartOffset(
                     ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).getLong());
         } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
+            Throwable cause = Failures.unwrap(failure);
             engine.context
                     .getDiagnostic()
                     .debug("Failed to read start offset for upload of "
                             + filenameOnly(upload.getFilename()) + " to "
-                            + upload.getUsername() + ": " + failureMessage(cause));
+                            + upload.getUsername() + ": " + Failures.message(cause));
             if (cause instanceof CancellationException || cause instanceof TimeoutException) {
                 throw new CompletionException(cause);
             }
-            throw new MessageReadException("Failed to read transfer start offset: " + failureMessage(cause), cause);
+            throw new MessageReadException("Failed to read transfer start offset: " + Failures.message(cause), cause);
         }
     }
 
@@ -348,7 +347,7 @@ final class UploadOperation {
                             .readAsync(1, cancellationSignal)
                             .orTimeout(remainingMillis, TimeUnit.MILLISECONDS));
                 } catch (Throwable failure) {
-                    Throwable cause = unwrap(failure);
+                    Throwable cause = Failures.unwrap(failure);
                     if (cause instanceof TimeoutException) {
                         connection.disconnect("Transfer complete, maximum " + "linger time exceeded");
                         return;
@@ -360,7 +359,7 @@ final class UploadOperation {
             }
             cancellationSignal.throwIfCancellationRequested();
         } catch (Throwable failure) {
-            if (!(unwrap(failure) instanceof ConnectionReadException)) {
+            if (!(Failures.unwrap(failure) instanceof ConnectionReadException)) {
                 throw failure;
             }
         }
@@ -402,7 +401,7 @@ final class UploadOperation {
         return new SoulseekClientException(
                 "Failed to upload file " + upload.getFilename()
                         + " to user " + upload.getUsername() + ": "
-                        + failureMessage(failure),
+                        + Failures.message(failure),
                 failure);
     }
 

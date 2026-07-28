@@ -3,19 +3,16 @@
 
 package dev.slsk.internal;
 
-import static dev.slsk.internal.ClientSupport.acquirePermit;
-import static dev.slsk.internal.ClientSupport.failureMessage;
-import static dev.slsk.internal.ClientSupport.mapClientFailure;
-import static dev.slsk.internal.ClientSupport.requireText;
-import static dev.slsk.internal.ClientSupport.unwrap;
-
 import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.UserEndpointCacheException;
 import dev.slsk.exceptions.UserEndpointException;
 import dev.slsk.exceptions.UserNotFoundException;
 import dev.slsk.exceptions.UserOfflineException;
+import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.Failures;
+import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.handlers.BrowseResponseConnection;
@@ -77,7 +74,7 @@ final class UserDirectory {
     }
 
     CompletableFuture<UserInfo> getUserInfo(String requestedUsername, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
+        CommonUtils.requireText(requestedUsername, "username");
         context.requireLoggedIn("fetch user information");
         CancellationSignal token = context.defaultToken(cancellationSignal);
         CompletableFuture<UserInfo> infoWait;
@@ -89,7 +86,7 @@ final class UserDirectory {
                             null,
                             token);
         } catch (Throwable failure) {
-            return mapClientFailure(
+            return Failures.map(
                     CompletableFuture.failedFuture(failure),
                     "Failed to retrieve information for user " + requestedUsername + ": ",
                     UserOfflineException.class);
@@ -99,7 +96,7 @@ final class UserDirectory {
                         .getOrAddMessageConnectionAsync(requestedUsername, endpoint, token))
                 .thenCompose(connection -> context.writeToPeer(connection, new UserInfoRequest(), token))
                 .thenCompose(ignored -> infoWait);
-        return mapClientFailure(
+        return Failures.map(
                 operation,
                 "Failed to retrieve information for user " + requestedUsername + ": ",
                 UserOfflineException.class);
@@ -110,7 +107,7 @@ final class UserDirectory {
     }
 
     CompletableFuture<Boolean> getUserPrivileged(String requestedUsername, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
+        CommonUtils.requireText(requestedUsername, "username");
         context.requireLoggedIn("check user privileges");
         return context.executeCorrelatedRequest(
                 new UserPrivilegesRequest(requestedUsername),
@@ -127,7 +124,7 @@ final class UserDirectory {
 
     CompletableFuture<UserStatistics> getUserStatistics(
             String requestedUsername, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
+        CommonUtils.requireText(requestedUsername, "username");
         context.requireLoggedIn("fetch user statistics");
         return context.executeCorrelatedRequest(
                 new UserStatisticsRequest(requestedUsername),
@@ -142,7 +139,7 @@ final class UserDirectory {
     }
 
     CompletableFuture<UserStatus> getUserStatus(String requestedUsername, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
+        CommonUtils.requireText(requestedUsername, "username");
         context.requireLoggedIn("fetch user status");
         return context.executeCorrelatedRequest(
                 new UserStatusRequest(requestedUsername),
@@ -158,7 +155,7 @@ final class UserDirectory {
     }
 
     CompletableFuture<UserData> watchUser(String requestedUsername, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
+        CommonUtils.requireText(requestedUsername, "username");
         context.requireLoggedIn("add users");
         return context.executeCorrelatedRequest(
                         new WatchUserRequest(requestedUsername),
@@ -180,9 +177,9 @@ final class UserDirectory {
     }
 
     CompletableFuture<Void> unwatchUser(String requestedUsername, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
+        CommonUtils.requireText(requestedUsername, "username");
         context.requireLoggedIn("add users");
-        return mapClientFailure(
+        return Failures.map(
                 context.writeToServer(
                         new UnwatchUserCommand(requestedUsername), context.defaultToken(cancellationSignal)),
                 "Failed to unwatch user " + requestedUsername + ": ");
@@ -194,12 +191,12 @@ final class UserDirectory {
 
     CompletableFuture<Void> grantUserPrivileges(
             String requestedUsername, int days, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
+        CommonUtils.requireText(requestedUsername, "username");
         if (days <= 0) {
             throw new IllegalArgumentException("The number of days granted must be greater than zero");
         }
         context.requireLoggedIn("grant user privileges");
-        return mapClientFailure(
+        return Failures.map(
                 context.writeToServer(
                         new GivePrivilegesCommand(requestedUsername, days), context.defaultToken(cancellationSignal)),
                 "Failed to grant " + days + " days of privileges to " + requestedUsername + ": ");
@@ -219,7 +216,7 @@ final class UserDirectory {
 
     CompletableFuture<BrowseResponse> browse(
             String requestedUsername, BrowseOptions browseOptions, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
+        CommonUtils.requireText(requestedUsername, "username");
         context.requireLoggedIn("browse");
         BrowseOptions operationOptions = browseOptions == null ? new BrowseOptions() : browseOptions;
         CancellationSignal token = context.defaultToken(cancellationSignal);
@@ -235,7 +232,7 @@ final class UserDirectory {
                             operationOptions.getResponseTimeout(),
                             token);
         } catch (Throwable failure) {
-            return mapClientFailure(
+            return Failures.map(
                     CompletableFuture.failedFuture(failure),
                     "Failed to browse user " + requestedUsername + ": ",
                     UserOfflineException.class);
@@ -250,7 +247,7 @@ final class UserDirectory {
                     if (failure == null) {
                         return responseConnection;
                     }
-                    Throwable cause = unwrap(failure);
+                    Throwable cause = Failures.unwrap(failure);
                     context.getWaiter().fail(browseWaitKey, cause);
                     throw new CompletionException(cause);
                 })
@@ -287,8 +284,7 @@ final class UserDirectory {
                         return response;
                     });
                 });
-        return mapClientFailure(
-                operation, "Failed to browse user " + requestedUsername + ": ", UserOfflineException.class);
+        return Failures.map(operation, "Failed to browse user " + requestedUsername + ": ", UserOfflineException.class);
     }
 
     CompletableFuture<Void> connectToUser(String requestedUsername) {
@@ -305,7 +301,7 @@ final class UserDirectory {
 
     CompletableFuture<Void> connectToUser(
             String requestedUsername, boolean invalidateCache, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
+        CommonUtils.requireText(requestedUsername, "username");
         context.requireLoggedIn("connect to other users");
         CancellationSignal token = context.defaultToken(cancellationSignal);
         CompletableFuture<Void> operation = getUserEndpoint(requestedUsername, token)
@@ -319,7 +315,7 @@ final class UserDirectory {
                             .getOrAddMessageConnectionAsync(requestedUsername, endpoint, token)
                             .thenApply(ignored -> null);
                 });
-        return mapClientFailure(
+        return Failures.map(
                 operation, "Failed to connect to user " + requestedUsername + ": ", UserOfflineException.class);
     }
 
@@ -329,7 +325,7 @@ final class UserDirectory {
 
     CompletableFuture<InetSocketAddress> getUserEndpoint(
             String requestedUsername, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
+        CommonUtils.requireText(requestedUsername, "username");
         context.requireLoggedIn("fetch user endpoint");
         CancellationSignal token = context.defaultToken(cancellationSignal);
         UserEndpointCache cache = context.getClientOptions().getUserEndpointCache();
@@ -357,7 +353,7 @@ final class UserDirectory {
 
         // The permit is released only on the path that acquired it; a cancelled acquisition must
         // not release a permit it never held.
-        return acquirePermit(semaphore, token).thenCompose(ignored -> {
+        return Permits.acquire(semaphore, token).thenCompose(ignored -> {
             CompletableFuture<InetSocketAddress> operation;
             try {
                 CacheLookupResult<InetSocketAddress> second = tryCacheGet(cache, requestedUsername);
@@ -405,7 +401,7 @@ final class UserDirectory {
                             throw new UserEndpointCacheException(
                                     "Exception retrieving or updating user "
                                             + "endpoint cache: "
-                                            + failureMessage(failure),
+                                            + Failures.message(failure),
                                     failure);
                         }
                         context.getDiagnostic().debug("Endpoint cache MISS for " + requestedUsername + ": " + result);
@@ -434,8 +430,8 @@ final class UserDirectory {
             String directoryName,
             Integer operationToken,
             CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
-        requireText(directoryName, "directoryName");
+        CommonUtils.requireText(requestedUsername, "username");
+        CommonUtils.requireText(directoryName, "directoryName");
         context.requireLoggedIn("fetch directory contents");
         int tokenValue = operationToken == null ? context.getTokenFactory().nextToken() : operationToken;
         CancellationSignal token = context.defaultToken(cancellationSignal);
@@ -452,7 +448,7 @@ final class UserDirectory {
                                     token);
             contentsWait = typedWait;
         } catch (Throwable failure) {
-            return mapClientFailure(
+            return Failures.map(
                     CompletableFuture.failedFuture(failure),
                     "Failed to retrieve directory contents for " + directoryName + " from " + requestedUsername + ": ",
                     UserOfflineException.class);
@@ -464,7 +460,7 @@ final class UserDirectory {
                         context.writeToPeer(connection, new FolderContentsRequest(tokenValue, directoryName), token))
                 .thenCompose(ignored -> contentsWait)
                 .thenApply(response -> Collections.unmodifiableList(new ArrayList<>(response)));
-        return mapClientFailure(
+        return Failures.map(
                 operation,
                 "Failed to retrieve directory contents for " + directoryName + " from " + requestedUsername + ": ",
                 UserOfflineException.class);
@@ -476,7 +472,7 @@ final class UserDirectory {
             if (failure == null) {
                 return result;
             }
-            Throwable cause = unwrap(failure);
+            Throwable cause = Failures.unwrap(failure);
             if (cause instanceof UserOfflineException
                     || cause instanceof UserEndpointCacheException
                     || cause instanceof CancellationException
@@ -484,7 +480,8 @@ final class UserDirectory {
                 throw new CompletionException(cause);
             }
             throw new CompletionException(new UserEndpointException(
-                    "Failed to retrieve endpoint for user " + requestedUsername + ": " + failureMessage(cause), cause));
+                    "Failed to retrieve endpoint for user " + requestedUsername + ": " + Failures.message(cause),
+                    cause));
         });
     }
 
@@ -493,7 +490,7 @@ final class UserDirectory {
             return cache.lookup(requestedUsername);
         } catch (Throwable failure) {
             throw new UserEndpointCacheException(
-                    "Exception retrieving or updating user endpoint cache: " + failureMessage(failure), failure);
+                    "Exception retrieving or updating user endpoint cache: " + Failures.message(failure), failure);
         }
     }
     /**

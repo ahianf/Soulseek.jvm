@@ -4,13 +4,6 @@
 
 package dev.slsk.internal;
 
-import static dev.slsk.internal.ClientSupport.acquirePermit;
-import static dev.slsk.internal.ClientSupport.failureMessage;
-import static dev.slsk.internal.ClientSupport.mapClientFailure;
-import static dev.slsk.internal.ClientSupport.requireNonEmpty;
-import static dev.slsk.internal.ClientSupport.requireText;
-import static dev.slsk.internal.ClientSupport.unwrap;
-
 import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.AddressException;
 import dev.slsk.exceptions.KickedFromServerException;
@@ -21,8 +14,11 @@ import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
 import dev.slsk.internal.ClientEvents.Kind;
 import dev.slsk.internal.common.Blocking;
+import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.DefaultWaiter;
+import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.IOAdapter;
+import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.common.Scheduler;
 import dev.slsk.internal.common.TokenBucket;
 import dev.slsk.internal.common.TokenFactory;
@@ -151,9 +147,6 @@ final class DefaultSoulseekClient
 
     /** Chat rooms, split out of this class; see RoomRegistry. */
     private final RoomRegistry rooms;
-
-    /** Applies option patches to a running client. */
-    private final ClientReconfiguration reconfiguration = new ClientReconfiguration(this);
 
     /** User info, presence and browsing, split out; see UserDirectory. */
     private final UserDirectory users;
@@ -425,12 +418,12 @@ final class DefaultSoulseekClient
             String requestedUsername,
             String password,
             CancellationSignal cancellationSignal) {
-        requireText(requestedAddress, "address");
+        CommonUtils.requireText(requestedAddress, "address");
         if (requestedPort < 0 || requestedPort > 65_535) {
             throw new IllegalArgumentException("port must be between 0 and 65535 (specified: " + requestedPort + ")");
         }
-        requireNonEmpty(requestedUsername, "username");
-        requireNonEmpty(password, "password");
+        CommonUtils.requireNonEmpty(requestedUsername, "username");
+        CommonUtils.requireNonEmpty(password, "password");
         if (state.contains(SoulseekClientState.CONNECTING) || state.contains(SoulseekClientState.LOGGING_IN)) {
             throw new IllegalStateException("A connection is already in the process of " + "being established");
         }
@@ -443,7 +436,7 @@ final class DefaultSoulseekClient
             serverAddress = InetAddress.getByName(requestedAddress);
         } catch (UnknownHostException failure) {
             throw new AddressException(
-                    "Failed to resolve address '" + requestedAddress + "': " + failureMessage(failure), failure);
+                    "Failed to resolve address '" + requestedAddress + "': " + Failures.message(failure), failure);
         }
 
         if (options.isEnableListener()) {
@@ -515,7 +508,7 @@ final class DefaultSoulseekClient
                 }
             }
         }
-        return reconfiguration.reconfigureOptionsInternalAsync(patch, defaultToken(cancellationSignal));
+        return reconfigureOptionsInternalAsync(patch, defaultToken(cancellationSignal));
     }
 
     /** Disconnects with the default reason. */
@@ -822,7 +815,7 @@ final class DefaultSoulseekClient
                         + download.getToken() + ")");
             }
         } catch (Throwable failure) {
-            diagnostic.warning("Failed to mark download(s) rejected: " + failureMessage(failure), failure);
+            diagnostic.warning("Failed to mark download(s) rejected: " + Failures.message(failure), failure);
         } finally {
             events.raise(Kind.DOWNLOAD_DENIED, eventData);
         }
@@ -844,7 +837,7 @@ final class DefaultSoulseekClient
                         + download.getToken() + ")");
             }
         } catch (Throwable failure) {
-            diagnostic.warning("Failed to mark download(s) failed: " + failureMessage(failure), failure);
+            diagnostic.warning("Failed to mark download(s) failed: " + Failures.message(failure), failure);
         } finally {
             events.raise(Kind.DOWNLOAD_FAILED, eventData);
         }
@@ -864,7 +857,7 @@ final class DefaultSoulseekClient
             String requestedUsername,
             String password,
             CancellationSignal cancellationSignal) {
-        CompletableFuture<Void> serialized = acquirePermit(stateSemaphore, cancellationSignal)
+        CompletableFuture<Void> serialized = Permits.acquire(stateSemaphore, cancellationSignal)
                 .thenCompose(ignored -> {
                     CompletableFuture<Void> attempt;
                     if (state.contains(SoulseekClientState.CONNECTED)
@@ -881,16 +874,16 @@ final class DefaultSoulseekClient
             if (failure == null) {
                 return result;
             }
-            Throwable cause = unwrap(failure);
+            Throwable cause = Failures.unwrap(failure);
             Throwable reported;
             if (cause instanceof LoginRejectedException
                     || cause instanceof CancellationException
                     || cause instanceof TimeoutException) {
                 reported = cause;
             } else {
-                reported = new SoulseekClientException("Failed to connect: " + failureMessage(cause), cause);
+                reported = new SoulseekClientException("Failed to connect: " + Failures.message(cause), cause);
             }
-            disconnect(failureMessage(reported), asException(reported));
+            disconnect(Failures.message(reported), asException(reported));
             throw new CompletionException(reported);
         });
     }
@@ -977,6 +970,150 @@ final class DefaultSoulseekClient
                         return CompletableFuture.failedFuture(failure);
                     }
                 });
+    }
+
+    // ---- reconfiguration --------------------------------------------------
+    //
+    // Applying an option patch to a running client: swapping the listener,
+    // resizing the rate-limit buckets, and deciding whether the change needs a
+    // reconnect. This lived in a class of its own that took the client whole,
+    // because routing it through ClientContext would have meant a dozen
+    // accessors for one caller. Now that the client is an engine rather than an
+    // API, it is simply the engine's own work.
+    //
+    // No facet exposes this: options are set at build time. It stays because it
+    // is the machinery a runtime speed limit needs, and Downloads.policy will.
+
+    private CompletableFuture<Boolean> performReconfigureOptionsAsync(
+            SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
+        boolean connected = isConnectedAndLoggedIn();
+        boolean enableDistributedNetworkChanged = patch.getEnableDistributedNetwork() != null
+                && patch.getEnableDistributedNetwork() != options.isEnableDistributedNetwork();
+        boolean acceptDistributedChildrenChanged = patch.getAcceptDistributedChildren() != null
+                && patch.getAcceptDistributedChildren() != options.isAcceptDistributedChildren();
+        boolean distributedConnectionOptionsChanged = patch.getDistributedConnectionOptions() != null
+                && patch.getDistributedConnectionOptions() != options.getDistributedConnectionOptions();
+        boolean distributedNetworkWasDisabled = enableDistributedNetworkChanged && !patch.getEnableDistributedNetwork();
+        boolean distributedChildrenWereDisabled =
+                acceptDistributedChildrenChanged && !patch.getAcceptDistributedChildren();
+        boolean reconnectRequired = connected
+                && (distributedNetworkWasDisabled
+                        || distributedChildrenWereDisabled
+                        || distributedConnectionOptionsChanged);
+        boolean serverConnectionOptionsChanged = patch.getServerConnectionOptions() != null
+                && patch.getServerConnectionOptions() != options.getServerConnectionOptions();
+        if (connected && serverConnectionOptionsChanged) {
+            reconnectRequired = true;
+        }
+
+        boolean enableListenerChanged =
+                patch.getEnableListener() != null && patch.getEnableListener() != options.isEnableListener();
+        boolean listenAddressChanged = patch.getListenIpAddress() != null
+                && !patch.getListenIpAddress().equals(options.getListenIpAddress());
+        boolean listenPortChanged = patch.getListenPort() != null && patch.getListenPort() != options.getListenPort();
+        boolean incomingConnectionOptionsChanged = patch.getIncomingConnectionOptions() != null
+                && patch.getIncomingConnectionOptions() != options.getIncomingConnectionOptions();
+
+        if (enableListenerChanged || listenAddressChanged || listenPortChanged || incomingConnectionOptionsChanged) {
+            boolean wasListening = listener != null && listener.isListening();
+            if (listener != null) {
+                listener.stop();
+            }
+            listener = null;
+            options = options.with(listenerPatch(patch));
+            if (wasListening && options.isEnableListener()) {
+                listener = clientListenerFactory.create(
+                        options.getListenIpAddress(), options.getListenPort(), options.getIncomingConnectionOptions());
+                listener.addAcceptedListener(listenerHandler::handleConnection);
+                listener.start();
+            }
+        }
+
+        boolean maximumUploadSpeedChanged = patch.getMaximumUploadSpeed() != null
+                && patch.getMaximumUploadSpeed() != options.getMaximumUploadSpeed();
+        boolean maximumDownloadSpeedChanged = patch.getMaximumDownloadSpeed() != null
+                && patch.getMaximumDownloadSpeed() != options.getMaximumDownloadSpeed();
+        options = options.with(patch);
+
+        if (maximumUploadSpeedChanged) {
+            uploadTokenBucket.setCapacity((options.getMaximumUploadSpeed() * 1024L) / 10);
+        }
+        if (maximumDownloadSpeedChanged) {
+            downloadTokenBucket.setCapacity((options.getMaximumDownloadSpeed() * 1024L) / 10);
+        }
+
+        diagnostic.info("Options reconfigured successfully");
+        if (!isConnectedAndLoggedIn()) {
+            return CompletableFuture.completedFuture(false);
+        }
+        diagnostic.debug("Updating server with latest configuration");
+        boolean requiresReconnect = reconnectRequired;
+        return sendConfigurationMessagesAsync(cancellationSignal).thenApply(ignored -> {
+            if (requiresReconnect) {
+                diagnostic.warning("Server reconnect required for options " + "to fully take effect");
+            }
+            return requiresReconnect;
+        });
+    }
+
+    private CompletableFuture<Boolean> reconfigureOptionsInternalAsync(
+            SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
+        CompletableFuture<Boolean> serialized = Permits.acquire(stateSemaphore, cancellationSignal)
+                .thenCompose(ignored -> {
+                    CompletableFuture<Boolean> operation;
+                    try {
+                        operation = performReconfigureOptionsAsync(patch, cancellationSignal);
+                    } catch (Throwable failure) {
+                        operation = CompletableFuture.failedFuture(failure);
+                    }
+                    return operation.whenComplete((result, failure) -> stateSemaphore.release());
+                });
+        return serialized.handle((result, failure) -> {
+            if (failure == null) {
+                return result;
+            }
+            Throwable cause = Failures.unwrap(failure);
+            if (cause instanceof CancellationException || cause instanceof TimeoutException) {
+                throw new CompletionException(cause);
+            }
+            throw new CompletionException(new SoulseekClientException(
+                    "Failed to reconfigure options: "
+                            + Failures.message(cause)
+                            + ".  Any successful reconfiguration has not "
+                            + "been rolled back; retry with the same patch "
+                            + "until successful or consider this as a "
+                            + "fatal Exception",
+                    cause));
+        });
+    }
+
+    private static SoulseekClientOptionsPatch listenerPatch(SoulseekClientOptionsPatch patch) {
+        return new SoulseekClientOptionsPatch(
+                patch.getEnableListener(),
+                patch.getListenIpAddress(),
+                patch.getListenPort(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                patch.getIncomingConnectionOptions(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 
     boolean isConnectedAndLoggedIn() {
@@ -1154,7 +1291,7 @@ final class DefaultSoulseekClient
         try {
             return future.join();
         } catch (Throwable failure) {
-            throw new CompletionException(unwrap(failure));
+            throw new CompletionException(Failures.unwrap(failure));
         }
     }
 
@@ -1168,7 +1305,7 @@ final class DefaultSoulseekClient
 
     private CompletableFuture<Void> writeServerAsync(
             OutgoingMessage message, CancellationSignal cancellationSignal, String failurePrefix) {
-        return mapClientFailure(invokeServerWrite(message, cancellationSignal), failurePrefix);
+        return Failures.map(invokeServerWrite(message, cancellationSignal), failurePrefix);
     }
 
     private CompletableFuture<Void> executeCorrelatedServerCommand(
@@ -1178,11 +1315,11 @@ final class DefaultSoulseekClient
         try {
             wait = waiter.waitAsync(waitKey, null, token);
         } catch (Throwable failure) {
-            return mapClientFailure(CompletableFuture.failedFuture(failure), failurePrefix);
+            return Failures.map(CompletableFuture.failedFuture(failure), failurePrefix);
         }
         CompletableFuture<Void> responseWait = wait;
         CompletableFuture<Void> operation = invokeServerWrite(message, token).thenCompose(ignored -> responseWait);
-        return mapClientFailure(operation, failurePrefix);
+        return Failures.map(operation, failurePrefix);
     }
 
     private <T> CompletableFuture<T> executeCorrelatedServerRequest(
@@ -1197,10 +1334,10 @@ final class DefaultSoulseekClient
         try {
             wait = waiter.waitAsync(waitKey, resultType, null, token);
         } catch (Throwable failure) {
-            return mapClientFailure(CompletableFuture.failedFuture(failure), failurePrefix, preservedFailures);
+            return Failures.map(CompletableFuture.failedFuture(failure), failurePrefix, preservedFailures);
         }
         CompletableFuture<T> operation = invokeServerWrite(message, token).thenCompose(ignored -> wait);
-        return mapClientFailure(operation, failurePrefix, preservedFailures);
+        return Failures.map(operation, failurePrefix, preservedFailures);
     }
 
     private CompletableFuture<Void> invokeServerWrite(OutgoingMessage message, CancellationSignal cancellationSignal) {

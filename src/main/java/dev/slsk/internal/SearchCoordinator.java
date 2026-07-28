@@ -3,14 +3,12 @@
 
 package dev.slsk.internal;
 
-import static dev.slsk.internal.ClientSupport.acquirePermit;
-import static dev.slsk.internal.ClientSupport.failureMessage;
-import static dev.slsk.internal.ClientSupport.unwrap;
-
 import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.DuplicateTokenException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.common.Failures;
+import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.events.SearchResponseReceivedEvent;
 import dev.slsk.internal.events.SearchStateChangedEvent;
 import dev.slsk.internal.messaging.messages.RoomSearchRequest;
@@ -385,7 +383,7 @@ final class SearchCoordinator {
                     if (failure == null) {
                         return result;
                     }
-                    Throwable cause = unwrap(failure);
+                    Throwable cause = Failures.unwrap(failure);
                     if (cause instanceof CancellationException) {
                         search.complete(SearchState.CANCELLED);
                         updateState.accept(SearchState.COMPLETED.or(SearchState.CANCELLED));
@@ -400,7 +398,7 @@ final class SearchCoordinator {
                             "Failed to search for "
                                     + invocation.query().getSearchText()
                                     + " (" + invocation.token() + "): "
-                                    + failureMessage(cause),
+                                    + Failures.message(cause),
                             cause));
                 })
                 .whenComplete((result, failure) -> {
@@ -410,7 +408,7 @@ final class SearchCoordinator {
     }
 
     CompletableFuture<Void> acquireSearchPermit(CancellationSignal cancellationSignal) {
-        return acquirePermit(searchSemaphore, cancellationSignal);
+        return Permits.acquire(searchSemaphore, cancellationSignal);
     }
 
     static byte[] buildSearchMessage(SearchScope scope, SearchInternal search) {

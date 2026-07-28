@@ -3,16 +3,13 @@
 
 package dev.slsk.internal;
 
-import static dev.slsk.internal.ClientSupport.failureMessage;
-import static dev.slsk.internal.ClientSupport.mapClientFailure;
-import static dev.slsk.internal.ClientSupport.requireText;
-import static dev.slsk.internal.ClientSupport.unwrap;
-
 import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.DuplicateTokenException;
 import dev.slsk.exceptions.DuplicateTransferException;
 import dev.slsk.exceptions.TransferNotFoundException;
 import dev.slsk.exceptions.UserOfflineException;
+import dev.slsk.internal.common.CommonUtils;
+import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.messaging.MessageCode;
@@ -269,9 +266,9 @@ final class TransferEngine {
             Integer token,
             TransferOptions transferOptions,
             CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
-        requireText(remoteFilename, "remoteFilename");
-        requireText(localFilename, "localFilename");
+        CommonUtils.requireText(requestedUsername, "username");
+        CommonUtils.requireText(remoteFilename, "remoteFilename");
+        CommonUtils.requireText(localFilename, "localFilename");
         validateDownloadRange(size, startOffset);
         context.requireLoggedIn("download files");
         int transferToken = token == null ? context.getTokenFactory().nextToken() : token;
@@ -380,8 +377,8 @@ final class TransferEngine {
             Integer token,
             TransferOptions transferOptions,
             CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
-        requireText(remoteFilename, "remoteFilename");
+        CommonUtils.requireText(requestedUsername, "username");
+        CommonUtils.requireText(remoteFilename, "remoteFilename");
         validateDownloadRange(size, startOffset);
         Objects.requireNonNull(outputStreamFactory, "outputStreamFactory");
         context.requireLoggedIn("download files");
@@ -438,9 +435,9 @@ final class TransferEngine {
             Integer token,
             TransferOptions transferOptions,
             CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
-        requireText(remoteFilename, "remoteFilename");
-        requireText(localFilename, "localFilename");
+        CommonUtils.requireText(requestedUsername, "username");
+        CommonUtils.requireText(remoteFilename, "remoteFilename");
+        CommonUtils.requireText(localFilename, "localFilename");
         if (!context.getIoAdapter().exists(localFilename)) {
             throw new UncheckedIOException(
                     new FileNotFoundException("The local file does not exist: " + localFilename));
@@ -450,7 +447,8 @@ final class TransferEngine {
             // Probe readability before allocating a transfer token.
         } catch (IOException failure) {
             throw new UncheckedIOException(
-                    "The local file " + localFilename + " could not be opened for reading: " + failureMessage(failure),
+                    "The local file " + localFilename + " could not be opened for reading: "
+                            + Failures.message(failure),
                     failure);
         }
 
@@ -548,8 +546,8 @@ final class TransferEngine {
             Integer token,
             TransferOptions transferOptions,
             CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
-        requireText(remoteFilename, "remoteFilename");
+        CommonUtils.requireText(requestedUsername, "username");
+        CommonUtils.requireText(remoteFilename, "remoteFilename");
         if (size < 0) {
             throw new IllegalArgumentException("size must be greater than or equal to zero");
         }
@@ -861,8 +859,8 @@ final class TransferEngine {
 
     CompletableFuture<Integer> getDownloadPlaceInQueue(
             String requestedUsername, String filename, CancellationSignal cancellationSignal) {
-        requireText(requestedUsername, "username");
-        requireText(filename, "filename");
+        CommonUtils.requireText(requestedUsername, "username");
+        CommonUtils.requireText(filename, "filename");
         context.requireLoggedIn("check download queue position");
         boolean active = context.getDownloadRegistry().values().stream()
                 .anyMatch(download -> Objects.equals(download.getUsername(), requestedUsername)
@@ -881,7 +879,7 @@ final class TransferEngine {
                             null,
                             token);
         } catch (Throwable failure) {
-            return mapClientFailure(
+            return Failures.map(
                     CompletableFuture.failedFuture(failure),
                     "Failed to fetch place in queue for download of " + filename + " from " + requestedUsername + ": ",
                     UserOfflineException.class);
@@ -892,7 +890,7 @@ final class TransferEngine {
                 .thenCompose(connection -> context.writeToPeer(connection, new PlaceInQueueRequest(filename), token))
                 .thenCompose(ignored -> responseWait)
                 .thenApply(PlaceInQueueResponse::getPlaceInQueue);
-        return mapClientFailure(
+        return Failures.map(
                 operation,
                 "Failed to fetch place in queue for download of " + filename + " from " + requestedUsername + ": ",
                 UserOfflineException.class);
@@ -1093,7 +1091,7 @@ final class TransferEngine {
         try {
             return future.join();
         } catch (Throwable failure) {
-            throw new java.util.concurrent.CompletionException(unwrap(failure));
+            throw new java.util.concurrent.CompletionException(Failures.unwrap(failure));
         }
     }
 

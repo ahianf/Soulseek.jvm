@@ -3,9 +3,6 @@
 
 package dev.slsk.internal;
 
-import static dev.slsk.internal.ClientSupport.acquirePermit;
-import static dev.slsk.internal.ClientSupport.failureMessage;
-import static dev.slsk.internal.ClientSupport.unwrap;
 import static dev.slsk.internal.TransferEngine.await;
 import static dev.slsk.internal.TransferEngine.determineOutputPosition;
 import static dev.slsk.internal.TransferEngine.filenameOnly;
@@ -22,6 +19,8 @@ import dev.slsk.exceptions.TransferSizeMismatchException;
 import dev.slsk.exceptions.TransferStreamException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.common.Failures;
+import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.events.TransferProgressUpdatedEvent;
 import dev.slsk.internal.events.TransferStateChangedEvent;
@@ -100,7 +99,7 @@ final class DownloadOperation {
     Transfer execute() {
         try {
             updateState(TransferState.QUEUED.or(TransferState.LOCALLY));
-            await(acquirePermit(engine.globalDownloadSemaphore, cancellationSignal));
+            await(Permits.acquire(engine.globalDownloadSemaphore, cancellationSignal));
             globalPermit.set(true);
             engine.context
                     .getDiagnostic()
@@ -182,7 +181,7 @@ final class DownloadOperation {
             connection.disconnect("Transfer complete");
             return download.toTransfer();
         } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
+            Throwable cause = Failures.unwrap(failure);
             handleFailure(cause);
             throw new CompletionException(mapDownloadFailure(cause));
         } finally {
@@ -249,7 +248,7 @@ final class DownloadOperation {
                             + download.getUsername() + " (id: " + connection.getId()
                             + ", state: " + connection.getState() + ")");
         } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
+            Throwable cause = Failures.unwrap(failure);
             if (!(cause instanceof ConnectionException)) {
                 throw failure;
             }
@@ -413,7 +412,7 @@ final class DownloadOperation {
                 "Failed to download file "
                         + download.getFilename()
                         + " from user " + download.getUsername()
-                        + ": " + failureMessage(failure),
+                        + ": " + Failures.message(failure),
                 failure);
     }
 
@@ -434,7 +433,7 @@ final class DownloadOperation {
                         .warning(
                                 "Failed to cancel wait for key "
                                         + transferStartRequestedWaitKey
-                                        + ": " + failureMessage(failure),
+                                        + ": " + Failures.message(failure),
                                 failure);
             }
             try {
@@ -447,7 +446,7 @@ final class DownloadOperation {
                                         + "listeners for file "
                                         + download.getFilename() + " from user "
                                         + download.getUsername() + ": "
-                                        + failureMessage(failure),
+                                        + Failures.message(failure),
                                 failure);
             }
             if (connection != null) {
@@ -462,7 +461,7 @@ final class DownloadOperation {
                                             + download.getFilename()
                                             + " from user "
                                             + download.getUsername() + ": "
-                                            + failureMessage(failure),
+                                            + Failures.message(failure),
                                     failure);
                 }
             }
@@ -483,7 +482,7 @@ final class DownloadOperation {
                                             + filenameOnly(download.getFilename())
                                             + " from "
                                             + download.getUsername() + ": "
-                                            + failureMessage(failure),
+                                            + Failures.message(failure),
                                     failure);
                 }
             }
@@ -500,7 +499,7 @@ final class DownloadOperation {
                                             + filenameOnly(download.getFilename())
                                             + " from "
                                             + download.getUsername() + ": "
-                                            + failureMessage(failure),
+                                            + Failures.message(failure),
                                     failure);
                 }
             }
@@ -571,7 +570,7 @@ final class DownloadOperation {
                                     + "stream for file "
                                     + filenameOnly(download.getFilename())
                                     + " from " + download.getUsername() + ": "
-                                    + failureMessage(failure),
+                                    + Failures.message(failure),
                             failure);
             return 0;
         }

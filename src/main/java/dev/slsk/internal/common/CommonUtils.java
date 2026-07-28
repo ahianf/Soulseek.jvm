@@ -36,6 +36,35 @@ public final class CommonUtils {
     }
 
     /**
+     * Requires a value that is not null, empty, or entirely whitespace.
+     *
+     * @param value the value to check
+     * @param name the argument name, for the message
+     * @throws IllegalArgumentException when the value is blank
+     */
+    public static void requireText(String value, String name) {
+        if (isNullOrWhiteSpace(value)) {
+            throw new IllegalArgumentException(name + " must not be null, empty, or whitespace");
+        }
+    }
+
+    /**
+     * Requires a value that is neither null nor empty.
+     *
+     * <p>Deliberately weaker than {@link #requireText}: a password of spaces is
+     * a password, and a message of spaces is a message.
+     *
+     * @param value the value to check
+     * @param name the argument name, for the message
+     * @throws IllegalArgumentException when the value is null or empty
+     */
+    public static void requireNonEmpty(String value, String name) {
+        if (value == null || value.isEmpty()) {
+            throw new IllegalArgumentException(name + " must not be null or empty");
+        }
+    }
+
+    /**
      * Removes and closes every queued value.
      *
      * @param queue the queue to drain
