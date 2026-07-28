@@ -17,9 +17,9 @@ package dev.slsk;
  * consistently, the facet is guessable without reading documentation.
  *
  * <p>The remaining facets — {@code search()}, {@code downloads()}, {@code
- * uploads()}, {@code users()}, {@code rooms()}, {@code chat()}, {@code
- * shares()}, {@code me()} and {@code diagnostics()} — are added as their phases
- * land. See {@code JAVA_API_1_0_GOAL.md}.
+ * uploads()}, {@code users()}, {@code rooms()}, {@code shares()} and {@code
+ * diagnostics()} — are added as their phases land. See {@code
+ * JAVA_API_1_0_GOAL.md}.
  *
  * <p>Every facet answers "what is true now?" synchronously and cheaply, and
  * publishes events as deltas on that. A consumer that misses every event and
@@ -39,6 +39,20 @@ public interface Soulseek extends AutoCloseable {
      * @return the connection facet
      */
     Connection connection();
+
+    /**
+     * Private messages.
+     *
+     * @return the chat facet
+     */
+    Chat chat();
+
+    /**
+     * This account.
+     *
+     * @return the account facet
+     */
+    Me me();
 
     /**
      * Closes the client and everything it owns — connections, listeners, timers,
