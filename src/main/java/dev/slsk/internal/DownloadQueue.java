@@ -94,6 +94,14 @@ final class DownloadQueue {
         private volatile int attempt;
         private volatile Instant startedAt;
         private volatile Instant endedAt;
+
+        /**
+         * How many bytes the last attempt left on disk.
+         *
+         * <p>Recorded by the runner rather than asked of the sink, because what
+         * matters is what was written, and only the thing that wrote it knows.
+         */
+        private volatile long resumeOffset;
         /** Set while paused, so resume knows there is nothing running to stop. */
         private final AtomicBoolean paused = new AtomicBoolean();
 
@@ -117,6 +125,24 @@ final class DownloadQueue {
 
         int attempt() {
             return attempt;
+        }
+
+        /**
+         * Returns where the next attempt should ask the peer to start.
+         *
+         * @return the offset, or zero for a fresh download
+         */
+        long resumeOffset() {
+            return resumeOffset;
+        }
+
+        /**
+         * Records what an attempt left behind, for the next one to resume from.
+         *
+         * @param value bytes written to the sink
+         */
+        void resumeOffset(long value) {
+            resumeOffset = Math.max(0, value);
         }
 
         dev.slsk.CancellationSignal signal() {
@@ -383,6 +409,9 @@ final class DownloadQueue {
         }
         entry.attempt = 0;
         entry.endedAt = null;
+        // An explicit retry is a fresh download: a consumer asking for one after
+        // a rejection is not asking to resume a transfer the peer refused.
+        entry.resumeOffset = 0;
         entry.paused.set(false);
         entry.cancellation.set(new CancellationController());
         transition(entry, new TransferState.Queued(0));

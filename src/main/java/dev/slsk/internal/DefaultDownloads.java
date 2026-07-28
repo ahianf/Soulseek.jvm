@@ -89,10 +89,14 @@ final class DefaultDownloads implements Downloads {
         DownloadRequest request = entry.request();
         AtomicReference<SinkOutputStream> stream = new AtomicReference<>();
         int token = client.getNextToken();
+        // What the last attempt left on disk. The peer is asked to start there
+        // and the sink is opened there, so a download interrupted at ninety
+        // percent costs ten percent to finish rather than another whole file.
+        long resumeFrom = entry.resumeOffset();
         dev.slsk.internal.DownloadRequest internal = dev.slsk.internal.DownloadRequest.toStream(
                         request.user().value(), request.path(), () -> {
                             try {
-                                SinkOutputStream opened = new SinkOutputStream(request.sink(), 0);
+                                SinkOutputStream opened = new SinkOutputStream(request.sink(), resumeFrom);
                                 stream.set(opened);
                                 return java.util.concurrent.CompletableFuture.completedFuture(opened);
                             } catch (IOException failure) {
@@ -100,6 +104,7 @@ final class DefaultDownloads implements Downloads {
                             }
                         })
                 .size(request.expectedSize() == 0 ? null : request.expectedSize())
+                .startOffset(resumeFrom)
                 .token(token)
                 .cancellation(entry.signal())
                 .build();
@@ -120,6 +125,8 @@ final class DefaultDownloads implements Downloads {
         } finally {
             running.remove(token);
             progress.forget(entry.id());
+            SinkOutputStream opened = stream.get();
+            entry.resumeOffset(opened == null ? resumeFrom : opened.getPosition());
         }
     }
 

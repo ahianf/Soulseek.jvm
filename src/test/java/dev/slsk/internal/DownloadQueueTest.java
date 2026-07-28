@@ -526,4 +526,59 @@ class DownloadQueueTest {
         runner.releaseAll();
         queue.close();
     }
+
+    /**
+     * A download interrupted at ninety percent should cost ten percent to
+     * finish, not another whole file. The offset is what the last attempt wrote,
+     * recorded by the thing that wrote it.
+     */
+    @Test
+    @DisplayName("a retried attempt resumes from what the last one left behind")
+    void aFailedAttemptLeavesAnOffsetForTheNext() {
+        List<Long> offsets = new CopyOnWriteArrayList<>();
+        AtomicInteger attempts = new AtomicInteger();
+        DownloadQueue queue = queue(entry -> {
+            offsets.add(entry.resumeOffset());
+            if (attempts.incrementAndGet() == 1) {
+                entry.resumeOffset(900);
+                return new TransferOutcome.Rejected(RejectionReason.QUEUE_FULL, "Queue full.");
+            }
+            return new TransferOutcome.Succeeded(1000, Duration.ofSeconds(1));
+        });
+        queue.policy(DownloadPolicy.defaults()
+                .retry(new RetryPolicy(
+                        3,
+                        Duration.ofMillis(1),
+                        1.0,
+                        Duration.ofMillis(1),
+                        java.util.Set.of(RejectionReason.QUEUE_FULL))));
+
+        TransferId id = TransferId.of("one");
+        queue.enqueue(id, request("alice", "music\\one.mp3"));
+        awaitTerminal(queue, id);
+
+        assertEquals(List.of(0L, 900L), offsets);
+        queue.close();
+    }
+
+    @Test
+    @DisplayName("an explicit retry starts over, because a refused file is not a resume")
+    void retryClearsTheOffset() {
+        List<Long> offsets = new CopyOnWriteArrayList<>();
+        DownloadQueue queue = queue(entry -> {
+            offsets.add(entry.resumeOffset());
+            entry.resumeOffset(500);
+            return new TransferOutcome.Rejected(RejectionReason.FILE_NOT_SHARED, "File not shared.");
+        });
+
+        TransferId id = TransferId.of("one");
+        queue.enqueue(id, request("alice", "music\\one.mp3"));
+        awaitTerminal(queue, id);
+
+        queue.retry(id);
+        awaitTerminal(queue, id);
+
+        assertEquals(List.of(0L, 0L), offsets);
+        queue.close();
+    }
 }
