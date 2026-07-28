@@ -13,7 +13,7 @@ import dev.slsk.Username;
 import dev.slsk.Users;
 import dev.slsk.Watch;
 import dev.slsk.events.UserEvent;
-import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import java.net.InetSocketAddress;
@@ -50,7 +50,7 @@ final class DefaultUsers implements Users {
     /** Watched users, and how many holders each has. */
     private final Map<Username, Registration> watches = new ConcurrentHashMap<>();
 
-    DefaultUsers(DefaultSoulseekClient client, EventBus<UserEvent> events, DiagnosticSink diagnostics) {
+    DefaultUsers(SoulseekEngine client, EventBus<UserEvent> events, DiagnosticSink diagnostics) {
         this.directory = Objects.requireNonNull(client, "client").users();
         this.events = Objects.requireNonNull(events, "events");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");

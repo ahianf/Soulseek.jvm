@@ -17,7 +17,7 @@ import dev.slsk.exceptions.TransferException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferStreamException;
 import dev.slsk.exceptions.UserOfflineException;
-import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.common.WaitKey;

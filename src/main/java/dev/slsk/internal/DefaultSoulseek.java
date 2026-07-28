@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class DefaultSoulseek implements Soulseek {
 
-    private final DefaultSoulseekClient client;
+    private final SoulseekEngine client;
     private final DefaultConnection connection;
     private final DefaultChat chat;
     private final DefaultMe me;
@@ -43,7 +43,7 @@ public final class DefaultSoulseek implements Soulseek {
     private final DefaultShares shares;
     private final AtomicBoolean closed = new AtomicBoolean();
 
-    private DefaultSoulseek(DefaultSoulseekClient client, DefaultConnection.Credentials credentials) {
+    private DefaultSoulseek(SoulseekEngine client, DefaultConnection.Credentials credentials) {
         this.client = Objects.requireNonNull(client, "client");
         DiagnosticSink diagnostics = client.getDiagnostic();
         this.connection = new DefaultConnection(client, credentials, new EventBus<>("connection", diagnostics));
@@ -71,7 +71,7 @@ public final class DefaultSoulseek implements Soulseek {
      * @return the client
      */
     public static Soulseek create(String username, String password, int minorVersion, SoulseekClientOptions options) {
-        DefaultSoulseekClient client = new DefaultSoulseekClient(minorVersion, options);
+        SoulseekEngine client = new SoulseekEngine(minorVersion, options);
         return new DefaultSoulseek(client, new DefaultConnection.Credentials(username, password));
     }
 
@@ -88,7 +88,7 @@ public final class DefaultSoulseek implements Soulseek {
      * @param password the account password
      * @return the client
      */
-    static Soulseek over(DefaultSoulseekClient client, String username, String password) {
+    static Soulseek over(SoulseekEngine client, String username, String password) {
         return new DefaultSoulseek(client, new DefaultConnection.Credentials(username, password));
     }
 
@@ -150,7 +150,7 @@ public final class DefaultSoulseek implements Soulseek {
     }
 
     /** The client the facets are still bound to. Removed by the fold. */
-    DefaultSoulseekClient client() {
+    SoulseekEngine client() {
         return client;
     }
 }

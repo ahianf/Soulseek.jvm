@@ -16,7 +16,7 @@ import dev.slsk.CancellationController;
 import dev.slsk.exceptions.DuplicateTokenException;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
-import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.messaging.messages.RoomSearchRequest;
 import dev.slsk.internal.messaging.messages.UserSearchRequest;
@@ -38,7 +38,7 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
-class SoulseekClientSearchTest {
+class EngineSearchTest {
     @Test
     void validatesQueryHandlerLoginAndDuplicateToken() {
         Fixture fixture = new Fixture();
@@ -463,7 +463,7 @@ class SoulseekClientSearchTest {
 
     private static final class Fixture {
         private final ConnectionProbe server = new ConnectionProbe();
-        private final DefaultSoulseekClient client = new DefaultSoulseekClient(
+        private final SoulseekEngine client = new SoulseekEngine(
                 9999,
                 null,
                 server.proxy,

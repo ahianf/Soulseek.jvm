@@ -12,7 +12,7 @@ import dev.slsk.exceptions.LoginRejectedException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
-import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.DefaultWaiter;
@@ -90,11 +90,23 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * A client for the Soulseek file-sharing network.
+ * What runs underneath the facets.
+ *
+ * <p>This was {@code DefaultSoulseekClient}, the implementation of a public
+ * interface with a hundred and eighty-five methods. Both are gone. What is left
+ * is not a client — nothing outside this package can name it, let alone hold
+ * one — but the machinery a client needs: the connection and login state
+ * machine, the wiring of every component, {@link EngineContext} for the
+ * collaborators to delegate through, and {@link EngineEvents} for the facets to
+ * subscribe to.
+ *
+ * <p>It also answers the callbacks of every message handler and connection
+ * manager, which is why it implements so many of their interfaces: incoming
+ * messages are dispatched against registries it owns.
  */
-final class DefaultSoulseekClient
+final class SoulseekEngine
         implements AutoCloseable,
-                ClientContext,
+                EngineContext,
                 DistributedConnectionManagerClient,
                 DistributedMessageHandlerClient,
                 ListenerHandlerClient,
@@ -133,7 +145,7 @@ final class DefaultSoulseekClient
      * What the engine tells the facets. Constructed before the diagnostic sink,
      * because the sink raises through it.
      */
-    private final ClientEvents events = new ClientEvents(this::reportListenerFault);
+    private final EngineEvents events = new EngineEvents(this::reportListenerFault);
 
     volatile ClientListenerFactory clientListenerFactory = SocketListener::new;
     private final AtomicBoolean closed = new AtomicBoolean();
@@ -173,12 +185,12 @@ final class DefaultSoulseekClient
     private final Map<String, Semaphore> uploadSemaphores = new ConcurrentHashMap<>();
 
     /** Creates a client with default options. */
-    DefaultSoulseekClient(int minorVersion) {
+    SoulseekEngine(int minorVersion) {
         this(minorVersion, null);
     }
 
     /** Creates a client. */
-    DefaultSoulseekClient(int minorVersion, SoulseekClientOptions options) {
+    SoulseekEngine(int minorVersion, SoulseekClientOptions options) {
         this(
                 minorVersion,
                 options,
@@ -200,7 +212,7 @@ final class DefaultSoulseekClient
                 null);
     }
 
-    DefaultSoulseekClient(
+    SoulseekEngine(
             int minorVersion,
             SoulseekClientOptions options,
             MessageConnection serverConnection,
@@ -282,7 +294,7 @@ final class DefaultSoulseekClient
      * <p>These events are raised on read loops. Before containment a facet that
      * threw while translating one took the connection down with it.
      */
-    private void reportListenerFault(ClientEvents.Kind kind, Throwable failure) {
+    private void reportListenerFault(EngineEvents.Kind kind, Throwable failure) {
         if (diagnostic != null) {
             diagnostic.warning(
                     "A listener for " + kind + " threw; the event was still delivered " + "to the rest", failure);
@@ -290,7 +302,7 @@ final class DefaultSoulseekClient
     }
 
     /** The channel the facets subscribe to. */
-    ClientEvents events() {
+    EngineEvents events() {
         return events;
     }
 
@@ -552,7 +564,7 @@ final class DefaultSoulseekClient
         if (!closed.compareAndSet(false, true)) {
             return;
         }
-        disconnect("Client is being disposed", new IllegalStateException("SoulseekClient is closed"));
+        disconnect("Client is being disposed", new IllegalStateException("The client is closed"));
         if (listener != null) {
             listener.stop();
         }
@@ -796,7 +808,7 @@ final class DefaultSoulseekClient
         });
     }
 
-    private <T> void forwardServer(ServerMessageEvent source, ClientEvents.Kind target) {
+    private <T> void forwardServer(ServerMessageEvent source, EngineEvents.Kind target) {
         serverMessageHandler.<T>addListener(source, (sender, eventData) -> events.raise(target, eventData));
     }
 
@@ -977,7 +989,7 @@ final class DefaultSoulseekClient
     // Applying an option patch to a running client: swapping the listener,
     // resizing the rate-limit buckets, and deciding whether the change needs a
     // reconnect. This lived in a class of its own that took the client whole,
-    // because routing it through ClientContext would have meant a dozen
+    // because routing it through EngineContext would have meant a dozen
     // accessors for one caller. Now that the client is an engine rather than an
     // API, it is simply the engine's own work.
     //
@@ -1151,7 +1163,7 @@ final class DefaultSoulseekClient
         }
     }
 
-    // ---- ClientContext, the seam the components delegate through ----------
+    // ---- EngineContext, the seam the components delegate through ----------
 
     /** The periodic endpoint-semaphore sweep; exposed for tests. */
     CompletableFuture<Void> cleanupUserEndpointSemaphoresAsync() {
@@ -1229,7 +1241,7 @@ final class DefaultSoulseekClient
     }
 
     @Override
-    public <T> void raiseEvent(ClientEvents.Kind kind, T eventData) {
+    public <T> void raiseEvent(EngineEvents.Kind kind, T eventData) {
         events.raise(kind, eventData);
     }
 

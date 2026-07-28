@@ -36,11 +36,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 
-class SoulseekClientCommandTest {
+class EngineCommandTest {
     @Test
     void sendsExpectedCommandsAndForwardsCancellationSignal() {
         ConnectionProbe connection = new ConnectionProbe();
-        try (DefaultSoulseekClient client = loggedInClient(connection)) {
+        try (SoulseekEngine client = loggedInClient(connection)) {
             CancellationController source = new CancellationController();
             CancellationSignal token = source.getSignal();
 
@@ -89,7 +89,7 @@ class SoulseekClientCommandTest {
     @Test
     void validatesTextRangeAndStateInSourceOrder() {
         ConnectionProbe connection = new ConnectionProbe();
-        try (DefaultSoulseekClient client = loggedInClient(connection)) {
+        try (SoulseekEngine client = loggedInClient(connection)) {
             assertThrows(
                     IllegalArgumentException.class,
                     () -> Blocking.await(client.server().sendPrivateMessage(" ", "message")));
@@ -144,7 +144,7 @@ class SoulseekClientCommandTest {
     @Test
     void wrapsEveryOrdinaryWriteFailureIncludingSynchronousOnes() {
         ConnectionProbe connection = new ConnectionProbe();
-        try (DefaultSoulseekClient client = loggedInClient(connection)) {
+        try (SoulseekEngine client = loggedInClient(connection)) {
             for (Operation operation : operations(client)) {
                 RuntimeException expected = new RuntimeException("write failed");
                 connection.synchronousFailure = expected;
@@ -161,7 +161,7 @@ class SoulseekClientCommandTest {
     @Test
     void preservesTimeoutAndCancellationForEveryWrite() {
         ConnectionProbe connection = new ConnectionProbe();
-        try (DefaultSoulseekClient client = loggedInClient(connection)) {
+        try (SoulseekEngine client = loggedInClient(connection)) {
             for (Operation operation : operations(client)) {
                 TimeoutException timeout = new TimeoutException("timed out");
                 connection.result = CompletableFuture.failedFuture(timeout);
@@ -180,7 +180,7 @@ class SoulseekClientCommandTest {
     @Test
     void acknowledgementCommandsAlsoUseGuardedWritePath() {
         ConnectionProbe connection = new ConnectionProbe();
-        try (DefaultSoulseekClient client = loggedInClient(connection)) {
+        try (SoulseekEngine client = loggedInClient(connection)) {
             Blocking.await(client.server().acknowledgePrivateMessage(123));
             Blocking.await(client.server().acknowledgePrivilegeNotification(456));
             assertEquals(
@@ -201,14 +201,14 @@ class SoulseekClientCommandTest {
         }
     }
 
-    private static DefaultSoulseekClient loggedInClient(ConnectionProbe connection) {
-        DefaultSoulseekClient client = new DefaultSoulseekClient(9999);
+    private static SoulseekEngine loggedInClient(ConnectionProbe connection) {
+        SoulseekEngine client = new SoulseekEngine(9999);
         client.setServerConnectionForTest(connection.proxy);
         client.setStateForTest(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
         return client;
     }
 
-    private static List<Operation> operations(DefaultSoulseekClient client) {
+    private static List<Operation> operations(SoulseekEngine client) {
         return List.of(
                 () -> Blocking.await(client.server().sendPrivateMessage("user", "message")),
                 () -> Blocking.await(client.rooms().sendRoomMessage("room", "message")),

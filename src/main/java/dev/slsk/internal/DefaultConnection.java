@@ -11,7 +11,7 @@ import dev.slsk.EventStream;
 import dev.slsk.ServerAddress;
 import dev.slsk.ServerInfo;
 import dev.slsk.events.ConnectionEvent;
-import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.events.SoulseekClientDisconnectedEvent;
 import dev.slsk.internal.events.SoulseekClientStateChangedEvent;
@@ -41,7 +41,7 @@ import java.util.function.Consumer;
  */
 final class DefaultConnection implements Connection {
 
-    private final DefaultSoulseekClient client;
+    private final SoulseekEngine client;
     private final ServerSession server;
     private final Credentials credentials;
     private final EventBus<ConnectionEvent> events;
@@ -52,7 +52,7 @@ final class DefaultConnection implements Connection {
     /** The last state we published, so a transition can report what it came from. */
     private final AtomicReference<ConnectionState> published = new AtomicReference<>(new ConnectionState.Offline());
 
-    DefaultConnection(DefaultSoulseekClient client, Credentials credentials, EventBus<ConnectionEvent> events) {
+    DefaultConnection(SoulseekEngine client, Credentials credentials, EventBus<ConnectionEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
         this.server = client.server();
         this.credentials = Objects.requireNonNull(credentials, "credentials");

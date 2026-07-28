@@ -7,7 +7,7 @@ package dev.slsk.internal;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.diagnostics.DiagnosticLevel;
 import dev.slsk.internal.events.SoulseekClientStateChangedEvent;
 import dev.slsk.internal.options.SoulseekClientOptions;
@@ -19,12 +19,12 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("integration")
-class SoulseekClientLiveIT {
+class EngineLiveIT {
     @Test
     @DisplayName("Client connects")
     void clientConnects() {
         LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
-        try (DefaultSoulseekClient client = new DefaultSoulseekClient(credentials.minorVersion())) {
+        try (SoulseekEngine client = new SoulseekEngine(credentials.minorVersion())) {
             assertDoesNotThrow(() -> client.connect(credentials.username(), credentials.password()));
             assertEquals(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN), client.getState());
         }
@@ -34,7 +34,7 @@ class SoulseekClientLiveIT {
     @DisplayName("Client connect raises StateChanged event")
     void clientConnectRaisesStateChangedEvent() {
         LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
-        try (DefaultSoulseekClient client = new DefaultSoulseekClient(credentials.minorVersion())) {
+        try (SoulseekEngine client = new SoulseekEngine(credentials.minorVersion())) {
             List<SoulseekClientStateChangedEvent> events = new ArrayList<>();
             client.events()
                     .on(
@@ -59,7 +59,7 @@ class SoulseekClientLiveIT {
     @DisplayName("Client disconnects")
     void clientDisconnects() {
         LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
-        try (DefaultSoulseekClient client = new DefaultSoulseekClient(credentials.minorVersion())) {
+        try (SoulseekEngine client = new SoulseekEngine(credentials.minorVersion())) {
             client.connect(credentials.username(), credentials.password());
 
             assertDoesNotThrow(() -> client.disconnect());
@@ -72,7 +72,7 @@ class SoulseekClientLiveIT {
     void clientDisconnectRaisesStateChangedEvent() {
         LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
         AtomicReference<SoulseekClientStateChangedEvent> event = new AtomicReference<>();
-        try (DefaultSoulseekClient client = new DefaultSoulseekClient(credentials.minorVersion())) {
+        try (SoulseekEngine client = new SoulseekEngine(credentials.minorVersion())) {
             client.connect(credentials.username(), credentials.password());
             client.events()
                     .on(
@@ -90,7 +90,7 @@ class SoulseekClientLiveIT {
     @Test
     @DisplayName("GetNextToken returns sequential tokens")
     void getNextTokenReturnsSequentialTokens() {
-        try (DefaultSoulseekClient client = new DefaultSoulseekClient(101)) {
+        try (SoulseekEngine client = new SoulseekEngine(101)) {
             int first = client.getNextToken();
             int second = client.getNextToken();
 
@@ -102,7 +102,7 @@ class SoulseekClientLiveIT {
     @DisplayName("GetNextToken rolls over at int.MaxValue")
     void getNextTokenRollsOverAtIntMaxValue() {
         SoulseekClientOptions options = optionsStartingAtMaximumToken();
-        try (DefaultSoulseekClient client = new DefaultSoulseekClient(101, options)) {
+        try (SoulseekEngine client = new SoulseekEngine(101, options)) {
             int first = client.getNextToken();
             int second = client.getNextToken();
 

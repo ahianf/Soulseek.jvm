@@ -36,13 +36,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 
-class SoulseekClientPrivateRoomTest {
+class EnginePrivateRoomTest {
     @Test
     void registersExpectedWaitBeforeWritingExactCommand() {
         List<String> sequence = new ArrayList<>();
         WaiterProbe waiter = new WaiterProbe(sequence);
         ConnectionProbe connection = new ConnectionProbe(sequence);
-        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
+        try (SoulseekEngine client = loggedInClient(connection, waiter)) {
             CancellationController source = new CancellationController();
             CancellationSignal token = source.getSignal();
             List<Case> cases = List.of(
@@ -96,7 +96,7 @@ class SoulseekClientPrivateRoomTest {
     void validatesArgumentsBeforeLoginState() {
         WaiterProbe waiter = new WaiterProbe(new ArrayList<>());
         ConnectionProbe connection = new ConnectionProbe(new ArrayList<>());
-        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
+        try (SoulseekEngine client = loggedInClient(connection, waiter)) {
             for (String bad : new String[] {null, "", " ", "\t"}) {
                 assertThrows(
                         IllegalArgumentException.class,
@@ -144,7 +144,7 @@ class SoulseekClientPrivateRoomTest {
     void mapsWriteFailuresAndPreservesTimeoutAndCancellation() {
         WaiterProbe waiter = new WaiterProbe(new ArrayList<>());
         ConnectionProbe connection = new ConnectionProbe(new ArrayList<>());
-        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
+        try (SoulseekEngine client = loggedInClient(connection, waiter)) {
             for (Operation operation : operations(client)) {
                 RuntimeException expected = new RuntimeException("write failed");
                 connection.synchronousFailure = expected;
@@ -172,7 +172,7 @@ class SoulseekClientPrivateRoomTest {
     void mapsWaitFailuresAndPreservesTimeoutAndCancellation() {
         WaiterProbe waiter = new WaiterProbe(new ArrayList<>());
         ConnectionProbe connection = new ConnectionProbe(new ArrayList<>());
-        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
+        try (SoulseekEngine client = loggedInClient(connection, waiter)) {
             for (Operation operation : operations(client)) {
                 RuntimeException expected = new RuntimeException("wait failed");
                 waiter.result = CompletableFuture.failedFuture(expected);
@@ -198,7 +198,7 @@ class SoulseekClientPrivateRoomTest {
     void synchronousWaitRegistrationFailurePreventsWrite() {
         WaiterProbe waiter = new WaiterProbe(new ArrayList<>());
         ConnectionProbe connection = new ConnectionProbe(new ArrayList<>());
-        try (DefaultSoulseekClient client = loggedInClient(connection, waiter)) {
+        try (SoulseekEngine client = loggedInClient(connection, waiter)) {
             RuntimeException expected = new RuntimeException("registration failed");
             waiter.synchronousFailure = expected;
 
@@ -211,8 +211,8 @@ class SoulseekClientPrivateRoomTest {
         }
     }
 
-    private static DefaultSoulseekClient loggedInClient(ConnectionProbe connection, WaiterProbe waiter) {
-        DefaultSoulseekClient client = new DefaultSoulseekClient(
+    private static SoulseekEngine loggedInClient(ConnectionProbe connection, WaiterProbe waiter) {
+        SoulseekEngine client = new SoulseekEngine(
                 9999,
                 null,
                 connection.proxy,
@@ -235,7 +235,7 @@ class SoulseekClientPrivateRoomTest {
         return client;
     }
 
-    private static List<Operation> operations(DefaultSoulseekClient client) {
+    private static List<Operation> operations(SoulseekEngine client) {
         return List.of(
                 () -> Blocking.await(client.rooms().addPrivateRoomMember("room", "user")),
                 () -> Blocking.await(client.rooms().addPrivateRoomModerator("room", "user")),

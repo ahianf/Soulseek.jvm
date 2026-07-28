@@ -10,7 +10,7 @@ import dev.slsk.ServerInfo;
 import dev.slsk.UserPresence;
 import dev.slsk.Username;
 import dev.slsk.events.MeEvent;
-import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.PrivilegeNotificationReceivedEvent;
@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 final class DefaultMe implements Me {
 
-    private final DefaultSoulseekClient client;
+    private final SoulseekEngine client;
     private final ServerSession server;
     private final UserDirectory users;
     private final EventBus<MeEvent> events;
@@ -47,7 +47,7 @@ final class DefaultMe implements Me {
     /** The last presence we published; the protocol offers no way to read it back. */
     private final AtomicReference<UserPresence> presence = new AtomicReference<>(UserPresence.ONLINE);
 
-    DefaultMe(DefaultSoulseekClient client, Username username, EventBus<MeEvent> events, DiagnosticSink diagnostics) {
+    DefaultMe(SoulseekEngine client, Username username, EventBus<MeEvent> events, DiagnosticSink diagnostics) {
         this.client = Objects.requireNonNull(client, "client");
         this.server = client.server();
         this.users = client.users();

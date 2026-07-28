@@ -46,14 +46,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Everything the client knows about other users: info, statistics, presence,
  * privileges, endpoint resolution and browsing their shares.
  *
- * <p>The second piece lifted out of {@code DefaultSoulseekClient}. These
+ * <p>The second piece lifted out of {@code SoulseekEngine}. These
  * operations are peer-facing rather than server-facing, but they share the same
  * correlate-and-translate shape, so they reach the rest of the client through
- * {@link ClientContext} like the rooms do.
+ * {@link EngineContext} like the rooms do.
  */
 final class UserDirectory {
 
-    private final ClientContext context;
+    private final EngineContext context;
 
     /**
      * Serialises endpoint lookups per user, so concurrent callers asking about
@@ -65,7 +65,7 @@ final class UserDirectory {
 
     private final java.util.concurrent.Semaphore userEndpointSemaphoreSyncRoot = new java.util.concurrent.Semaphore(1);
 
-    UserDirectory(ClientContext context) {
+    UserDirectory(EngineContext context) {
         this.context = Objects.requireNonNull(context, "context");
     }
 

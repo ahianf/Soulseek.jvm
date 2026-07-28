@@ -21,7 +21,7 @@ import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
 import dev.slsk.exceptions.TransferSizeMismatchException;
-import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
@@ -64,7 +64,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 
-class SoulseekClientDownloadTest {
+class EngineDownloadTest {
     private static final InetSocketAddress ENDPOINT = new InetSocketAddress(InetAddress.getLoopbackAddress(), 46012);
 
     @Test
@@ -825,14 +825,14 @@ class SoulseekClientDownloadTest {
         private final TransferConnectionProbe transfer = new TransferConnectionProbe();
         private final WaiterProbe waiter = new WaiterProbe();
         private final PeerManagerProbe peerManager = new PeerManagerProbe(message.proxy, transfer.proxy);
-        private final DefaultSoulseekClient client;
+        private final SoulseekEngine client;
 
         private Fixture() {
             this(null);
         }
 
         private Fixture(DiagnosticSink diagnostic) {
-            client = new DefaultSoulseekClient(
+            client = new SoulseekEngine(
                     9999,
                     null,
                     server.proxy,

@@ -48,7 +48,7 @@ import java.util.concurrent.CompletableFuture;
  */
 final class TransferEngine {
 
-    final ClientContext context;
+    final EngineContext context;
 
     /** Global transfer concurrency limits; a transfer concern, so owned here. */
     final java.util.concurrent.Semaphore globalDownloadSemaphore;
@@ -64,7 +64,7 @@ final class TransferEngine {
     /** Duplicate-transfer keys; owned here, since this is what detects duplicates. */
     final java.util.Map<String, Boolean> uniqueKeys = new java.util.concurrent.ConcurrentHashMap<>();
 
-    TransferEngine(ClientContext context) {
+    TransferEngine(EngineContext context) {
         this.context = java.util.Objects.requireNonNull(context, "context");
         this.globalDownloadSemaphore =
                 new java.util.concurrent.Semaphore(context.getClientOptions().getMaximumConcurrentDownloads());

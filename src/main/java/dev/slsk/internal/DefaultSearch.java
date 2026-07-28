@@ -20,7 +20,7 @@ import dev.slsk.SearchSnapshot;
 import dev.slsk.SearchStatus;
 import dev.slsk.Username;
 import dev.slsk.events.SearchEvent;
-import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.events.SearchRequestEvent;
 import dev.slsk.internal.events.SearchRequestResponseEvent;
@@ -51,13 +51,13 @@ import java.util.function.Consumer;
  */
 final class DefaultSearch implements Search {
 
-    private final DefaultSoulseekClient client;
+    private final SoulseekEngine client;
     private final SearchCoordinator coordinator;
     private final EventBus<SearchEvent> events;
     private final Map<SearchId, State> searches = new ConcurrentHashMap<>();
     private final AtomicLong revisions = new AtomicLong();
 
-    DefaultSearch(DefaultSoulseekClient client, EventBus<SearchEvent> events) {
+    DefaultSearch(SoulseekEngine client, EventBus<SearchEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
         this.coordinator = client.searchCoordinator();
         this.events = Objects.requireNonNull(events, "events");

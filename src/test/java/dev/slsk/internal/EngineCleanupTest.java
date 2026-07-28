@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.concurrent.Semaphore;
 import org.junit.jupiter.api.Test;
 
-class SoulseekClientCleanupTest {
+class EngineCleanupTest {
     @Test
     void exitsWhenUploadSynchronizationRootIsHeld() {
         try (Fixture fixture = new Fixture()) {
@@ -79,7 +79,7 @@ class SoulseekClientCleanupTest {
 
     private static final class Fixture implements AutoCloseable {
         private final DiagnosticProbe diagnostic = new DiagnosticProbe();
-        private final DefaultSoulseekClient client = new DefaultSoulseekClient(
+        private final SoulseekEngine client = new SoulseekEngine(
                 9999,
                 null,
                 null,

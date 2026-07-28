@@ -35,12 +35,12 @@ import java.util.function.Consumer;
  */
 final class DefaultUploads implements Uploads {
 
-    private final DefaultSoulseekClient client;
+    private final SoulseekEngine client;
     private final EventBus<UploadEvent> events;
     private final Map<TransferId, Priority> priorities = new ConcurrentHashMap<>();
     private final Map<Username, String> bans = new ConcurrentHashMap<>();
 
-    DefaultUploads(DefaultSoulseekClient client, EventBus<UploadEvent> events) {
+    DefaultUploads(SoulseekEngine client, EventBus<UploadEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
         this.events = Objects.requireNonNull(events, "events");
     }

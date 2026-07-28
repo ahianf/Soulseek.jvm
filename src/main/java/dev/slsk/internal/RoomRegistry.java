@@ -29,18 +29,18 @@ import java.util.concurrent.TimeoutException;
 /**
  * Chat rooms: joining, leaving, messaging, tickers and private-room membership.
  *
- * <p>One of the pieces {@code DefaultSoulseekClient} was split into. Room
+ * <p>One of the pieces {@code SoulseekEngine} was split into. Room
  * operations are all the same shape — register a correlated wait, write a
  * command, translate the reply — and none of them share mutable state with the
  * rest of the client, which makes them the cleanest thing to lift out first.
  *
- * <p>Everything it needs from the client arrives through {@link ClientContext}.
+ * <p>Everything it needs from the client arrives through {@link EngineContext}.
  */
 final class RoomRegistry {
 
-    private final ClientContext context;
+    private final EngineContext context;
 
-    RoomRegistry(ClientContext context) {
+    RoomRegistry(EngineContext context) {
         this.context = Objects.requireNonNull(context, "context");
     }
 

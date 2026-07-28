@@ -11,7 +11,7 @@ import dev.slsk.Metrics;
 import dev.slsk.Username;
 import dev.slsk.events.DiagnosticEvent;
 import dev.slsk.events.MeshEvent;
-import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.events.DistributedChildEvent;
 import dev.slsk.internal.events.DistributedParentEvent;
 import dev.slsk.internal.network.DistributedConnectionManager;
@@ -46,7 +46,7 @@ final class DefaultDiagnostics implements Diagnostics {
     private final AtomicReference<MeshState> published = new AtomicReference<>(empty());
     private final AtomicBoolean tracing = new AtomicBoolean();
 
-    DefaultDiagnostics(DefaultSoulseekClient client, EventBus<DiagnosticEvent> events, EventBus<MeshEvent> meshEvents) {
+    DefaultDiagnostics(SoulseekEngine client, EventBus<DiagnosticEvent> events, EventBus<MeshEvent> meshEvents) {
         this.mesh = Objects.requireNonNull(client, "client").getDistributedConnectionManager();
         this.events = Objects.requireNonNull(events, "events");
         this.meshEvents = Objects.requireNonNull(meshEvents, "meshEvents");
@@ -57,7 +57,7 @@ final class DefaultDiagnostics implements Diagnostics {
         return new MeshState(false, Optional.empty(), List.of(), false, 0, Optional.empty());
     }
 
-    private void wire(DefaultSoulseekClient client) {
+    private void wire(SoulseekEngine client) {
         client.events().on(Kind.DIAGNOSTIC_GENERATED, this::onDiagnostic);
 
         client.events().on(Kind.DISTRIBUTED_PARENT_ADOPTED, (DistributedParentEvent event) -> onMeshChanged());

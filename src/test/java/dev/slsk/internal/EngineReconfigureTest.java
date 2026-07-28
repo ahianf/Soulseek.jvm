@@ -38,7 +38,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 
-class SoulseekClientReconfigureTest {
+class EngineReconfigureTest {
     private static final InetAddress LOOPBACK = InetAddress.getLoopbackAddress();
 
     @Test
@@ -393,7 +393,7 @@ class SoulseekClientReconfigureTest {
         private final ListenerFactoryProbe listenerFactory = new ListenerFactoryProbe();
         private final TokenBucket uploadBucket;
         private final TokenBucket downloadBucket;
-        private final DefaultSoulseekClient client;
+        private final SoulseekEngine client;
 
         private Fixture() {
             this(new SoulseekClientOptions(false));
@@ -403,7 +403,7 @@ class SoulseekClientReconfigureTest {
             options = clientOptions;
             uploadBucket = new TokenBucket((options.getMaximumUploadSpeed() * 1024L) / 10, 100);
             downloadBucket = new TokenBucket((options.getMaximumDownloadSpeed() * 1024L) / 10, 100);
-            client = new DefaultSoulseekClient(
+            client = new SoulseekEngine(
                     9999,
                     options,
                     server.proxy,

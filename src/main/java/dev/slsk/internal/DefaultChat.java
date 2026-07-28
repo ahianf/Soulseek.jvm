@@ -8,7 +8,7 @@ import dev.slsk.Chat;
 import dev.slsk.EventStream;
 import dev.slsk.Username;
 import dev.slsk.events.ChatEvent;
-import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.PrivateMessageReceivedEvent;
@@ -38,7 +38,7 @@ final class DefaultChat implements Chat {
     private final EventBus<ChatEvent> events;
     private final DiagnosticSink diagnostics;
 
-    DefaultChat(DefaultSoulseekClient client, EventBus<ChatEvent> events, DiagnosticSink diagnostics) {
+    DefaultChat(SoulseekEngine client, EventBus<ChatEvent> events, DiagnosticSink diagnostics) {
         this.server = Objects.requireNonNull(client, "client").server();
         this.events = Objects.requireNonNull(events, "events");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");

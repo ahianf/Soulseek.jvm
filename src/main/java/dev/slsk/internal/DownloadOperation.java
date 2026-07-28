@@ -18,7 +18,7 @@ import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferSizeMismatchException;
 import dev.slsk.exceptions.TransferStreamException;
 import dev.slsk.exceptions.UserOfflineException;
-import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.common.WaitKey;
@@ -56,7 +56,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p>Was an inner class of {@link TransferEngine}. Lifted out so neither type
  * carries the other's bulk; it keeps an explicit reference to the engine for
  * the concurrency limits and duplicate keys the engine owns, and reaches the
- * client through the same {@link ClientContext} seam.
+ * client through the same {@link EngineContext} seam.
  */
 final class DownloadOperation {
 

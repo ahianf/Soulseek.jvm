@@ -22,7 +22,7 @@ import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferException;
 import dev.slsk.exceptions.TransferRejectedException;
-import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
@@ -68,7 +68,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
-class SoulseekClientUploadTest {
+class EngineUploadTest {
     private static final InetSocketAddress ENDPOINT = new InetSocketAddress(InetAddress.getLoopbackAddress(), 46011);
 
     @Test
@@ -491,7 +491,7 @@ class SoulseekClientUploadTest {
 
             // Cancellation surfaces as CancellationException; the exact
             // instance was observable only while the future was the return
-            // value. See the matching note in SoulseekClientDownloadTest.
+            // value. See the matching note in EngineDownloadTest.
             assertInstanceOf(CancellationException.class, failure);
             assertTrue(terminal.get(0).getState().contains(TransferState.CANCELLED));
             assertEquals(0, released.get(), "a slot that was not acquired is not released");
@@ -743,7 +743,7 @@ class SoulseekClientUploadTest {
         private final TransferConnectionProbe transfer = new TransferConnectionProbe();
         private final WaiterProbe waiter = new WaiterProbe();
         private final PeerManagerProbe peerManager = new PeerManagerProbe(message.proxy, transfer.proxy);
-        private final DefaultSoulseekClient client = new DefaultSoulseekClient(
+        private final SoulseekEngine client = new SoulseekEngine(
                 9999,
                 null,
                 server.proxy,

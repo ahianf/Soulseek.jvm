@@ -32,12 +32,12 @@ import java.util.stream.Stream;
  */
 final class DefaultShares implements Shares {
 
-    private final DefaultSoulseekClient client;
+    private final SoulseekEngine client;
     private final EventBus<ShareEvent> events;
     private final AtomicReference<List<SharedFolder>> folders = new AtomicReference<>(List.of());
     private final AtomicReference<ShareIndex> index = new AtomicReference<>(ShareIndex.empty());
 
-    DefaultShares(DefaultSoulseekClient client, EventBus<ShareEvent> events) {
+    DefaultShares(SoulseekEngine client, EventBus<ShareEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
         this.events = Objects.requireNonNull(events, "events");
     }

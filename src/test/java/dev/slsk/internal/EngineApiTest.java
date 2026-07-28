@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -25,12 +25,12 @@ import org.junit.jupiter.api.Test;
 /**
  * The ratchet on the fold.
  *
- * <p>This used to assert that the concrete client implemented a public {@code
- * SoulseekClient} interface member for member. That interface is gone, and with
- * it the claim it encoded — that the library's public surface was one god
- * object. What is left underneath is an engine, and the useful thing to assert
- * about an engine mid-fold is not what it has but what it still has that it
- * should not.
+ * <p>This used to assert that the concrete client implemented a public
+ * {@code SoulseekClient} interface member for member. That interface is gone,
+ * and with it the claim it encoded — that the library's public surface was one
+ * god object. What is left underneath is an engine, and the useful thing to
+ * assert about an engine mid-fold is not what it has but what it still has that
+ * it should not.
  *
  * <p>So the inventory is split three ways. {@link #SEAM} is what the engine is
  * for: the context the extracted collaborators delegate through, and the
@@ -40,9 +40,9 @@ import org.junit.jupiter.api.Test;
  * waiting to take them — and it is now empty, as is the listener registry that
  * once sat beside it. What the engine has left is what an engine should have.
  */
-class SoulseekClientApiTest {
+class EngineApiTest {
 
-    /** {@code ClientContext} plus the accessors the handlers reach the engine by. */
+    /** {@code EngineContext} plus the accessors the handlers reach the engine by. */
     private static final Set<String> SEAM = Set.of(
             "acknowledgePrivateMessageOperation",
             "acknowledgePrivilegeNotificationOperation",
@@ -108,7 +108,7 @@ class SoulseekClientApiTest {
     private static final Set<String> AWAITING_A_FACET = Set.of();
 
     private static Set<String> publicInstanceMethodNames() {
-        return Arrays.stream(DefaultSoulseekClient.class.getMethods())
+        return Arrays.stream(SoulseekEngine.class.getMethods())
                 .filter(method -> method.getDeclaringClass() != Object.class)
                 .filter(method -> !Modifier.isStatic(method.getModifiers()))
                 .map(Method::getName)
@@ -137,7 +137,7 @@ class SoulseekClientApiTest {
         for (String accessor : Set.of("rooms", "users", "server", "searchCoordinator", "transfers")) {
             assertThrows(
                     NoSuchMethodException.class,
-                    () -> DefaultSoulseekClient.class.getMethod(accessor),
+                    () -> SoulseekEngine.class.getMethod(accessor),
                     accessor + "() must stay package-private: it hands out a collaborator");
         }
     }
@@ -157,9 +157,9 @@ class SoulseekClientApiTest {
 
     @Test
     void constructionPreservesValidationDefaultsOptionsAndLifecycle() {
-        assertThrows(IllegalArgumentException.class, () -> new DefaultSoulseekClient(100));
+        assertThrows(IllegalArgumentException.class, () -> new SoulseekEngine(100));
 
-        try (DefaultSoulseekClient client = new DefaultSoulseekClient(9999)) {
+        try (SoulseekEngine client = new SoulseekEngine(9999)) {
             assertEquals(170, client.getMajorVersion());
             assertEquals(9999, client.getMinorVersion());
             assertNotNull(client.getOptions());
@@ -168,7 +168,7 @@ class SoulseekClientApiTest {
         }
 
         SoulseekClientOptions options = new SoulseekClientOptions();
-        try (DefaultSoulseekClient client = new DefaultSoulseekClient(9999, options)) {
+        try (SoulseekEngine client = new SoulseekEngine(9999, options)) {
             assertSame(options, client.getOptions());
         }
     }
@@ -176,11 +176,11 @@ class SoulseekClientApiTest {
     @Test
     @DisplayName("nothing about the engine is reachable from outside the package")
     void theEngineAndItsConstructorsAreNotPublic() {
-        assertFalse(Modifier.isPublic(DefaultSoulseekClient.class.getModifiers()));
-        Arrays.stream(DefaultSoulseekClient.class.getDeclaredConstructors())
+        assertFalse(Modifier.isPublic(SoulseekEngine.class.getModifiers()));
+        Arrays.stream(SoulseekEngine.class.getDeclaredConstructors())
                 .forEach(constructor -> assertFalse(Modifier.isPublic(constructor.getModifiers())));
 
-        for (Class<?> implemented : DefaultSoulseekClient.class.getInterfaces()) {
+        for (Class<?> implemented : SoulseekEngine.class.getInterfaces()) {
             assertTrue(
                     implemented == AutoCloseable.class || implemented.getName().startsWith("dev.slsk.internal."),
                     "the engine implements " + implemented.getName() + ", which is not internal");
@@ -189,12 +189,12 @@ class SoulseekClientApiTest {
 
     @Test
     void staticEventDispatchControlsRemainAvailable() {
-        boolean original = DefaultSoulseekClient.isRaiseEventsAsynchronously();
+        boolean original = SoulseekEngine.isRaiseEventsAsynchronously();
         try {
-            DefaultSoulseekClient.setRaiseEventsAsynchronously(!original);
-            assertEquals(!original, DefaultSoulseekClient.isRaiseEventsAsynchronously());
+            SoulseekEngine.setRaiseEventsAsynchronously(!original);
+            assertEquals(!original, SoulseekEngine.isRaiseEventsAsynchronously());
         } finally {
-            DefaultSoulseekClient.setRaiseEventsAsynchronously(original);
+            SoulseekEngine.setRaiseEventsAsynchronously(original);
         }
     }
 }

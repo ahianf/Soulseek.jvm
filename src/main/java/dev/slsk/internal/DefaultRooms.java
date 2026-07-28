@@ -17,7 +17,7 @@ import dev.slsk.UserPresence;
 import dev.slsk.UserStatistics;
 import dev.slsk.Username;
 import dev.slsk.events.RoomEvent;
-import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.events.PublicChatMessageReceivedEvent;
 import dev.slsk.internal.events.RoomJoinedEvent;
@@ -57,14 +57,14 @@ import java.util.stream.Collectors;
  */
 final class DefaultRooms implements Rooms {
 
-    private final DefaultSoulseekClient client;
+    private final SoulseekEngine client;
     private final RoomRegistry registry;
     private final ServerSession server;
     private final EventBus<RoomEvent> events;
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
     private final PrivateRooms privateRooms;
 
-    DefaultRooms(DefaultSoulseekClient client, EventBus<RoomEvent> events) {
+    DefaultRooms(SoulseekEngine client, EventBus<RoomEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
         this.registry = client.rooms();
         this.server = client.server();

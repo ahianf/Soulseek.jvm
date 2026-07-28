@@ -6,7 +6,7 @@ package dev.slsk.internal;
 import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.DuplicateTokenException;
 import dev.slsk.exceptions.SoulseekClientException;
-import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.events.SearchResponseReceivedEvent;
@@ -39,12 +39,12 @@ import java.util.function.Consumer;
  */
 final class SearchCoordinator {
 
-    private final ClientContext context;
+    private final EngineContext context;
 
     /** Caps concurrent searches; the limit is a search concern, so it lives here. */
     private final java.util.concurrent.Semaphore searchSemaphore;
 
-    SearchCoordinator(ClientContext context) {
+    SearchCoordinator(EngineContext context) {
         this.context = java.util.Objects.requireNonNull(context, "context");
         this.searchSemaphore =
                 new java.util.concurrent.Semaphore(context.getClientOptions().getMaximumConcurrentSearches());

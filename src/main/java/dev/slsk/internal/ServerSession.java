@@ -33,9 +33,9 @@ import java.util.concurrent.TimeUnit;
  */
 final class ServerSession {
 
-    private final ClientContext context;
+    private final EngineContext context;
 
-    ServerSession(ClientContext context) {
+    ServerSession(EngineContext context) {
         this.context = java.util.Objects.requireNonNull(context, "context");
     }
 

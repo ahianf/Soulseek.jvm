@@ -21,7 +21,7 @@ import dev.slsk.Username;
 import dev.slsk.exceptions.KickedFromServerException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
-import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.TokenBucket;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.Waiter;
@@ -63,14 +63,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
-class SoulseekClientTest {
+class EngineTest {
     private static final InetSocketAddress ENDPOINT = endpoint(46001);
 
     @Test
     void constructorsPreserveVersionOptionsAndInitialState() {
-        assertThrows(IllegalArgumentException.class, () -> new DefaultSoulseekClient(100));
+        assertThrows(IllegalArgumentException.class, () -> new SoulseekEngine(100));
         SoulseekClientOptions options = new SoulseekClientOptions();
-        try (DefaultSoulseekClient client = new DefaultSoulseekClient(9999, options)) {
+        try (SoulseekEngine client = new SoulseekEngine(9999, options)) {
             assertEquals(170, client.getMajorVersion());
             assertEquals(9999, client.getMinorVersion());
             assertSame(options, client.getOptions());
@@ -399,7 +399,7 @@ class SoulseekClientTest {
     }
 
     private static boolean hasMethod(String name) {
-        for (Method method : DefaultSoulseekClient.class.getMethods()) {
+        for (Method method : SoulseekEngine.class.getMethods()) {
             if (method.getName().equals(name)) {
                 return true;
             }
@@ -463,10 +463,10 @@ class SoulseekClientTest {
         private final ListenerHandler listenerHandler = diagnosticProxy(ListenerHandler.class);
         private final DistributedMessageHandler distributedHandler = diagnosticProxy(DistributedMessageHandler.class);
         private final PeerConnectionManager peerManager = diagnosticProxy(PeerConnectionManager.class);
-        private final DefaultSoulseekClient client;
+        private final SoulseekEngine client;
 
         private Fixture() {
-            client = new DefaultSoulseekClient(
+            client = new SoulseekEngine(
                     9999,
                     new SoulseekClientOptions(),
                     connection.proxy,

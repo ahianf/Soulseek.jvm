@@ -17,7 +17,7 @@ import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferNotFoundException;
 import dev.slsk.exceptions.UserEndpointException;
 import dev.slsk.exceptions.UserOfflineException;
-import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
@@ -56,7 +56,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 
-class SoulseekClientPeerRequestTest {
+class EnginePeerRequestTest {
     private static final InetSocketAddress ENDPOINT = new InetSocketAddress(InetAddress.getLoopbackAddress(), 46001);
 
     @Test
@@ -598,7 +598,7 @@ class SoulseekClientPeerRequestTest {
         private final WaiterProbe waiter = new WaiterProbe();
         private final PeerManagerProbe peerManager = new PeerManagerProbe(peer.proxy);
         private final DiagnosticProbe diagnostic = new DiagnosticProbe();
-        private final DefaultSoulseekClient client = new DefaultSoulseekClient(
+        private final SoulseekEngine client = new SoulseekEngine(
                 9999,
                 null,
                 server.proxy,

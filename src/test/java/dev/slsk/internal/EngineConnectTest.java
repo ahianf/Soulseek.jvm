@@ -21,7 +21,7 @@ import dev.slsk.exceptions.ListenException;
 import dev.slsk.exceptions.LoginRejectedException;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
-import dev.slsk.internal.ClientEvents.Kind;
+import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.messaging.MessageCode;
@@ -50,7 +50,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 
-class SoulseekClientConnectTest {
+class EngineConnectTest {
     private static final InetAddress LOOPBACK = InetAddress.getLoopbackAddress();
 
     @Test
@@ -304,7 +304,7 @@ class SoulseekClientConnectTest {
         private final ConnectionFactoryProbe factory = new ConnectionFactoryProbe(connection);
         private final WaiterProbe waiter = new WaiterProbe(sequence);
         private final DistributedProbe distributed = new DistributedProbe(sequence);
-        private final DefaultSoulseekClient client;
+        private final SoulseekEngine client;
 
         private Fixture() {
             this(new SoulseekClientOptions(false));
@@ -312,7 +312,7 @@ class SoulseekClientConnectTest {
 
         private Fixture(SoulseekClientOptions clientOptions) {
             options = clientOptions;
-            client = new DefaultSoulseekClient(
+            client = new SoulseekEngine(
                     9999,
                     options,
                     null,

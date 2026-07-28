@@ -36,13 +36,13 @@ import java.util.function.Consumer;
  */
 final class DefaultDownloads implements Downloads {
 
-    private final DefaultSoulseekClient client;
+    private final SoulseekEngine client;
     private final EventBus<DownloadEvent> events;
 
     /** Per-enqueue data the engine does not carry. */
     private final Map<TransferId, Metadata> metadata = new ConcurrentHashMap<>();
 
-    DefaultDownloads(DefaultSoulseekClient client, EventBus<DownloadEvent> events) {
+    DefaultDownloads(SoulseekEngine client, EventBus<DownloadEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
         this.events = Objects.requireNonNull(events, "events");
     }

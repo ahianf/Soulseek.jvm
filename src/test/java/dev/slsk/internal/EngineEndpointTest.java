@@ -35,7 +35,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
-class SoulseekClientEndpointTest {
+class EngineEndpointTest {
     private static final InetSocketAddress ENDPOINT = new InetSocketAddress(InetAddress.getLoopbackAddress(), 46001);
 
     @Test
@@ -331,10 +331,10 @@ class SoulseekClientEndpointTest {
     private static final class Fixture implements AutoCloseable {
         private final ConnectionProbe connection = new ConnectionProbe();
         private final WaiterProbe waiter = new WaiterProbe();
-        private final DefaultSoulseekClient client;
+        private final SoulseekEngine client;
 
         private Fixture(UserEndpointCache cache) {
-            client = new DefaultSoulseekClient(
+            client = new SoulseekEngine(
                     9999,
                     options(cache),
                     connection.proxy,

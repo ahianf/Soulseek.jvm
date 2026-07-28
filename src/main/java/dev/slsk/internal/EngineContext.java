@@ -12,19 +12,19 @@ import dev.slsk.internal.options.SoulseekClientOptions;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * The seam between the client and the components it delegates to.
+ * The seam between the engine and the components it delegates to.
  *
- * <p>{@code DefaultSoulseekClient} was one class of five thousand lines owning
- * connection lifecycle, the server protocol, searches, transfers, user queries,
- * rooms and semaphore garbage collection at once. Splitting it needs somewhere
- * for the parts each component genuinely shares — the server write path, the
- * response correlator, login state — to live without handing every component a
- * reference to the whole client.
+ * <p>The engine was one class of five thousand lines owning connection
+ * lifecycle, the server protocol, searches, transfers, user queries, rooms and
+ * semaphore garbage collection at once. Splitting it needs somewhere for the
+ * parts each component genuinely shares — the server write path, the response
+ * correlator, login state — to live without handing every component a reference
+ * to the whole engine.
  *
  * <p>Deliberately small. A component that needs more than this is a sign the
  * split is in the wrong place, not that the interface should grow.
  */
-interface ClientContext {
+interface EngineContext {
 
     /** Returns the response correlator. */
     Waiter getWaiter();
@@ -131,7 +131,7 @@ interface ClientContext {
      * @param eventData the payload
      * @param <T> the payload type
      */
-    <T> void raiseEvent(ClientEvents.Kind kind, T eventData);
+    <T> void raiseEvent(EngineEvents.Kind kind, T eventData);
 
     /**
      * Returns the live download registry.
