@@ -7,6 +7,7 @@ import dev.slsk.Chat;
 import dev.slsk.Connection;
 import dev.slsk.Me;
 import dev.slsk.Soulseek;
+import dev.slsk.Users;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.diagnostics.GlobalDiagnostic;
 import dev.slsk.internal.options.SoulseekClientOptions;
@@ -30,6 +31,7 @@ public final class DefaultSoulseek implements Soulseek {
     private final DefaultConnection connection;
     private final DefaultChat chat;
     private final DefaultMe me;
+    private final DefaultUsers users;
     private final AtomicBoolean closed = new AtomicBoolean();
 
     private DefaultSoulseek(SoulseekClient client, DefaultConnection.Credentials credentials) {
@@ -39,6 +41,7 @@ public final class DefaultSoulseek implements Soulseek {
         this.chat = new DefaultChat(client, new EventBus<>("chat", diagnostics), diagnostics);
         this.me = new DefaultMe(
                 client, dev.slsk.Username.of(credentials.username()), new EventBus<>("me", diagnostics), diagnostics);
+        this.users = new DefaultUsers(client, new EventBus<>("users", diagnostics), diagnostics);
     }
 
     /**
@@ -120,6 +123,11 @@ public final class DefaultSoulseek implements Soulseek {
     @Override
     public Me me() {
         return me;
+    }
+
+    @Override
+    public Users users() {
+        return users;
     }
 
     @Override
