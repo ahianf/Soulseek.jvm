@@ -10,6 +10,7 @@ import dev.slsk.Downloads;
 import dev.slsk.Me;
 import dev.slsk.Rooms;
 import dev.slsk.Search;
+import dev.slsk.Shares;
 import dev.slsk.Soulseek;
 import dev.slsk.Uploads;
 import dev.slsk.Users;
@@ -42,6 +43,7 @@ public final class DefaultSoulseek implements Soulseek {
     private final DefaultSearch search;
     private final DefaultDownloads downloads;
     private final DefaultUploads uploads;
+    private final DefaultShares shares;
     private final AtomicBoolean closed = new AtomicBoolean();
 
     private DefaultSoulseek(SoulseekClient client, DefaultConnection.Credentials credentials) {
@@ -58,6 +60,7 @@ public final class DefaultSoulseek implements Soulseek {
         this.search = new DefaultSearch(client, new EventBus<>("search", diagnostics));
         this.downloads = new DefaultDownloads(client, new EventBus<>("downloads", diagnostics));
         this.uploads = new DefaultUploads(client, new EventBus<>("uploads", diagnostics));
+        this.shares = new DefaultShares(client, new EventBus<>("shares", diagnostics));
     }
 
     /**
@@ -169,6 +172,11 @@ public final class DefaultSoulseek implements Soulseek {
     @Override
     public Uploads uploads() {
         return uploads;
+    }
+
+    @Override
+    public Shares shares() {
+        return shares;
     }
 
     @Override
