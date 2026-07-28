@@ -5,6 +5,7 @@ package dev.slsk;
 
 import dev.slsk.events.UserEvent;
 import java.net.InetSocketAddress;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -59,6 +60,27 @@ public interface Users {
      * @return where they are
      */
     InetSocketAddress endpoint(Username user, CancellationSignal signal);
+
+    /**
+     * Reads everything a user is sharing.
+     *
+     * @param request whose share to read, and how patiently
+     * @return what they were sharing, at the moment they answered
+     */
+    Browse browse(BrowseRequest request);
+
+    /**
+     * Reads the contents of one of a user's directories.
+     *
+     * <p>A list rather than a single directory, because the protocol answers a
+     * folder request with one and a peer is free to include subdirectories.
+     *
+     * @param user whose share to read
+     * @param path the directory's full remote path
+     * @param signal cancels the request
+     * @return the directories they answered with, empty if none
+     */
+    List<Directory> directory(Username user, String path, CancellationSignal signal);
 
     /**
      * Opens a status subscription, re-registered automatically on every login

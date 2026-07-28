@@ -3,8 +3,14 @@
 
 package dev.slsk.internal;
 
+import dev.slsk.Browse;
+import dev.slsk.BrowseProgress;
+import dev.slsk.BrowseRequest;
 import dev.slsk.CancellationSignal;
+import dev.slsk.Directory;
 import dev.slsk.EventStream;
+import dev.slsk.FileAttributes;
+import dev.slsk.SearchFile;
 import dev.slsk.UserInfo;
 import dev.slsk.UserPresence;
 import dev.slsk.UserStatistics;
@@ -16,8 +22,12 @@ import dev.slsk.events.UserEvent;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
+import dev.slsk.internal.options.BrowseOptions;
+import dev.slsk.internal.options.BrowseProgressCallback;
 import java.net.InetSocketAddress;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -151,6 +161,48 @@ final class DefaultUsers implements Users {
         Objects.requireNonNull(user, "user");
         Objects.requireNonNull(signal, "signal");
         return Blocking.await(directory.getUserEndpoint(user.value(), signal));
+    }
+
+    @Override
+    public Browse browse(BrowseRequest request) {
+        Objects.requireNonNull(request, "request");
+        BrowseOptions options = new BrowseOptions(
+                (int) request.timeout().toMillis(),
+                request.onProgress()
+                        .<BrowseProgressCallback>map(listener -> progress -> listener.accept(
+                                new BrowseProgress(request.user(), progress.bytesTransferred(), progress.size())))
+                        .orElse(null));
+        dev.slsk.internal.BrowseResponse response =
+                Blocking.await(directory.browse(request.user().value(), options, request.signal()));
+        return new Browse(
+                request.user(),
+                Instant.now(),
+                directories(response.getDirectories()),
+                directories(response.getLockedDirectories()));
+    }
+
+    @Override
+    public List<Directory> directory(Username user, String path, CancellationSignal signal) {
+        Objects.requireNonNull(user, "user");
+        Objects.requireNonNull(path, "path");
+        Objects.requireNonNull(signal, "signal");
+        return directories(Blocking.await(directory.getDirectoryContents(user.value(), path, null, signal)));
+    }
+
+    /** The wire's directories, as the surface describes them. */
+    private static List<Directory> directories(List<dev.slsk.internal.Directory> source) {
+        if (source == null) {
+            return List.of();
+        }
+        List<Directory> converted = new ArrayList<>(source.size());
+        for (dev.slsk.internal.Directory entry : source) {
+            List<SearchFile> files = new ArrayList<>(entry.getFiles().size());
+            for (dev.slsk.internal.File file : entry.getFiles()) {
+                files.add(new SearchFile(file.getFilename(), file.getSize(), FileAttributes.none()));
+            }
+            converted.add(new Directory(entry.getName(), files));
+        }
+        return List.copyOf(converted);
     }
 
     @Override

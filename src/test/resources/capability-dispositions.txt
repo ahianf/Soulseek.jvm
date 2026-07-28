@@ -70,12 +70,12 @@ getUserEndpoint                                = Users.endpoint
 watchUser                                      = Users.watch
 unwatchUser                                    = Watch.close
 getUserPrivileged                              = Users.status
-browse                                         = PENDING:5 - Users.browse, with the browse SPI
-getDirectoryContents                           = PENDING:5 - Users.directory, with the browse SPI
+browse                                         = Users.browse
+getDirectoryContents                           = Users.directory
 addUserStatusChangedListener                   = Users.events
 addUserStatisticsChangedListener               = Users.events
 addUserCannotConnectListener                   = Users.events
-addBrowseProgressUpdatedListener               = PENDING:5 - browse progress arrives with the browse SPI
+addBrowseProgressUpdatedListener               = ABSORBED:progress is a callback on the request that asked for it, not a client-wide event
 
 # --- rooms ------------------------------------------------------------------
 joinRoom                                       = Rooms.join

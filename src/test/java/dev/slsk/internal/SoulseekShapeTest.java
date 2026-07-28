@@ -82,12 +82,17 @@ class SoulseekShapeTest {
                 assertEquals(dev.slsk.Username.class, method.getParameterTypes()[0]);
             }
         }
+        // Not "the first parameter is a Username": browse takes a request
+        // object, which carries one. What must never happen is a bare String
+        // standing in for a user, which is what the compiler cannot protect.
         for (Method method : dev.slsk.Users.class.getDeclaredMethods()) {
-            if (method.getParameterCount() > 0 && !method.getName().equals("watched")) {
-                assertTrue(
-                        method.getParameterTypes()[0] == dev.slsk.Username.class,
-                        method.getName() + " should take a Username first");
+            if (method.getParameterCount() == 0) {
+                continue;
             }
+            Class<?> first = method.getParameterTypes()[0];
+            assertTrue(
+                    first == dev.slsk.Username.class || first == dev.slsk.BrowseRequest.class,
+                    method.getName() + " leads with " + first.getSimpleName() + ", not a user");
         }
     }
 
