@@ -461,7 +461,7 @@ class EngineDownloadTest {
                             .build())));
             assertInstanceOf(SoulseekClientException.class, failure);
 
-            TransferOptions noSeek = new TransferOptions(null, null, null, null, null, null, 3_000, true, false);
+            TransferOptions noSeek = new TransferOptions(null, null, null, null, 3_000, true, false);
             fixture.transfer.data = new byte[] {2};
             Transfer result = Blocking.await(fixture.client
                     .transfers()
@@ -476,8 +476,14 @@ class EngineDownloadTest {
         }
     }
 
+    /**
+     * The governor is gone: a pluggable per-transfer byte grant sat in front of
+     * the token bucket, every implementation granted everything, and the bucket
+     * already does that when the rate is unlimited. What remains is what the
+     * grant was ever observed through — the reporter and the progress callback.
+     */
     @Test
-    void governorReporterAndProgressCallbacksAreInvoked() {
+    void reporterAndProgressCallbacksAreInvoked() {
         try (Fixture fixture = new Fixture()) {
             fixture.transfer.data = new byte[] {1, 2, 3, 4, 5};
             fixture.transfer.maximumActualPerIteration = 2;
@@ -486,15 +492,13 @@ class EngineDownloadTest {
             List<List<Integer>> reports = new ArrayList<>();
             List<Long> progress = new ArrayList<>();
             TransferOptions options = new TransferOptions(
-                    (transfer, requested, token) -> {
-                        grants.add(requested);
-                        return CompletableFuture.completedFuture(requested);
-                    },
                     null,
                     update -> progress.add(update.transfer().getBytesTransferred()),
                     null,
-                    null,
-                    (transfer, attempted, granted, actual) -> reports.add(List.of(attempted, granted, actual)));
+                    (transfer, attempted, granted, actual) -> {
+                        grants.add(granted);
+                        reports.add(List.of(attempted, granted, actual));
+                    });
 
             Blocking.await(fixture.client
                     .transfers()

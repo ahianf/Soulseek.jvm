@@ -401,6 +401,21 @@ final class SoulseekEngine
     }
 
     /**
+     * Applies a download rate ceiling.
+     *
+     * <p>The bucket refills ten times a second, so its capacity is a tenth of
+     * the rate. Unlimited is expressed as a capacity nothing will reach rather
+     * than as a special case, because a branch on "is this unlimited" is a
+     * branch that gets forgotten on one of the two paths.
+     *
+     * @param limit the ceiling
+     */
+    void setDownloadSpeedLimit(dev.slsk.Bandwidth limit) {
+        downloadTokenBucket.setCapacity(
+                limit == null || limit.isUnlimited() ? Long.MAX_VALUE / 16 : Math.max(1, limit.bytesPerSecond() / 10));
+    }
+
+    /**
      * Serves a file to a peer whose request the policy allowed.
      *
      * <p>Nothing did this before 1.0. The old surface accepted the request in

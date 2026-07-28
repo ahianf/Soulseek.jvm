@@ -334,6 +334,11 @@ final class DefaultDownloads implements Downloads {
 
     @Override
     public void policy(DownloadPolicy policy) {
+        Objects.requireNonNull(policy, "policy");
+        // The rate ceiling is the engine's to apply: the queue decides what runs
+        // and the token bucket decides how fast, and a policy that carried a
+        // limit nothing read would be a setting that silently did nothing.
+        client.setDownloadSpeedLimit(policy.speedLimit());
         queue.policy(policy);
     }
 

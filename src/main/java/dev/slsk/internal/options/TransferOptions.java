@@ -4,8 +4,6 @@
 
 package dev.slsk.internal.options;
 
-import java.util.concurrent.CompletableFuture;
-
 /**
  * Options for transfer operations.
  */
@@ -15,13 +13,11 @@ public class TransferOptions {
 
     private final boolean disposeInputStreamOnCompletion;
     private final boolean disposeOutputStreamOnCompletion;
-    private final TransferGovernor governor;
     private final int maximumLingerTime;
     private final TransferProgressUpdatedCallback progressUpdated;
     private final TransferReporter reporter;
     private final boolean seekInputStreamAutomatically;
     private final boolean seekOutputStreamAutomatically;
-    private final TransferSlotAwaiter slotAwaiter;
     private final TransferSlotReleasedCallback slotReleased;
     private final TransferStateChangedCallback stateChanged;
 
@@ -29,102 +25,69 @@ public class TransferOptions {
      * Creates transfer options with source defaults.
      */
     public TransferOptions() {
-        this(null, null, null, null, null, null);
-    }
-
-    /**
-     * Creates transfer options overriding the governor.
-     *
-     * @param governor the speed governor
-     */
-    public TransferOptions(TransferGovernor governor) {
-        this(governor, null, null, null, null, null);
+        this(null, null, null, null);
     }
 
     /**
      * Creates transfer options through the state callback.
      */
-    public TransferOptions(TransferGovernor governor, TransferStateChangedCallback stateChanged) {
-        this(governor, stateChanged, null, null, null, null);
+    public TransferOptions(TransferStateChangedCallback stateChanged) {
+        this(stateChanged, null, null, null);
     }
 
     /**
      * Creates transfer options through the progress callback.
      */
-    public TransferOptions(
-            TransferGovernor governor,
-            TransferStateChangedCallback stateChanged,
-            TransferProgressUpdatedCallback progressUpdated) {
-        this(governor, stateChanged, progressUpdated, null, null, null);
-    }
-
-    /**
-     * Creates transfer options through the slot awaiter.
-     */
-    public TransferOptions(
-            TransferGovernor governor,
-            TransferStateChangedCallback stateChanged,
-            TransferProgressUpdatedCallback progressUpdated,
-            TransferSlotAwaiter slotAwaiter) {
-        this(governor, stateChanged, progressUpdated, slotAwaiter, null, null);
+    public TransferOptions(TransferStateChangedCallback stateChanged, TransferProgressUpdatedCallback progressUpdated) {
+        this(stateChanged, progressUpdated, null, null);
     }
 
     /**
      * Creates transfer options through the slot-release callback.
      */
     public TransferOptions(
-            TransferGovernor governor,
             TransferStateChangedCallback stateChanged,
             TransferProgressUpdatedCallback progressUpdated,
-            TransferSlotAwaiter slotAwaiter,
             TransferSlotReleasedCallback slotReleased) {
-        this(governor, stateChanged, progressUpdated, slotAwaiter, slotReleased, null);
+        this(stateChanged, progressUpdated, slotReleased, null);
     }
 
     /**
      * Creates transfer options through the reporter.
      */
     public TransferOptions(
-            TransferGovernor governor,
             TransferStateChangedCallback stateChanged,
             TransferProgressUpdatedCallback progressUpdated,
-            TransferSlotAwaiter slotAwaiter,
             TransferSlotReleasedCallback slotReleased,
             TransferReporter reporter) {
-        this(governor, stateChanged, progressUpdated, slotAwaiter, slotReleased, reporter, DEFAULT_MAXIMUM_LINGER_TIME);
+        this(stateChanged, progressUpdated, slotReleased, reporter, DEFAULT_MAXIMUM_LINGER_TIME);
     }
 
     /**
      * Creates transfer options through the maximum linger time.
      */
     public TransferOptions(
-            TransferGovernor governor,
             TransferStateChangedCallback stateChanged,
             TransferProgressUpdatedCallback progressUpdated,
-            TransferSlotAwaiter slotAwaiter,
             TransferSlotReleasedCallback slotReleased,
             TransferReporter reporter,
             int maximumLingerTime) {
-        this(governor, stateChanged, progressUpdated, slotAwaiter, slotReleased, reporter, maximumLingerTime, true);
+        this(stateChanged, progressUpdated, slotReleased, reporter, maximumLingerTime, true);
     }
 
     /**
      * Creates transfer options through automatic input seeking.
      */
     public TransferOptions(
-            TransferGovernor governor,
             TransferStateChangedCallback stateChanged,
             TransferProgressUpdatedCallback progressUpdated,
-            TransferSlotAwaiter slotAwaiter,
             TransferSlotReleasedCallback slotReleased,
             TransferReporter reporter,
             int maximumLingerTime,
             boolean seekInputStreamAutomatically) {
         this(
-                governor,
                 stateChanged,
                 progressUpdated,
-                slotAwaiter,
                 slotReleased,
                 reporter,
                 maximumLingerTime,
@@ -136,20 +99,16 @@ public class TransferOptions {
      * Creates transfer options through automatic output seeking.
      */
     public TransferOptions(
-            TransferGovernor governor,
             TransferStateChangedCallback stateChanged,
             TransferProgressUpdatedCallback progressUpdated,
-            TransferSlotAwaiter slotAwaiter,
             TransferSlotReleasedCallback slotReleased,
             TransferReporter reporter,
             int maximumLingerTime,
             boolean seekInputStreamAutomatically,
             boolean seekOutputStreamAutomatically) {
         this(
-                governor,
                 stateChanged,
                 progressUpdated,
-                slotAwaiter,
                 slotReleased,
                 reporter,
                 maximumLingerTime,
@@ -162,10 +121,8 @@ public class TransferOptions {
      * Creates transfer options through input-stream disposal.
      */
     public TransferOptions(
-            TransferGovernor governor,
             TransferStateChangedCallback stateChanged,
             TransferProgressUpdatedCallback progressUpdated,
-            TransferSlotAwaiter slotAwaiter,
             TransferSlotReleasedCallback slotReleased,
             TransferReporter reporter,
             int maximumLingerTime,
@@ -173,10 +130,8 @@ public class TransferOptions {
             boolean seekOutputStreamAutomatically,
             boolean disposeInputStreamOnCompletion) {
         this(
-                governor,
                 stateChanged,
                 progressUpdated,
-                slotAwaiter,
                 slotReleased,
                 reporter,
                 maximumLingerTime,
@@ -190,10 +145,8 @@ public class TransferOptions {
      * Creates transfer options.
      */
     public TransferOptions(
-            TransferGovernor governor,
             TransferStateChangedCallback stateChanged,
             TransferProgressUpdatedCallback progressUpdated,
-            TransferSlotAwaiter slotAwaiter,
             TransferSlotReleasedCallback slotReleased,
             TransferReporter reporter,
             int maximumLingerTime,
@@ -201,13 +154,8 @@ public class TransferOptions {
             boolean seekOutputStreamAutomatically,
             boolean disposeInputStreamOnCompletion,
             boolean disposeOutputStreamOnCompletion) {
-        this.governor = governor == null
-                ? (transfer, requested, token) -> CompletableFuture.completedFuture(Integer.MAX_VALUE)
-                : governor;
         this.stateChanged = stateChanged;
         this.progressUpdated = progressUpdated;
-        this.slotAwaiter =
-                slotAwaiter == null ? (transfer, token) -> CompletableFuture.completedFuture(null) : slotAwaiter;
         this.slotReleased = slotReleased;
         this.reporter = reporter;
         this.maximumLingerTime = maximumLingerTime;
@@ -229,13 +177,6 @@ public class TransferOptions {
      */
     public final boolean isDisposeOutputStreamOnCompletion() {
         return disposeOutputStreamOnCompletion;
-    }
-
-    /**
-     * Returns the transfer speed governor.
-     */
-    public final TransferGovernor getGovernor() {
-        return governor;
     }
 
     /**
@@ -274,13 +215,6 @@ public class TransferOptions {
     }
 
     /**
-     * Returns the upload slot awaiter.
-     */
-    public final TransferSlotAwaiter getSlotAwaiter() {
-        return slotAwaiter;
-    }
-
-    /**
      * Returns the slot-release callback, or {@code null}.
      */
     public final TransferSlotReleasedCallback getSlotReleased() {
@@ -302,7 +236,6 @@ public class TransferOptions {
      */
     public TransferOptions withAdditionalStateChanged(TransferStateChangedCallback additionalStateChanged) {
         return new TransferOptions(
-                governor,
                 change -> {
                     if (additionalStateChanged != null) {
                         additionalStateChanged.onStateChanged(change);
@@ -312,7 +245,6 @@ public class TransferOptions {
                     }
                 },
                 progressUpdated,
-                slotAwaiter,
                 slotReleased,
                 reporter,
                 maximumLingerTime,
@@ -351,10 +283,8 @@ public class TransferOptions {
     public TransferOptions withDisposalOptions(
             Boolean disposeInputStreamOnCompletion, Boolean disposeOutputStreamOnCompletion) {
         return new TransferOptions(
-                governor,
                 stateChanged,
                 progressUpdated,
-                slotAwaiter,
                 slotReleased,
                 reporter,
                 maximumLingerTime,

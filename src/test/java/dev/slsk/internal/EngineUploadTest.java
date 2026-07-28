@@ -239,7 +239,7 @@ class EngineUploadTest {
     void enqueueReturnsAfterLocalQueueingBeforeSlotAcquisition() {
         try (Fixture fixture = new Fixture()) {
             CompletableFuture<Void> slot = new CompletableFuture<>();
-            TransferOptions options = options(20, (transfer, token) -> slot, null, null, null, null);
+            TransferOptions options = options(20, null, null, null);
 
             TransferHandle upload = new TransferHandle(Blocking.await(fixture.client
                     .transfers()
@@ -276,12 +276,7 @@ class EngineUploadTest {
                             (dev.slsk.internal.events.TransferProgressUpdatedEvent eventData) ->
                                     progress.add(eventData.getTransfer().getBytesTransferred()));
             TransferOptions options = options(
-                    20,
-                    null,
-                    null,
-                    null,
-                    change -> optionStates.add(change.transfer().getState()),
-                    null);
+                    20, null, change -> optionStates.add(change.transfer().getState()), null);
 
             Transfer result = Blocking.await(fixture.client
                     .transfers()
@@ -386,7 +381,7 @@ class EngineUploadTest {
     void canDisableAutomaticSeeking() {
         try (Fixture fixture = new Fixture()) {
             fixture.transfer.offset = 1;
-            TransferOptions options = new TransferOptions(null, null, null, null, null, null, 20, false);
+            TransferOptions options = new TransferOptions(null, null, null, null, 20, false);
 
             Transfer result = Blocking.await(fixture.client
                     .transfers()
@@ -402,17 +397,11 @@ class EngineUploadTest {
     }
 
     @Test
-    void invokesGovernorThenReporterAndReturnsUnusedTokens() {
+    void reportsAttemptedGrantedAndActualAndReturnsUnusedTokens() {
         try (Fixture fixture = new Fixture()) {
-            List<Integer> governorRequests = new ArrayList<>();
             List<List<Integer>> reports = new ArrayList<>();
             TransferOptions options = options(
                     20,
-                    null,
-                    (transfer, requested, token) -> {
-                        governorRequests.add(requested);
-                        return CompletableFuture.completedFuture(requested);
-                    },
                     (transfer, attempted, granted, actual) -> reports.add(List.of(attempted, granted, actual)),
                     null,
                     null);
@@ -426,7 +415,6 @@ class EngineUploadTest {
                             .options(options)
                             .build()));
 
-            assertFalse(governorRequests.isEmpty());
             assertFalse(reports.isEmpty());
             assertTrue(reports.stream().anyMatch(report -> report.get(1) > report.get(2)));
         }
@@ -460,16 +448,20 @@ class EngineUploadTest {
         }
     }
 
+    /**
+     * Cancellation used to be provoked by a slot awaiter that failed. There is
+     * no pluggable awaiter now — the upload policy is the slot gate — so it is
+     * provoked the way a caller provokes it, through the signal.
+     */
     @Test
     void cancellationSetsFinalStateWritesDeniedAndReleasesSlot() {
         try (Fixture fixture = new Fixture()) {
-            CancellationException cancellation = new CancellationException("cancelled");
+            dev.slsk.CancellationController cancelled = new dev.slsk.CancellationController();
+            cancelled.cancel();
             AtomicInteger released = new AtomicInteger();
             List<Transfer> terminal = new ArrayList<>();
             TransferOptions options = options(
                     20,
-                    (transfer, token) -> CompletableFuture.failedFuture(cancellation),
-                    null,
                     null,
                     change -> {
                         if (change.transfer().getState().contains(TransferState.COMPLETED)) {
@@ -483,6 +475,7 @@ class EngineUploadTest {
                     .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(41)
                             .options(options)
+                            .cancellation(cancelled.getSignal())
                             .build())));
 
             // Cancellation surfaces as CancellationException; the exact
@@ -503,8 +496,6 @@ class EngineUploadTest {
             List<Transfer> terminal = new ArrayList<>();
             TransferOptions options = options(
                     20,
-                    null,
-                    null,
                     null,
                     change -> {
                         if (change.transfer().getState().contains(TransferState.COMPLETED)) {
@@ -527,31 +518,31 @@ class EngineUploadTest {
         }
     }
 
+    /**
+     * The failing slot awaiter this used to inject is gone with the awaiter. A
+     * source that will not open is the failure that remains, and the property
+     * that mattered — a released slot is released even when the release
+     * callback itself throws — is unchanged.
+     */
     @Test
-    void slotFailureIsWrappedAndAcquiredSlotIsReleased() {
+    void aSourceThatWillNotOpenIsWrappedAndTheSlotIsStillReleased() {
         try (Fixture fixture = new Fixture()) {
-            RuntimeException slotFailure = new RuntimeException("slot failed");
             Throwable failure = failureOf(() -> Blocking.await(fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> {
+                                throw new java.io.UncheckedIOException(new java.io.IOException("source is gone"));
+                            })
                             .token(43)
-                            .options(options(
-                                    20,
-                                    (transfer, token) -> CompletableFuture.failedFuture(slotFailure),
-                                    null,
-                                    null,
-                                    null,
-                                    null))
+                            .options(options(20))
                             .build())));
-            SoulseekClientException mapped = assertInstanceOf(SoulseekClientException.class, failure);
-            assertInstanceOf(TransferException.class, mapped.getCause());
+            assertInstanceOf(SoulseekClientException.class, failure);
 
             AtomicInteger released = new AtomicInteger();
             Blocking.await(fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "other", 1, offset -> completedStream(new byte[] {1}))
                             .token(44)
-                            .options(options(20, null, null, null, null, transfer -> {
+                            .options(options(20, null, null, transfer -> {
                                 released.incrementAndGet();
                                 throw new RuntimeException("ignored");
                             }))
@@ -648,17 +639,15 @@ class EngineUploadTest {
     }
 
     private static TransferOptions options(int linger) {
-        return options(linger, null, null, null, null, null);
+        return options(linger, null, null, null);
     }
 
     private static TransferOptions options(
             int linger,
-            dev.slsk.internal.options.TransferSlotAwaiter slotAwaiter,
-            dev.slsk.internal.options.TransferGovernor governor,
             dev.slsk.internal.options.TransferReporter reporter,
             dev.slsk.internal.options.TransferStateChangedCallback stateChanged,
             dev.slsk.internal.options.TransferSlotReleasedCallback slotReleased) {
-        return new TransferOptions(governor, stateChanged, null, slotAwaiter, slotReleased, reporter, linger);
+        return new TransferOptions(stateChanged, null, slotReleased, reporter, linger);
     }
 
     /**

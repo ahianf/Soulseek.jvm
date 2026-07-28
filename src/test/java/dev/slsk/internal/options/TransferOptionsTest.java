@@ -12,11 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.internal.TransferState;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -24,30 +22,16 @@ class TransferOptionsTest {
     @Test
     @DisplayName("Instantiates with given data")
     void instantiatesWithGivenData() {
-        TransferGovernor governor = (transfer, requested, token) -> CompletableFuture.completedFuture(requested);
         TransferStateChangedCallback stateChanged = change -> {};
         TransferProgressUpdatedCallback progressUpdated = update -> {};
-        TransferSlotAwaiter slotAwaiter = (transfer, token) -> CompletableFuture.completedFuture(null);
         TransferSlotReleasedCallback slotReleased = transfer -> {};
         TransferReporter reporter = (transfer, attempted, granted, transferred) -> {};
 
         TransferOptions options = new TransferOptions(
-                governor,
-                stateChanged,
-                progressUpdated,
-                slotAwaiter,
-                slotReleased,
-                reporter,
-                42,
-                false,
-                false,
-                false,
-                false);
+                stateChanged, progressUpdated, slotReleased, reporter, 42, false, false, false, false);
 
-        assertSame(governor, options.getGovernor());
         assertSame(stateChanged, options.getStateChanged());
         assertSame(progressUpdated, options.getProgressUpdated());
-        assertSame(slotAwaiter, options.getSlotAwaiter());
         assertSame(slotReleased, options.getSlotReleased());
         assertSame(reporter, options.getReporter());
         assertEquals(42, options.getMaximumLingerTime());
@@ -67,14 +51,6 @@ class TransferOptionsTest {
         assertTrue(options.isDisposeInputStreamOnCompletion());
         assertTrue(options.isDisposeOutputStreamOnCompletion());
         assertEquals(TransferOptions.DEFAULT_MAXIMUM_LINGER_TIME, options.getMaximumLingerTime());
-        assertEquals(
-                Integer.MAX_VALUE,
-                options.getGovernor()
-                        .grantAsync(null, 1, CancellationSignal.none())
-                        .join());
-        assertNull(options.getSlotAwaiter()
-                .awaitSlotAsync(null, CancellationSignal.none())
-                .join());
         assertNull(options.getStateChanged());
         assertNull(options.getProgressUpdated());
         assertNull(options.getSlotReleased());
@@ -84,19 +60,15 @@ class TransferOptionsTest {
     @Test
     @DisplayName("WithAdditionalStateChanged retains other options")
     void withAdditionalStateChangedRetainsOtherOptions() {
-        TransferGovernor governor = (transfer, requested, token) -> CompletableFuture.completedFuture(requested);
         TransferProgressUpdatedCallback progress = update -> {};
-        TransferSlotAwaiter awaiter = (transfer, token) -> CompletableFuture.completedFuture(null);
         TransferSlotReleasedCallback released = transfer -> {};
         TransferReporter reporter = (transfer, attempted, granted, transferred) -> {};
-        TransferOptions original = new TransferOptions(
-                governor, null, progress, awaiter, released, reporter, 42, false, true, false, true);
+        TransferOptions original =
+                new TransferOptions(null, progress, released, reporter, 42, false, true, false, true);
 
         TransferOptions copy = original.withAdditionalStateChanged(null);
 
-        assertSame(governor, copy.getGovernor());
         assertSame(progress, copy.getProgressUpdated());
-        assertSame(awaiter, copy.getSlotAwaiter());
         assertSame(released, copy.getSlotReleased());
         assertSame(reporter, copy.getReporter());
         assertEquals(42, copy.getMaximumLingerTime());
@@ -112,7 +84,7 @@ class TransferOptionsTest {
     @DisplayName("WithAdditionalStateChanged executes new callback before existing")
     void withAdditionalStateChangedExecutesBothInOrder() {
         List<Integer> order = new ArrayList<>();
-        TransferOptions original = new TransferOptions(null, change -> order.add(2));
+        TransferOptions original = new TransferOptions(change -> order.add(2));
         TransferOptions copy = original.withAdditionalStateChanged(change -> order.add(1));
 
         copy.getStateChanged().onStateChanged(new TransferStateChange(TransferState.NONE, null));
@@ -142,8 +114,7 @@ class TransferOptionsTest {
     @Test
     @DisplayName("WithDisposalOptions retains null overrides")
     void withDisposalOptionsRetainsNullOverrides() {
-        TransferOptions original =
-                new TransferOptions(null, null, null, null, null, null, 42, false, false, false, true);
+        TransferOptions original = new TransferOptions(null, null, null, null, 42, false, false, false, true);
 
         TransferOptions copy = original.withDisposalOptions();
 

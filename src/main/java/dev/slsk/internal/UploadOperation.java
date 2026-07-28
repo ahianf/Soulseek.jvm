@@ -123,7 +123,10 @@ final class UploadOperation {
                             + upload.getUsername() + " acquired");
 
             try {
-                await(transferOptions.getSlotAwaiter().awaitSlotAsync(upload.toTransfer(), cancellationSignal));
+                // The slot gate is the upload policy: serveUpload is only
+                // reached on an Allow, and Allow is only returned when a slot is
+                // free. A second, pluggable gate in front of it was two places
+                // to express one rule.
                 slot.set(true);
                 engine.context
                         .getDiagnostic()
@@ -308,12 +311,8 @@ final class UploadOperation {
                 : connection.writeAsync(
                         remaining,
                         trackingStream,
-                        (requestedBytes, governorToken) -> transferOptions
-                                .getGovernor()
-                                .grantAsync(upload.toTransfer(), requestedBytes, governorToken)
-                                .thenCompose(granted -> engine.context
-                                        .getUploadTokenBucket()
-                                        .getAsync(Math.min(requestedBytes, granted), cancellationSignal)),
+                        (requestedBytes, governorToken) ->
+                                engine.context.getUploadTokenBucket().getAsync(requestedBytes, cancellationSignal),
                         (attemptedBytes, grantedBytes, transferredBytes) -> {
                             if (transferOptions.getReporter() != null) {
                                 transferOptions

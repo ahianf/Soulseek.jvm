@@ -337,12 +337,12 @@ final class DownloadOperation {
             CompletableFuture<Void> read = connection.readAsync(
                     download.getSize() - download.getStartOffset(),
                     trackingStream,
-                    (requestedBytes, governorToken) -> transferOptions
-                            .getGovernor()
-                            .grantAsync(download.toTransfer(), requestedBytes, governorToken)
-                            .thenCompose(granted -> engine.context
-                                    .getDownloadTokenBucket()
-                                    .getAsync(Math.min(requestedBytes, granted), governorToken)),
+                    // The bucket is the whole of the metering now. A pluggable
+                    // per-transfer governor sat in front of it and every
+                    // implementation granted everything, which is what the
+                    // bucket already does when the rate is unlimited.
+                    (requestedBytes, governorToken) ->
+                            engine.context.getDownloadTokenBucket().getAsync(requestedBytes, governorToken),
                     (attemptedBytes, grantedBytes, transferredBytes) -> {
                         if (transferOptions.getReporter() != null) {
                             transferOptions
