@@ -6,6 +6,8 @@ package dev.slsk.internal.network.tcp;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -80,6 +82,70 @@ class ListenerTest {
                     accepted.get().close();
                 }
             }
+        }
+    }
+
+    @Test
+    @DisplayName("stopping a listener is silent, because shutdown is a state and not a failure")
+    void stoppingRaisesNothingToTheUncaughtHandler() throws Exception {
+        // stop() closes the server socket under a pending accept, so the accept
+        // fails — every time, by design. The loop used to rethrow it, so a
+        // normal shutdown printed a SocketException stack trace to stderr from
+        // a thread named after the library. An operator who sees that on every
+        // clean exit learns to ignore the channel that should never be noisy.
+        InetAddress address = InetAddress.getLoopbackAddress();
+        AtomicReference<Throwable> uncaught = new AtomicReference<>();
+        try (ServerSocket server = new ServerSocket(0, 1, address);
+                UncaughtHandler handler = new UncaughtHandler(uncaught)) {
+            SocketListener listener =
+                    new SocketListener(address, server.getLocalPort(), null, new TcpListenerAdapter(server));
+            listener.start();
+            // Let the accept actually block before closing it out from under.
+            Thread.sleep(50);
+
+            listener.stop();
+            Thread.sleep(250);
+
+            assertNull(uncaught.get(), () -> "a normal stop() reached the uncaught handler: " + uncaught.get());
+            assertFalse(listener.isListening());
+        }
+    }
+
+    @Test
+    @DisplayName("an accept that fails while still listening is still a failure, and still surfaces")
+    void aRealAcceptFailureStillSurfaces() throws Exception {
+        // The other half of the same rule: silence for our own stop() must not
+        // become silence for a listener that has genuinely died, or the fix
+        // would have replaced noise with a client that quietly stops accepting.
+        AtomicReference<Throwable> uncaught = new AtomicReference<>();
+        FakeTcpListener tcpListener = new FakeTcpListener();
+        try (UncaughtHandler handler = new UncaughtHandler(uncaught)) {
+            SocketListener listener = new SocketListener(InetAddress.getLoopbackAddress(), 2234, null, tcpListener);
+            listener.start();
+            Thread.sleep(50);
+
+            tcpListener.accept.completeExceptionally(new java.net.SocketException("the interface went away"));
+
+            long deadline = System.nanoTime() + 2_000_000_000L;
+            while (uncaught.get() == null && System.nanoTime() < deadline) {
+                Thread.sleep(2);
+            }
+            assertNotNull(uncaught.get(), "a dead accept loop said nothing");
+            assertFalse(listener.isListening(), "and it still claimed to be listening");
+        }
+    }
+
+    /** Captures what reaches the default uncaught-exception handler, and restores it. */
+    private static final class UncaughtHandler implements AutoCloseable {
+        private final Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
+
+        private UncaughtHandler(AtomicReference<Throwable> sink) {
+            Thread.setDefaultUncaughtExceptionHandler((thread, failure) -> sink.compareAndSet(null, failure));
+        }
+
+        @Override
+        public void close() {
+            Thread.setDefaultUncaughtExceptionHandler(previous);
         }
     }
 

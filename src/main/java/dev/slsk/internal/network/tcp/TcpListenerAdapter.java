@@ -13,7 +13,6 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 
 /**
  * Pass-through implementation of {@link TcpListener} over a server socket.
@@ -51,7 +50,11 @@ final class TcpListenerAdapter implements TcpListener {
             try {
                 return serverSocket.accept();
             } catch (IOException exception) {
-                throw new CompletionException(exception);
+                // The same UncheckedIOException every other method here throws.
+                // Building a CompletionException by hand only meant the caller
+                // saw a stack trace pointing at this lambda rather than at the
+                // socket, and the future wraps whatever escapes anyway.
+                throw new UncheckedIOException(exception);
             }
         });
     }
