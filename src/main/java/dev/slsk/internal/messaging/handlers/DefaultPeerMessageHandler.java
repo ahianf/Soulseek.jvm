@@ -539,7 +539,20 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
             return new EnqueueResult(true, denied.message());
         }
         if (decision instanceof dev.slsk.spi.UploadPolicy.Decision.Allow) {
-            services.serve(dev.slsk.Username.of(username), filename);
+            try {
+                services.serve(dev.slsk.Username.of(username), filename);
+            } catch (RuntimeException failure) {
+                // The admission catches a throwing policy itself; this is the
+                // upload failing to start after the policy said yes. The peer
+                // still deserves an answer, and — as the C# source does for
+                // any enqueue failure — a generic one: the real message can
+                // carry filesystem details a stranger should not see. Silence
+                // would leave the peer hanging until its own timeout.
+                diagnostic.warning(
+                        "Failed to start serving " + filename + " to " + username + ": " + message(failure),
+                        unwrap(failure));
+                return new EnqueueResult(true, "Enqueue failed due to internal error");
+            }
         }
         return new EnqueueResult(false, "");
     }

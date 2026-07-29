@@ -366,6 +366,26 @@ class PeerMessageHandlerTest {
                 failed.connection.outgoing.getFirst().toByteArray());
     }
 
+    /**
+     * The admission guards a throwing policy itself; this is the upload
+     * failing to start after the policy said yes. The C# source answers any
+     * enqueue failure with a generic denial — generic because the real message
+     * can carry filesystem details a stranger should not see — where silence
+     * would leave the peer hanging until its own timeout.
+     */
+    @Test
+    @DisplayName("an upload that fails to start after an Allow still answers the peer")
+    void aServeThatThrowsAfterAllowStillDeniesThePeer() {
+        Fixture fixture = new Fixture(policy((request, context) -> new UploadPolicy.Decision.Allow()));
+        fixture.client.serveFailure = new IllegalStateException("no such file on disk: /home/me/secret");
+
+        fixture.handler.handleMessageRead(fixture.connection.proxy, new QueueDownloadRequest(FILENAME).toByteArray());
+
+        assertArrayEquals(
+                new UploadDenied(FILENAME, "Enqueue failed due to internal error").toByteArray(),
+                fixture.connection.outgoing.getFirst().toByteArray());
+    }
+
     @Test
     void downloadTransferRequestSendsQueuedOrTwoRejectionMessages() {
         Fixture queued = new Fixture(policy((request, context) -> new UploadPolicy.Decision.Allow()));
@@ -658,8 +678,14 @@ class PeerMessageHandlerTest {
         /** What the handler asked us to serve; asserted on by the tests. */
         private final List<String> served = new java.util.ArrayList<>();
 
+        /** A failure to inject into {@link #serve}. */
+        private RuntimeException serveFailure;
+
         @Override
         public void serve(Username user, String path) {
+            if (serveFailure != null) {
+                throw serveFailure;
+            }
             served.add(user.value() + " " + path);
         }
 
