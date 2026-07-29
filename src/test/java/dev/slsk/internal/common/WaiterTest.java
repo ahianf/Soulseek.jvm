@@ -180,19 +180,31 @@ class WaiterTest {
         }
     }
 
+    /**
+     * Deliberately not the C# behaviour. The source's cancel action dequeues
+     * the key's oldest wait, so with two callers under one key — CHECK_
+     * PRIVILEGES, PING, a shared place-in-queue key — caller B's cancellation
+     * settled caller A's wait: A saw a spurious CancellationException, and B
+     * stayed waiting to be handed A's response. The signal belongs to one
+     * wait, and it is that wait it cancels. Nothing on the wire changes.
+     */
     @Test
-    @DisplayName("Cancellation callback preserves source FIFO disposition")
-    void cancellationCallbackPreservesFifoDisposition() {
+    @DisplayName("A caller's cancellation settles its own wait, not the oldest under the key")
+    void cancellationTargetsTheWaitWhoseSignalFired() {
         try (DefaultWaiter waiter = new DefaultWaiter();
                 CancellationController secondSource = new CancellationController()) {
             WaitKey key = new WaitKey("login");
             Wait<String> first = waiter.register(key, String.class, 30_000, null);
-            waiter.register(key, String.class, 30_000, secondSource.getSignal());
+            Wait<String> second = waiter.register(key, String.class, 30_000, secondSource.getSignal());
 
             secondSource.cancel();
 
-            assertThrows(CancellationException.class, first::await);
-            assertEquals(1, waiter.getWaitCount(key));
+            assertThrows(CancellationException.class, second::await);
+            assertEquals(1, waiter.getWaitCount(key), "the uncancelled wait is still registered");
+
+            // And it is still the head: the next response reaches it.
+            waiter.complete(key, "answer");
+            assertEquals("answer", first.await());
         }
     }
 
@@ -287,10 +299,12 @@ class WaiterTest {
     @DisplayName("PendingWait close works before and after registration")
     void pendingWaitCloseWorksBeforeAndAfterRegistration() {
         try (Scheduler scheduler = new Scheduler("waiter-test-timer")) {
-            DefaultWaiter.PendingWait<String> unregistered = new DefaultWaiter.PendingWait<>(
-                    String.class, 30_000, () -> {}, () -> {}, CancellationSignal.none());
-            DefaultWaiter.PendingWait<String> registered = new DefaultWaiter.PendingWait<>(
-                    String.class, 30_000, () -> {}, () -> {}, CancellationSignal.none());
+            DefaultWaiter.PendingWait<String> unregistered =
+                    new DefaultWaiter.PendingWait<>(String.class, 30_000, CancellationSignal.none());
+            unregistered.actions(() -> {}, () -> {});
+            DefaultWaiter.PendingWait<String> registered =
+                    new DefaultWaiter.PendingWait<>(String.class, 30_000, CancellationSignal.none());
+            registered.actions(() -> {}, () -> {});
 
             assertDoesNotThrow(unregistered::close);
             registered.register(scheduler);

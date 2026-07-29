@@ -84,6 +84,49 @@ public final class DefaultWaiter implements Waiter {
     }
 
     /**
+     * Cancels one specific wait — the one whose signal fired.
+     *
+     * <p>Not the oldest for the key. Keys like {@code CHECK_PRIVILEGES} or
+     * {@code PLACE_IN_QUEUE_RESPONSE(user, file)} can hold two callers' waits
+     * at once, and dequeuing the head handed caller B's cancellation to caller
+     * A: A got a spurious {@code CancellationException} and B stayed waiting,
+     * to later be settled with A's response. The C# waiter completes the
+     * specific wait; so does this.
+     */
+    private void cancel(WaitKey key, PendingWait<?> wait) {
+        if (remove(key, wait)) {
+            wait.close();
+            wait.settle(null, new CancellationException("The wait was cancelled"));
+        }
+    }
+
+    /** Times out one specific wait — the one whose timer fired. */
+    private void timeout(WaitKey key, PendingWait<?> wait) {
+        if (remove(key, wait)) {
+            wait.close();
+            wait.settle(null, new TimeoutException("The wait timed out after " + wait.timeout + " milliseconds"));
+        }
+    }
+
+    /**
+     * Removes one specific wait from its queue, if it is still registered.
+     *
+     * @return whether it was there to remove — {@code false} means somebody
+     *     else already settled it
+     */
+    private synchronized boolean remove(WaitKey key, PendingWait<?> wait) {
+        ArrayDeque<PendingWait<?>> queue = waits.get(key);
+        if (queue == null) {
+            return false;
+        }
+        boolean removed = queue.remove(wait);
+        if (queue.isEmpty()) {
+            waits.remove(key);
+        }
+        return removed;
+    }
+
+    /**
      * Cancels all pending waits.
      */
     public void cancelAll() {
@@ -185,8 +228,11 @@ public final class DefaultWaiter implements Waiter {
             throw new IllegalArgumentException("timeout must be greater than or equal to -1");
         }
         CancellationSignal effectiveToken = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
-        PendingWait<T> wait =
-                new PendingWait<>(resultType, effectiveTimeout, () -> cancel(key), () -> timeout(key), effectiveToken);
+        PendingWait<T> wait = new PendingWait<>(resultType, effectiveTimeout, effectiveToken);
+        // The actions name the wait itself, not the key's queue head: another
+        // caller's wait under the same key must not absorb this one's
+        // cancellation or timeout.
+        wait.actions(() -> cancel(key, wait), () -> timeout(key, wait));
 
         synchronized (this) {
             if (closed) {
@@ -265,29 +311,32 @@ public final class DefaultWaiter implements Waiter {
      * @param <T> the result type
      */
     static final class PendingWait<T> implements Wait<T>, AutoCloseable {
-        private final Runnable cancelAction;
         private final CancellationSignal cancellationSignal;
         private final CountDownLatch settled = new CountDownLatch(1);
         private final Class<T> resultType;
         private final int timeout;
-        private final Runnable timeoutAction;
+        private Runnable cancelAction;
+        private Runnable timeoutAction;
         private T result;
         private Throwable failure;
         private CancellationSubscription cancellationSubscription;
         private boolean closed;
         private ScheduledFuture<?> timeoutTask;
 
-        PendingWait(
-                Class<T> resultType,
-                int timeout,
-                Runnable cancelAction,
-                Runnable timeoutAction,
-                CancellationSignal cancellationSignal) {
+        PendingWait(Class<T> resultType, int timeout, CancellationSignal cancellationSignal) {
             this.resultType = Objects.requireNonNull(resultType, "resultType");
             this.timeout = timeout;
+            this.cancellationSignal = Objects.requireNonNull(cancellationSignal, "cancellationSignal");
+        }
+
+        /**
+         * Names what cancellation and timeout do. Set after construction —
+         * both actions reference the wait itself — and before {@link
+         * #register}, which is what arms them.
+         */
+        void actions(Runnable cancelAction, Runnable timeoutAction) {
             this.cancelAction = Objects.requireNonNull(cancelAction, "cancelAction");
             this.timeoutAction = Objects.requireNonNull(timeoutAction, "timeoutAction");
-            this.cancellationSignal = Objects.requireNonNull(cancellationSignal, "cancellationSignal");
         }
 
         @Override
