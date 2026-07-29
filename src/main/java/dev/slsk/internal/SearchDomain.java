@@ -140,62 +140,6 @@ final class SearchDomain {
                 request.getCancellationSignal());
     }
 
-    SearchResult search(SearchQuery query) {
-        return search(query, null, null, null, CancellationSignal.none());
-    }
-    /**
-     * Searches the network and collects accepted responses.
-     *
-     * @param query the search query
-     * @param cancellationSignal the cancellation signal
-     * @return the completed search and collected responses
-     */
-    SearchResult search(SearchQuery query, CancellationSignal cancellationSignal) {
-        return search(query, null, null, null, cancellationSignal);
-    }
-    /**
-     * Searches the selected scope and collects accepted responses.
-     *
-     * @param query the search query
-     * @param scope the search scope
-     * @return the completed search and collected responses
-     */
-    SearchResult search(SearchQuery query, SearchScope scope) {
-        return search(query, scope, null, null, CancellationSignal.none());
-    }
-    /**
-     * Searches the selected scope with a specific token.
-     *
-     * @param query the search query
-     * @param scope the search scope
-     * @param token the unique token
-     * @return the completed search and collected responses
-     */
-    SearchResult search(SearchQuery query, SearchScope scope, Integer token) {
-        return search(query, scope, token, null, CancellationSignal.none());
-    }
-    /**
-     * Searches the selected scope using the supplied context.getClientOptions().
-     *
-     * @param query the search query
-     * @param scope the search scope
-     * @param token the unique token
-     * @param searchOptions the search options
-     * @return the completed search and collected responses
-     */
-    SearchResult search(SearchQuery query, SearchScope scope, Integer token, SearchOptions searchOptions) {
-        return search(query, scope, token, searchOptions, CancellationSignal.none());
-    }
-    /**
-     * Searches the selected scope and collects accepted responses.
-     *
-     * @param query the search query
-     * @param scope the search scope, or {@code null} for the network
-     * @param token the unique token, or {@code null} to generate one
-     * @param searchOptions the search options, or {@code null} for defaults
-     * @param cancellationSignal the cancellation signal
-     * @return the completed search and collected responses
-     */
     SearchResult search(
             SearchQuery query,
             SearchScope scope,
@@ -214,73 +158,6 @@ final class SearchDomain {
      *
      * @param query the search query
      * @param responseHandler the response handler
-     * @return the completed search
-     */
-    Search search(SearchQuery query, Consumer<SearchResponse> responseHandler) {
-        return search(query, responseHandler, null, null, null, CancellationSignal.none());
-    }
-    /**
-     * Searches the network and invokes a handler for each accepted response.
-     *
-     * @param query the search query
-     * @param responseHandler the response handler
-     * @param cancellationSignal the cancellation signal
-     * @return the completed search
-     */
-    Search search(SearchQuery query, Consumer<SearchResponse> responseHandler, CancellationSignal cancellationSignal) {
-        return search(query, responseHandler, null, null, null, cancellationSignal);
-    }
-    /**
-     * Searches the selected scope and invokes a response handler.
-     *
-     * @param query the search query
-     * @param responseHandler the response handler
-     * @param scope the search scope
-     * @return the completed search
-     */
-    Search search(SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope) {
-        return search(query, responseHandler, scope, null, null, CancellationSignal.none());
-    }
-    /**
-     * Searches the selected scope with a specific token.
-     *
-     * @param query the search query
-     * @param responseHandler the response handler
-     * @param scope the search scope
-     * @param token the unique token
-     * @return the completed search
-     */
-    Search search(SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope, Integer token) {
-        return search(query, responseHandler, scope, token, null, CancellationSignal.none());
-    }
-    /**
-     * Searches the selected scope using the supplied context.getClientOptions().
-     *
-     * @param query the search query
-     * @param responseHandler the response handler
-     * @param scope the search scope
-     * @param token the unique token
-     * @param searchOptions the search options
-     * @return the completed search
-     */
-    Search search(
-            SearchQuery query,
-            Consumer<SearchResponse> responseHandler,
-            SearchScope scope,
-            Integer token,
-            SearchOptions searchOptions) {
-        return search(query, responseHandler, scope, token, searchOptions, CancellationSignal.none());
-    }
-    /**
-     * Searches the selected scope and invokes a handler for each accepted
-     * response.
-     *
-     * @param query the search query
-     * @param responseHandler the response handler
-     * @param scope the search scope, or {@code null} for the network
-     * @param token the unique token, or {@code null} to generate one
-     * @param searchOptions the search options, or {@code null} for defaults
-     * @param cancellationSignal the cancellation signal
      * @return the completed search
      */
     Search search(
