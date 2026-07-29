@@ -9,7 +9,6 @@ import dev.slsk.EventStream;
 import dev.slsk.Username;
 import dev.slsk.events.ChatEvent;
 import dev.slsk.internal.EngineEvents.Kind;
-import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.PrivateMessageReceivedEvent;
 import java.time.Instant;
@@ -63,7 +62,7 @@ final class DefaultChat implements Chat {
             return;
         }
         try {
-            Blocking.await(server.acknowledgePrivateMessage(event.getId()));
+            server.acknowledgePrivateMessage(event.getId());
         } catch (RuntimeException exception) {
             diagnostics.warning("Failed to acknowledge private message " + event.getId(), exception);
         }
@@ -74,7 +73,7 @@ final class DefaultChat implements Chat {
         Objects.requireNonNull(to, "to");
         Objects.requireNonNull(message, "message");
         Objects.requireNonNull(signal, "signal");
-        Blocking.await(server.sendPrivateMessage(to.value(), message, signal));
+        server.sendPrivateMessage(to.value(), message, signal);
     }
 
     @Override

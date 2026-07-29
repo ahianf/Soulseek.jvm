@@ -23,8 +23,8 @@ import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.internal.EngineEvents.Kind;
-import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.common.Outcomes;
+import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
@@ -78,51 +78,51 @@ class EngineUploadTest {
             for (String bad : new String[] {null, "", " ", "\t"}) {
                 assertThrows(
                         IllegalArgumentException.class,
-                        () -> Blocking.await(fixture.client
+                        () -> fixture.client
                                 .transfers()
                                 .upload(UploadRequest.fromStream(bad, "file", 0, offset -> completedStream(new byte[0]))
-                                        .build())));
+                                        .build()));
                 assertThrows(
                         IllegalArgumentException.class,
-                        () -> Blocking.await(fixture.client
+                        () -> fixture.client
                                 .transfers()
                                 .upload(UploadRequest.fromStream(
                                                 "alice", bad, 0, offset -> completedStream(new byte[0]))
-                                        .build())));
+                                        .build()));
                 assertThrows(
                         IllegalArgumentException.class,
-                        () -> Blocking.await(fixture.client
+                        () -> fixture.client
                                 .transfers()
                                 .upload(UploadRequest.fromFile("alice", "file", bad)
-                                        .build())));
+                                        .build()));
             }
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> Blocking.await(fixture.client
+                    () -> fixture.client
                             .transfers()
                             .upload(UploadRequest.fromStream(
                                             "alice", "file", -1, offset -> completedStream(new byte[0]))
-                                    .build())));
+                                    .build()));
             assertThrows(
                     NullPointerException.class,
-                    () -> Blocking.await(fixture.client
+                    () -> fixture.client
                             .transfers()
                             .upload(UploadRequest.fromStream("alice", "file", 0, null)
-                                    .build())));
+                                    .build()));
             assertThrows(
                     UncheckedIOException.class,
-                    () -> Blocking.await(fixture.client
+                    () -> fixture.client
                             .transfers()
                             .upload(UploadRequest.fromFile("alice", "file", "/missing/upload-file")
-                                    .build())));
+                                    .build()));
 
             fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
             assertThrows(
                     IllegalStateException.class,
-                    () -> Blocking.await(fixture.client
+                    () -> fixture.client
                             .transfers()
                             .upload(UploadRequest.fromStream("alice", "file", 0, offset -> completedStream(new byte[0]))
-                                    .build())));
+                                    .build()));
         }
     }
 
@@ -132,13 +132,13 @@ class EngineUploadTest {
             CancellationController source = new CancellationController();
             fixture.transfer.size = 0;
 
-            Transfer result = Blocking.await(fixture.client
+            Transfer result = fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "empty", 0, offset -> completedStream(new byte[0]))
                             .token(41)
                             .options(options(20))
                             .cancellation(source.getSignal())
-                            .build()));
+                            .build());
 
             assertEquals(0, result.getSize());
             assertSame(source.getSignal(), fixture.message.lastToken);
@@ -153,12 +153,12 @@ class EngineUploadTest {
         byte[] bytes = new byte[] {5, 4, 3, 2, 1};
         Files.write(file, bytes);
         try (Fixture fixture = new Fixture()) {
-            Transfer result = Blocking.await(fixture.client
+            Transfer result = fixture.client
                     .transfers()
                     .upload(UploadRequest.fromFile("alice", "remote", file.toString())
                             .token(7)
                             .options(options(20))
-                            .build()));
+                            .build());
 
             assertEquals(bytes.length, result.getSize());
             assertArrayEquals(bytes, fixture.transfer.written.toByteArray());
@@ -173,23 +173,23 @@ class EngineUploadTest {
             fixture.client.getUploadsInternal().put(8, transfer(TransferDirection.UPLOAD, "other", "other", 8));
             assertThrows(
                     DuplicateTokenException.class,
-                    () -> Blocking.await(fixture.client
+                    () -> fixture.client
                             .transfers()
                             .upload(UploadRequest.fromStream(
                                             "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                                     .token(8)
-                                    .build())));
+                                    .build()));
 
             fixture.client.getUploadsInternal().clear();
             fixture.client.getDownloadDictionary().put(9, transfer(TransferDirection.DOWNLOAD, "other", "other", 9));
             assertThrows(
                     DuplicateTokenException.class,
-                    () -> Blocking.await(fixture.client
+                    () -> fixture.client
                             .transfers()
                             .upload(UploadRequest.fromStream(
                                             "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                                     .token(9)
-                                    .build())));
+                                    .build()));
         }
     }
 
@@ -199,23 +199,23 @@ class EngineUploadTest {
             fixture.client.getUploadsInternal().put(8, transfer(TransferDirection.UPLOAD, "alice", "file", 8));
             assertThrows(
                     DuplicateTransferException.class,
-                    () -> Blocking.await(fixture.client
+                    () -> fixture.client
                             .transfers()
                             .upload(UploadRequest.fromStream(
                                             "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                                     .token(9)
-                                    .build())));
+                                    .build()));
 
             fixture.client.getUploadsInternal().clear();
             fixture.client.getUniqueKeys().put("Upload:alice:file", true);
             assertThrows(
                     DuplicateTransferException.class,
-                    () -> Blocking.await(fixture.client
+                    () -> fixture.client
                             .transfers()
                             .upload(UploadRequest.fromStream(
                                             "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                                     .token(9)
-                                    .build())));
+                                    .build()));
         }
     }
 
@@ -225,12 +225,12 @@ class EngineUploadTest {
             fixture.client.getUploadsInternal().put(8, transfer(TransferDirection.UPLOAD, "alice", "other", 8));
             fixture.client.getUploadsInternal().put(9, transfer(TransferDirection.UPLOAD, "other", "file", 9));
 
-            Transfer result = Blocking.await(fixture.client
+            Transfer result = fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(10)
                             .options(options(20))
-                            .build()));
+                            .build());
 
             assertTrue(result.getState().contains(TransferState.SUCCEEDED));
         }
@@ -242,7 +242,7 @@ class EngineUploadTest {
             CompletableFuture<Void> slot = new CompletableFuture<>();
             TransferOptions options = options(20, null, null, null);
 
-            TransferHandle upload = new TransferHandle(Blocking.await(fixture.client
+            TransferHandle upload = new TransferHandle(Outcomes.await(fixture.client
                     .transfers()
                     .enqueueUpload(
                             UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
@@ -279,13 +279,13 @@ class EngineUploadTest {
             TransferOptions options = options(
                     20, null, change -> optionStates.add(change.transfer().getState()), null);
 
-            Transfer result = Blocking.await(fixture.client
+            Transfer result = fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream(
                                     "alice", "remote\\file", bytes.length, offset -> completedStream(bytes))
                             .token(22)
                             .options(options)
-                            .build()));
+                            .build());
 
             List<TransferState> expected = List.of(
                     TransferState.QUEUED.or(TransferState.LOCALLY),
@@ -316,12 +316,12 @@ class EngineUploadTest {
             fixture.transfer.offset = 2;
             byte[] bytes = new byte[] {1, 2, 3, 4, 5};
 
-            Transfer result = Blocking.await(fixture.client
+            Transfer result = fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "file", bytes.length, offset -> completedStream(bytes))
                             .token(31)
                             .options(options(20))
-                            .build()));
+                            .build());
 
             assertEquals(2, result.getStartOffset());
             assertEquals(3, fixture.transfer.writeLength);
@@ -335,13 +335,13 @@ class EngineUploadTest {
         try (Fixture fixture = new Fixture()) {
             fixture.transfer.offset = 3;
 
-            Transfer result = Blocking.await(fixture.client
+            Transfer result = fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream(
                                     "alice", "file", 3, offset -> completedStream(new byte[] {1, 2, 3}))
                             .token(32)
                             .options(options(20))
-                            .build()));
+                            .build());
 
             assertEquals(0, fixture.transfer.writeCalls);
             assertEquals(3, result.getBytesTransferred());
@@ -352,18 +352,18 @@ class EngineUploadTest {
     void rejectsOffsetBeyondSizeAndNonSeekableResume() {
         try (Fixture fixture = new Fixture()) {
             fixture.transfer.offset = 4;
-            Throwable tooLong = failureOf(() -> Blocking.await(fixture.client
+            Throwable tooLong = failureOf(() -> fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream(
                                     "alice", "file", 3, offset -> completedStream(new byte[] {1, 2, 3}))
                             .token(33)
                             .options(options(20))
-                            .build())));
+                            .build()));
             assertInstanceOf(SoulseekClientException.class, tooLong);
             assertInstanceOf(TransferException.class, tooLong.getCause());
 
             fixture.transfer.offset = 1;
-            Throwable notSeekable = failureOf(() -> Blocking.await(fixture.client
+            Throwable notSeekable = failureOf(() -> fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "other", 2, offset -> (new InputStream() {
                                 @Override
@@ -373,7 +373,7 @@ class EngineUploadTest {
                             }))
                             .token(34)
                             .options(options(20))
-                            .build())));
+                            .build()));
             assertInstanceOf(SoulseekClientException.class, notSeekable);
         }
     }
@@ -384,13 +384,13 @@ class EngineUploadTest {
             fixture.transfer.offset = 1;
             TransferOptions options = new TransferOptions(null, null, null, null, 20, false);
 
-            Transfer result = Blocking.await(fixture.client
+            Transfer result = fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream(
                                     "alice", "file", 3, offset -> completedStream(new byte[] {9, 8, 7}))
                             .token(35)
                             .options(options)
-                            .build()));
+                            .build());
 
             assertArrayEquals(new byte[] {9, 8}, fixture.transfer.written.toByteArray());
             assertEquals(3, result.getBytesTransferred());
@@ -408,13 +408,13 @@ class EngineUploadTest {
                     null);
             fixture.transfer.maximumActualPerIteration = 2;
 
-            Blocking.await(fixture.client
+            fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream(
                                     "alice", "file", 5, offset -> completedStream(new byte[] {1, 2, 3, 4, 5}))
                             .token(36)
                             .options(options)
-                            .build()));
+                            .build());
 
             assertFalse(reports.isEmpty());
             assertTrue(reports.stream().anyMatch(report -> report.get(1) > report.get(2)));
@@ -434,12 +434,12 @@ class EngineUploadTest {
                         }
                     });
 
-            Throwable failure = failureOf(() -> Blocking.await(fixture.client
+            Throwable failure = failureOf(() -> fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(40)
                             .options(options(20))
-                            .build())));
+                            .build()));
 
             assertInstanceOf(TransferRejectedException.class, failure);
             assertEquals(1, terminal.size());
@@ -471,13 +471,13 @@ class EngineUploadTest {
                     },
                     transfer -> released.incrementAndGet());
 
-            Throwable failure = failureOf(() -> Blocking.await(fixture.client
+            Throwable failure = failureOf(() -> fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(41)
                             .options(options)
                             .cancellation(cancelled.getSignal())
-                            .build())));
+                            .build()));
 
             // Cancellation surfaces as CancellationException; the exact
             // instance was observable only while the future was the return
@@ -505,12 +505,12 @@ class EngineUploadTest {
                     },
                     null);
 
-            Throwable failure = failureOf(() -> Blocking.await(fixture.client
+            Throwable failure = failureOf(() -> fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(42)
                             .options(options)
-                            .build())));
+                            .build()));
 
             assertSame(
                     timeout,
@@ -528,18 +528,18 @@ class EngineUploadTest {
     @Test
     void aSourceThatWillNotOpenIsWrappedAndTheSlotIsStillReleased() {
         try (Fixture fixture = new Fixture()) {
-            Throwable failure = failureOf(() -> Blocking.await(fixture.client
+            Throwable failure = failureOf(() -> fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "file", 1, offset -> {
                                 throw new java.io.UncheckedIOException(new java.io.IOException("source is gone"));
                             })
                             .token(43)
                             .options(options(20))
-                            .build())));
+                            .build()));
             assertInstanceOf(SoulseekClientException.class, failure);
 
             AtomicInteger released = new AtomicInteger();
-            Blocking.await(fixture.client
+            fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "other", 1, offset -> completedStream(new byte[] {1}))
                             .token(44)
@@ -547,7 +547,7 @@ class EngineUploadTest {
                                 released.incrementAndGet();
                                 throw new RuntimeException("ignored");
                             }))
-                            .build()));
+                            .build());
             assertEquals(1, released.get());
         }
     }
@@ -556,21 +556,21 @@ class EngineUploadTest {
     void streamDisposalOptionIsHonored() {
         try (Fixture fixture = new Fixture()) {
             CloseTrackingInputStream disposable = new CloseTrackingInputStream(new byte[] {1});
-            Blocking.await(fixture.client
+            fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "file", 1, offset -> disposable)
                             .token(45)
                             .options(options(20).withDisposalOptions(true))
-                            .build()));
+                            .build());
             assertTrue(disposable.closed.get());
 
             CloseTrackingInputStream retained = new CloseTrackingInputStream(new byte[] {2});
-            Blocking.await(fixture.client
+            fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "other", 1, offset -> retained)
                             .token(46)
                             .options(options(20).withDisposalOptions(false))
-                            .build()));
+                            .build());
             assertFalse(retained.closed.get());
         }
     }
@@ -579,23 +579,23 @@ class EngineUploadTest {
     void malformedOffsetAndWriteFailureAreWrappedAndCleanedUp() {
         try (Fixture fixture = new Fixture()) {
             fixture.transfer.offsetBytes = new byte[] {1, 2};
-            Throwable malformed = failureOf(() -> Blocking.await(fixture.client
+            Throwable malformed = failureOf(() -> fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(47)
                             .options(options(20))
-                            .build())));
+                            .build()));
             assertInstanceOf(SoulseekClientException.class, malformed);
             assertFalse(fixture.client.getUploadsInternal().containsKey(47));
 
             fixture.transfer.offsetBytes = null;
             fixture.transfer.writeFailure = new IOException("write failed");
-            Throwable write = failureOf(() -> Blocking.await(fixture.client
+            Throwable write = failureOf(() -> fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "other", 1, offset -> completedStream(new byte[] {1}))
                             .token(48)
                             .options(options(20))
-                            .build())));
+                            .build()));
             assertInstanceOf(SoulseekClientException.class, write);
             assertSame(fixture.transfer.writeFailure, write.getCause());
             assertFalse(fixture.client.getUniqueKeys().containsKey("Upload:alice:other"));
@@ -616,12 +616,12 @@ class EngineUploadTest {
                         }
                     });
 
-            Throwable failure = failureOf(() -> Blocking.await(fixture.client
+            Throwable failure = failureOf(() -> fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(49)
                             .options(options(20))
-                            .build())));
+                            .build()));
 
             SoulseekClientException mapped = assertInstanceOf(SoulseekClientException.class, failure);
             ConnectionException connection = assertInstanceOf(ConnectionException.class, mapped.getCause());
@@ -765,24 +765,21 @@ class EngineUploadTest {
                 Proxy.newProxyInstance(Waiter.class.getClassLoader(), new Class<?>[] {Waiter.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("waitAsync")) {
+            if (method.getName().startsWith("register")) {
                 if (arguments != null && arguments.length > 0 && arguments[0] instanceof WaitKey key) {
                     keys.add(key);
                 }
                 if (arguments != null) {
                     for (Object argument : arguments) {
                         if (argument == TransferResponse.class) {
-                            return transferResponse;
+                            return (Wait<Object>) () -> Outcomes.raise(transferResponse);
                         }
                         if (argument == UserAddressResponse.class) {
-                            return CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT));
+                            return (Wait<Object>) () -> new UserAddressResponse("alice", ENDPOINT);
                         }
                     }
                 }
-                return CompletableFuture.completedFuture(null);
-            }
-            if (method.getName().equals("waitIndefinitelyAsync")) {
-                return CompletableFuture.completedFuture(null);
+                return (Wait<Object>) () -> null;
             }
             if (method.getName().equals("getDefaultTimeout")) {
                 return 5_000;
@@ -806,18 +803,18 @@ class EngineUploadTest {
         }
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("getOrAddMessageConnectionAsync")
+            if (method.getName().equals("getOrAddMessageConnection")
                     && arguments != null
                     && arguments.length == 3
                     && arguments[0] instanceof String) {
-                return CompletableFuture.completedFuture(messageConnection);
+                return messageConnection;
             }
-            if (method.getName().equals("getTransferConnectionAsync")
+            if (method.getName().equals("getTransferConnection")
                     && arguments != null
                     && arguments.length == 4
                     && arguments[0] instanceof String) {
                 transferToken = (CancellationSignal) arguments[3];
-                return CompletableFuture.completedFuture(transferConnection);
+                return transferConnection;
             }
             return defaultValue(method.getReturnType());
         }

@@ -13,7 +13,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -78,7 +79,7 @@ public final class DefaultWaiter implements Waiter {
         PendingWait<?> wait = dequeue(key);
         if (wait != null) {
             wait.close();
-            wait.future.cancel(false);
+            wait.settle(null, new CancellationException("The wait was cancelled"));
         }
     }
 
@@ -98,7 +99,7 @@ public final class DefaultWaiter implements Waiter {
 
         for (PendingWait<?> wait : pending) {
             wait.close();
-            wait.future.cancel(false);
+            wait.settle(null, new CancellationException("The wait was cancelled"));
         }
     }
 
@@ -128,7 +129,7 @@ public final class DefaultWaiter implements Waiter {
         if (result != null && !wait.resultType.isInstance(result)) {
             throw new SoulseekClientException("Failed to bind wait types for key " + key
                     + "; this is a mismatch between the types specified in "
-                    + "waitAsync() and complete()");
+                    + "register() and complete()");
         }
 
         completeUnchecked(wait, result);
@@ -155,7 +156,7 @@ public final class DefaultWaiter implements Waiter {
         PendingWait<?> wait = dequeue(key);
         if (wait != null) {
             wait.close();
-            wait.future.completeExceptionally(exception);
+            wait.settle(null, exception);
         }
     }
 
@@ -168,50 +169,14 @@ public final class DefaultWaiter implements Waiter {
         PendingWait<?> wait = dequeue(key);
         if (wait != null) {
             wait.close();
-            wait.future.completeExceptionally(
-                    new TimeoutException("The wait timed out after " + wait.timeout + " milliseconds"));
+            wait.settle(null, new TimeoutException("The wait timed out after " + wait.timeout + " milliseconds"));
         }
     }
 
     /**
-     * Adds a void wait with the default timeout.
+     * Registers a wait.
      */
-    public CompletableFuture<Void> waitAsync(WaitKey key) {
-        return waitAsync(key, (Integer) null, null);
-    }
-
-    /**
-     * Adds a void wait.
-     */
-    public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout) {
-        return waitAsync(key, timeout, null);
-    }
-
-    /**
-     * Adds a void wait.
-     */
-    public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout, CancellationSignal cancellationSignal) {
-        return waitAsync(key, Void.class, timeout, cancellationSignal);
-    }
-
-    /**
-     * Adds a typed wait with the default timeout.
-     */
-    public <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType) {
-        return waitAsync(key, resultType, null, null);
-    }
-
-    /**
-     * Adds a typed wait.
-     */
-    public <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType, Integer timeout) {
-        return waitAsync(key, resultType, timeout, null);
-    }
-
-    /**
-     * Adds a typed wait.
-     */
-    public <T> CompletableFuture<T> waitAsync(
+    public <T> Wait<T> register(
             WaitKey key, Class<T> resultType, Integer timeout, CancellationSignal cancellationSignal) {
         Objects.requireNonNull(key, "key");
         Objects.requireNonNull(resultType, "resultType");
@@ -225,47 +190,17 @@ public final class DefaultWaiter implements Waiter {
 
         synchronized (this) {
             if (closed) {
-                return CompletableFuture.failedFuture(new IllegalStateException("The waiter is closed"));
+                // Settled rather than thrown, because that is where the failure
+                // used to arrive: a closed waiter handed back a failed future
+                // and the caller met it at the await.
+                wait.settle(null, new IllegalStateException("The waiter is closed"));
+                return wait;
             }
             waits.computeIfAbsent(key, ignored -> new ArrayDeque<>()).addLast(wait);
         }
 
-        wait.future.whenComplete((result, exception) -> {
-            if (wait.future.isCancelled()) {
-                remove(wait, key);
-            }
-        });
         wait.register(scheduler);
-        return wait.future;
-    }
-
-    /**
-     * Adds a void wait that uses the source's maximum timeout.
-     */
-    public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key) {
-        return waitIndefinitelyAsync(key, (CancellationSignal) null);
-    }
-
-    /**
-     * Adds a void wait that uses the source's maximum timeout.
-     */
-    public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key, CancellationSignal cancellationSignal) {
-        return waitAsync(key, Void.class, Integer.MAX_VALUE, cancellationSignal);
-    }
-
-    /**
-     * Adds a typed wait that uses the source's maximum timeout.
-     */
-    public <T> CompletableFuture<T> waitIndefinitelyAsync(WaitKey key, Class<T> resultType) {
-        return waitIndefinitelyAsync(key, resultType, null);
-    }
-
-    /**
-     * Adds a typed wait that uses the source's maximum timeout.
-     */
-    public <T> CompletableFuture<T> waitIndefinitelyAsync(
-            WaitKey key, Class<T> resultType, CancellationSignal cancellationSignal) {
-        return waitAsync(key, resultType, Integer.MAX_VALUE, cancellationSignal);
+        return wait;
     }
 
     /**
@@ -314,36 +249,30 @@ public final class DefaultWaiter implements Waiter {
         return wait;
     }
 
-    private void remove(PendingWait<?> wait, WaitKey key) {
-        synchronized (this) {
-            ArrayDeque<PendingWait<?>> queue = waits.get(key);
-            if (queue == null || !queue.remove(wait)) {
-                return;
-            }
-            if (queue.isEmpty()) {
-                waits.remove(key);
-            }
-        }
-        wait.close();
-    }
-
     @SuppressWarnings("unchecked")
     private static <T> void completeUnchecked(PendingWait<?> wait, T result) {
-        ((CompletableFuture<T>) wait.future).complete(result);
+        ((PendingWait<T>) wait).settle(result, null);
     }
 
     /**
-     * A registered pending wait.
+     * A registered pending wait, and the cell its answer is handed off in.
+     *
+     * <p>Exactly one caller settles it, because settling is only reachable
+     * through {@link DefaultWaiter#dequeue}, which takes it out of the registry
+     * under the waiter's lock. The latch is what publishes the answer to
+     * whoever is waiting.
      *
      * @param <T> the result type
      */
-    static final class PendingWait<T> implements AutoCloseable {
+    static final class PendingWait<T> implements Wait<T>, AutoCloseable {
         private final Runnable cancelAction;
         private final CancellationSignal cancellationSignal;
-        private final CompletableFuture<T> future = new CompletableFuture<>();
+        private final CountDownLatch settled = new CountDownLatch(1);
         private final Class<T> resultType;
         private final int timeout;
         private final Runnable timeoutAction;
+        private T result;
+        private Throwable failure;
         private CancellationSubscription cancellationSubscription;
         private boolean closed;
         private ScheduledFuture<?> timeoutTask;
@@ -361,11 +290,34 @@ public final class DefaultWaiter implements Waiter {
             this.cancellationSignal = Objects.requireNonNull(cancellationSignal, "cancellationSignal");
         }
 
-        /**
-         * Returns the wait future.
-         */
-        CompletableFuture<T> getFuture() {
-            return future;
+        @Override
+        public T await() {
+            boolean interrupted = false;
+            try {
+                while (true) {
+                    try {
+                        settled.await();
+                        break;
+                    } catch (InterruptedException exception) {
+                        interrupted = true;
+                    }
+                }
+            } finally {
+                if (interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            if (failure != null) {
+                throw Failures.propagate(failure);
+            }
+            return result;
+        }
+
+        /** Hands the answer over. The latch publishes both fields. */
+        void settle(T value, Throwable error) {
+            result = value;
+            failure = error;
+            settled.countDown();
         }
 
         /**
@@ -394,8 +346,8 @@ public final class DefaultWaiter implements Waiter {
             }
 
             // Scheduler dispatches every task onto a virtual thread, so a
-            // blocking continuation chained on the wait future cannot stall the
-            // timer thread and every other wait behind it.
+            // waiter released by the timeout cannot stall the timer thread and
+            // every other wait behind it.
             ScheduledFuture<?> task = scheduler.schedule(timeoutAction, timeout, TimeUnit.MILLISECONDS);
             synchronized (this) {
                 if (closed) {

@@ -16,6 +16,7 @@ import dev.slsk.internal.ServerInfo;
 import dev.slsk.internal.UserStatistics;
 import dev.slsk.internal.UserStatus;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;
@@ -415,7 +416,9 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         if (!client.getOptions().isAutoAcknowledgePrivilegeNotifications()) {
             return completed();
         }
-        return client.acknowledgePrivilegeNotificationOperation(notification.getId(), CancellationSignal.none());
+        // Off the server read loop: acknowledging writes back to the server.
+        return NetworkExecutor.runAsync(() ->
+                client.acknowledgePrivilegeNotificationOperation(notification.getId(), CancellationSignal.none()));
     }
 
     private CompletableFuture<Void> handlePrivateMessage(byte[] message) {
@@ -424,7 +427,9 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         if (!client.getOptions().isAutoAcknowledgePrivateMessages()) {
             return completed();
         }
-        return client.acknowledgePrivateMessageOperation(notification.getId(), CancellationSignal.none());
+        // Off the server read loop: acknowledging writes back to the server.
+        return NetworkExecutor.runAsync(
+                () -> client.acknowledgePrivateMessageOperation(notification.getId(), CancellationSignal.none()));
     }
 
     private CompletableFuture<Void> handleNetInfo(byte[] message) {
@@ -472,9 +477,11 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                     diagnostic.debug("Received message ConnectToPeer request from "
                             + response.getUsername() + " ("
                             + response.getIpEndpoint() + ")");
-                    yield client.getPeerConnectionManager()
-                            .getOrAddMessageConnectionAsync(response)
-                            .thenApply(ignored -> null);
+                    // Off the server read loop: establishing this connects to
+                    // a peer and writes to it, and the server has more to say
+                    // meanwhile.
+                    yield NetworkExecutor.runAsync(
+                            () -> client.getPeerConnectionManager().getOrAddMessageConnection(response));
                 }
                 case Constants.ConnectionType.DISTRIBUTED -> {
                     diagnostic.debug("Received distributed ConnectToPeer request from "
@@ -514,9 +521,9 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                     + response.getUsername() + " ("
                     + response.getIpEndpoint() + "); Ignored"));
         }
-        return client.getPeerConnectionManager()
-                .getTransferConnectionAsync(response)
-                .thenAccept(result -> correlateTransferConnection(response, result));
+        // Off the server read loop, as above.
+        return NetworkExecutor.runAsync(() -> correlateTransferConnection(
+                response, client.getPeerConnectionManager().getTransferConnection(response)));
     }
 
     private void correlateTransferConnection(ConnectToPeerResponse response, TransferConnectionResult result) {

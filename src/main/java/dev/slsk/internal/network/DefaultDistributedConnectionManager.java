@@ -15,6 +15,7 @@ import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Scheduler;
+import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;
@@ -967,22 +968,25 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         diagnostic.debug(
                 "Soliciting indirect parent candidate connection to " + username + " with token " + solicitationToken);
         pendingSolicitations.putIfAbsent(solicitationToken, username);
-        return NetworkExecutor.runAsync(() -> client.getServerConnection()
-                        .write(
-                                new ConnectToPeerRequest(
-                                        solicitationToken, username, Constants.ConnectionType.DISTRIBUTED),
-                                cancellationSignal))
-                .thenCompose(ignored -> client.getWaiter()
-                        .waitAsync(
-                                new WaitKey(
-                                        Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION,
-                                        username,
-                                        solicitationToken),
-                                Connection.class,
-                                client.getOptions()
-                                        .getDistributedConnectionOptions()
-                                        .getConnectTimeout(),
-                                cancellationSignal))
+        return NetworkExecutor.supplyAsync(() -> {
+                    Wait<Connection> wait = client.getWaiter()
+                            .register(
+                                    new WaitKey(
+                                            Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION,
+                                            username,
+                                            solicitationToken),
+                                    Connection.class,
+                                    client.getOptions()
+                                            .getDistributedConnectionOptions()
+                                            .getConnectTimeout(),
+                                    cancellationSignal);
+                    client.getServerConnection()
+                            .write(
+                                    new ConnectToPeerRequest(
+                                            solicitationToken, username, Constants.ConnectionType.DISTRIBUTED),
+                                    cancellationSignal);
+                    return wait.await();
+                })
                 .thenApply(accepted -> {
                     try {
                         MessageConnection connection = connectionFactory.getDistributedConnection(
@@ -1022,33 +1026,36 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     private CompletableFuture<BranchInformation> waitForParentCandidateConnectionInitializationAsync(
             MessageConnection connection, CancellationSignal cancellationSignal) {
         connection.addMessageReadListener(parentInitializationListener);
-        CompletableFuture<Integer> branchLevel = client.getWaiter()
-                .waitAsync(
+        // All three are registered before any is awaited: the candidate sends
+        // them back to back and a wait registered after the first would miss
+        // the ones behind it.
+        Wait<Integer> branchLevel = client.getWaiter()
+                .register(
                         new WaitKey(Constants.WaitKey.BRANCH_LEVEL_MESSAGE, connection.getId()),
                         Integer.class,
                         null,
                         token(cancellationSignal));
-        CompletableFuture<String> branchRoot = client.getWaiter()
-                .waitAsync(
+        Wait<String> branchRoot = client.getWaiter()
+                .register(
                         new WaitKey(Constants.WaitKey.BRANCH_ROOT_MESSAGE, connection.getId()),
                         String.class,
                         null,
                         token(cancellationSignal));
-        CompletableFuture<Void> search = client.getWaiter()
-                .waitAsync(
+        Wait<Void> search = client.getWaiter()
+                .register(
                         new WaitKey(Constants.WaitKey.SEARCH_REQUEST_MESSAGE, connection.getId()),
                         null,
                         token(cancellationSignal));
-        return branchLevel
-                .thenCombine(search, (level, ignored) -> level)
-                .thenCompose(level -> {
+        return NetworkExecutor.supplyAsync(() -> {
+                    int level = branchLevel.await();
+                    search.await();
                     if (level > 0) {
-                        return branchRoot.thenApply(root -> new BranchInformation(level, root));
+                        return new BranchInformation(level, branchRoot.await());
                     }
                     diagnostic.debug("Received branch level 0 from parent candidate "
                             + connection.getUsername()
                             + "; this user is a branch root.");
-                    return CompletableFuture.completedFuture(new BranchInformation(level, connection.getUsername()));
+                    return new BranchInformation(level, connection.getUsername());
                 })
                 .handle((branch, failure) -> {
                     connection.removeMessageReadListener(parentInitializationListener);

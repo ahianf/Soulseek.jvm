@@ -24,6 +24,36 @@ public final class Outcomes {
     private Outcomes() {}
 
     /**
+     * Waits for an operation the internals have not finished converting.
+     *
+     * <p>What the deleted {@code Blocking.await} did, kept for the handful of
+     * tests that still exercise a future-returning method — the dead
+     * {@code enqueue*} overloads Phase 4 removes. Nothing in {@code src/main}
+     * needs it.
+     *
+     * @param operation the operation to wait for
+     * @param <T> the result type
+     * @return the operation's result
+     */
+    public static <T> T await(CompletableFuture<T> operation) {
+        try {
+            return operation.join();
+        } catch (Throwable failure) {
+            Throwable cause = Failures.unwrap(failure);
+            if (cause instanceof java.util.concurrent.TimeoutException) {
+                throw new dev.slsk.exceptions.NoResponseException(cause.getMessage(), cause);
+            }
+            if (cause instanceof RuntimeException runtime) {
+                throw runtime;
+            }
+            if (cause instanceof Error error) {
+                throw error;
+            }
+            throw new dev.slsk.exceptions.SoulseekClientException(cause.getMessage(), cause);
+        }
+    }
+
+    /**
      * Waits for an outcome and raises its failure as the transport would.
      *
      * @param outcome the configured outcome; a pending one parks the caller

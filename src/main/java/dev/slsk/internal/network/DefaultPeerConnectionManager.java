@@ -9,7 +9,9 @@ import dev.slsk.CancellationSignal;
 import dev.slsk.CancellationSubscription;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
+import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;
@@ -119,7 +121,75 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
     }
 
     @Override
-    public CompletableFuture<Void> addOrUpdateMessageConnectionAsync(String username, Connection incomingConnection) {
+    public void addOrUpdateMessageConnection(String username, Connection incomingConnection) {
+        await(addOrUpdateMessageConnectionAsync(username, incomingConnection));
+    }
+
+    @Override
+    public Connection awaitTransferConnection(
+            String username, String filename, int remoteToken, CancellationSignal cancellationSignal) {
+        return await(awaitTransferConnectionAsync(username, filename, remoteToken, cancellationSignal));
+    }
+
+    @Override
+    public MessageConnection getCachedMessageConnection(String username) {
+        return await(getCachedMessageConnectionAsync(username));
+    }
+
+    @Override
+    public MessageConnection getOrAddMessageConnection(ConnectToPeerResponse connectToPeerResponse) {
+        return await(getOrAddMessageConnectionAsync(connectToPeerResponse));
+    }
+
+    @Override
+    public MessageConnection getOrAddMessageConnection(
+            String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal) {
+        return await(getOrAddMessageConnectionAsync(username, ipEndpoint, cancellationSignal));
+    }
+
+    @Override
+    public MessageConnection getOrAddMessageConnection(
+            String username,
+            InetSocketAddress ipEndpoint,
+            int solicitationToken,
+            CancellationSignal cancellationSignal) {
+        return await(getOrAddMessageConnectionAsync(username, ipEndpoint, solicitationToken, cancellationSignal));
+    }
+
+    @Override
+    public TransferConnectionResult getTransferConnection(String username, int token, Connection incomingConnection) {
+        return await(getTransferConnectionAsync(username, token, incomingConnection));
+    }
+
+    @Override
+    public TransferConnectionResult getTransferConnection(ConnectToPeerResponse connectToPeerResponse) {
+        return await(getTransferConnectionAsync(connectToPeerResponse));
+    }
+
+    @Override
+    public Connection getTransferConnection(
+            String username, InetSocketAddress ipEndpoint, int token, CancellationSignal cancellationSignal) {
+        return await(getTransferConnectionAsync(username, ipEndpoint, token, cancellationSignal));
+    }
+
+    /**
+     * Waits for one of the cached or raced operations below.
+     *
+     * <p>The last future in this class that a caller can see, and it stops
+     * here. Two things underneath genuinely need one — the per-user cache that
+     * deduplicates concurrent establishment, and the direct/indirect race — and
+     * D11 and D12 replace both with a connection cell and a first-success
+     * helper. Until they do, this is where the shape converts.
+     */
+    private static <T> T await(CompletableFuture<T> operation) {
+        try {
+            return operation.join();
+        } catch (Throwable failure) {
+            throw Failures.propagate(unwrap(failure));
+        }
+    }
+
+    private CompletableFuture<Void> addOrUpdateMessageConnectionAsync(String username, Connection incomingConnection) {
         Objects.requireNonNull(incomingConnection, "incomingConnection");
         AtomicReference<CompletableFuture<MessageConnection>> cached = new AtomicReference<>();
         CompletableFuture<MessageConnection> replacement = messageConnections.compute(username, (key, old) -> {
@@ -146,8 +216,7 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         });
     }
 
-    @Override
-    public CompletableFuture<Connection> awaitTransferConnectionAsync(
+    private CompletableFuture<Connection> awaitTransferConnectionAsync(
             String username, String filename, int remoteToken, CancellationSignal cancellationSignal) {
         LinkedCancellation directCancellation = new LinkedCancellation(cancellationSignal);
         LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationSignal);
@@ -155,18 +224,23 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                 + username + " with remote token " + remoteToken + " for "
                 + filename);
 
-        CompletableFuture<Connection> indirect = client.getWaiter()
-                .waitAsync(
+        // Both waits are registered before either is awaited, so a peer that
+        // arrives on one path while the other is still being set up is caught.
+        Wait<Connection> indirectWait = client.getWaiter()
+                .register(
                         new WaitKey(Constants.WaitKey.INDIRECT_TRANSFER, username, filename, remoteToken),
                         Connection.class,
                         client.getOptions().getTransferConnectionOptions().getConnectTimeout(),
                         indirectCancellation.token());
-        CompletableFuture<Connection> direct = client.getWaiter()
-                .waitAsync(
+        Wait<Connection> directWait = client.getWaiter()
+                .register(
                         new WaitKey(Constants.WaitKey.DIRECT_TRANSFER, username, remoteToken),
                         Connection.class,
                         client.getOptions().getTransferConnectionOptions().getConnectTimeout(),
                         directCancellation.token());
+        // A thread apiece, because the two are raced. D12 replaces this.
+        CompletableFuture<Connection> indirect = NetworkExecutor.supplyAsync(indirectWait::await);
+        CompletableFuture<Connection> direct = NetworkExecutor.supplyAsync(directWait::await);
 
         return firstSuccessful(direct, indirect).handle((winner, failure) -> {
             if (failure != null) {
@@ -199,8 +273,7 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         });
     }
 
-    @Override
-    public CompletableFuture<MessageConnection> getCachedMessageConnectionAsync(String username) {
+    private CompletableFuture<MessageConnection> getCachedMessageConnectionAsync(String username) {
         CompletableFuture<MessageConnection> cached = messageConnections.get(username);
         if (cached == null) {
             return CompletableFuture.completedFuture(null);
@@ -220,8 +293,7 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         });
     }
 
-    @Override
-    public CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(ConnectToPeerResponse response) {
+    private CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(ConnectToPeerResponse response) {
         AtomicBoolean cached = new AtomicBoolean(true);
         CompletableFuture<MessageConnection> future =
                 messageConnections.computeIfAbsent(response.getUsername(), key -> {
@@ -268,14 +340,12 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         });
     }
 
-    @Override
-    public CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
+    private CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
             String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal) {
         return getOrAddMessageConnectionAsync(username, ipEndpoint, client.getNextToken(), cancellationSignal);
     }
 
-    @Override
-    public CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
+    private CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
             String username,
             InetSocketAddress ipEndpoint,
             int solicitationToken,
@@ -302,8 +372,7 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         });
     }
 
-    @Override
-    public CompletableFuture<TransferConnectionResult> getTransferConnectionAsync(
+    private CompletableFuture<TransferConnectionResult> getTransferConnectionAsync(
             String username, int token, Connection incomingConnection) {
         diagnostic.debug("Inbound transfer connection to " + username + " ("
                 + incomingConnection.getIpEndpoint() + ") for token " + token
@@ -349,8 +418,7 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         });
     }
 
-    @Override
-    public CompletableFuture<TransferConnectionResult> getTransferConnectionAsync(ConnectToPeerResponse response) {
+    private CompletableFuture<TransferConnectionResult> getTransferConnectionAsync(ConnectToPeerResponse response) {
         diagnostic.debug("Attempting inbound indirect transfer connection to "
                 + response.getUsername() + " (" + response.getIpEndpoint()
                 + ") for token " + response.getToken());
@@ -391,8 +459,7 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         });
     }
 
-    @Override
-    public CompletableFuture<Connection> getTransferConnectionAsync(
+    private CompletableFuture<Connection> getTransferConnectionAsync(
             String username, InetSocketAddress ipEndpoint, int token, CancellationSignal cancellationSignal) {
         LinkedCancellation directCancellation = new LinkedCancellation(cancellationSignal);
         LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationSignal);
@@ -691,16 +758,19 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
             String username, int solicitationToken, CancellationSignal cancellationSignal) {
         diagnostic.debug("Soliciting indirect message connection to " + username + " with token " + solicitationToken);
         pendingSolicitations.putIfAbsent(solicitationToken, username);
-        CompletableFuture<Connection> incoming = NetworkExecutor.runAsync(() -> client.getServerConnection()
-                        .write(
-                                new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.PEER),
-                                cancellationSignal))
-                .thenCompose(ignored -> client.getWaiter()
-                        .waitAsync(
-                                new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),
-                                Connection.class,
-                                client.getOptions().getPeerConnectionOptions().getConnectTimeout(),
-                                cancellationSignal));
+        CompletableFuture<Connection> incoming = NetworkExecutor.supplyAsync(() -> {
+            Wait<Connection> wait = client.getWaiter()
+                    .register(
+                            new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),
+                            Connection.class,
+                            client.getOptions().getPeerConnectionOptions().getConnectTimeout(),
+                            cancellationSignal);
+            client.getServerConnection()
+                    .write(
+                            new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.PEER),
+                            cancellationSignal);
+            return wait.await();
+        });
 
         return incoming.thenApply(accepted -> {
                     try {
@@ -772,19 +842,23 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         diagnostic.debug("Soliciting indirect transfer connection to " + username + " with token " + token);
         int solicitationToken = client.getNextToken();
         pendingSolicitations.putIfAbsent(solicitationToken, username);
-        return NetworkExecutor.runAsync(() -> client.getServerConnection()
-                        .write(
-                                new ConnectToPeerRequest(
-                                        solicitationToken, username, Constants.ConnectionType.TRANSFER),
-                                cancellationSignal))
-                .thenCompose(ignored -> client.getWaiter()
-                        .waitAsync(
-                                new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),
-                                Connection.class,
-                                client.getOptions()
-                                        .getTransferConnectionOptions()
-                                        .getConnectTimeout(),
-                                cancellationSignal))
+        return NetworkExecutor.supplyAsync(() -> {
+                    Wait<Connection> wait = client.getWaiter()
+                            .register(
+                                    new WaitKey(
+                                            Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),
+                                    Connection.class,
+                                    client.getOptions()
+                                            .getTransferConnectionOptions()
+                                            .getConnectTimeout(),
+                                    cancellationSignal);
+                    client.getServerConnection()
+                            .write(
+                                    new ConnectToPeerRequest(
+                                            solicitationToken, username, Constants.ConnectionType.TRANSFER),
+                                    cancellationSignal);
+                    return wait.await();
+                })
                 .thenApply(accepted -> {
                     try {
                         Connection connection = connectionFactory.getTransferConnection(

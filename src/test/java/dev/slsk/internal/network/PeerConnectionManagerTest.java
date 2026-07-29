@@ -19,6 +19,7 @@ import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Outcomes;
+import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;
@@ -85,7 +86,7 @@ class PeerConnectionManagerTest {
         DefaultPeerConnectionManager defaultDiagnostic = new DefaultPeerConnectionManager(fixture.client);
         defaultDiagnostic.addDiagnosticGeneratedListener(listener);
         // The default factory is covered through a debug-producing failure.
-        defaultDiagnostic.getCachedMessageConnectionAsync("missing").join();
+        defaultDiagnostic.getCachedMessageConnection("missing");
         defaultDiagnostic.close();
     }
 
@@ -96,17 +97,13 @@ class PeerConnectionManagerTest {
         ConnectionProbe message = ConnectionProbe.message(USERNAME, DIRECT_ENDPOINT);
         fixture.factory.messageHandoff = message;
 
-        fixture.manager()
-                .addOrUpdateMessageConnectionAsync(USERNAME, incoming.connection())
-                .join();
+        fixture.manager().addOrUpdateMessageConnection(USERNAME, incoming.connection());
 
         assertEquals(1, incoming.handoffCount);
         assertEquals(1, incoming.closeCount);
         assertEquals(1, message.startReadingCount);
         assertEquals(ConnectionTypes.INBOUND.or(ConnectionTypes.DIRECT), message.type);
-        assertSame(
-                message.messageConnection(),
-                fixture.manager().getCachedMessageConnectionAsync(USERNAME).join());
+        assertSame(message.messageConnection(), fixture.manager().getCachedMessageConnection(USERNAME));
         assertEquals(
                 List.of(new PeerEndpoint(USERNAME, DIRECT_ENDPOINT)),
                 fixture.manager().getMessageConnections());
@@ -122,20 +119,16 @@ class PeerConnectionManagerTest {
         ConnectionProbe second = ConnectionProbe.message(USERNAME, INDIRECT_ENDPOINT);
         fixture.factory.messageHandoff = first;
         fixture.manager()
-                .addOrUpdateMessageConnectionAsync(
-                        USERNAME, ConnectionProbe.connection(DIRECT_ENDPOINT).connection())
-                .join();
+                .addOrUpdateMessageConnection(
+                        USERNAME, ConnectionProbe.connection(DIRECT_ENDPOINT).connection());
 
         fixture.factory.messageHandoff = second;
         fixture.manager()
-                .addOrUpdateMessageConnectionAsync(
-                        USERNAME, ConnectionProbe.connection(INDIRECT_ENDPOINT).connection())
-                .join();
+                .addOrUpdateMessageConnection(
+                        USERNAME, ConnectionProbe.connection(INDIRECT_ENDPOINT).connection());
 
         assertEquals(0, first.closeCount);
-        assertSame(
-                second.messageConnection(),
-                fixture.manager().getCachedMessageConnectionAsync(USERNAME).join());
+        assertSame(second.messageConnection(), fixture.manager().getCachedMessageConnection(USERNAME));
         assertTrue(fixture.diagnostic.contains("Superseding cached"));
     }
 
@@ -150,15 +143,14 @@ class PeerConnectionManagerTest {
         CompletionException thrown = assertThrows(
                 CompletionException.class,
                 () -> fixture.manager()
-                        .addOrUpdateMessageConnectionAsync(
+                        .addOrUpdateMessageConnection(
                                 USERNAME,
-                                ConnectionProbe.connection(DIRECT_ENDPOINT).connection())
-                        .join());
+                                ConnectionProbe.connection(DIRECT_ENDPOINT).connection()));
 
         ConnectionException mapped = assertInstanceOf(ConnectionException.class, thrown.getCause());
         assertSame(expected, mapped.getCause());
         assertEquals(1, message.closeCount);
-        assertNull(fixture.manager().getCachedMessageConnectionAsync(USERNAME).join());
+        assertNull(fixture.manager().getCachedMessageConnection(USERNAME));
         assertTrue(fixture.diagnostic.contains("Purging message connection cache"));
     }
 
@@ -170,9 +162,7 @@ class PeerConnectionManagerTest {
         transfer.readFuture = CompletableFuture.completedFuture(littleEndian(TOKEN));
         fixture.factory.transferHandoff = transfer;
 
-        TransferConnectionResult result = fixture.manager()
-                .getTransferConnectionAsync(USERNAME, 91, incoming.connection())
-                .join();
+        TransferConnectionResult result = fixture.manager().getTransferConnection(USERNAME, 91, incoming.connection());
 
         assertSame(transfer.connection(), result.connection());
         assertEquals(TOKEN, result.remoteToken());
@@ -191,11 +181,10 @@ class PeerConnectionManagerTest {
         CompletionException thrown = assertThrows(
                 CompletionException.class,
                 () -> fixture.manager()
-                        .getTransferConnectionAsync(
+                        .getTransferConnection(
                                 USERNAME,
                                 TOKEN,
-                                ConnectionProbe.connection(DIRECT_ENDPOINT).connection())
-                        .join());
+                                ConnectionProbe.connection(DIRECT_ENDPOINT).connection()));
 
         ConnectionException mapped = assertInstanceOf(ConnectionException.class, thrown.getCause());
         assertSame(expected, mapped.getCause());
@@ -211,8 +200,7 @@ class PeerConnectionManagerTest {
         ConnectToPeerResponse response =
                 new ConnectToPeerResponse(USERNAME, Constants.ConnectionType.TRANSFER, INDIRECT_ENDPOINT, 77, true);
 
-        TransferConnectionResult result =
-                fixture.manager().getTransferConnectionAsync(response).join();
+        TransferConnectionResult result = fixture.manager().getTransferConnection(response);
 
         assertSame(transfer.connection(), result.connection());
         assertEquals(TOKEN, result.remoteToken());
@@ -232,9 +220,8 @@ class PeerConnectionManagerTest {
         CompletionException thrown = assertThrows(
                 CompletionException.class,
                 () -> fixture.manager()
-                        .getTransferConnectionAsync(new ConnectToPeerResponse(
-                                USERNAME, Constants.ConnectionType.TRANSFER, INDIRECT_ENDPOINT, TOKEN, false))
-                        .join());
+                        .getTransferConnection(new ConnectToPeerResponse(
+                                USERNAME, Constants.ConnectionType.TRANSFER, INDIRECT_ENDPOINT, TOKEN, false)));
 
         ConnectionException mapped = assertInstanceOf(ConnectionException.class, thrown.getCause());
         assertSame(expected, mapped.getCause());
@@ -248,9 +235,8 @@ class PeerConnectionManagerTest {
         fixture.factory.transferDirect = direct;
         fixture.waiter.defaultFuture = CompletableFuture.failedFuture(new RuntimeException("indirect"));
 
-        Connection result = fixture.manager()
-                .getTransferConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none())
-                .join();
+        Connection result =
+                fixture.manager().getTransferConnection(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none());
 
         assertSame(direct.connection(), result);
         assertEquals(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT), direct.type);
@@ -273,9 +259,8 @@ class PeerConnectionManagerTest {
         fixture.factory.transferHandoff = indirect;
         fixture.waiter.defaultFuture = CompletableFuture.completedFuture(accepted.connection());
 
-        Connection result = fixture.manager()
-                .getTransferConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none())
-                .join();
+        Connection result =
+                fixture.manager().getTransferConnection(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none());
 
         assertSame(indirect.connection(), result);
         assertEquals(ConnectionTypes.OUTBOUND.or(ConnectionTypes.INDIRECT), indirect.type);
@@ -300,8 +285,7 @@ class PeerConnectionManagerTest {
         CompletionException thrown = assertThrows(
                 CompletionException.class,
                 () -> fixture.manager()
-                        .getTransferConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none())
-                        .join());
+                        .getTransferConnection(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none()));
 
         assertTrue(assertInstanceOf(ConnectionException.class, thrown.getCause())
                 .getMessage()
@@ -316,10 +300,8 @@ class PeerConnectionManagerTest {
         ConnectToPeerResponse response =
                 new ConnectToPeerResponse(USERNAME, Constants.ConnectionType.PEER, INDIRECT_ENDPOINT, TOKEN, false);
 
-        MessageConnection result =
-                fixture.manager().getOrAddMessageConnectionAsync(response).join();
-        MessageConnection cached =
-                fixture.manager().getOrAddMessageConnectionAsync(response).join();
+        MessageConnection result = fixture.manager().getOrAddMessageConnection(response);
+        MessageConnection cached = fixture.manager().getOrAddMessageConnection(response);
 
         assertSame(message.messageConnection(), result);
         assertSame(result, cached);
@@ -339,14 +321,13 @@ class PeerConnectionManagerTest {
         CompletionException thrown = assertThrows(
                 CompletionException.class,
                 () -> fixture.manager()
-                        .getOrAddMessageConnectionAsync(new ConnectToPeerResponse(
-                                USERNAME, Constants.ConnectionType.PEER, INDIRECT_ENDPOINT, TOKEN, false))
-                        .join());
+                        .getOrAddMessageConnection(new ConnectToPeerResponse(
+                                USERNAME, Constants.ConnectionType.PEER, INDIRECT_ENDPOINT, TOKEN, false)));
 
         ConnectionException mapped = assertInstanceOf(ConnectionException.class, thrown.getCause());
         assertSame(expected, mapped.getCause());
         assertEquals(1, message.closeCount);
-        assertNull(fixture.manager().getCachedMessageConnectionAsync(USERNAME).join());
+        assertNull(fixture.manager().getCachedMessageConnection(USERNAME));
     }
 
     @Test
@@ -357,8 +338,7 @@ class PeerConnectionManagerTest {
         fixture.waiter.defaultFuture = CompletableFuture.failedFuture(new RuntimeException("indirect"));
 
         MessageConnection result = fixture.manager()
-                .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none())
-                .join();
+                .getOrAddMessageConnection(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none());
 
         assertSame(direct.messageConnection(), result);
         assertEquals(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT), direct.type);
@@ -380,8 +360,7 @@ class PeerConnectionManagerTest {
         fixture.waiter.defaultFuture = CompletableFuture.completedFuture(accepted.connection());
 
         MessageConnection result = fixture.manager()
-                .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none())
-                .join();
+                .getOrAddMessageConnection(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none());
 
         assertSame(indirect.messageConnection(), result);
         assertEquals(ConnectionTypes.OUTBOUND.or(ConnectionTypes.INDIRECT), indirect.type);
@@ -405,11 +384,10 @@ class PeerConnectionManagerTest {
         CompletionException thrown = assertThrows(
                 CompletionException.class,
                 () -> fixture.manager()
-                        .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none())
-                        .join());
+                        .getOrAddMessageConnection(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none()));
 
         assertInstanceOf(ConnectionException.class, thrown.getCause());
-        assertNull(fixture.manager().getCachedMessageConnectionAsync(USERNAME).join());
+        assertNull(fixture.manager().getCachedMessageConnection(USERNAME));
         assertTrue(fixture.diagnostic.contains("Purging message connection cache"));
     }
 
@@ -425,8 +403,7 @@ class PeerConnectionManagerTest {
         CompletionException thrown = assertThrows(
                 CompletionException.class,
                 () -> fixture.manager()
-                        .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none())
-                        .join());
+                        .getOrAddMessageConnection(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none()));
 
         ConnectionException mapped = assertInstanceOf(ConnectionException.class, thrown.getCause());
         assertSame(expected, mapped.getCause());
@@ -442,10 +419,17 @@ class PeerConnectionManagerTest {
         fixture.factory.messageDirect = direct;
         fixture.waiter.defaultFuture = CompletableFuture.failedFuture(new RuntimeException("indirect"));
 
-        CompletableFuture<MessageConnection> first = fixture.manager()
-                .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none());
-        CompletableFuture<MessageConnection> second = fixture.manager()
-                .getOrAddMessageConnectionAsync(USERNAME, DIRECT_ENDPOINT, TOKEN + 1, CancellationSignal.none());
+        // Two callers now block, so each needs a thread; the cache still has
+        // to give them one connection between them.
+        java.util.concurrent.Executor callers = task -> Thread.ofVirtual().start(task);
+        CompletableFuture<MessageConnection> first = CompletableFuture.supplyAsync(
+                () -> fixture.manager()
+                        .getOrAddMessageConnection(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none()),
+                callers);
+        CompletableFuture<MessageConnection> second = CompletableFuture.supplyAsync(
+                () -> fixture.manager()
+                        .getOrAddMessageConnection(USERNAME, DIRECT_ENDPOINT, TOKEN + 1, CancellationSignal.none()),
+                callers);
         connect.complete(null);
 
         assertSame(first.join(), second.join());
@@ -464,10 +448,7 @@ class PeerConnectionManagerTest {
                 CompletableFuture.failedFuture(new RuntimeException()));
         assertSame(
                 direct.connection(),
-                directFixture
-                        .manager()
-                        .awaitTransferConnectionAsync(USERNAME, "file", TOKEN, CancellationSignal.none())
-                        .join());
+                directFixture.manager().awaitTransferConnection(USERNAME, "file", TOKEN, CancellationSignal.none()));
 
         Fixture indirectFixture = new Fixture();
         ConnectionProbe indirect = ConnectionProbe.connection(INDIRECT_ENDPOINT);
@@ -479,10 +460,7 @@ class PeerConnectionManagerTest {
                 CompletableFuture.completedFuture(indirect.connection()));
         assertSame(
                 indirect.connection(),
-                indirectFixture
-                        .manager()
-                        .awaitTransferConnectionAsync(USERNAME, "file", TOKEN, CancellationSignal.none())
-                        .join());
+                indirectFixture.manager().awaitTransferConnection(USERNAME, "file", TOKEN, CancellationSignal.none()));
 
         Fixture failedFixture = new Fixture();
         failedFixture.waiter.defaultFuture = CompletableFuture.failedFuture(new RuntimeException());
@@ -490,8 +468,7 @@ class PeerConnectionManagerTest {
                 CompletionException.class,
                 () -> failedFixture
                         .manager()
-                        .awaitTransferConnectionAsync(USERNAME, "file", TOKEN, CancellationSignal.none())
-                        .join());
+                        .awaitTransferConnection(USERNAME, "file", TOKEN, CancellationSignal.none()));
         assertInstanceOf(ConnectionException.class, thrown.getCause());
     }
 
@@ -501,29 +478,26 @@ class PeerConnectionManagerTest {
         ConnectionProbe first = ConnectionProbe.message(USERNAME, DIRECT_ENDPOINT);
         fixture.factory.messageHandoff = first;
         fixture.manager()
-                .addOrUpdateMessageConnectionAsync(
-                        USERNAME, ConnectionProbe.connection(DIRECT_ENDPOINT).connection())
-                .join();
+                .addOrUpdateMessageConnection(
+                        USERNAME, ConnectionProbe.connection(DIRECT_ENDPOINT).connection());
         assertTrue(fixture.manager().tryInvalidateMessageConnectionCache(USERNAME));
         assertFalse(fixture.manager().tryInvalidateMessageConnectionCache(USERNAME));
 
         ConnectionProbe second = ConnectionProbe.message(USERNAME, DIRECT_ENDPOINT);
         fixture.factory.messageHandoff = second;
         fixture.manager()
-                .addOrUpdateMessageConnectionAsync(
-                        USERNAME, ConnectionProbe.connection(DIRECT_ENDPOINT).connection())
-                .join();
+                .addOrUpdateMessageConnection(
+                        USERNAME, ConnectionProbe.connection(DIRECT_ENDPOINT).connection());
         second.fireDisconnected("closed", null);
-        assertNull(fixture.manager().getCachedMessageConnectionAsync(USERNAME).join());
+        assertNull(fixture.manager().getCachedMessageConnection(USERNAME));
         assertEquals(1, second.closeCount);
         assertTrue(fixture.diagnostic.contains("Removed message connection record"));
 
         ConnectionProbe third = ConnectionProbe.message(USERNAME, DIRECT_ENDPOINT);
         fixture.factory.messageHandoff = third;
         fixture.manager()
-                .addOrUpdateMessageConnectionAsync(
-                        USERNAME, ConnectionProbe.connection(DIRECT_ENDPOINT).connection())
-                .join();
+                .addOrUpdateMessageConnection(
+                        USERNAME, ConnectionProbe.connection(DIRECT_ENDPOINT).connection());
         fixture.manager().removeAndDisposeAll();
         assertTrue(fixture.manager().getMessageConnections().isEmpty());
         assertEquals(1, third.closeCount);
@@ -551,9 +525,12 @@ class PeerConnectionManagerTest {
         pending.connectFuture = neverConnects;
         fixture.factory.messageDirect = pending;
 
-        CompletableFuture<MessageConnection> attempt = fixture.manager()
-                .getOrAddMessageConnectionAsync(new ConnectToPeerResponse(
-                        USERNAME, Constants.ConnectionType.PEER, INDIRECT_ENDPOINT, TOKEN, false));
+        java.util.concurrent.Executor callers = task -> Thread.ofVirtual().start(task);
+        CompletableFuture<MessageConnection> attempt = CompletableFuture.supplyAsync(
+                () -> fixture.manager()
+                        .getOrAddMessageConnection(new ConnectToPeerResponse(
+                                USERNAME, Constants.ConnectionType.PEER, INDIRECT_ENDPOINT, TOKEN, false)),
+                callers);
 
         assertFalse(attempt.isDone(), "the attempt should still be in flight");
         // Returns now, not when the peer answers.
@@ -757,57 +734,14 @@ class PeerConnectionManagerTest {
             fail(key, new java.util.concurrent.TimeoutException());
         }
 
-        @Override
-        public CompletableFuture<Void> waitAsync(WaitKey key) {
-            return waitAsync(key, Void.class, null, CancellationSignal.none());
-        }
-
-        @Override
-        public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout) {
-            return waitAsync(key, Void.class, timeout, CancellationSignal.none());
-        }
-
-        @Override
-        public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout, CancellationSignal cancellationSignal) {
-            return waitAsync(key, Void.class, timeout, cancellationSignal);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType) {
-            return waitAsync(key, resultType, null, CancellationSignal.none());
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType, Integer timeout) {
-            return waitAsync(key, resultType, timeout, CancellationSignal.none());
-        }
-
         @SuppressWarnings("unchecked")
         @Override
-        public <T> CompletableFuture<T> waitAsync(
+        public <T> Wait<T> register(
                 WaitKey key, Class<T> resultType, Integer timeout, CancellationSignal cancellationSignal) {
-            return (CompletableFuture<T>) futures.getOrDefault(key, defaultFuture);
-        }
-
-        @Override
-        public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key) {
-            return waitAsync(key);
-        }
-
-        @Override
-        public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key, CancellationSignal cancellationSignal) {
-            return waitAsync(key, null, cancellationSignal);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitIndefinitelyAsync(WaitKey key, Class<T> resultType) {
-            return waitAsync(key, resultType);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitIndefinitelyAsync(
-                WaitKey key, Class<T> resultType, CancellationSignal cancellationSignal) {
-            return waitAsync(key, resultType, null, cancellationSignal);
+            CompletableFuture<T> configured = (CompletableFuture<T>) futures.getOrDefault(key, defaultFuture);
+            // The future is how a test says what the answer will be; Outcomes
+            // turns it into what a real wait raises.
+            return () -> Outcomes.raise(configured);
         }
 
         @Override

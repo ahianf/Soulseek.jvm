@@ -13,7 +13,6 @@ import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.search.SearchResponder;
 import dev.slsk.internal.transfer.TransferInternal;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /** Internal client state and operations used by the server handler. */
 public interface ServerMessageHandlerClient {
@@ -35,7 +34,7 @@ public interface ServerMessageHandlerClient {
 
     SearchResponder getSearchResponder();
 
-    CompletableFuture<Void> acknowledgePrivateMessageOperation(int id, CancellationSignal cancellationSignal);
+    void acknowledgePrivateMessageOperation(int id, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> acknowledgePrivilegeNotificationOperation(int id, CancellationSignal cancellationSignal);
+    void acknowledgePrivilegeNotificationOperation(int id, CancellationSignal cancellationSignal);
 }

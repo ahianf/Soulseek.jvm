@@ -178,7 +178,8 @@ public final class DefaultSearchResponder implements SearchResponder {
         SearchResponseCacheRecord record = lookup.value();
         CompletableFuture<MessageConnection> connectionFuture;
         try {
-            connectionFuture = client.getPeerConnectionManager().getCachedMessageConnectionAsync(record.username());
+            connectionFuture = CompletableFuture.completedFuture(
+                    client.getPeerConnectionManager().getCachedMessageConnection(record.username()));
         } catch (Throwable failure) {
             connectionFuture = CompletableFuture.failedFuture(failure);
         }
@@ -222,7 +223,8 @@ public final class DefaultSearchResponder implements SearchResponder {
 
         CompletableFuture<InetSocketAddress> endpointFuture;
         try {
-            endpointFuture = client.getUserEndpointOperation(username, CancellationSignal.none());
+            endpointFuture = CompletableFuture.completedFuture(
+                    client.getUserEndpointOperation(username, CancellationSignal.none()));
         } catch (Throwable failure) {
             endpointFuture = CompletableFuture.failedFuture(failure);
         }
@@ -232,9 +234,9 @@ public final class DefaultSearchResponder implements SearchResponder {
                     int responseToken = client.getNextToken();
                     CompletableFuture<MessageConnection> connectionFuture;
                     try {
-                        connectionFuture = client.getPeerConnectionManager()
-                                .getOrAddMessageConnectionAsync(
-                                        username, endpoint, responseToken, CancellationSignal.none());
+                        connectionFuture = CompletableFuture.completedFuture(client.getPeerConnectionManager()
+                                .getOrAddMessageConnection(
+                                        username, endpoint, responseToken, CancellationSignal.none()));
                     } catch (Throwable failure) {
                         connectionFuture = CompletableFuture.failedFuture(failure);
                     }

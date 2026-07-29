@@ -24,8 +24,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
@@ -66,7 +64,7 @@ final class SearchCoordinator {
      * @param request the search to perform
      * @return the completed search and collected responses
      */
-    CompletableFuture<SearchResult> search(dev.slsk.internal.SearchRequest request) {
+    SearchResult search(dev.slsk.internal.SearchRequest request) {
         // Qualified: this file also talks to the wire message of the same name.
         java.util.Objects.requireNonNull(request, "request");
         return search(
@@ -84,8 +82,7 @@ final class SearchCoordinator {
      * @param responseHandler receives each accepted response
      * @return the completed search
      */
-    CompletableFuture<Search> search(
-            dev.slsk.internal.SearchRequest request, Consumer<SearchResponse> responseHandler) {
+    Search search(dev.slsk.internal.SearchRequest request, Consumer<SearchResponse> responseHandler) {
         java.util.Objects.requireNonNull(request, "request");
         java.util.Objects.requireNonNull(responseHandler, "responseHandler");
         return search(
@@ -97,7 +94,7 @@ final class SearchCoordinator {
                 request.getCancellationSignal());
     }
 
-    CompletableFuture<SearchResult> search(SearchQuery query) {
+    SearchResult search(SearchQuery query) {
         return search(query, null, null, null, CancellationSignal.none());
     }
     /**
@@ -107,7 +104,7 @@ final class SearchCoordinator {
      * @param cancellationSignal the cancellation signal
      * @return the completed search and collected responses
      */
-    CompletableFuture<SearchResult> search(SearchQuery query, CancellationSignal cancellationSignal) {
+    SearchResult search(SearchQuery query, CancellationSignal cancellationSignal) {
         return search(query, null, null, null, cancellationSignal);
     }
     /**
@@ -117,7 +114,7 @@ final class SearchCoordinator {
      * @param scope the search scope
      * @return the completed search and collected responses
      */
-    CompletableFuture<SearchResult> search(SearchQuery query, SearchScope scope) {
+    SearchResult search(SearchQuery query, SearchScope scope) {
         return search(query, scope, null, null, CancellationSignal.none());
     }
     /**
@@ -128,7 +125,7 @@ final class SearchCoordinator {
      * @param token the unique token
      * @return the completed search and collected responses
      */
-    CompletableFuture<SearchResult> search(SearchQuery query, SearchScope scope, Integer token) {
+    SearchResult search(SearchQuery query, SearchScope scope, Integer token) {
         return search(query, scope, token, null, CancellationSignal.none());
     }
     /**
@@ -140,8 +137,7 @@ final class SearchCoordinator {
      * @param searchOptions the search options
      * @return the completed search and collected responses
      */
-    CompletableFuture<SearchResult> search(
-            SearchQuery query, SearchScope scope, Integer token, SearchOptions searchOptions) {
+    SearchResult search(SearchQuery query, SearchScope scope, Integer token, SearchOptions searchOptions) {
         return search(query, scope, token, searchOptions, CancellationSignal.none());
     }
     /**
@@ -154,7 +150,7 @@ final class SearchCoordinator {
      * @param cancellationSignal the cancellation signal
      * @return the completed search and collected responses
      */
-    CompletableFuture<SearchResult> search(
+    SearchResult search(
             SearchQuery query,
             SearchScope scope,
             Integer token,
@@ -162,12 +158,10 @@ final class SearchCoordinator {
             CancellationSignal cancellationSignal) {
         SearchInvocation invocation = validateSearch(query, scope, token, searchOptions);
         List<SearchResponse> responses = Collections.synchronizedList(new ArrayList<>());
-        return searchToCallbackAsync(invocation, responses::add, context.defaultToken(cancellationSignal))
-                .thenApply(search -> {
-                    synchronized (responses) {
-                        return new SearchResult(search, responses);
-                    }
-                });
+        Search search = searchToCallback(invocation, responses::add, context.defaultToken(cancellationSignal));
+        synchronized (responses) {
+            return new SearchResult(search, responses);
+        }
     }
     /**
      * Searches the network and invokes a handler for each accepted response.
@@ -176,7 +170,7 @@ final class SearchCoordinator {
      * @param responseHandler the response handler
      * @return the completed search
      */
-    CompletableFuture<Search> search(SearchQuery query, Consumer<SearchResponse> responseHandler) {
+    Search search(SearchQuery query, Consumer<SearchResponse> responseHandler) {
         return search(query, responseHandler, null, null, null, CancellationSignal.none());
     }
     /**
@@ -187,8 +181,7 @@ final class SearchCoordinator {
      * @param cancellationSignal the cancellation signal
      * @return the completed search
      */
-    CompletableFuture<Search> search(
-            SearchQuery query, Consumer<SearchResponse> responseHandler, CancellationSignal cancellationSignal) {
+    Search search(SearchQuery query, Consumer<SearchResponse> responseHandler, CancellationSignal cancellationSignal) {
         return search(query, responseHandler, null, null, null, cancellationSignal);
     }
     /**
@@ -199,7 +192,7 @@ final class SearchCoordinator {
      * @param scope the search scope
      * @return the completed search
      */
-    CompletableFuture<Search> search(SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope) {
+    Search search(SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope) {
         return search(query, responseHandler, scope, null, null, CancellationSignal.none());
     }
     /**
@@ -211,8 +204,7 @@ final class SearchCoordinator {
      * @param token the unique token
      * @return the completed search
      */
-    CompletableFuture<Search> search(
-            SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope, Integer token) {
+    Search search(SearchQuery query, Consumer<SearchResponse> responseHandler, SearchScope scope, Integer token) {
         return search(query, responseHandler, scope, token, null, CancellationSignal.none());
     }
     /**
@@ -225,7 +217,7 @@ final class SearchCoordinator {
      * @param searchOptions the search options
      * @return the completed search
      */
-    CompletableFuture<Search> search(
+    Search search(
             SearchQuery query,
             Consumer<SearchResponse> responseHandler,
             SearchScope scope,
@@ -245,7 +237,7 @@ final class SearchCoordinator {
      * @param cancellationSignal the cancellation signal
      * @return the completed search
      */
-    CompletableFuture<Search> search(
+    Search search(
             SearchQuery query,
             Consumer<SearchResponse> responseHandler,
             SearchScope scope,
@@ -255,7 +247,7 @@ final class SearchCoordinator {
         SearchQuery validatedQuery = validateSearchQuery(query);
         Objects.requireNonNull(responseHandler, "responseHandler");
         SearchInvocation invocation = validateSearch(validatedQuery, scope, token, searchOptions);
-        return searchToCallbackAsync(invocation, responseHandler, context.defaultToken(cancellationSignal));
+        return searchToCallback(invocation, responseHandler, context.defaultToken(cancellationSignal));
     }
 
     SearchInvocation validateSearch(
@@ -294,7 +286,7 @@ final class SearchCoordinator {
 
     record SearchInvocation(SearchQuery query, SearchScope scope, int token, SearchOptions options) {}
 
-    CompletableFuture<Search> searchToCallbackAsync(
+    Search searchToCallback(
             SearchInvocation invocation,
             Consumer<SearchResponse> responseHandler,
             CancellationSignal cancellationSignal) {
@@ -319,7 +311,6 @@ final class SearchCoordinator {
             context.raiseEvent(Kind.SEARCH_STATE_CHANGED, eventData);
         };
 
-        CompletableFuture<Search> operation;
         try {
             context.getSearchRegistry().putIfAbsent(search.getToken(), search);
             updateState.accept(SearchState.REQUESTED);
@@ -333,7 +324,6 @@ final class SearchCoordinator {
             context.getDiagnostic()
                     .debug("Acquired search semaphore for search '"
                             + invocation.query().getSearchText() + "'");
-            CompletableFuture<Search> activeSearch;
             try {
                 byte[] message = buildSearchMessage(invocation.scope(), search);
                 search.setResponseReceived(response -> {
@@ -349,22 +339,17 @@ final class SearchCoordinator {
                     }
                     context.raiseEvent(Kind.SEARCH_RESPONSE_RECEIVED, eventData);
                 });
-                activeSearch = context.writeBytesToServer(message, cancellationSignal)
-                        .thenRun(() -> updateState.accept(SearchState.IN_PROGRESS))
-                        .thenCompose(ignoredWrite -> search.waitForCompletion(cancellationSignal))
-                        .thenApply(ignoredCompletion -> {
-                            updateState.accept(SearchState.COMPLETED.or(search.getState()));
-                            context.getDiagnostic()
-                                    .debug("Search for '"
-                                            + invocation.query().getSearchText()
-                                            + "' completed: "
-                                            + search.getState());
-                            return search.toSearch();
-                        });
-            } catch (Throwable failure) {
-                activeSearch = CompletableFuture.failedFuture(failure);
-            }
-            operation = activeSearch.whenComplete((result, failure) -> {
+                context.writeBytesToServer(message, cancellationSignal);
+                updateState.accept(SearchState.IN_PROGRESS);
+                search.waitForCompletion(cancellationSignal);
+                updateState.accept(SearchState.COMPLETED.or(search.getState()));
+                context.getDiagnostic()
+                        .debug("Search for '"
+                                + invocation.query().getSearchText()
+                                + "' completed: "
+                                + search.getState());
+                return search.toSearch();
+            } finally {
                 searchSemaphore.release();
                 context.getDiagnostic()
                         .debug("Released search semaphore for search '"
@@ -372,40 +357,29 @@ final class SearchCoordinator {
                                 + "' ("
                                 + searchSemaphore.availablePermits()
                                 + " available)");
-            });
+            }
         } catch (Throwable failure) {
-            // Reaches here only if the permit was never taken; anything after
-            // the acquire releases it through the whenComplete above.
-            operation = CompletableFuture.failedFuture(failure);
+            Throwable cause = Failures.unwrap(failure);
+            if (cause instanceof CancellationException) {
+                search.complete(SearchState.CANCELLED);
+                updateState.accept(SearchState.COMPLETED.or(SearchState.CANCELLED));
+                throw Failures.surface(cause);
+            }
+            search.complete(SearchState.ERRORED);
+            updateState.accept(SearchState.COMPLETED.or(SearchState.ERRORED));
+            if (cause instanceof TimeoutException) {
+                throw Failures.surface(cause);
+            }
+            throw new SoulseekClientException(
+                    "Failed to search for "
+                            + invocation.query().getSearchText()
+                            + " (" + invocation.token() + "): "
+                            + Failures.message(cause),
+                    cause);
+        } finally {
+            context.getSearchRegistry().remove(search.getToken(), search);
+            search.close();
         }
-
-        return operation
-                .handle((result, failure) -> {
-                    if (failure == null) {
-                        return result;
-                    }
-                    Throwable cause = Failures.unwrap(failure);
-                    if (cause instanceof CancellationException) {
-                        search.complete(SearchState.CANCELLED);
-                        updateState.accept(SearchState.COMPLETED.or(SearchState.CANCELLED));
-                        throw new CompletionException(cause);
-                    }
-                    search.complete(SearchState.ERRORED);
-                    updateState.accept(SearchState.COMPLETED.or(SearchState.ERRORED));
-                    if (cause instanceof TimeoutException) {
-                        throw new CompletionException(cause);
-                    }
-                    throw new CompletionException(new SoulseekClientException(
-                            "Failed to search for "
-                                    + invocation.query().getSearchText()
-                                    + " (" + invocation.token() + "): "
-                                    + Failures.message(cause),
-                            cause));
-                })
-                .whenComplete((result, failure) -> {
-                    context.getSearchRegistry().remove(search.getToken(), search);
-                    search.close();
-                });
     }
 
     void acquireSearchPermit(CancellationSignal cancellationSignal) {

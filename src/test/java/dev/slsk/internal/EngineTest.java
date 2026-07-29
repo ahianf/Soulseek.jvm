@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.slsk.CancellationSignal;
 import dev.slsk.MeshState;
 import dev.slsk.Soulseek;
 import dev.slsk.Subscription;
@@ -658,64 +659,14 @@ class EngineTest {
         public void timeout(dev.slsk.internal.common.WaitKey key) {}
 
         @Override
-        public CompletableFuture<Void> waitAsync(dev.slsk.internal.common.WaitKey key) {
-            return new CompletableFuture<>();
-        }
-
-        @Override
-        public CompletableFuture<Void> waitAsync(dev.slsk.internal.common.WaitKey key, Integer timeout) {
-            return waitAsync(key);
-        }
-
-        @Override
-        public CompletableFuture<Void> waitAsync(
-                dev.slsk.internal.common.WaitKey key, Integer timeout, dev.slsk.CancellationSignal cancellationSignal) {
-            return waitAsync(key);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitAsync(dev.slsk.internal.common.WaitKey key, Class<T> resultType) {
-            return new CompletableFuture<>();
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitAsync(
-                dev.slsk.internal.common.WaitKey key, Class<T> resultType, Integer timeout) {
-            return waitAsync(key, resultType);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitAsync(
+        public <T> dev.slsk.internal.common.Wait<T> register(
                 dev.slsk.internal.common.WaitKey key,
                 Class<T> resultType,
                 Integer timeout,
-                dev.slsk.CancellationSignal cancellationSignal) {
-            return waitAsync(key, resultType);
-        }
-
-        @Override
-        public CompletableFuture<Void> waitIndefinitelyAsync(dev.slsk.internal.common.WaitKey key) {
-            return waitAsync(key);
-        }
-
-        @Override
-        public CompletableFuture<Void> waitIndefinitelyAsync(
-                dev.slsk.internal.common.WaitKey key, dev.slsk.CancellationSignal cancellationSignal) {
-            return waitAsync(key);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitIndefinitelyAsync(
-                dev.slsk.internal.common.WaitKey key, Class<T> resultType) {
-            return waitAsync(key, resultType);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitIndefinitelyAsync(
-                dev.slsk.internal.common.WaitKey key,
-                Class<T> resultType,
-                dev.slsk.CancellationSignal cancellationSignal) {
-            return waitAsync(key, resultType);
+                CancellationSignal cancellationSignal) {
+            // Answers at once with nothing. No test here provokes a correlated
+            // request; a wait that never settles would hang one that did.
+            return () -> null;
         }
 
         @Override

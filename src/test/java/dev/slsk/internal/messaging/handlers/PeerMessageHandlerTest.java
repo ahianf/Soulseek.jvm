@@ -32,6 +32,7 @@ import dev.slsk.internal.SearchState;
 import dev.slsk.internal.TransferDirection;
 import dev.slsk.internal.UserInfo;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
@@ -722,55 +723,10 @@ class PeerMessageHandlerTest {
         public void timeout(WaitKey key) {}
 
         @Override
-        public CompletableFuture<Void> waitAsync(WaitKey key) {
-            return new CompletableFuture<>();
-        }
-
-        @Override
-        public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout) {
-            return waitAsync(key);
-        }
-
-        @Override
-        public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout, CancellationSignal cancellationSignal) {
-            return waitAsync(key);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType) {
-            return new CompletableFuture<>();
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType, Integer timeout) {
-            return waitAsync(key, resultType);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitAsync(
+        public <T> Wait<T> register(
                 WaitKey key, Class<T> resultType, Integer timeout, CancellationSignal cancellationSignal) {
-            return waitAsync(key, resultType);
-        }
-
-        @Override
-        public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key) {
-            return waitAsync(key);
-        }
-
-        @Override
-        public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key, CancellationSignal cancellationSignal) {
-            return waitAsync(key);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitIndefinitelyAsync(WaitKey key, Class<T> resultType) {
-            return waitAsync(key, resultType);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitIndefinitelyAsync(
-                WaitKey key, Class<T> resultType, CancellationSignal cancellationSignal) {
-            return waitAsync(key, resultType);
+            // These tests drive completions, never waits.
+            return () -> null;
         }
 
         @Override

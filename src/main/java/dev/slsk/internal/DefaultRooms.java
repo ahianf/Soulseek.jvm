@@ -18,7 +18,6 @@ import dev.slsk.UserStatistics;
 import dev.slsk.Username;
 import dev.slsk.events.RoomEvent;
 import dev.slsk.internal.EngineEvents.Kind;
-import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.events.PublicChatMessageReceivedEvent;
 import dev.slsk.internal.events.RoomJoinedEvent;
 import dev.slsk.internal.events.RoomLeftEvent;
@@ -305,14 +304,14 @@ final class DefaultRooms implements Rooms {
     @Override
     public RoomList list(CancellationSignal signal) {
         Objects.requireNonNull(signal, "signal");
-        return roomList(Blocking.await(registry.getRoomList(signal)));
+        return roomList(registry.getRoomList(signal));
     }
 
     @Override
     public Room join(String name, CancellationSignal signal) {
         Objects.requireNonNull(name, "room");
         Objects.requireNonNull(signal, "signal");
-        Room joined = room(Blocking.await(registry.joinRoom(name, signal)));
+        Room joined = room(registry.joinRoom(name, signal));
         events.mutateAndPublish(() -> {
             rooms.put(name, joined);
             return new RoomEvent.Joined(name, joined, Instant.now());
@@ -324,7 +323,7 @@ final class DefaultRooms implements Rooms {
     public void leave(String name) {
         Objects.requireNonNull(name, "room");
         if (rooms.containsKey(name)) {
-            Blocking.await(registry.leaveRoom(name));
+            registry.leaveRoom(name);
             events.mutateAndPublish(() -> {
                 rooms.remove(name);
                 return new RoomEvent.Left(name, Instant.now());
@@ -336,14 +335,14 @@ final class DefaultRooms implements Rooms {
     public void say(String name, String message) {
         Objects.requireNonNull(name, "room");
         Objects.requireNonNull(message, "message");
-        Blocking.await(registry.sendRoomMessage(name, message));
+        registry.sendRoomMessage(name, message);
     }
 
     @Override
     public void setTicker(String name, String message) {
         Objects.requireNonNull(name, "room");
         Objects.requireNonNull(message, "message");
-        Blocking.await(registry.setRoomTicker(name, message));
+        registry.setRoomTicker(name, message);
     }
 
     @Override
@@ -363,12 +362,12 @@ final class DefaultRooms implements Rooms {
 
     @Override
     public void startPublicChat() {
-        Blocking.await(server.startPublicChat());
+        server.startPublicChat();
     }
 
     @Override
     public void stopPublicChat() {
-        Blocking.await(server.stopPublicChat());
+        server.stopPublicChat();
     }
 
     @Override
@@ -391,32 +390,32 @@ final class DefaultRooms implements Rooms {
 
         @Override
         public void addMember(String room, Username user, CancellationSignal signal) {
-            Blocking.await(registry.addPrivateRoomMember(require(room), user.value(), require(signal)));
+            registry.addPrivateRoomMember(require(room), user.value(), require(signal));
         }
 
         @Override
         public void removeMember(String room, Username user, CancellationSignal signal) {
-            Blocking.await(registry.removePrivateRoomMember(require(room), user.value(), require(signal)));
+            registry.removePrivateRoomMember(require(room), user.value(), require(signal));
         }
 
         @Override
         public void addOperator(String room, Username user, CancellationSignal signal) {
-            Blocking.await(registry.addPrivateRoomModerator(require(room), user.value(), require(signal)));
+            registry.addPrivateRoomModerator(require(room), user.value(), require(signal));
         }
 
         @Override
         public void removeOperator(String room, Username user, CancellationSignal signal) {
-            Blocking.await(registry.removePrivateRoomModerator(require(room), user.value(), require(signal)));
+            registry.removePrivateRoomModerator(require(room), user.value(), require(signal));
         }
 
         @Override
         public void dropMembership(String room, CancellationSignal signal) {
-            Blocking.await(registry.dropPrivateRoomMembership(require(room), require(signal)));
+            registry.dropPrivateRoomMembership(require(room), require(signal));
         }
 
         @Override
         public void dropOwnership(String room, CancellationSignal signal) {
-            Blocking.await(registry.dropPrivateRoomOwnership(require(room), require(signal)));
+            registry.dropPrivateRoomOwnership(require(room), require(signal));
         }
 
         private static <T> T require(T value) {

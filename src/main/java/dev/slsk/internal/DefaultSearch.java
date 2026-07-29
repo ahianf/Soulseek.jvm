@@ -23,7 +23,6 @@ import dev.slsk.SearchStatus;
 import dev.slsk.Username;
 import dev.slsk.events.SearchEvent;
 import dev.slsk.internal.EngineEvents.Kind;
-import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.events.SearchRequestEvent;
 import dev.slsk.internal.events.SearchRequestResponseEvent;
@@ -299,13 +298,13 @@ final class DefaultSearch implements Search {
         CancellationSignal signal = state.controller.getSignal();
         SearchStatus status;
         try {
-            Blocking.await(coordinator.search(
+            coordinator.search(
                     dev.slsk.internal.SearchQuery.fromText(query.terms()),
                     source -> accept(state, source, query.filters()),
                     scope(query.scope()),
                     state.token,
                     options(query),
-                    signal));
+                    signal);
             status = SearchStatus.COMPLETED;
         } catch (RuntimeException exception) {
             status = signal.isCancellationRequested() ? SearchStatus.CANCELLED : SearchStatus.TIMED_OUT;

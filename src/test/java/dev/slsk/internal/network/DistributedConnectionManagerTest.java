@@ -20,6 +20,7 @@ import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.internal.SoulseekClientState;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Outcomes;
+import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
@@ -390,12 +391,12 @@ class DistributedConnectionManagerTest {
     void parentCandidateMessageCompletesRequiredWaits() {
         Fixture fixture = fixture();
         ConnectionProbe parent = ConnectionProbe.message(USERNAME, ENDPOINT);
-        CompletableFuture<Integer> level =
-                fixture.waiter.waitAsync(new WaitKey(Constants.WaitKey.BRANCH_LEVEL_MESSAGE, parent.id), Integer.class);
-        CompletableFuture<String> root =
-                fixture.waiter.waitAsync(new WaitKey(Constants.WaitKey.BRANCH_ROOT_MESSAGE, parent.id), String.class);
-        CompletableFuture<Void> search =
-                fixture.waiter.waitAsync(new WaitKey(Constants.WaitKey.SEARCH_REQUEST_MESSAGE, parent.id));
+        Wait<Integer> level = fixture.waiter.register(
+                new WaitKey(Constants.WaitKey.BRANCH_LEVEL_MESSAGE, parent.id), Integer.class, null, null);
+        Wait<String> root = fixture.waiter.register(
+                new WaitKey(Constants.WaitKey.BRANCH_ROOT_MESSAGE, parent.id), String.class, null, null);
+        Wait<Void> search =
+                fixture.waiter.register(new WaitKey(Constants.WaitKey.SEARCH_REQUEST_MESSAGE, parent.id), null, null);
 
         fixture.manager.handleParentCandidateMessage(
                 parent.messageConnection(), new MessageEvent(new DistributedBranchLevel(3).toByteArray()));
@@ -405,9 +406,9 @@ class DistributedConnectionManagerTest {
                 parent.messageConnection(),
                 new MessageEvent(new DistributedSearchRequest("user", TOKEN, "query").toByteArray()));
 
-        assertEquals(3, level.join());
-        assertEquals("root", root.join());
-        assertNull(search.join());
+        assertEquals(3, level.await());
+        assertEquals("root", root.await());
+        assertNull(search.await());
     }
 
     @Test
@@ -779,60 +780,17 @@ class DistributedConnectionManagerTest {
             fail(key, new java.util.concurrent.TimeoutException());
         }
 
-        @Override
-        public CompletableFuture<Void> waitAsync(WaitKey key) {
-            return waitAsync(key, Void.class, null, CancellationSignal.none());
-        }
-
-        @Override
-        public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout) {
-            return waitAsync(key, Void.class, timeout, CancellationSignal.none());
-        }
-
-        @Override
-        public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout, CancellationSignal cancellationSignal) {
-            return waitAsync(key, Void.class, timeout, cancellationSignal);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType) {
-            return waitAsync(key, resultType, null, CancellationSignal.none());
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType, Integer timeout) {
-            return waitAsync(key, resultType, timeout, CancellationSignal.none());
-        }
-
         @SuppressWarnings("unchecked")
         @Override
-        public <T> CompletableFuture<T> waitAsync(
+        public <T> Wait<T> register(
                 WaitKey key, Class<T> resultType, Integer timeout, CancellationSignal cancellationSignal) {
-            if (key.getToken().startsWith(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION)) {
-                return (CompletableFuture<T>) solicitationFuture;
-            }
-            return (CompletableFuture<T>) futures.computeIfAbsent(key, ignored -> new CompletableFuture<>());
-        }
-
-        @Override
-        public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key) {
-            return waitAsync(key);
-        }
-
-        @Override
-        public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key, CancellationSignal cancellationSignal) {
-            return waitAsync(key, null, cancellationSignal);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitIndefinitelyAsync(WaitKey key, Class<T> resultType) {
-            return waitAsync(key, resultType);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitIndefinitelyAsync(
-                WaitKey key, Class<T> resultType, CancellationSignal cancellationSignal) {
-            return waitAsync(key, resultType, null, cancellationSignal);
+            CompletableFuture<T> configured =
+                    key.getToken().startsWith(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION)
+                            ? (CompletableFuture<T>) solicitationFuture
+                            : (CompletableFuture<T>) futures.computeIfAbsent(key, ignored -> new CompletableFuture<>());
+            // The future is how a test says what the answer will be; Outcomes
+            // turns it into what a real wait raises.
+            return () -> Outcomes.raise(configured);
         }
 
         @Override

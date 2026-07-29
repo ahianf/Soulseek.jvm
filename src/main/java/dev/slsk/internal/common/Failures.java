@@ -3,6 +3,7 @@
 
 package dev.slsk.internal.common;
 
+import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -79,6 +80,75 @@ public final class Failures {
      */
     public static String message(Throwable failure) {
         return failure.getMessage() == null ? "" : failure.getMessage();
+    }
+
+    /**
+     * Rethrows a failed operation's real failure, in this library's terms.
+     *
+     * <p>The blocking replacement for {@link #map} composed with the await that
+     * always followed it. Those were two halves of one rule and lived apart
+     * only because one ran inside a future and the other outside it: translate
+     * the fault, pass a decision through, and never hand a caller a wrapper
+     * from the async layer.
+     *
+     * <p>A lapsed deadline arrives as the checked {@link TimeoutException}.
+     * Declaring that on every operation that talks to the server would put a
+     * checked exception on most of the surface, which is the ceremony this API
+     * exists to remove; it becomes {@link NoResponseException}, which already
+     * means "an expected response was not received".
+     *
+     * @param failure the failure to translate
+     * @param prefix prefixes any wrapped failure
+     * @param preservedFailures failure types to rethrow untranslated
+     * @return never; the return type exists so a caller can write {@code throw}
+     */
+    @SafeVarargs
+    public static RuntimeException raise(
+            Throwable failure, String prefix, Class<? extends Throwable>... preservedFailures) {
+        Throwable cause = unwrap(failure);
+        // NoResponseException alongside the other two because it *is* the
+        // surfaced deadline: an inner layer that has already named a timeout
+        // must not have it renamed "the operation failed" by an outer one.
+        if (cause instanceof CancellationException
+                || cause instanceof TimeoutException
+                || cause instanceof NoResponseException) {
+            throw surface(cause);
+        }
+        for (Class<? extends Throwable> preserved : preservedFailures) {
+            if (preserved.isInstance(cause)) {
+                throw surface(cause);
+            }
+        }
+        throw surface(new SoulseekClientException(prefix + message(cause), cause));
+    }
+
+    /**
+     * The last translation before a caller sees a failure.
+     *
+     * <p>Says what went wrong in this library's terms without adding anything:
+     * a decision the caller made comes back as itself, and the one fault that
+     * cannot come back as itself — the checked {@link TimeoutException} — takes
+     * the name the hierarchy already has for it.
+     *
+     * @param failure the failure to surface
+     * @return never; the return type exists so a caller can write {@code throw}
+     */
+    public static RuntimeException surface(Throwable failure) {
+        Throwable cause = unwrap(failure);
+        if (cause instanceof TimeoutException) {
+            throw new NoResponseException(cause.getMessage(), cause);
+        }
+        throw rethrow(cause, message(cause));
+    }
+
+    private static RuntimeException rethrow(Throwable cause, String message) {
+        if (cause instanceof RuntimeException runtime) {
+            throw runtime;
+        }
+        if (cause instanceof Error error) {
+            throw error;
+        }
+        throw new SoulseekClientException(message, cause);
     }
 
     /**

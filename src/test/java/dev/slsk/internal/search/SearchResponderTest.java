@@ -382,12 +382,11 @@ class SearchResponderTest {
         }
 
         @Override
-        public CompletableFuture<InetSocketAddress> getUserEndpointOperation(
-                String username, CancellationSignal cancellationSignal) {
+        public InetSocketAddress getUserEndpointOperation(String username, CancellationSignal cancellationSignal) {
             if (endpointFailure != null) {
-                return CompletableFuture.failedFuture(endpointFailure);
+                throw endpointFailure;
             }
-            return CompletableFuture.completedFuture(new InetSocketAddress("127.0.0.1", 1234));
+            return new InetSocketAddress("127.0.0.1", 1234);
         }
     }
 
@@ -477,38 +476,35 @@ class SearchResponderTest {
         }
 
         @Override
-        public CompletableFuture<Void> addOrUpdateMessageConnectionAsync(
-                String username, Connection incomingConnection) {
-            return CompletableFuture.completedFuture(null);
-        }
+        public void addOrUpdateMessageConnection(String username, Connection incomingConnection) {}
 
         @Override
-        public CompletableFuture<Connection> awaitTransferConnectionAsync(
+        public Connection awaitTransferConnection(
                 String username, String filename, int remoteToken, CancellationSignal cancellationSignal) {
             return unsupported();
         }
 
         @Override
-        public CompletableFuture<MessageConnection> getCachedMessageConnectionAsync(String username) {
+        public MessageConnection getCachedMessageConnection(String username) {
             if (connectionFailure != null) {
-                return CompletableFuture.failedFuture(connectionFailure);
+                throw connectionFailure;
             }
-            return CompletableFuture.completedFuture(connection);
+            return connection;
         }
 
         @Override
-        public CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(ConnectToPeerResponse response) {
+        public MessageConnection getOrAddMessageConnection(ConnectToPeerResponse response) {
             return unsupported();
         }
 
         @Override
-        public CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
+        public MessageConnection getOrAddMessageConnection(
                 String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal) {
-            return getOrAddMessageConnectionAsync(username, ipEndpoint, 0, cancellationSignal);
+            return getOrAddMessageConnection(username, ipEndpoint, 0, cancellationSignal);
         }
 
         @Override
-        public CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
+        public MessageConnection getOrAddMessageConnection(
                 String username,
                 InetSocketAddress ipEndpoint,
                 int solicitationToken,
@@ -516,24 +512,24 @@ class SearchResponderTest {
             lastUsername = username;
             lastSolicitationToken = solicitationToken;
             if (connectionFailure != null) {
-                return CompletableFuture.failedFuture(connectionFailure);
+                throw connectionFailure;
             }
-            return CompletableFuture.completedFuture(connection);
+            return connection;
         }
 
         @Override
-        public CompletableFuture<TransferConnectionResult> getTransferConnectionAsync(
+        public TransferConnectionResult getTransferConnection(
                 String username, int token, Connection incomingConnection) {
             return unsupported();
         }
 
         @Override
-        public CompletableFuture<TransferConnectionResult> getTransferConnectionAsync(ConnectToPeerResponse response) {
+        public TransferConnectionResult getTransferConnection(ConnectToPeerResponse response) {
             return unsupported();
         }
 
         @Override
-        public CompletableFuture<Connection> getTransferConnectionAsync(
+        public Connection getTransferConnection(
                 String username, InetSocketAddress ipEndpoint, int token, CancellationSignal cancellationSignal) {
             return unsupported();
         }
@@ -555,8 +551,8 @@ class SearchResponderTest {
         @Override
         public void close() {}
 
-        private static <T> CompletableFuture<T> unsupported() {
-            return CompletableFuture.failedFuture(new UnsupportedOperationException());
+        private static <T> T unsupported() {
+            throw new UnsupportedOperationException();
         }
     }
 }

@@ -11,6 +11,7 @@ import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
+import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.messages.PlaceInQueueRequest;
@@ -84,8 +85,16 @@ final class TransferEngine {
      * @param request the download to perform
      * @return the completed transfer
      */
-    CompletableFuture<Transfer> download(DownloadRequest request) {
+    Transfer download(DownloadRequest request) {
         java.util.Objects.requireNonNull(request, "request");
+        try {
+            return await(downloadOperation(request));
+        } catch (Throwable failure) {
+            throw Failures.surface(failure);
+        }
+    }
+
+    private CompletableFuture<Transfer> downloadOperation(DownloadRequest request) {
         return request.isToStream()
                 ? download(
                         request.getUsername(),
@@ -143,8 +152,16 @@ final class TransferEngine {
      * @param request the upload to perform
      * @return the completed transfer
      */
-    CompletableFuture<Transfer> upload(UploadRequest request) {
+    Transfer upload(UploadRequest request) {
         java.util.Objects.requireNonNull(request, "request");
+        try {
+            return await(uploadOperation(request));
+        } catch (Throwable failure) {
+            throw Failures.surface(failure);
+        }
+    }
+
+    private CompletableFuture<Transfer> uploadOperation(UploadRequest request) {
         return request.isFromStream()
                 ? upload(
                         request.getUsername(),
@@ -876,12 +893,11 @@ final class TransferEngine {
         return enqueued.thenApply(ignored -> upload);
     }
 
-    CompletableFuture<Integer> getDownloadPlaceInQueue(String requestedUsername, String filename) {
+    Integer getDownloadPlaceInQueue(String requestedUsername, String filename) {
         return getDownloadPlaceInQueue(requestedUsername, filename, CancellationSignal.none());
     }
 
-    CompletableFuture<Integer> getDownloadPlaceInQueue(
-            String requestedUsername, String filename, CancellationSignal cancellationSignal) {
+    Integer getDownloadPlaceInQueue(String requestedUsername, String filename, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(requestedUsername, "username");
         CommonUtils.requireText(filename, "filename");
         context.requireLoggedIn("check download queue position");
@@ -893,30 +909,24 @@ final class TransferEngine {
                     "A download of " + filename + " from user " + requestedUsername + " is not active");
         }
         CancellationSignal token = context.defaultToken(cancellationSignal);
-        CompletableFuture<PlaceInQueueResponse> responseWait;
         try {
-            responseWait = context.getWaiter()
-                    .waitAsync(
+            Wait<PlaceInQueueResponse> responseWait = context.getWaiter()
+                    .register(
                             new WaitKey(MessageCode.Peer.PLACE_IN_QUEUE_RESPONSE, requestedUsername, filename),
                             PlaceInQueueResponse.class,
                             null,
                             token);
+            java.net.InetSocketAddress endpoint = context.resolveUserEndpoint(requestedUsername, token);
+            dev.slsk.internal.network.MessageConnection connection =
+                    context.getPeerConnectionManager().getOrAddMessageConnection(requestedUsername, endpoint, token);
+            context.writeToPeer(connection, new PlaceInQueueRequest(filename), token);
+            return responseWait.await().getPlaceInQueue();
         } catch (Throwable failure) {
-            return Failures.map(
-                    CompletableFuture.failedFuture(failure),
+            throw Failures.raise(
+                    failure,
                     "Failed to fetch place in queue for download of " + filename + " from " + requestedUsername + ": ",
                     UserOfflineException.class);
         }
-        CompletableFuture<Integer> operation = context.resolveUserEndpoint(requestedUsername, token)
-                .thenCompose(endpoint -> context.getPeerConnectionManager()
-                        .getOrAddMessageConnectionAsync(requestedUsername, endpoint, token))
-                .thenCompose(connection -> context.writeToPeer(connection, new PlaceInQueueRequest(filename), token))
-                .thenCompose(ignored -> responseWait)
-                .thenApply(PlaceInQueueResponse::getPlaceInQueue);
-        return Failures.map(
-                operation,
-                "Failed to fetch place in queue for download of " + filename + " from " + requestedUsername + ": ",
-                UserOfflineException.class);
     }
 
     static void completeDownloadEnqueue(CompletableFuture<Boolean> enqueued, TransferState state) {

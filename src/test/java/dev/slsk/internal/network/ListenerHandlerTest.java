@@ -18,6 +18,7 @@ import dev.slsk.internal.SearchResponseCacheRecord;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.DefaultWaiter;
 import dev.slsk.internal.common.Outcomes;
+import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
@@ -95,13 +96,13 @@ class ListenerHandlerTest {
             Connection transferConnection = ConnectionProbe.message(new byte[] {1}).proxy;
             fixture.peer.transferResult = new TransferConnectionResult(transferConnection, 24);
             WaitKey key = new WaitKey(Constants.WaitKey.DIRECT_TRANSFER, "alice", 24);
-            CompletableFuture<Connection> wait = fixture.waiter.waitAsync(key, Connection.class, -1, null);
+            Wait<Connection> wait = fixture.waiter.register(key, Connection.class, -1, null);
             ConnectionProbe incoming =
                     ConnectionProbe.message(new PeerInit("alice", Constants.ConnectionType.TRANSFER, 7).toByteArray());
 
             fixture.handler.handleConnectionAsync(incoming.proxy).join();
 
-            assertSame(transferConnection, wait.join());
+            assertSame(transferConnection, wait.await());
             assertEquals(7, fixture.peer.transferToken);
             assertSame(incoming.proxy, fixture.peer.transferIncoming);
         }
@@ -126,19 +127,18 @@ class ListenerHandlerTest {
         try (Fixture fixture = fixture(null)) {
             fixture.peer.pending = Map.of(8, "alice");
             WaitKey peerKey = new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, "alice", 8);
-            CompletableFuture<Connection> peerWait = fixture.waiter.waitAsync(peerKey, Connection.class, -1, null);
+            Wait<Connection> peerWait = fixture.waiter.register(peerKey, Connection.class, -1, null);
             ConnectionProbe peer = ConnectionProbe.message(new PierceFirewall(8).toByteArray());
             fixture.handler.handleConnectionAsync(peer.proxy).join();
-            assertSame(peer.proxy, peerWait.join());
+            assertSame(peer.proxy, peerWait.await());
 
             fixture.peer.pending = Map.of();
             fixture.distributed.pending = Map.of(9, "bob");
             WaitKey distributedKey = new WaitKey(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION, "bob", 9);
-            CompletableFuture<Connection> distributedWait =
-                    fixture.waiter.waitAsync(distributedKey, Connection.class, -1, null);
+            Wait<Connection> distributedWait = fixture.waiter.register(distributedKey, Connection.class, -1, null);
             ConnectionProbe distributed = ConnectionProbe.message(new PierceFirewall(9).toByteArray());
             fixture.handler.handleConnectionAsync(distributed.proxy).join();
-            assertSame(distributed.proxy, distributedWait.join());
+            assertSame(distributed.proxy, distributedWait.await());
         }
     }
 
@@ -391,15 +391,15 @@ class ListenerHandlerTest {
                 (ignored, method, arguments) -> {
                     return switch (method.getName()) {
                         case "getPendingSolicitations" -> pending;
-                        case "addOrUpdateMessageConnectionAsync" -> {
+                        case "addOrUpdateMessageConnection" -> {
                             addedUsername = (String) arguments[0];
                             addedConnection = (Connection) arguments[1];
-                            yield CompletableFuture.completedFuture(null);
+                            yield null;
                         }
-                        case "getTransferConnectionAsync" -> {
+                        case "getTransferConnection" -> {
                             transferToken = (Integer) arguments[1];
                             transferIncoming = (Connection) arguments[2];
-                            yield CompletableFuture.completedFuture(transferResult);
+                            yield transferResult;
                         }
                         case "toString" -> "peerManager";
                         default -> defaultValue(method.getReturnType());

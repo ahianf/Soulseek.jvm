@@ -9,7 +9,6 @@ import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.options.SoulseekClientOptions;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * The seam between the engine and the components it delegates to.
@@ -61,9 +60,8 @@ interface EngineContext {
      * @param waitKey correlates the acknowledgement
      * @param cancellationSignal the cancellation signal
      * @param failurePrefix prefixes any wrapped failure
-     * @return a future completing when the server acknowledges
      */
-    CompletableFuture<Void> executeCorrelatedCommand(
+    void executeCorrelatedCommand(
             OutgoingMessage message, WaitKey waitKey, CancellationSignal cancellationSignal, String failurePrefix);
 
     /**
@@ -76,9 +74,9 @@ interface EngineContext {
      * @param failurePrefix prefixes any wrapped failure
      * @param preservedFailures failure types to pass through untranslated
      * @param <T> the response type
-     * @return a future containing the response
+     * @return the response
      */
-    <T> CompletableFuture<T> executeCorrelatedRequest(
+    <T> T executeCorrelatedRequest(
             OutgoingMessage message,
             WaitKey waitKey,
             Class<T> resultType,
@@ -120,9 +118,8 @@ interface EngineContext {
      *
      * @param message the encoded message
      * @param cancellationSignal the cancellation signal
-     * @return a future completing when the write lands
      */
-    CompletableFuture<Void> writeBytesToServer(byte[] message, CancellationSignal cancellationSignal);
+    void writeBytesToServer(byte[] message, CancellationSignal cancellationSignal);
 
     /**
      * Raises an engine event.
@@ -163,10 +160,9 @@ interface EngineContext {
      *
      * @param username the user to resolve
      * @param cancellationSignal the cancellation signal
-     * @return a future containing the endpoint
+     * @return the endpoint
      */
-    CompletableFuture<java.net.InetSocketAddress> resolveUserEndpoint(
-            String username, CancellationSignal cancellationSignal);
+    java.net.InetSocketAddress resolveUserEndpoint(String username, CancellationSignal cancellationSignal);
 
     /**
      * Raises a browse-progress event.
@@ -193,9 +189,8 @@ interface EngineContext {
      * @param connection the connection to write to
      * @param message the message to send
      * @param cancellationSignal the cancellation signal
-     * @return a future completing when the write lands
      */
-    CompletableFuture<Void> writeToPeer(
+    void writeToPeer(
             dev.slsk.internal.network.MessageConnection connection,
             OutgoingMessage message,
             CancellationSignal cancellationSignal);
@@ -205,7 +200,6 @@ interface EngineContext {
      *
      * @param message the message to send
      * @param cancellationSignal the cancellation signal
-     * @return a future completing when the write lands
      */
-    CompletableFuture<Void> writeToServer(OutgoingMessage message, CancellationSignal cancellationSignal);
+    void writeToServer(OutgoingMessage message, CancellationSignal cancellationSignal);
 }

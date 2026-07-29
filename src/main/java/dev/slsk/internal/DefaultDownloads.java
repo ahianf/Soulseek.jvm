@@ -17,7 +17,6 @@ import dev.slsk.TransferState;
 import dev.slsk.Username;
 import dev.slsk.events.DownloadEvent;
 import dev.slsk.exceptions.TransferNotFoundException;
-import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.messaging.handlers.PeerMessageHandlerClient;
 import dev.slsk.internal.messaging.messages.TransferRequest;
 import dev.slsk.spi.TransferStore;
@@ -156,7 +155,7 @@ final class DefaultDownloads implements Downloads {
 
         running.put(token, entry.id());
         try {
-            Transfer completed = Blocking.await(client.transfers().download(internal));
+            Transfer completed = client.transfers().download(internal);
             TransferState state = Transfers.state(completed);
             TransferOutcome outcome = state instanceof TransferState.Finished finished
                     ? finished.outcome()
@@ -186,9 +185,9 @@ final class DefaultDownloads implements Downloads {
      */
     private java.util.OptionalInt place(DownloadQueue.Entry entry) {
         try {
-            Integer position = Blocking.await(client.transfers()
+            Integer position = client.transfers()
                     .getDownloadPlaceInQueue(
-                            entry.user().value(), entry.request().path()));
+                            entry.user().value(), entry.request().path());
             return position == null ? java.util.OptionalInt.empty() : java.util.OptionalInt.of(position);
         } catch (RuntimeException unreachable) {
             return java.util.OptionalInt.empty();

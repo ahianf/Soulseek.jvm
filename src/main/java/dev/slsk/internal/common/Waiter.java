@@ -5,9 +5,15 @@
 package dev.slsk.internal.common;
 
 import dev.slsk.CancellationSignal;
-import java.util.concurrent.CompletableFuture;
 
-/** Correlates asynchronous responses with keyed waits. */
+/**
+ * Correlates responses with keyed waits.
+ *
+ * <p>Registration is separate from waiting, and the ten {@code waitAsync}
+ * overloads that used to be here are three: a wait is a key, an expected type,
+ * a deadline and a cancellation signal, and the rest were C# default parameters
+ * kept as Java source.
+ */
 public interface Waiter extends AutoCloseable {
     int getDefaultTimeout();
 
@@ -25,27 +31,32 @@ public interface Waiter extends AutoCloseable {
 
     void timeout(WaitKey key);
 
-    CompletableFuture<Void> waitAsync(WaitKey key);
+    /**
+     * Registers a wait for a typed answer.
+     *
+     * <p>The request that provokes the answer must be written <em>after</em>
+     * this returns, or the answer can arrive before anything is listening for
+     * it.
+     *
+     * @param key correlates the answer
+     * @param resultType the expected answer type; {@code Void.class} for none
+     * @param timeout the deadline in milliseconds, {@code null} for the
+     *     default, or {@code -1} for none
+     * @param cancellationSignal cancels the wait, or {@code null}
+     * @param <T> the answer type
+     * @return the registered wait
+     */
+    <T> Wait<T> register(WaitKey key, Class<T> resultType, Integer timeout, CancellationSignal cancellationSignal);
 
-    CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout);
+    /** Registers a wait for an answer that carries no value. */
+    default Wait<Void> register(WaitKey key, Integer timeout, CancellationSignal cancellationSignal) {
+        return register(key, Void.class, timeout, cancellationSignal);
+    }
 
-    CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout, CancellationSignal cancellationSignal);
-
-    <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType);
-
-    <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType, Integer timeout);
-
-    <T> CompletableFuture<T> waitAsync(
-            WaitKey key, Class<T> resultType, Integer timeout, CancellationSignal cancellationSignal);
-
-    CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key);
-
-    CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key, CancellationSignal cancellationSignal);
-
-    <T> CompletableFuture<T> waitIndefinitelyAsync(WaitKey key, Class<T> resultType);
-
-    <T> CompletableFuture<T> waitIndefinitelyAsync(
-            WaitKey key, Class<T> resultType, CancellationSignal cancellationSignal);
+    /** Registers a wait that uses the source's maximum timeout. */
+    default <T> Wait<T> registerIndefinitely(WaitKey key, Class<T> resultType, CancellationSignal cancellationSignal) {
+        return register(key, resultType, Integer.MAX_VALUE, cancellationSignal);
+    }
 
     @Override
     void close();

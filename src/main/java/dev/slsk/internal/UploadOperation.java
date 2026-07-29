@@ -21,6 +21,7 @@ import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Permits;
+import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.events.TransferProgressUpdatedEvent;
 import dev.slsk.internal.events.TransferStateChangedEvent;
@@ -157,10 +158,10 @@ final class UploadOperation {
                             + filenameOnly(upload.getFilename()) + " to "
                             + upload.getUsername() + " acquired");
 
-            endpoint = await(engine.context.resolveUserEndpoint(upload.getUsername(), cancellationSignal));
-            MessageConnection messageConnection = await(engine.context
+            endpoint = engine.context.resolveUserEndpoint(upload.getUsername(), cancellationSignal);
+            MessageConnection messageConnection = engine.context
                     .getPeerConnectionManager()
-                    .getOrAddMessageConnectionAsync(upload.getUsername(), endpoint, cancellationSignal));
+                    .getOrAddMessageConnection(upload.getUsername(), endpoint, cancellationSignal);
             engine.context
                     .getDiagnostic()
                     .debug("Fetched peer connection for upload of "
@@ -168,9 +169,9 @@ final class UploadOperation {
                             + upload.getUsername() + " (id: " + messageConnection.getId()
                             + ", state: " + messageConnection.getState() + ")");
 
-            CompletableFuture<TransferResponse> transferRequestAcknowledged = engine.context
+            Wait<TransferResponse> transferRequestAcknowledged = engine.context
                     .getWaiter()
-                    .waitAsync(
+                    .register(
                             new WaitKey(MessageCode.Peer.TRANSFER_RESPONSE, upload.getUsername(), upload.getToken()),
                             TransferResponse.class,
                             engine.context
@@ -178,11 +179,11 @@ final class UploadOperation {
                                     .getPeerConnectionOptions()
                                     .getInactivityTimeout(),
                             cancellationSignal);
-            await(engine.context.writeToPeer(
+            engine.context.writeToPeer(
                     messageConnection,
                     new TransferRequest(
                             TransferDirection.UPLOAD, upload.getToken(), upload.getFilename(), upload.getSize()),
-                    cancellationSignal));
+                    cancellationSignal);
             engine.context
                     .getDiagnostic()
                     .debug("Wrote transfer request for upload of "
@@ -191,7 +192,7 @@ final class UploadOperation {
                             + ", state: " + messageConnection.getState() + ")");
             updateState(TransferState.REQUESTED);
 
-            TransferResponse acknowledgement = await(transferRequestAcknowledged);
+            TransferResponse acknowledgement = transferRequestAcknowledged.await();
             engine.context
                     .getDiagnostic()
                     .debug("Received transfer request ACK for upload of "
@@ -204,9 +205,9 @@ final class UploadOperation {
             }
 
             updateState(TransferState.INITIALIZING);
-            connection = await(engine.context
+            connection = engine.context
                     .getPeerConnectionManager()
-                    .getTransferConnectionAsync(upload.getUsername(), endpoint, upload.getToken(), cancellationSignal));
+                    .getTransferConnection(upload.getUsername(), endpoint, upload.getToken(), cancellationSignal);
             engine.context
                     .getDiagnostic()
                     .debug("Fetched transfer connection for upload of "
@@ -461,14 +462,14 @@ final class UploadOperation {
     private void notifyUploadFailure() {
         try {
             InetSocketAddress currentEndpoint =
-                    await(engine.context.resolveUserEndpoint(upload.getUsername(), CancellationSignal.none()));
-            MessageConnection messageConnection = await(engine.context
+                    engine.context.resolveUserEndpoint(upload.getUsername(), CancellationSignal.none());
+            MessageConnection messageConnection = engine.context
                     .getPeerConnectionManager()
-                    .getOrAddMessageConnectionAsync(upload.getUsername(), currentEndpoint, CancellationSignal.none()));
+                    .getOrAddMessageConnection(upload.getUsername(), currentEndpoint, CancellationSignal.none());
             OutgoingMessage message = upload.getState().contains(TransferState.CANCELLED)
                     ? new UploadDenied(upload.getFilename(), "Cancelled")
                     : new UploadFailed(upload.getFilename());
-            await(engine.context.writeToPeer(messageConnection, message, CancellationSignal.none()));
+            engine.context.writeToPeer(messageConnection, message, CancellationSignal.none());
         } catch (Throwable ignored) {
             // Failure notification is intentionally best effort.
         }

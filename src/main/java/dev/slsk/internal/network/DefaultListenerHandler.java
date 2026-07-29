@@ -124,12 +124,12 @@ public final class DefaultListenerHandler implements ListenerHandler {
                 + ") (id: " + connection.getId() + ")");
 
         if (Constants.ConnectionType.PEER.equals(peerInit.getConnectionType())) {
-            return client.getPeerConnectionManager()
-                    .addOrUpdateMessageConnectionAsync(peerInit.getUsername(), connection);
+            client.getPeerConnectionManager().addOrUpdateMessageConnection(peerInit.getUsername(), connection);
+            return CompletableFuture.completedFuture(null);
         }
         if (Constants.ConnectionType.TRANSFER.equals(peerInit.getConnectionType())) {
-            return client.getPeerConnectionManager()
-                    .getTransferConnectionAsync(peerInit.getUsername(), peerInit.getToken(), connection)
+            return CompletableFuture.completedFuture(client.getPeerConnectionManager()
+                            .getTransferConnection(peerInit.getUsername(), peerInit.getToken(), connection))
                     .thenAccept(result -> {
                         WaitKey waitKey = new WaitKey(
                                 Constants.WaitKey.DIRECT_TRANSFER, peerInit.getUsername(), result.remoteToken());
@@ -194,10 +194,8 @@ public final class DefaultListenerHandler implements ListenerHandler {
                         + connection.getIpEndpoint().getAddress().getHostAddress()
                         + ":" + client.getListener().getPort()
                         + ") (id: " + connection.getId() + ")");
-                return client.getPeerConnectionManager()
-                        .addOrUpdateMessageConnectionAsync(record.username(), connection)
-                        .thenCompose(ignored -> client.getSearchResponder().tryRespondAsync(token))
-                        .thenApply(ignored -> null);
+                client.getPeerConnectionManager().addOrUpdateMessageConnection(record.username(), connection);
+                return client.getSearchResponder().tryRespondAsync(token).thenApply(ignored -> null);
             }
         }
 

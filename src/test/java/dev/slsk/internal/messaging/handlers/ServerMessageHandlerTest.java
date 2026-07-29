@@ -25,6 +25,7 @@ import dev.slsk.internal.UserPresence;
 import dev.slsk.internal.UserStatistics;
 import dev.slsk.internal.UserStatus;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
@@ -835,17 +836,13 @@ class ServerMessageHandlerTest {
         }
 
         @Override
-        public CompletableFuture<Void> acknowledgePrivateMessageOperation(
-                int id, CancellationSignal cancellationSignal) {
+        public void acknowledgePrivateMessageOperation(int id, CancellationSignal cancellationSignal) {
             privateAcknowledgements.add(id);
-            return CompletableFuture.completedFuture(null);
         }
 
         @Override
-        public CompletableFuture<Void> acknowledgePrivilegeNotificationOperation(
-                int id, CancellationSignal cancellationSignal) {
+        public void acknowledgePrivilegeNotificationOperation(int id, CancellationSignal cancellationSignal) {
             privilegeAcknowledgements.add(id);
-            return CompletableFuture.completedFuture(null);
         }
     }
 
@@ -888,55 +885,10 @@ class ServerMessageHandlerTest {
         public void timeout(WaitKey key) {}
 
         @Override
-        public CompletableFuture<Void> waitAsync(WaitKey key) {
-            return new CompletableFuture<>();
-        }
-
-        @Override
-        public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout) {
-            return waitAsync(key);
-        }
-
-        @Override
-        public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout, CancellationSignal cancellationSignal) {
-            return waitAsync(key);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType) {
-            return new CompletableFuture<>();
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType, Integer timeout) {
-            return waitAsync(key, resultType);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitAsync(
+        public <T> Wait<T> register(
                 WaitKey key, Class<T> resultType, Integer timeout, CancellationSignal cancellationSignal) {
-            return waitAsync(key, resultType);
-        }
-
-        @Override
-        public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key) {
-            return waitAsync(key);
-        }
-
-        @Override
-        public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key, CancellationSignal cancellationSignal) {
-            return waitAsync(key);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitIndefinitelyAsync(WaitKey key, Class<T> resultType) {
-            return waitAsync(key, resultType);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitIndefinitelyAsync(
-                WaitKey key, Class<T> resultType, CancellationSignal cancellationSignal) {
-            return waitAsync(key, resultType);
+            // These tests drive completions, never waits.
+            return () -> null;
         }
 
         @Override
@@ -953,13 +905,13 @@ class ServerMessageHandlerTest {
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             return switch (method.getName()) {
-                case "getOrAddMessageConnectionAsync" -> {
+                case "getOrAddMessageConnection" -> {
                     if (arguments.length == 1 && arguments[0] instanceof ConnectToPeerResponse response) {
                         messageRequests.add(response);
                     }
-                    yield CompletableFuture.completedFuture(null);
+                    yield null;
                 }
-                case "getTransferConnectionAsync" -> CompletableFuture.completedFuture(transferResult);
+                case "getTransferConnection" -> transferResult;
                 case "toString" -> "PeerManagerProbe";
                 default -> defaultValue(method.getReturnType());
             };

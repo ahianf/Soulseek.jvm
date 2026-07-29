@@ -10,11 +10,11 @@ import dev.slsk.exceptions.AddressException;
 import dev.slsk.exceptions.KickedFromServerException;
 import dev.slsk.exceptions.ListenException;
 import dev.slsk.exceptions.LoginRejectedException;
+import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
 import dev.slsk.internal.EngineEvents.Kind;
-import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.DefaultWaiter;
 import dev.slsk.internal.common.Failures;
@@ -23,6 +23,7 @@ import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.common.Scheduler;
 import dev.slsk.internal.common.TokenBucket;
 import dev.slsk.internal.common.TokenFactory;
+import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
@@ -83,8 +84,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -308,8 +307,8 @@ final class SoulseekEngine
 
         bindEvents();
 
-        scheduler.scheduleAtFixedRate(() -> users.cleanupUserEndpointSemaphoresAsync(), 5, 5, TimeUnit.MINUTES);
-        scheduler.scheduleAtFixedRate(() -> cleanupUploadSemaphoresAsync(), 15, 15, TimeUnit.MINUTES);
+        scheduler.scheduleAtFixedRate(users::cleanupUserEndpointSemaphores, 5, 5, TimeUnit.MINUTES);
+        scheduler.scheduleAtFixedRate(this::cleanupUploadSemaphores, 15, 15, TimeUnit.MINUTES);
     }
 
     /**
@@ -618,8 +617,8 @@ final class SoulseekEngine
      * @param password the login password
      * @return the connection operation
      */
-    private CompletableFuture<Void> connectOperation(String requestedUsername, String password) {
-        return connectOperation(DEFAULT_ADDRESS, DEFAULT_PORT, requestedUsername, password, CancellationSignal.none());
+    private void connectOperation(String requestedUsername, String password) {
+        connectOperation(DEFAULT_ADDRESS, DEFAULT_PORT, requestedUsername, password, CancellationSignal.none());
     }
 
     /**
@@ -630,9 +629,8 @@ final class SoulseekEngine
      * @param cancellationSignal the cancellation signal
      * @return the connection operation
      */
-    private CompletableFuture<Void> connectOperation(
-            String requestedUsername, String password, CancellationSignal cancellationSignal) {
-        return connectOperation(DEFAULT_ADDRESS, DEFAULT_PORT, requestedUsername, password, cancellationSignal);
+    private void connectOperation(String requestedUsername, String password, CancellationSignal cancellationSignal) {
+        connectOperation(DEFAULT_ADDRESS, DEFAULT_PORT, requestedUsername, password, cancellationSignal);
     }
 
     /**
@@ -644,10 +642,9 @@ final class SoulseekEngine
      * @param password the login password
      * @return the connection operation
      */
-    private CompletableFuture<Void> connectOperation(
+    private void connectOperation(
             String requestedAddress, int requestedPort, String requestedUsername, String password) {
-        return connectOperation(
-                requestedAddress, requestedPort, requestedUsername, password, CancellationSignal.none());
+        connectOperation(requestedAddress, requestedPort, requestedUsername, password, CancellationSignal.none());
     }
 
     /**
@@ -660,7 +657,7 @@ final class SoulseekEngine
      * @param cancellationSignal the cancellation signal
      * @return the connection operation
      */
-    private CompletableFuture<Void> connectOperation(
+    private void connectOperation(
             String requestedAddress,
             int requestedPort,
             String requestedUsername,
@@ -706,7 +703,7 @@ final class SoulseekEngine
             }
         }
 
-        return connectInternalAsync(
+        connectInternal(
                 requestedAddress,
                 new InetSocketAddress(serverAddress, requestedPort),
                 requestedUsername,
@@ -720,7 +717,7 @@ final class SoulseekEngine
      * @param patch the option substitutions
      * @return whether reconnecting is required for full effect
      */
-    private CompletableFuture<Boolean> reconfigureOptionsOperation(SoulseekClientOptionsPatch patch) {
+    private boolean reconfigureOptionsOperation(SoulseekClientOptionsPatch patch) {
         return reconfigureOptionsOperation(patch, CancellationSignal.none());
     }
 
@@ -731,7 +728,7 @@ final class SoulseekEngine
      * @param cancellationSignal the cancellation signal
      * @return whether reconnecting is required for full effect
      */
-    private CompletableFuture<Boolean> reconfigureOptionsOperation(
+    private boolean reconfigureOptionsOperation(
             SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
         Objects.requireNonNull(patch, "patch");
         boolean addressChanged = patch.getListenIpAddress() != null
@@ -756,7 +753,7 @@ final class SoulseekEngine
                 }
             }
         }
-        return reconfigureOptionsInternalAsync(patch, defaultToken(cancellationSignal));
+        return reconfigureOptionsInternal(patch, defaultToken(cancellationSignal));
     }
 
     /** Disconnects with the default reason. */
@@ -1103,56 +1100,49 @@ final class SoulseekEngine
         }
     }
 
-    private CompletableFuture<Void> connectInternalAsync(
+    private void connectInternal(
             String requestedAddress,
             InetSocketAddress requestedEndpoint,
             String requestedUsername,
             String password,
             CancellationSignal cancellationSignal) {
         try {
+            // The permit is never held on the failing path, so there is nothing
+            // to release; the acquire stays outside the try for that reason.
             Permits.acquire(stateSemaphore, cancellationSignal);
         } catch (RuntimeException failure) {
-            // The permit was never held, so there is nothing to release. The
-            // failure is still reported the same way as any other.
-            return reportConnectFailure(CompletableFuture.failedFuture(failure));
+            throw reportConnectFailure(failure);
         }
 
-        CompletableFuture<Void> attempt;
         try {
-            if (state.contains(SoulseekClientState.CONNECTED) && state.contains(SoulseekClientState.LOGGED_IN)) {
-                attempt = CompletableFuture.completedFuture(null);
-            } else {
-                attempt = performConnectAsync(
-                        requestedAddress, requestedEndpoint, requestedUsername, password, cancellationSignal);
+            if (!state.contains(SoulseekClientState.CONNECTED) || !state.contains(SoulseekClientState.LOGGED_IN)) {
+                performConnect(requestedAddress, requestedEndpoint, requestedUsername, password, cancellationSignal);
             }
-        } catch (RuntimeException | Error failure) {
+        } catch (Throwable failure) {
+            throw reportConnectFailure(failure);
+        } finally {
             stateSemaphore.release();
-            throw failure;
         }
-        return reportConnectFailure(attempt.whenComplete((result, failure) -> stateSemaphore.release()));
     }
 
     /** Classifies a connect failure and tears the connection down. */
-    private CompletableFuture<Void> reportConnectFailure(CompletableFuture<Void> serialized) {
-        return serialized.handle((result, failure) -> {
-            if (failure == null) {
-                return result;
-            }
-            Throwable cause = Failures.unwrap(failure);
-            Throwable reported;
-            if (cause instanceof LoginRejectedException
-                    || cause instanceof CancellationException
-                    || cause instanceof TimeoutException) {
-                reported = cause;
-            } else {
-                reported = new SoulseekClientException("Failed to connect: " + Failures.message(cause), cause);
-            }
-            disconnect(Failures.message(reported), asException(reported));
-            throw new CompletionException(reported);
-        });
+    private RuntimeException reportConnectFailure(Throwable failure) {
+        Throwable cause = Failures.unwrap(failure);
+        Throwable reported;
+        if (cause instanceof TimeoutException) {
+            // A lapsed deadline cannot be thrown as itself past here: the
+            // checked TimeoutException has no place on an unchecked surface.
+            reported = new NoResponseException(Failures.message(cause), cause);
+        } else if (cause instanceof LoginRejectedException || cause instanceof CancellationException) {
+            reported = cause;
+        } else {
+            reported = new SoulseekClientException("Failed to connect: " + Failures.message(cause), cause);
+        }
+        disconnect(Failures.message(reported), asException(reported));
+        throw Failures.surface(reported);
     }
 
-    private CompletableFuture<Void> performConnectAsync(
+    private void performConnect(
             String requestedAddress,
             InetSocketAddress requestedEndpoint,
             String requestedUsername,
@@ -1181,52 +1171,38 @@ final class SoulseekEngine
             address = requestedAddress;
             ipEndpoint = requestedEndpoint;
             changeState(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGING_IN), "Logging in", null);
-            return loginAsync(requestedUsername, password, cancellationSignal);
+            login(requestedUsername, password, cancellationSignal);
         } catch (Throwable failure) {
-            return CompletableFuture.failedFuture(failure);
+            throw Failures.propagate(failure);
         }
     }
 
-    private CompletableFuture<Void> loginAsync(
-            String requestedUsername, String password, CancellationSignal cancellationSignal) {
-        CompletableFuture<LoginResponse> loginWait;
-        try {
-            loginWait = waiter.waitAsync(
-                    new WaitKey(MessageCode.Server.LOGIN), LoginResponse.class, null, cancellationSignal);
-        } catch (Throwable failure) {
-            return CompletableFuture.failedFuture(failure);
-        }
+    private void login(String requestedUsername, String password, CancellationSignal cancellationSignal) {
+        // Registered before the login bytes go out: the server answers a login
+        // as fast as anything on this protocol.
+        Wait<LoginResponse> loginWait =
+                waiter.register(new WaitKey(MessageCode.Server.LOGIN), LoginResponse.class, null, cancellationSignal);
 
         ByteArrayOutputStream loginMessages = new ByteArrayOutputStream();
         loginMessages.writeBytes(new LoginRequest(minorVersion, requestedUsername, password).toByteArray());
         loginMessages.writeBytes(new SetListenPortCommand(options.getListenPort()).toByteArray());
 
-        return invokeServerByteWrite(loginMessages.toByteArray(), cancellationSignal)
-                .thenCompose(ignored -> loginWait)
-                .thenCompose(response -> {
-                    if (!response.isSucceeded()) {
-                        return CompletableFuture.failedFuture(new LoginRejectedException(
-                                "The server rejected login attempt: " + response.getMessage()));
-                    }
-                    serverInfo = serverInfo.with(null, null, null, response.isSupporter());
-                    events.raise(Kind.SERVER_INFO_RECEIVED, serverInfo);
-                    username = requestedUsername;
-                    changeState(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN), "Logged in", null);
-                    return sendConfigurationMessagesAsync(cancellationSignal);
-                });
+        invokeServerByteWrite(loginMessages.toByteArray(), cancellationSignal);
+        LoginResponse response = loginWait.await();
+        if (!response.isSucceeded()) {
+            throw new LoginRejectedException("The server rejected login attempt: " + response.getMessage());
+        }
+        serverInfo = serverInfo.with(null, null, null, response.isSupporter());
+        events.raise(Kind.SERVER_INFO_RECEIVED, serverInfo);
+        username = requestedUsername;
+        changeState(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN), "Logged in", null);
+        sendConfigurationMessages(cancellationSignal);
     }
 
-    CompletableFuture<Void> sendConfigurationMessagesAsync(CancellationSignal cancellationSignal) {
-        return invokeServerWrite(new SetListenPortCommand(options.getListenPort()), cancellationSignal)
-                .thenCompose(ignored -> invokeServerWrite(
-                        new PrivateRoomToggle(options.isAcceptPrivateRoomInvitations()), cancellationSignal))
-                .thenCompose(ignored -> {
-                    try {
-                        return distributedConnectionManager.updateStatusAsync(cancellationSignal);
-                    } catch (Throwable failure) {
-                        return CompletableFuture.failedFuture(failure);
-                    }
-                });
+    void sendConfigurationMessages(CancellationSignal cancellationSignal) {
+        invokeServerWrite(new SetListenPortCommand(options.getListenPort()), cancellationSignal);
+        invokeServerWrite(new PrivateRoomToggle(options.isAcceptPrivateRoomInvitations()), cancellationSignal);
+        distributedConnectionManager.updateStatusAsync(cancellationSignal);
     }
 
     // ---- reconfiguration --------------------------------------------------
@@ -1241,8 +1217,7 @@ final class SoulseekEngine
     // No facet exposes this: options are set at build time. It stays because it
     // is the machinery a runtime speed limit needs, and Downloads.policy will.
 
-    private CompletableFuture<Boolean> performReconfigureOptionsAsync(
-            SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
+    private boolean performReconfigureOptions(SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
         boolean connected = isConnectedAndLoggedIn();
         boolean enableDistributedNetworkChanged = patch.getEnableDistributedNetwork() != null
                 && patch.getEnableDistributedNetwork() != options.isEnableDistributedNetwork();
@@ -1301,56 +1276,47 @@ final class SoulseekEngine
 
         diagnostic.info("Options reconfigured successfully");
         if (!isConnectedAndLoggedIn()) {
-            return CompletableFuture.completedFuture(false);
+            return false;
         }
         diagnostic.debug("Updating server with latest configuration");
-        boolean requiresReconnect = reconnectRequired;
-        return sendConfigurationMessagesAsync(cancellationSignal).thenApply(ignored -> {
-            if (requiresReconnect) {
-                diagnostic.warning("Server reconnect required for options " + "to fully take effect");
-            }
-            return requiresReconnect;
-        });
+        sendConfigurationMessages(cancellationSignal);
+        if (reconnectRequired) {
+            diagnostic.warning("Server reconnect required for options " + "to fully take effect");
+        }
+        return reconnectRequired;
     }
 
-    private CompletableFuture<Boolean> reconfigureOptionsInternalAsync(
+    private boolean reconfigureOptionsInternal(
             SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
-        CompletableFuture<Boolean> serialized;
         try {
+            // Never held on the failing path, so nothing to release.
             Permits.acquire(stateSemaphore, cancellationSignal);
         } catch (RuntimeException failure) {
-            // Never held, so nothing to release.
-            return reportReconfigureFailure(CompletableFuture.failedFuture(failure));
+            throw reportReconfigureFailure(failure);
         }
-        CompletableFuture<Boolean> operation;
         try {
-            operation = performReconfigureOptionsAsync(patch, cancellationSignal);
+            return performReconfigureOptions(patch, cancellationSignal);
         } catch (Throwable failure) {
-            operation = CompletableFuture.failedFuture(failure);
+            throw reportReconfigureFailure(failure);
+        } finally {
+            stateSemaphore.release();
         }
-        serialized = operation.whenComplete((result, failure) -> stateSemaphore.release());
-        return reportReconfigureFailure(serialized);
     }
 
     /** Classifies a reconfiguration failure, which is never rolled back. */
-    private CompletableFuture<Boolean> reportReconfigureFailure(CompletableFuture<Boolean> serialized) {
-        return serialized.handle((result, failure) -> {
-            if (failure == null) {
-                return result;
-            }
-            Throwable cause = Failures.unwrap(failure);
-            if (cause instanceof CancellationException || cause instanceof TimeoutException) {
-                throw new CompletionException(cause);
-            }
-            throw new CompletionException(new SoulseekClientException(
-                    "Failed to reconfigure options: "
-                            + Failures.message(cause)
-                            + ".  Any successful reconfiguration has not "
-                            + "been rolled back; retry with the same patch "
-                            + "until successful or consider this as a "
-                            + "fatal Exception",
-                    cause));
-        });
+    private RuntimeException reportReconfigureFailure(Throwable failure) {
+        Throwable cause = Failures.unwrap(failure);
+        if (cause instanceof CancellationException || cause instanceof TimeoutException) {
+            throw Failures.surface(cause);
+        }
+        throw new SoulseekClientException(
+                "Failed to reconfigure options: "
+                        + Failures.message(cause)
+                        + ".  Any successful reconfiguration has not "
+                        + "been rolled back; retry with the same patch "
+                        + "until successful or consider this as a "
+                        + "fatal Exception",
+                cause);
     }
 
     private static SoulseekClientOptionsPatch listenerPatch(SoulseekClientOptionsPatch patch) {
@@ -1387,9 +1353,9 @@ final class SoulseekEngine
         return new RuntimeException(failure);
     }
 
-    CompletableFuture<Void> cleanupUploadSemaphoresAsync() {
+    void cleanupUploadSemaphores() {
         if (!uploadSemaphoreSyncRoot.tryAcquire()) {
-            return CompletableFuture.completedFuture(null);
+            return;
         }
         try {
             for (Map.Entry<String, Semaphore> entry : uploadSemaphores.entrySet()) {
@@ -1403,9 +1369,6 @@ final class SoulseekEngine
                     semaphore.release();
                 }
             }
-            return CompletableFuture.completedFuture(null);
-        } catch (Throwable failure) {
-            return CompletableFuture.failedFuture(failure);
         } finally {
             uploadSemaphoreSyncRoot.release();
         }
@@ -1414,26 +1377,24 @@ final class SoulseekEngine
     // ---- EngineContext, the seam the components delegate through ----------
 
     /** The periodic endpoint-semaphore sweep; exposed for tests. */
-    CompletableFuture<Void> cleanupUserEndpointSemaphoresAsync() {
-        return users.cleanupUserEndpointSemaphoresAsync();
+    void cleanupUserEndpointSemaphores() {
+        users.cleanupUserEndpointSemaphores();
     }
 
     @Override
-    public CompletableFuture<java.net.InetSocketAddress> getUserEndpointOperation(
-            String username, CancellationSignal cancellationSignal) {
+    public java.net.InetSocketAddress getUserEndpointOperation(String username, CancellationSignal cancellationSignal) {
         return users.getUserEndpoint(username, cancellationSignal);
     }
 
     @Override
-    public CompletableFuture<java.net.InetSocketAddress> resolveUserEndpoint(
-            String username, CancellationSignal cancellationSignal) {
+    public java.net.InetSocketAddress resolveUserEndpoint(String username, CancellationSignal cancellationSignal) {
         return users.getUserEndpoint(username, cancellationSignal);
     }
 
     @Override
-    public CompletableFuture<Void> writeToPeer(
+    public void writeToPeer(
             MessageConnection connection, OutgoingMessage message, CancellationSignal cancellationSignal) {
-        return invokeMessageWrite(connection, message, cancellationSignal);
+        invokeMessageWrite(connection, message, cancellationSignal);
     }
 
     @Override
@@ -1462,15 +1423,13 @@ final class SoulseekEngine
     }
 
     @Override
-    public CompletableFuture<Void> acknowledgePrivateMessageOperation(
-            int privateMessageId, CancellationSignal cancellationSignal) {
-        return server.acknowledgePrivateMessage(privateMessageId, cancellationSignal);
+    public void acknowledgePrivateMessageOperation(int privateMessageId, CancellationSignal cancellationSignal) {
+        server.acknowledgePrivateMessage(privateMessageId, cancellationSignal);
     }
 
     @Override
-    public CompletableFuture<Void> acknowledgePrivilegeNotificationOperation(
-            int notificationId, CancellationSignal cancellationSignal) {
-        return server.acknowledgePrivilegeNotification(notificationId, cancellationSignal);
+    public void acknowledgePrivilegeNotificationOperation(int notificationId, CancellationSignal cancellationSignal) {
+        server.acknowledgePrivilegeNotification(notificationId, cancellationSignal);
     }
 
     @Override
@@ -1494,8 +1453,8 @@ final class SoulseekEngine
     }
 
     @Override
-    public CompletableFuture<Void> writeBytesToServer(byte[] message, CancellationSignal cancellationSignal) {
-        return invokeServerByteWrite(message, cancellationSignal);
+    public void writeBytesToServer(byte[] message, CancellationSignal cancellationSignal) {
+        invokeServerByteWrite(message, cancellationSignal);
     }
 
     @Override
@@ -1524,19 +1483,19 @@ final class SoulseekEngine
     }
 
     @Override
-    public CompletableFuture<Void> writeToServer(OutgoingMessage message, CancellationSignal cancellationSignal) {
-        return invokeServerWrite(message, cancellationSignal);
+    public void writeToServer(OutgoingMessage message, CancellationSignal cancellationSignal) {
+        invokeServerWrite(message, cancellationSignal);
     }
 
     @Override
-    public CompletableFuture<Void> executeCorrelatedCommand(
+    public void executeCorrelatedCommand(
             OutgoingMessage message, WaitKey waitKey, CancellationSignal cancellationSignal, String failurePrefix) {
-        return executeCorrelatedServerCommand(message, waitKey, cancellationSignal, failurePrefix);
+        executeCorrelatedServerCommand(message, waitKey, cancellationSignal, failurePrefix);
     }
 
     @Override
     @SafeVarargs
-    public final <T> CompletableFuture<T> executeCorrelatedRequest(
+    public final <T> T executeCorrelatedRequest(
             OutgoingMessage message,
             WaitKey waitKey,
             Class<T> resultType,
@@ -1547,43 +1506,23 @@ final class SoulseekEngine
                 message, waitKey, resultType, cancellationSignal, failurePrefix, preservedFailures);
     }
 
-    private static <T> T await(CompletableFuture<T> future) {
-        try {
-            return future.join();
-        } catch (Throwable failure) {
-            throw new CompletionException(Failures.unwrap(failure));
-        }
+    private void invokeServerByteWrite(byte[] message, CancellationSignal cancellationSignal) {
+        serverConnection.write(message, defaultToken(cancellationSignal));
     }
 
-    private CompletableFuture<Void> invokeServerByteWrite(byte[] message, CancellationSignal cancellationSignal) {
-        try {
-            serverConnection.write(message, defaultToken(cancellationSignal));
-            return CompletableFuture.completedFuture(null);
-        } catch (Throwable failure) {
-            return CompletableFuture.failedFuture(failure);
-        }
-    }
-
-    private CompletableFuture<Void> writeServerAsync(
-            OutgoingMessage message, CancellationSignal cancellationSignal, String failurePrefix) {
-        return Failures.map(invokeServerWrite(message, cancellationSignal), failurePrefix);
-    }
-
-    private CompletableFuture<Void> executeCorrelatedServerCommand(
+    private void executeCorrelatedServerCommand(
             OutgoingMessage message, WaitKey waitKey, CancellationSignal cancellationSignal, String failurePrefix) {
         CancellationSignal token = defaultToken(cancellationSignal);
-        CompletableFuture<Void> wait;
         try {
-            wait = waiter.waitAsync(waitKey, null, token);
+            Wait<Void> wait = waiter.register(waitKey, null, token);
+            invokeServerWrite(message, token);
+            wait.await();
         } catch (Throwable failure) {
-            return Failures.map(CompletableFuture.failedFuture(failure), failurePrefix);
+            throw Failures.raise(failure, failurePrefix);
         }
-        CompletableFuture<Void> responseWait = wait;
-        CompletableFuture<Void> operation = invokeServerWrite(message, token).thenCompose(ignored -> responseWait);
-        return Failures.map(operation, failurePrefix);
     }
 
-    private <T> CompletableFuture<T> executeCorrelatedServerRequest(
+    private <T> T executeCorrelatedServerRequest(
             OutgoingMessage message,
             WaitKey waitKey,
             Class<T> resultType,
@@ -1591,28 +1530,24 @@ final class SoulseekEngine
             String failurePrefix,
             Class<? extends Throwable>... preservedFailures) {
         CancellationSignal token = defaultToken(cancellationSignal);
-        CompletableFuture<T> wait;
         try {
-            wait = waiter.waitAsync(waitKey, resultType, null, token);
+            // Registered, then written, then awaited. The server can answer
+            // before the write returns, so this order is the correlation.
+            Wait<T> wait = waiter.register(waitKey, resultType, null, token);
+            invokeServerWrite(message, token);
+            return wait.await();
         } catch (Throwable failure) {
-            return Failures.map(CompletableFuture.failedFuture(failure), failurePrefix, preservedFailures);
+            throw Failures.raise(failure, failurePrefix, preservedFailures);
         }
-        CompletableFuture<T> operation = invokeServerWrite(message, token).thenCompose(ignored -> wait);
-        return Failures.map(operation, failurePrefix, preservedFailures);
     }
 
-    private CompletableFuture<Void> invokeServerWrite(OutgoingMessage message, CancellationSignal cancellationSignal) {
-        return invokeMessageWrite(serverConnection, message, cancellationSignal);
+    private void invokeServerWrite(OutgoingMessage message, CancellationSignal cancellationSignal) {
+        invokeMessageWrite(serverConnection, message, cancellationSignal);
     }
 
-    private static CompletableFuture<Void> invokeMessageWrite(
+    private static void invokeMessageWrite(
             MessageConnection connection, OutgoingMessage message, CancellationSignal cancellationSignal) {
-        try {
-            connection.write(message, cancellationSignal == null ? CancellationSignal.none() : cancellationSignal);
-            return CompletableFuture.completedFuture(null);
-        } catch (Throwable failure) {
-            return CompletableFuture.failedFuture(failure);
-        }
+        connection.write(message, cancellationSignal == null ? CancellationSignal.none() : cancellationSignal);
     }
 
     @Override
@@ -1626,28 +1561,28 @@ final class SoulseekEngine
     }
 
     public void connect(String username, String password) {
-        Blocking.await(connectOperation(username, password));
+        connectOperation(username, password);
     }
 
     public void connect(String username, String password, CancellationSignal cancellationSignal) {
-        Blocking.await(connectOperation(username, password, cancellationSignal));
+        connectOperation(username, password, cancellationSignal);
     }
 
     public void connect(String address, int port, String username, String password) {
-        Blocking.await(connectOperation(address, port, username, password));
+        connectOperation(address, port, username, password);
     }
 
     public void connect(
             String address, int port, String username, String password, CancellationSignal cancellationSignal) {
-        Blocking.await(connectOperation(address, port, username, password, cancellationSignal));
+        connectOperation(address, port, username, password, cancellationSignal);
     }
 
     public Boolean reconfigureOptions(SoulseekClientOptionsPatch patch) {
-        return Blocking.await(reconfigureOptionsOperation(patch));
+        return reconfigureOptionsOperation(patch);
     }
 
     public Boolean reconfigureOptions(SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
-        return Blocking.await(reconfigureOptionsOperation(patch, cancellationSignal));
+        return reconfigureOptionsOperation(patch, cancellationSignal);
     }
 
     RoomRegistry rooms() {

@@ -12,7 +12,6 @@ import dev.slsk.ServerAddress;
 import dev.slsk.ServerInfo;
 import dev.slsk.events.ConnectionEvent;
 import dev.slsk.internal.EngineEvents.Kind;
-import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.events.SoulseekClientDisconnectedEvent;
 import dev.slsk.internal.events.SoulseekClientStateChangedEvent;
 import java.time.Duration;
@@ -179,7 +178,7 @@ final class DefaultConnection implements Connection {
     @Override
     public Duration ping(CancellationSignal signal) {
         Objects.requireNonNull(signal, "signal");
-        Long milliseconds = Blocking.await(server.pingServer(signal));
+        Long milliseconds = server.pingServer(signal);
         return Duration.ofMillis(milliseconds == null ? 0L : milliseconds);
     }
 

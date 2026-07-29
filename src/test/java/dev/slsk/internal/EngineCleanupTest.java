@@ -25,7 +25,7 @@ class EngineCleanupTest {
             Semaphore user = new Semaphore(1);
             fixture.client.getUploadSemaphoresForTest().put("alice", user);
             try {
-                fixture.client.cleanupUploadSemaphoresAsync().join();
+                fixture.client.cleanupUploadSemaphores();
                 assertSame(user, fixture.client.getUploadSemaphoresForTest().get("alice"));
             } finally {
                 syncRoot.release();
@@ -38,7 +38,7 @@ class EngineCleanupTest {
         try (Fixture fixture = new Fixture()) {
             fixture.client.getUploadSemaphoresForTest().put("alice", new Semaphore(1));
 
-            fixture.client.cleanupUploadSemaphoresAsync().join();
+            fixture.client.cleanupUploadSemaphores();
 
             assertTrue(fixture.client.getUploadSemaphoresForTest().isEmpty());
             assertEquals(List.of("Cleaned up upload semaphore for alice"), fixture.diagnostic.debugMessages);
@@ -51,7 +51,7 @@ class EngineCleanupTest {
             Semaphore held = new Semaphore(0);
             fixture.client.getUploadSemaphoresForTest().put("alice", held);
 
-            fixture.client.cleanupUploadSemaphoresAsync().join();
+            fixture.client.cleanupUploadSemaphores();
 
             assertSame(held, fixture.client.getUploadSemaphoresForTest().get("alice"));
             assertTrue(fixture.diagnostic.debugMessages.isEmpty());

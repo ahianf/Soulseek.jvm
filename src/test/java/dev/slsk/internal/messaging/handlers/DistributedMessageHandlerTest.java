@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.CancellationSignal;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Outcomes;
+import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
@@ -90,10 +91,10 @@ class DistributedMessageHandlerTest {
     void childDepthAndPingCompleteExpectedWaitKeys() {
         Fixture fixture = new Fixture(true);
         ConnectionProbe connection = new ConnectionProbe(USERNAME, ENDPOINT);
-        CompletableFuture<Integer> depth = fixture.waiter.waitAsync(
-                new WaitKey(Constants.WaitKey.CHILD_DEPTH_MESSAGE, connection.key), Integer.class);
-        CompletableFuture<DistributedPingResponse> ping = fixture.waiter.waitAsync(
-                new WaitKey(MessageCode.Distributed.PING, USERNAME), DistributedPingResponse.class);
+        Wait<Integer> depth = fixture.waiter.register(
+                new WaitKey(Constants.WaitKey.CHILD_DEPTH_MESSAGE, connection.key), Integer.class, null, null);
+        Wait<DistributedPingResponse> ping = fixture.waiter.register(
+                new WaitKey(MessageCode.Distributed.PING, USERNAME), DistributedPingResponse.class, null, null);
 
         fixture.handler
                 .handleMessageReadAsync(connection.proxy, new DistributedChildDepth(7).toByteArray())
@@ -102,8 +103,8 @@ class DistributedMessageHandlerTest {
                 .handleMessageReadAsync(connection.proxy, new DistributedPingResponse(TOKEN).toByteArray())
                 .join();
 
-        assertEquals(7, depth.join());
-        assertEquals(TOKEN, ping.join().getToken());
+        assertEquals(7, depth.await());
+        assertEquals(TOKEN, ping.await().getToken());
     }
 
     @Test
@@ -412,57 +413,15 @@ class DistributedMessageHandlerTest {
             fail(key, new java.util.concurrent.TimeoutException());
         }
 
-        @Override
-        public CompletableFuture<Void> waitAsync(WaitKey key) {
-            return waitAsync(key, Void.class, null, CancellationSignal.none());
-        }
-
-        @Override
-        public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout) {
-            return waitAsync(key, Void.class, timeout, CancellationSignal.none());
-        }
-
-        @Override
-        public CompletableFuture<Void> waitAsync(WaitKey key, Integer timeout, CancellationSignal cancellationSignal) {
-            return waitAsync(key, Void.class, timeout, cancellationSignal);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType) {
-            return waitAsync(key, resultType, null, CancellationSignal.none());
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitAsync(WaitKey key, Class<T> resultType, Integer timeout) {
-            return waitAsync(key, resultType, timeout, CancellationSignal.none());
-        }
-
         @SuppressWarnings("unchecked")
         @Override
-        public <T> CompletableFuture<T> waitAsync(
+        public <T> Wait<T> register(
                 WaitKey key, Class<T> resultType, Integer timeout, CancellationSignal cancellationSignal) {
-            return (CompletableFuture<T>) waits.computeIfAbsent(key, ignored -> new CompletableFuture<>());
-        }
-
-        @Override
-        public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key) {
-            return waitAsync(key);
-        }
-
-        @Override
-        public CompletableFuture<Void> waitIndefinitelyAsync(WaitKey key, CancellationSignal cancellationSignal) {
-            return waitAsync(key, null, cancellationSignal);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitIndefinitelyAsync(WaitKey key, Class<T> resultType) {
-            return waitAsync(key, resultType);
-        }
-
-        @Override
-        public <T> CompletableFuture<T> waitIndefinitelyAsync(
-                WaitKey key, Class<T> resultType, CancellationSignal cancellationSignal) {
-            return waitAsync(key, resultType, null, cancellationSignal);
+            CompletableFuture<T> wait =
+                    (CompletableFuture<T>) waits.computeIfAbsent(key, ignored -> new CompletableFuture<>());
+            // The future is how a test says what the answer will be; Outcomes
+            // turns it into what a real wait raises.
+            return () -> Outcomes.raise(wait);
         }
 
         @Override

@@ -4,10 +4,10 @@
 
 package dev.slsk.internal.search;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -66,8 +66,7 @@ class SearchInternalTest {
         cancelled.cancel();
         assertTrue(cancelled.getState().contains(SearchState.COMPLETED));
         assertTrue(cancelled.getState().contains(SearchState.CANCELLED));
-        assertThrows(
-                CancellationException.class, () -> cancelled.waitForCompletion().join());
+        assertThrows(CancellationException.class, cancelled::waitForCompletion);
         cancelled.close();
     }
 
@@ -174,7 +173,7 @@ class SearchInternalTest {
         try (SearchInternal search = search(42, options)) {
             search.setState(SearchState.IN_PROGRESS);
             search.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of()));
-            search.waitForCompletion().join();
+            search.waitForCompletion();
             assertTrue(search.getState().contains(SearchState.RESPONSE_LIMIT_REACHED));
             assertFalse(search.getState().contains(SearchState.FILE_LIMIT_REACHED));
         }
@@ -186,7 +185,7 @@ class SearchInternalTest {
         try (SearchInternal search = search(42, options)) {
             search.setState(SearchState.IN_PROGRESS);
             search.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of()));
-            search.waitForCompletion().join();
+            search.waitForCompletion();
             assertTrue(search.getState().contains(SearchState.FILE_LIMIT_REACHED));
         }
     }
@@ -194,16 +193,16 @@ class SearchInternalTest {
     @Test
     void waitCompletesAndCallerCancellationDoesNotCancelSearch() {
         try (SearchInternal search = search(42, new SearchOptions())) {
-            var wait = search.waitForCompletion();
+            // Complete first, then wait: a blocking wait on a search nothing
+            // has finished would park this thread for the search timeout.
             search.complete(SearchState.TIMED_OUT);
-            assertNull(wait.join());
+            assertDoesNotThrow(() -> search.waitForCompletion());
         }
 
         try (SearchInternal search = search(42, new SearchOptions());
                 CancellationController source = new CancellationController()) {
-            var wait = search.waitForCompletion(source.getSignal());
             source.cancel();
-            assertThrows(CancellationException.class, wait::join);
+            assertThrows(CancellationException.class, () -> search.waitForCompletion(source.getSignal()));
             assertEquals(SearchState.NONE, search.getState());
         }
     }
@@ -220,7 +219,7 @@ class SearchInternalTest {
             assertTrue(search.isTimeoutActive());
             search.setState(SearchState.IN_PROGRESS);
             assertTrue(search.isTimeoutActive());
-            search.waitForCompletion().join();
+            search.waitForCompletion();
             assertTrue(search.getState().contains(SearchState.COMPLETED));
             assertTrue(search.getState().contains(SearchState.TIMED_OUT));
             assertFalse(search.isTimeoutActive());

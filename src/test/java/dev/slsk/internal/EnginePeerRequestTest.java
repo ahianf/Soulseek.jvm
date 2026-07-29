@@ -18,8 +18,8 @@ import dev.slsk.exceptions.TransferNotFoundException;
 import dev.slsk.exceptions.UserEndpointException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.internal.EngineEvents.Kind;
-import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.common.Outcomes;
+import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
@@ -69,7 +69,7 @@ class EnginePeerRequestTest {
         CancellationController source = new CancellationController();
         CancellationSignal token = source.getSignal();
 
-        Blocking.await(fixture.client.users().connectToUser("alice", token));
+        fixture.client.users().connectToUser("alice", token);
 
         assertEquals("alice", fixture.peerManager.username);
         assertEquals(ENDPOINT, fixture.peerManager.endpoint);
@@ -91,13 +91,13 @@ class EnginePeerRequestTest {
                 CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));
         fixture.peerManager.invalidationResult = false;
 
-        Blocking.await(fixture.client.users().connectToUser("alice", true));
+        fixture.client.users().connectToUser("alice", true);
 
         assertEquals(1, fixture.peerManager.invalidations);
         assertEquals(List.of(), fixture.diagnostic.debugMessages);
 
         fixture.peerManager.invalidationResult = true;
-        Blocking.await(fixture.client.users().connectToUser("alice", true));
+        fixture.client.users().connectToUser("alice", true);
         assertEquals(2, fixture.peerManager.invalidations);
         assertEquals(List.of("Invalidated message connection cache for alice"), fixture.diagnostic.debugMessages);
         fixture.close();
@@ -114,7 +114,7 @@ class EnginePeerRequestTest {
         CancellationController source = new CancellationController();
         CancellationSignal token = source.getSignal();
 
-        UserInfo actual = Blocking.await(fixture.client.users().getUserInfo("alice", token));
+        UserInfo actual = fixture.client.users().getUserInfo("alice", token);
 
         assertSame(expected, actual);
         assertEquals(
@@ -136,19 +136,13 @@ class EnginePeerRequestTest {
         Fixture fixture = new Fixture();
         for (String bad : new String[] {null, "", " ", "\t"}) {
             assertThrows(
-                    IllegalArgumentException.class,
-                    () -> Blocking.await(fixture.client.users().connectToUser(bad)));
+                    IllegalArgumentException.class, () -> fixture.client.users().connectToUser(bad));
             assertThrows(
-                    IllegalArgumentException.class,
-                    () -> Blocking.await(fixture.client.users().getUserInfo(bad)));
+                    IllegalArgumentException.class, () -> fixture.client.users().getUserInfo(bad));
         }
         fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
-        assertThrows(
-                IllegalStateException.class,
-                () -> Blocking.await(fixture.client.users().connectToUser("alice")));
-        assertThrows(
-                IllegalStateException.class,
-                () -> Blocking.await(fixture.client.users().getUserInfo("alice")));
+        assertThrows(IllegalStateException.class, () -> fixture.client.users().connectToUser("alice"));
+        assertThrows(IllegalStateException.class, () -> fixture.client.users().getUserInfo("alice"));
         fixture.close();
     }
 
@@ -157,8 +151,7 @@ class EnginePeerRequestTest {
         Fixture fixture = new Fixture();
         UserOfflineException offline = new UserOfflineException("offline");
         fixture.waiter.results.put(UserAddressResponse.class, CompletableFuture.failedFuture(offline));
-        assertSame(
-                offline, failureOf(() -> Blocking.await(fixture.client.users().connectToUser("alice"))));
+        assertSame(offline, failureOf(() -> fixture.client.users().connectToUser("alice")));
 
         TimeoutException timeout = new TimeoutException("timed out");
         fixture.server.result = CompletableFuture.failedFuture(timeout);
@@ -167,15 +160,12 @@ class EnginePeerRequestTest {
                 timeout,
                 assertInstanceOf(
                                 NoResponseException.class,
-                                failureOf(() ->
-                                        Blocking.await(fixture.client.users().connectToUser("bob"))))
+                                failureOf(() -> fixture.client.users().connectToUser("bob")))
                         .getCause());
 
         CancellationException cancellation = new CancellationException("cancelled");
         fixture.server.result = CompletableFuture.failedFuture(cancellation);
-        assertSame(
-                cancellation,
-                failureOf(() -> Blocking.await(fixture.client.users().connectToUser("carol"))));
+        assertSame(cancellation, failureOf(() -> fixture.client.users().connectToUser("carol")));
         fixture.close();
     }
 
@@ -187,7 +177,7 @@ class EnginePeerRequestTest {
 
         SoulseekClientException outer = assertInstanceOf(
                 SoulseekClientException.class,
-                failureOf(() -> Blocking.await(fixture.client.users().connectToUser("alice"))));
+                failureOf(() -> fixture.client.users().connectToUser("alice")));
         UserEndpointException endpoint = assertInstanceOf(UserEndpointException.class, outer.getCause());
         assertSame(endpointFailure, endpoint.getCause());
 
@@ -200,7 +190,7 @@ class EnginePeerRequestTest {
 
         SoulseekClientException managerMapped = assertInstanceOf(
                 SoulseekClientException.class,
-                failureOf(() -> Blocking.await(fixture.client.users().connectToUser("bob"))));
+                failureOf(() -> fixture.client.users().connectToUser("bob")));
         assertSame(managerFailure, managerMapped.getCause());
         fixture.close();
     }
@@ -220,28 +210,24 @@ class EnginePeerRequestTest {
                 timeout,
                 assertInstanceOf(
                                 NoResponseException.class,
-                                failureOf(() ->
-                                        Blocking.await(fixture.client.users().getUserInfo("alice"))))
+                                failureOf(() -> fixture.client.users().getUserInfo("alice")))
                         .getCause());
 
         CancellationException cancellation = new CancellationException("cancelled");
         fixture.peer.result = CompletableFuture.failedFuture(cancellation);
-        assertSame(
-                cancellation,
-                failureOf(() -> Blocking.await(fixture.client.users().getUserInfo("bob"))));
+        assertSame(cancellation, failureOf(() -> fixture.client.users().getUserInfo("bob")));
 
         RuntimeException expected = new RuntimeException("peer write failed");
         fixture.peer.result = CompletableFuture.failedFuture(expected);
         SoulseekClientException mapped = assertInstanceOf(
                 SoulseekClientException.class,
-                failureOf(() -> Blocking.await(fixture.client.users().getUserInfo("carol"))));
+                failureOf(() -> fixture.client.users().getUserInfo("carol")));
         assertSame(expected, mapped.getCause());
 
         UserOfflineException offline = new UserOfflineException("offline");
         fixture.peer.result = CompletableFuture.completedFuture(null);
         fixture.waiter.results.put(UserAddressResponse.class, CompletableFuture.failedFuture(offline));
-        assertSame(
-                offline, failureOf(() -> Blocking.await(fixture.client.users().getUserInfo("dave"))));
+        assertSame(offline, failureOf(() -> fixture.client.users().getUserInfo("dave")));
         fixture.close();
     }
 
@@ -257,7 +243,7 @@ class EnginePeerRequestTest {
         CancellationSignal cancellationSignal = cancellationController.getSignal();
 
         List<Directory> result =
-                Blocking.await(fixture.client.users().getDirectoryContents("alice", "shared", 123, cancellationSignal));
+                fixture.client.users().getDirectoryContents("alice", "shared", 123, cancellationSignal);
 
         assertEquals(1, result.size());
         source.clear();
@@ -285,7 +271,7 @@ class EnginePeerRequestTest {
         CancellationController source = new CancellationController();
         CancellationSignal token = source.getSignal();
 
-        int result = Blocking.await(fixture.client.transfers().getDownloadPlaceInQueue("alice", "file", token));
+        int result = fixture.client.transfers().getDownloadPlaceInQueue("alice", "file", token);
 
         assertEquals(17, result);
         assertEquals(
@@ -304,20 +290,19 @@ class EnginePeerRequestTest {
         for (String bad : new String[] {null, "", " ", "\t"}) {
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> Blocking.await(fixture.client.users().getDirectoryContents(bad, "directory")));
+                    () -> fixture.client.users().getDirectoryContents(bad, "directory"));
+            assertThrows(
+                    IllegalArgumentException.class, () -> fixture.client.users().getDirectoryContents("alice", bad));
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> Blocking.await(fixture.client.users().getDirectoryContents("alice", bad)));
+                    () -> fixture.client.transfers().getDownloadPlaceInQueue(bad, "file"));
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> Blocking.await(fixture.client.transfers().getDownloadPlaceInQueue(bad, "file")));
-            assertThrows(
-                    IllegalArgumentException.class,
-                    () -> Blocking.await(fixture.client.transfers().getDownloadPlaceInQueue("alice", bad)));
+                    () -> fixture.client.transfers().getDownloadPlaceInQueue("alice", bad));
         }
         assertThrows(
                 TransferNotFoundException.class,
-                () -> Blocking.await(fixture.client.transfers().getDownloadPlaceInQueue("alice", "file")));
+                () -> fixture.client.transfers().getDownloadPlaceInQueue("alice", "file"));
         fixture.client.setDownloadsForTest(new HashMap<>(Map.of(
                 1,
                 new TransferInternal(TransferDirection.DOWNLOAD, "other", "file", 1),
@@ -325,15 +310,13 @@ class EnginePeerRequestTest {
                 new TransferInternal(TransferDirection.DOWNLOAD, "alice", "other", 2))));
         assertThrows(
                 TransferNotFoundException.class,
-                () -> Blocking.await(fixture.client.transfers().getDownloadPlaceInQueue("alice", "file")));
+                () -> fixture.client.transfers().getDownloadPlaceInQueue("alice", "file"));
 
         fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
         assertThrows(
-                IllegalStateException.class,
-                () -> Blocking.await(fixture.client.users().getDirectoryContents("alice", "directory")));
+                IllegalStateException.class, () -> fixture.client.users().getDirectoryContents("alice", "directory"));
         assertThrows(
-                IllegalStateException.class,
-                () -> Blocking.await(fixture.client.transfers().getDownloadPlaceInQueue("alice", "file")));
+                IllegalStateException.class, () -> fixture.client.transfers().getDownloadPlaceInQueue("alice", "file"));
         fixture.close();
     }
 
@@ -351,22 +334,20 @@ class EnginePeerRequestTest {
                 timeout,
                 assertInstanceOf(
                                 NoResponseException.class,
-                                failureOf(() -> Blocking.await(
-                                        directoryFixture.client.users().getDirectoryContents("alice", "shared"))))
+                                failureOf(
+                                        () -> directoryFixture.client.users().getDirectoryContents("alice", "shared")))
                         .getCause());
 
         CancellationException cancellation = new CancellationException("cancelled");
         directoryFixture.peer.result = CompletableFuture.failedFuture(cancellation);
         assertSame(
-                cancellation,
-                failureOf(() -> Blocking.await(directoryFixture.client.users().getDirectoryContents("bob", "shared"))));
+                cancellation, failureOf(() -> directoryFixture.client.users().getDirectoryContents("bob", "shared")));
 
         RuntimeException expected = new RuntimeException("peer failed");
         directoryFixture.peer.result = CompletableFuture.failedFuture(expected);
         SoulseekClientException mapped = assertInstanceOf(
                 SoulseekClientException.class,
-                failureOf(
-                        () -> Blocking.await(directoryFixture.client.users().getDirectoryContents("carol", "shared"))));
+                failureOf(() -> directoryFixture.client.users().getDirectoryContents("carol", "shared")));
         assertSame(expected, mapped.getCause());
         directoryFixture.close();
 
@@ -376,10 +357,7 @@ class EnginePeerRequestTest {
         UserOfflineException offline = new UserOfflineException("offline");
         queueFixture.waiter.results.put(PlaceInQueueResponse.class, new CompletableFuture<>());
         queueFixture.waiter.results.put(UserAddressResponse.class, CompletableFuture.failedFuture(offline));
-        assertSame(
-                offline,
-                failureOf(() ->
-                        Blocking.await(queueFixture.client.transfers().getDownloadPlaceInQueue("alice", "file"))));
+        assertSame(offline, failureOf(() -> queueFixture.client.transfers().getDownloadPlaceInQueue("alice", "file")));
 
         RuntimeException waitFailure = new RuntimeException("wait failed");
         queueFixture.waiter.results.put(PlaceInQueueResponse.class, CompletableFuture.failedFuture(waitFailure));
@@ -388,8 +366,7 @@ class EnginePeerRequestTest {
                 CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));
         SoulseekClientException waitMapped = assertInstanceOf(
                 SoulseekClientException.class,
-                failureOf(() ->
-                        Blocking.await(queueFixture.client.transfers().getDownloadPlaceInQueue("alice", "file"))));
+                failureOf(() -> queueFixture.client.transfers().getDownloadPlaceInQueue("alice", "file")));
         assertSame(waitFailure, waitMapped.getCause());
         queueFixture.close();
     }
@@ -416,8 +393,7 @@ class EnginePeerRequestTest {
         CancellationController source = new CancellationController();
         CancellationSignal token = source.getSignal();
 
-        BrowseResponse actual =
-                Blocking.await(fixture.client.users().browse("alice", new BrowseOptions(1234, callbacks::add), token));
+        BrowseResponse actual = fixture.client.users().browse("alice", new BrowseOptions(1234, callbacks::add), token);
 
         assertSame(response, actual);
         assertInstanceOf(BrowseRequest.class, fixture.peer.message);
@@ -444,13 +420,10 @@ class EnginePeerRequestTest {
         Fixture fixture = new Fixture();
         for (String bad : new String[] {null, "", " ", "\t"}) {
             assertThrows(
-                    IllegalArgumentException.class,
-                    () -> Blocking.await(fixture.client.users().browse(bad)));
+                    IllegalArgumentException.class, () -> fixture.client.users().browse(bad));
         }
         fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
-        assertThrows(
-                IllegalStateException.class,
-                () -> Blocking.await(fixture.client.users().browse("alice")));
+        assertThrows(IllegalStateException.class, () -> fixture.client.users().browse("alice"));
         fixture.client.setStateForTest(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
 
         fixture.waiter.results.put(BrowseResponse.class, new CompletableFuture<>());
@@ -463,15 +436,13 @@ class EnginePeerRequestTest {
                 timeout,
                 assertInstanceOf(
                                 NoResponseException.class,
-                                failureOf(() ->
-                                        Blocking.await(fixture.client.users().browse("alice"))))
+                                failureOf(() -> fixture.client.users().browse("alice")))
                         .getCause());
 
         UserOfflineException offline = new UserOfflineException("offline");
         fixture.waiter.results.put(BrowseResponseConnection.class, new CompletableFuture<>());
         fixture.waiter.results.put(UserAddressResponse.class, CompletableFuture.failedFuture(offline));
-        assertSame(
-                offline, failureOf(() -> Blocking.await(fixture.client.users().browse("bob"))));
+        assertSame(offline, failureOf(() -> fixture.client.users().browse("bob")));
 
         CancellationException cancellation = new CancellationException("cancelled");
         fixture.waiter.results.put(BrowseResponse.class, CompletableFuture.failedFuture(cancellation));
@@ -482,9 +453,7 @@ class EnginePeerRequestTest {
         fixture.waiter.results.put(
                 UserAddressResponse.class,
                 CompletableFuture.completedFuture(new UserAddressResponse("carol", ENDPOINT)));
-        assertSame(
-                cancellation,
-                failureOf(() -> Blocking.await(fixture.client.users().browse("carol"))));
+        assertSame(cancellation, failureOf(() -> fixture.client.users().browse("carol")));
         fixture.close();
     }
 
@@ -501,7 +470,7 @@ class EnginePeerRequestTest {
 
         SoulseekClientException mapped = assertInstanceOf(
                 SoulseekClientException.class,
-                failureOf(() -> Blocking.await(setupFixture.client.users().browse("alice"))));
+                failureOf(() -> setupFixture.client.users().browse("alice")));
         assertSame(expected, mapped.getCause());
         assertEquals(new WaitKey(MessageCode.Peer.BROWSE_RESPONSE, "alice"), setupFixture.waiter.failedKey);
         setupFixture.close();
@@ -515,8 +484,8 @@ class EnginePeerRequestTest {
         disconnectFixture.waiter.results.put(
                 UserAddressResponse.class, CompletableFuture.completedFuture(new UserAddressResponse("bob", ENDPOINT)));
 
-        CompletableFuture<BrowseResponse> operation = inBackground(
-                () -> Blocking.await(disconnectFixture.client.users().browse("bob")));
+        CompletableFuture<BrowseResponse> operation =
+                inBackground(() -> disconnectFixture.client.users().browse("bob"));
         // browse runs on another thread now; it has to have wired its
         // disconnect listener before the peer can drop underneath it.
         waitForDisconnectListener(disconnectFixture.peer);
@@ -691,20 +660,22 @@ class EnginePeerRequestTest {
                 Proxy.newProxyInstance(Waiter.class.getClassLoader(), new Class<?>[] {Waiter.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("waitAsync") && arguments.length == 4) {
+            if (method.getName().equals("register") && arguments.length == 4) {
                 keys.add((WaitKey) arguments[0]);
                 Class<?> resultType = (Class<?>) arguments[1];
                 if (arguments[2] != null) {
                     lastTimeout = (Integer) arguments[2];
                 }
                 tokens.add((CancellationSignal) arguments[3]);
-                return results.getOrDefault(resultType, new CompletableFuture<>());
+                CompletableFuture<?> configured = results.getOrDefault(resultType, new CompletableFuture<>());
+                return (Wait<Object>) () -> Outcomes.raise(configured);
             }
-            if (method.getName().equals("waitIndefinitelyAsync") && arguments.length == 3) {
+            if (method.getName().equals("registerIndefinitely") && arguments.length == 3) {
                 keys.add((WaitKey) arguments[0]);
                 Class<?> resultType = (Class<?>) arguments[1];
                 tokens.add((CancellationSignal) arguments[2]);
-                return results.getOrDefault(resultType, new CompletableFuture<>());
+                CompletableFuture<?> configured = results.getOrDefault(resultType, new CompletableFuture<>());
+                return (Wait<Object>) () -> Outcomes.raise(configured);
             }
             if (method.getName().equals("fail")) {
                 failedKey = (WaitKey) arguments[0];
@@ -746,14 +717,14 @@ class EnginePeerRequestTest {
                 invalidations++;
                 return invalidationResult;
             }
-            if (method.getName().equals("getOrAddMessageConnectionAsync") && arguments.length == 3) {
+            if (method.getName().equals("getOrAddMessageConnection") && arguments.length == 3) {
                 if (synchronousFailure != null) {
                     throw synchronousFailure;
                 }
                 username = (String) arguments[0];
                 endpoint = (InetSocketAddress) arguments[1];
                 token = (CancellationSignal) arguments[2];
-                return CompletableFuture.completedFuture(connection);
+                return connection;
             }
             return defaultValue(method.getReturnType());
         }

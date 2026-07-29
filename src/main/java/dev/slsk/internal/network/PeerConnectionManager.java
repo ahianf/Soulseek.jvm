@@ -11,7 +11,6 @@ import dev.slsk.internal.network.tcp.Connection;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /** Manages peer message and transfer connections. */
 public interface PeerConnectionManager extends AutoCloseable, DiagnosticSource {
@@ -21,30 +20,37 @@ public interface PeerConnectionManager extends AutoCloseable, DiagnosticSource {
     /** Returns a snapshot of pending connection solicitations. */
     Map<Integer, String> getPendingSolicitations();
 
-    CompletableFuture<Void> addOrUpdateMessageConnectionAsync(String username, Connection incomingConnection);
+    /**
+     * Adopts an inbound message connection, superseding any cached one.
+     *
+     * <p>Blocking, like everything else here. The dedupe-and-broadcast cache
+     * behind these is still a future per user — that is the one thing in this
+     * class a future genuinely earns, and D11 replaces it with a connection
+     * cell — but it is nobody else's business, so it stops at this boundary.
+     */
+    void addOrUpdateMessageConnection(String username, Connection incomingConnection);
 
-    CompletableFuture<Connection> awaitTransferConnectionAsync(
+    Connection awaitTransferConnection(
             String username, String filename, int remoteToken, CancellationSignal cancellationSignal);
 
-    CompletableFuture<MessageConnection> getCachedMessageConnectionAsync(String username);
+    MessageConnection getCachedMessageConnection(String username);
 
-    CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(ConnectToPeerResponse connectToPeerResponse);
+    MessageConnection getOrAddMessageConnection(ConnectToPeerResponse connectToPeerResponse);
 
-    CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
+    MessageConnection getOrAddMessageConnection(
             String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal);
 
-    CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
+    MessageConnection getOrAddMessageConnection(
             String username,
             InetSocketAddress ipEndpoint,
             int solicitationToken,
             CancellationSignal cancellationSignal);
 
-    CompletableFuture<TransferConnectionResult> getTransferConnectionAsync(
-            String username, int token, Connection incomingConnection);
+    TransferConnectionResult getTransferConnection(String username, int token, Connection incomingConnection);
 
-    CompletableFuture<TransferConnectionResult> getTransferConnectionAsync(ConnectToPeerResponse connectToPeerResponse);
+    TransferConnectionResult getTransferConnection(ConnectToPeerResponse connectToPeerResponse);
 
-    CompletableFuture<Connection> getTransferConnectionAsync(
+    Connection getTransferConnection(
             String username, InetSocketAddress ipEndpoint, int token, CancellationSignal cancellationSignal);
 
     void removeAndDisposeAll();

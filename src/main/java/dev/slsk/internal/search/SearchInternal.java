@@ -11,6 +11,7 @@ import dev.slsk.internal.SearchQuery;
 import dev.slsk.internal.SearchResponse;
 import dev.slsk.internal.SearchScope;
 import dev.slsk.internal.SearchState;
+import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Scheduler;
 import dev.slsk.internal.options.SearchOptions;
@@ -251,26 +252,40 @@ public final class SearchInternal implements AutoCloseable {
         }
     }
 
-    /** Waits until this search completes or the caller cancels. */
-    public CompletableFuture<Void> waitForCompletion(CancellationSignal cancellationSignal) {
+    /**
+     * Waits until this search completes or the caller gives up.
+     *
+     * <p>Cancelling abandons this caller's wait, not the search: another caller
+     * may still be in it. {@code completion} stays a future because that is the
+     * one thing it does that a blocking cell cannot — hand one terminal state
+     * to every waiter at once. Phase 3's search domain owns it next.
+     *
+     * @param cancellationSignal abandons this wait when signalled
+     */
+    public void waitForCompletion(CancellationSignal cancellationSignal) {
         Objects.requireNonNull(cancellationSignal, "cancellationSignal");
-        CompletableFuture<Void> result = new CompletableFuture<>();
+        CompletableFuture<Void> wait = new CompletableFuture<>();
         CancellationSubscription registration = cancellationSignal.register(
-                () -> result.completeExceptionally(new CancellationException("Operation cancelled")));
+                () -> wait.completeExceptionally(new CancellationException("Operation cancelled")));
         completion.whenComplete((ignored, failure) -> {
             if (failure == null) {
-                result.complete(null);
+                wait.complete(null);
             } else {
-                result.completeExceptionally(failure);
+                wait.completeExceptionally(failure);
             }
         });
-        result.whenComplete((ignored, failure) -> registration.close());
-        return result;
+        try {
+            wait.join();
+        } catch (Throwable failure) {
+            throw Failures.propagate(Failures.unwrap(failure));
+        } finally {
+            registration.close();
+        }
     }
 
     /** Waits without a cancellable caller token. */
-    public CompletableFuture<Void> waitForCompletion() {
-        return waitForCompletion(CancellationSignal.none());
+    public void waitForCompletion() {
+        waitForCompletion(CancellationSignal.none());
     }
 
     /** Creates the public immutable snapshot of this search. */

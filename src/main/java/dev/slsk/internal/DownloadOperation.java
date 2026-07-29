@@ -22,6 +22,7 @@ import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Permits;
+import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.events.TransferProgressUpdatedEvent;
 import dev.slsk.internal.events.TransferStateChangedEvent;
@@ -121,10 +122,10 @@ final class DownloadOperation {
                             + filenameOnly(download.getFilename()) + " to "
                             + download.getUsername() + " acquired");
 
-            endpoint = await(engine.context.resolveUserEndpoint(download.getUsername(), cancellationSignal));
-            MessageConnection peerConnection = await(engine.context
+            endpoint = engine.context.resolveUserEndpoint(download.getUsername(), cancellationSignal);
+            MessageConnection peerConnection = engine.context
                     .getPeerConnectionManager()
-                    .getOrAddMessageConnectionAsync(download.getUsername(), endpoint, cancellationSignal));
+                    .getOrAddMessageConnection(download.getUsername(), endpoint, cancellationSignal);
             engine.context
                     .getDiagnostic()
                     .debug("Fetched peer connection for download of "
@@ -144,13 +145,13 @@ final class DownloadOperation {
                                 + " is taking up an offer already made (remote token: "
                                 + offer.getToken() + ")");
                 updateState(TransferState.REQUESTED);
-                beginQueuedDownload(CompletableFuture.completedFuture(offer), peerConnection);
+                beginQueuedDownload(() -> offer, peerConnection);
                 return receiveFile();
             }
 
-            CompletableFuture<TransferResponse> transferRequestAcknowledged = engine.context
+            Wait<TransferResponse> transferRequestAcknowledged = engine.context
                     .getWaiter()
-                    .waitAsync(
+                    .register(
                             new WaitKey(
                                     MessageCode.Peer.TRANSFER_RESPONSE, download.getUsername(), download.getToken()),
                             TransferResponse.class,
@@ -159,14 +160,14 @@ final class DownloadOperation {
                                     .getPeerConnectionOptions()
                                     .getInactivityTimeout(),
                             cancellationSignal);
-            CompletableFuture<TransferRequest> transferStartRequested = engine.context
+            Wait<TransferRequest> transferStartRequested = engine.context
                     .getWaiter()
-                    .waitIndefinitelyAsync(transferStartRequestedWaitKey, TransferRequest.class, cancellationSignal);
+                    .registerIndefinitely(transferStartRequestedWaitKey, TransferRequest.class, cancellationSignal);
 
-            await(engine.context.writeToPeer(
+            engine.context.writeToPeer(
                     peerConnection,
                     new TransferRequest(TransferDirection.DOWNLOAD, download.getToken(), download.getFilename()),
-                    cancellationSignal));
+                    cancellationSignal);
             engine.context
                     .getDiagnostic()
                     .debug("Wrote transfer request for download of "
@@ -175,7 +176,7 @@ final class DownloadOperation {
                             + ", state: " + peerConnection.getState() + ")");
             updateState(TransferState.REQUESTED);
 
-            TransferResponse acknowledgement = await(transferRequestAcknowledged);
+            TransferResponse acknowledgement = transferRequestAcknowledged.await();
             engine.context
                     .getDiagnostic()
                     .debug("Received transfer request ACK for download of "
@@ -242,10 +243,10 @@ final class DownloadOperation {
             download.setSize(acknowledgement.getFileSize());
         }
         updateState(TransferState.INITIALIZING);
-        connection = await(engine.context
+        connection = engine.context
                 .getPeerConnectionManager()
-                .getTransferConnectionAsync(
-                        download.getUsername(), endpoint, acknowledgement.getToken(), cancellationSignal));
+                .getTransferConnection(
+                        download.getUsername(), endpoint, acknowledgement.getToken(), cancellationSignal);
         engine.context
                 .getDiagnostic()
                 .debug("Fetched transfer connection for download of "
@@ -257,9 +258,9 @@ final class DownloadOperation {
     }
 
     private MessageConnection beginQueuedDownload(
-            CompletableFuture<TransferRequest> transferStartRequested, MessageConnection peerConnection) {
+            Wait<TransferRequest> transferStartRequested, MessageConnection peerConnection) {
         updateState(TransferState.QUEUED.or(TransferState.REMOTELY));
-        TransferRequest request = await(transferStartRequested);
+        TransferRequest request = transferStartRequested.await();
         validateRemoteSize(request.getFileSize());
         if (download.getSize() == null) {
             download.setSize(request.getFileSize());
@@ -267,23 +268,25 @@ final class DownloadOperation {
         download.setRemoteToken(request.getToken());
         updateState(TransferState.INITIALIZING);
 
-        MessageConnection refreshed = await(engine.context
+        MessageConnection refreshed = engine.context
                 .getPeerConnectionManager()
-                .getOrAddMessageConnectionAsync(download.getUsername(), endpoint, cancellationSignal));
+                .getOrAddMessageConnection(download.getUsername(), endpoint, cancellationSignal);
         engine.context
                 .getDiagnostic()
                 .debug("Fetched peer connection for download of "
                         + filenameOnly(download.getFilename()) + " from "
                         + download.getUsername() + " (id: " + refreshed.getId()
                         + ", state: " + refreshed.getState() + ")");
-        CompletableFuture<Connection> connectionTask = engine.context
+        // Started before the acceptance is written, because the peer opens the
+        // transfer connection the moment it reads it.
+        CompletableFuture<Connection> connectionTask = NetworkExecutor.supplyAsync(() -> engine.context
                 .getPeerConnectionManager()
-                .awaitTransferConnectionAsync(
-                        download.getUsername(), download.getFilename(), download.getRemoteToken(), cancellationSignal);
-        await(engine.context.writeToPeer(
+                .awaitTransferConnection(
+                        download.getUsername(), download.getFilename(), download.getRemoteToken(), cancellationSignal));
+        engine.context.writeToPeer(
                 refreshed,
                 new TransferResponse(download.getRemoteToken(), download.getSize() == null ? 0 : download.getSize()),
-                cancellationSignal));
+                cancellationSignal);
         try {
             connection = await(connectionTask);
             engine.context
@@ -303,10 +306,10 @@ final class DownloadOperation {
                     .getDiagnostic()
                     .warning("Attempting to initiate a second-chance transfer connection to " + download.getUsername()
                             + " for download of " + download.getFilename());
-            connection = await(engine.context
+            connection = engine.context
                     .getPeerConnectionManager()
-                    .getTransferConnectionAsync(
-                            download.getUsername(), endpoint, download.getRemoteToken(), cancellationSignal));
+                    .getTransferConnection(
+                            download.getUsername(), endpoint, download.getRemoteToken(), cancellationSignal);
             engine.context
                     .getDiagnostic()
                     .warning("Successfully established a second-chance transfer connection to " + download.getUsername()

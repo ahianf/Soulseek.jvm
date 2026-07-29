@@ -9,7 +9,6 @@ import dev.slsk.ShareIndex;
 import dev.slsk.SharedFolder;
 import dev.slsk.Shares;
 import dev.slsk.events.ShareEvent;
-import dev.slsk.internal.common.Blocking;
 import dev.slsk.spi.ShareCatalog;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -76,7 +75,7 @@ final class DefaultShares implements Shares {
             return;
         }
         try {
-            Blocking.await(client.server().setSharedCounts(current.directoryCount(), current.fileCount()));
+            client.server().setSharedCounts(current.directoryCount(), current.fileCount());
         } catch (RuntimeException failure) {
             client.getDiagnostic().warning("Failed to announce the share counts", failure);
         }
@@ -153,7 +152,7 @@ final class DefaultShares implements Shares {
         // the walk sees empty directories and the catalog does not — and
         // announcing one while reporting the other would leave the server and
         // index() disagreeing about the same share.
-        Blocking.await(client.server().setSharedCounts(scanned.directoryCount(), scanned.fileCount()));
+        client.server().setSharedCounts(scanned.directoryCount(), scanned.fileCount());
         events.publish(new ShareEvent.ScanCompleted(scanned, Instant.now()));
         return scanned;
     }

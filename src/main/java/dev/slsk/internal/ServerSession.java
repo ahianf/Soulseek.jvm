@@ -7,6 +7,7 @@ import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Failures;
+import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.messages.AcknowledgePrivateMessageCommand;
@@ -20,7 +21,6 @@ import dev.slsk.internal.messaging.messages.SetOnlineStatusCommand;
 import dev.slsk.internal.messaging.messages.SetSharedCountsCommand;
 import dev.slsk.internal.messaging.messages.StartPublicChatCommand;
 import dev.slsk.internal.messaging.messages.StopPublicChatCommand;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -39,69 +39,62 @@ final class ServerSession {
         this.context = java.util.Objects.requireNonNull(context, "context");
     }
 
-    CompletableFuture<Void> acknowledgePrivateMessage(int privateMessageId) {
-        return acknowledgePrivateMessage(privateMessageId, CancellationSignal.none());
+    void acknowledgePrivateMessage(int privateMessageId) {
+        acknowledgePrivateMessage(privateMessageId, CancellationSignal.none());
     }
 
-    CompletableFuture<Void> acknowledgePrivateMessage(int privateMessageId, CancellationSignal cancellationSignal) {
+    void acknowledgePrivateMessage(int privateMessageId, CancellationSignal cancellationSignal) {
         if (privateMessageId < 0) {
             throw new IllegalArgumentException("The private message ID must be greater than zero");
         }
         context.requireLoggedIn("acknowledge private messages");
-        CompletableFuture<Void> write = Failures.map(
-                context.writeToServer(
-                        new AcknowledgePrivateMessageCommand(privateMessageId),
-                        context.defaultToken(cancellationSignal)),
+        write(
+                new AcknowledgePrivateMessageCommand(privateMessageId),
+                cancellationSignal,
                 "Failed to acknowledge private message with ID " + privateMessageId + ": ");
-        return write.thenRun(
-                () -> context.getDiagnostic().debug("Acknowledged private message ID " + privateMessageId));
+        context.getDiagnostic().debug("Acknowledged private message ID " + privateMessageId);
     }
 
-    CompletableFuture<Void> acknowledgePrivilegeNotification(int privilegeNotificationId) {
-        return acknowledgePrivilegeNotification(privilegeNotificationId, CancellationSignal.none());
+    void acknowledgePrivilegeNotification(int privilegeNotificationId) {
+        acknowledgePrivilegeNotification(privilegeNotificationId, CancellationSignal.none());
     }
 
-    CompletableFuture<Void> acknowledgePrivilegeNotification(
-            int privilegeNotificationId, CancellationSignal cancellationSignal) {
+    void acknowledgePrivilegeNotification(int privilegeNotificationId, CancellationSignal cancellationSignal) {
         if (privilegeNotificationId < 0) {
             throw new IllegalArgumentException("The privilege notification ID must be greater than zero");
         }
         context.requireLoggedIn("acknowledge privilege notifications");
-        return Failures.map(
-                context.writeToServer(
-                        new AcknowledgePrivilegeNotificationCommand(privilegeNotificationId),
-                        context.defaultToken(cancellationSignal)),
+        write(
+                new AcknowledgePrivilegeNotificationCommand(privilegeNotificationId),
+                cancellationSignal,
                 "Failed to acknowledge privilege notification with ID " + privilegeNotificationId + ": ");
     }
 
-    CompletableFuture<Void> changePassword(String password) {
-        return changePassword(password, CancellationSignal.none());
+    void changePassword(String password) {
+        changePassword(password, CancellationSignal.none());
     }
 
-    CompletableFuture<Void> changePassword(String password, CancellationSignal cancellationSignal) {
+    void changePassword(String password, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(password, "password");
         context.requireLoggedIn("change a password");
-        return context.executeCorrelatedRequest(
-                        new NewPassword(password),
-                        new WaitKey(MessageCode.Server.NEW_PASSWORD),
-                        String.class,
-                        cancellationSignal,
-                        "Failed to change password: ")
-                .thenApply(response -> {
-                    if (!password.equals(response)) {
-                        throw new SoulseekClientException("Probably failed to change password; the response "
-                                + "from the server doesn't match the specified "
-                                + "password");
-                    }
-                    return null;
-                });
+        String response = context.executeCorrelatedRequest(
+                new NewPassword(password),
+                new WaitKey(MessageCode.Server.NEW_PASSWORD),
+                String.class,
+                cancellationSignal,
+                "Failed to change password: ");
+        if (!password.equals(response)) {
+            throw new SoulseekClientException("Probably failed to change password; the response "
+                    + "from the server doesn't match the specified "
+                    + "password");
+        }
     }
 
-    CompletableFuture<Integer> getPrivileges() {
+    Integer getPrivileges() {
         return getPrivileges(CancellationSignal.none());
     }
 
-    CompletableFuture<Integer> getPrivileges(CancellationSignal cancellationSignal) {
+    Integer getPrivileges(CancellationSignal cancellationSignal) {
         context.requireLoggedIn("check privileges");
         return context.executeCorrelatedRequest(
                 new CheckPrivilegesRequest(),
@@ -111,62 +104,55 @@ final class ServerSession {
                 "Failed to get privileges: ");
     }
 
-    CompletableFuture<Long> pingServer() {
+    long pingServer() {
         return pingServer(CancellationSignal.none());
     }
 
-    CompletableFuture<Long> pingServer(CancellationSignal cancellationSignal) {
+    long pingServer(CancellationSignal cancellationSignal) {
         context.requireLoggedIn("send a ping");
         CancellationSignal token = context.defaultToken(cancellationSignal);
-        CompletableFuture<Void> wait;
         try {
-            wait = context.getWaiter().waitAsync(new WaitKey(MessageCode.Server.PING), null, token);
+            Wait<Void> wait = context.getWaiter().register(new WaitKey(MessageCode.Server.PING), null, token);
+            long started = System.nanoTime();
+            context.writeToServer(new ServerPing(), token);
+            wait.await();
+            return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
         } catch (Throwable failure) {
-            return Failures.map(CompletableFuture.failedFuture(failure), "Failed to ping the server: ");
+            throw Failures.raise(failure, "Failed to ping the server: ");
         }
-        long started = System.nanoTime();
-        CompletableFuture<Void> responseWait = wait;
-        CompletableFuture<Long> operation = context.writeToServer(new ServerPing(), token)
-                .thenCompose(ignored -> responseWait)
-                .thenApply(ignored -> TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
-        return Failures.map(operation, "Failed to ping the server: ");
     }
 
-    CompletableFuture<Void> sendPrivateMessage(String requestedUsername, String message) {
-        return sendPrivateMessage(requestedUsername, message, CancellationSignal.none());
+    void sendPrivateMessage(String requestedUsername, String message) {
+        sendPrivateMessage(requestedUsername, message, CancellationSignal.none());
     }
 
-    CompletableFuture<Void> sendPrivateMessage(
-            String requestedUsername, String message, CancellationSignal cancellationSignal) {
+    void sendPrivateMessage(String requestedUsername, String message, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(requestedUsername, "username");
         CommonUtils.requireNonEmpty(message, "message");
         context.requireLoggedIn("send a private message");
-        return Failures.map(
-                context.writeToServer(
-                        new PrivateMessageCommand(requestedUsername, message),
-                        context.defaultToken(cancellationSignal)),
+        write(
+                new PrivateMessageCommand(requestedUsername, message),
+                cancellationSignal,
                 "Failed to send private message to user " + requestedUsername + ": ");
     }
 
-    CompletableFuture<Void> sendUploadSpeed(int speed) {
-        return sendUploadSpeed(speed, CancellationSignal.none());
+    void sendUploadSpeed(int speed) {
+        sendUploadSpeed(speed, CancellationSignal.none());
     }
 
-    CompletableFuture<Void> sendUploadSpeed(int speed, CancellationSignal cancellationSignal) {
+    void sendUploadSpeed(int speed, CancellationSignal cancellationSignal) {
         context.requireLoggedIn("set upload speed");
         if (speed <= 0) {
             throw new IllegalArgumentException("The upload speed must be greater than zero");
         }
-        return Failures.map(
-                context.writeToServer(new SendUploadSpeedCommand(speed), context.defaultToken(cancellationSignal)),
-                "Failed to set upload speed: ");
+        write(new SendUploadSpeedCommand(speed), cancellationSignal, "Failed to set upload speed: ");
     }
 
-    CompletableFuture<Void> setSharedCounts(int directories, int files) {
-        return setSharedCounts(directories, files, CancellationSignal.none());
+    void setSharedCounts(int directories, int files) {
+        setSharedCounts(directories, files, CancellationSignal.none());
     }
 
-    CompletableFuture<Void> setSharedCounts(int directories, int files, CancellationSignal cancellationSignal) {
+    void setSharedCounts(int directories, int files, CancellationSignal cancellationSignal) {
         if (directories < 0) {
             throw new IllegalArgumentException("The directory count must be equal to or greater than zero");
         }
@@ -174,42 +160,48 @@ final class ServerSession {
             throw new IllegalArgumentException("The file count must be equal to or greater than zero");
         }
         context.requireLoggedIn("set shared counts");
-        return Failures.map(
-                context.writeToServer(
-                        new SetSharedCountsCommand(directories, files), context.defaultToken(cancellationSignal)),
+        write(
+                new SetSharedCountsCommand(directories, files),
+                cancellationSignal,
                 "Failed to set shared counts to " + directories + " directories and " + files + " files: ");
     }
 
-    CompletableFuture<Void> setStatus(UserPresence status) {
-        return setStatus(status, CancellationSignal.none());
+    void setStatus(UserPresence status) {
+        setStatus(status, CancellationSignal.none());
     }
 
-    CompletableFuture<Void> setStatus(UserPresence status, CancellationSignal cancellationSignal) {
+    void setStatus(UserPresence status, CancellationSignal cancellationSignal) {
         context.requireLoggedIn("set online status");
-        return Failures.map(
-                context.writeToServer(new SetOnlineStatusCommand(status), context.defaultToken(cancellationSignal)),
-                "Failed to set user status to " + status + ": ");
+        write(new SetOnlineStatusCommand(status), cancellationSignal, "Failed to set user status to " + status + ": ");
     }
 
-    CompletableFuture<Void> startPublicChat() {
-        return startPublicChat(CancellationSignal.none());
+    void startPublicChat() {
+        startPublicChat(CancellationSignal.none());
     }
 
-    CompletableFuture<Void> startPublicChat(CancellationSignal cancellationSignal) {
+    void startPublicChat(CancellationSignal cancellationSignal) {
         context.requireLoggedIn("start public chat");
-        return Failures.map(
-                context.writeToServer(new StartPublicChatCommand(), context.defaultToken(cancellationSignal)),
-                "Failed to start public chat: ");
+        write(new StartPublicChatCommand(), cancellationSignal, "Failed to start public chat: ");
     }
 
-    CompletableFuture<Void> stopPublicChat() {
-        return stopPublicChat(CancellationSignal.none());
+    void stopPublicChat() {
+        stopPublicChat(CancellationSignal.none());
     }
 
-    CompletableFuture<Void> stopPublicChat(CancellationSignal cancellationSignal) {
+    void stopPublicChat(CancellationSignal cancellationSignal) {
         context.requireLoggedIn("stop public chat");
-        return Failures.map(
-                context.writeToServer(new StopPublicChatCommand(), context.defaultToken(cancellationSignal)),
-                "Failed to stop public chat: ");
+        write(new StopPublicChatCommand(), cancellationSignal, "Failed to stop public chat: ");
+    }
+
+    /** Writes a fire-and-forget command, saying what failed if it does. */
+    private void write(
+            dev.slsk.internal.messaging.messages.OutgoingMessage message,
+            CancellationSignal cancellationSignal,
+            String failurePrefix) {
+        try {
+            context.writeToServer(message, context.defaultToken(cancellationSignal));
+        } catch (Throwable failure) {
+            throw Failures.raise(failure, failurePrefix);
+        }
     }
 }

@@ -12,7 +12,6 @@ import dev.slsk.UserProfile;
 import dev.slsk.Username;
 import dev.slsk.events.MeEvent;
 import dev.slsk.internal.EngineEvents.Kind;
-import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.PrivilegeNotificationReceivedEvent;
 import java.time.Instant;
@@ -89,7 +88,7 @@ final class DefaultMe implements Me {
                 event.getUsername() == null ? null : Username.of(event.getUsername()), Instant.now()));
         if (event.isRequiresAcknowlegement() && event.getId() != null) {
             try {
-                Blocking.await(server.acknowledgePrivilegeNotification(event.getId()));
+                server.acknowledgePrivilegeNotification(event.getId());
             } catch (RuntimeException exception) {
                 diagnostics.warning("Failed to acknowledge privilege notification " + event.getId(), exception);
             }
@@ -114,7 +113,7 @@ final class DefaultMe implements Me {
         if (previous == value) {
             return;
         }
-        Blocking.await(server.setStatus(map(value)));
+        server.setStatus(map(value));
         events.publish(new MeEvent.PresenceChanged(previous, value, Instant.now()));
     }
 
@@ -140,7 +139,7 @@ final class DefaultMe implements Me {
     @Override
     public int privileges(CancellationSignal signal) {
         Objects.requireNonNull(signal, "signal");
-        Integer days = Blocking.await(server.getPrivileges(signal));
+        Integer days = server.getPrivileges(signal);
         return days == null ? 0 : days;
     }
 
@@ -151,14 +150,14 @@ final class DefaultMe implements Me {
         if (days <= 0) {
             throw new IllegalArgumentException("days must be positive: " + days);
         }
-        Blocking.await(users.grantUserPrivileges(to.value(), days, signal));
+        users.grantUserPrivileges(to.value(), days, signal);
     }
 
     @Override
     public void changePassword(String newPassword, CancellationSignal signal) {
         Objects.requireNonNull(newPassword, "newPassword");
         Objects.requireNonNull(signal, "signal");
-        Blocking.await(server.changePassword(newPassword, signal));
+        server.changePassword(newPassword, signal);
     }
 
     @Override
@@ -166,7 +165,7 @@ final class DefaultMe implements Me {
         if (bytesPerSecond < 0) {
             throw new IllegalArgumentException("bytesPerSecond must not be negative: " + bytesPerSecond);
         }
-        Blocking.await(server.sendUploadSpeed((int) Math.min(bytesPerSecond, Integer.MAX_VALUE)));
+        server.sendUploadSpeed((int) Math.min(bytesPerSecond, Integer.MAX_VALUE));
     }
 
     @Override

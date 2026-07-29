@@ -15,7 +15,8 @@ import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.UserEndpointCacheException;
 import dev.slsk.exceptions.UserEndpointException;
 import dev.slsk.exceptions.UserOfflineException;
-import dev.slsk.internal.common.Blocking;
+import dev.slsk.internal.common.Outcomes;
+import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticLevel;
@@ -43,13 +44,10 @@ class EngineEndpointTest {
         Fixture fixture = new Fixture(null);
         for (String bad : new String[] {null, "", " ", "\t"}) {
             assertThrows(
-                    IllegalArgumentException.class,
-                    () -> Blocking.await(fixture.client.users().getUserEndpoint(bad)));
+                    IllegalArgumentException.class, () -> fixture.client.users().getUserEndpoint(bad));
         }
         fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
-        assertThrows(
-                IllegalStateException.class,
-                () -> Blocking.await(fixture.client.users().getUserEndpoint("alice")));
+        assertThrows(IllegalStateException.class, () -> fixture.client.users().getUserEndpoint("alice"));
         fixture.close();
     }
 
@@ -60,7 +58,7 @@ class EngineEndpointTest {
         CancellationController source = new CancellationController();
         CancellationSignal token = source.getSignal();
 
-        InetSocketAddress actual = Blocking.await(fixture.client.users().getUserEndpoint("alice", token));
+        InetSocketAddress actual = fixture.client.users().getUserEndpoint("alice", token);
 
         assertEquals(ENDPOINT, actual);
         assertEquals(new WaitKey(MessageCode.Server.GET_PEER_ADDRESS, "alice"), fixture.waiter.key);
@@ -82,7 +80,7 @@ class EngineEndpointTest {
                 new UserAddressResponse("alice", new InetSocketAddress("0.0.0.0", 0)));
         assertInstanceOf(
                 UserOfflineException.class,
-                failureOf(() -> Blocking.await(fixture.client.users().getUserEndpoint("alice"))));
+                failureOf(() -> fixture.client.users().getUserEndpoint("alice")));
 
         TimeoutException timeout = new TimeoutException("timed out");
         fixture.waiter.result = CompletableFuture.failedFuture(timeout);
@@ -90,21 +88,18 @@ class EngineEndpointTest {
                 timeout,
                 assertInstanceOf(
                                 NoResponseException.class,
-                                failureOf(() ->
-                                        Blocking.await(fixture.client.users().getUserEndpoint("bob"))))
+                                failureOf(() -> fixture.client.users().getUserEndpoint("bob")))
                         .getCause());
 
         CancellationException cancellation = new CancellationException("cancelled");
         fixture.waiter.result = CompletableFuture.failedFuture(cancellation);
-        assertSame(
-                cancellation,
-                failureOf(() -> Blocking.await(fixture.client.users().getUserEndpoint("carol"))));
+        assertSame(cancellation, failureOf(() -> fixture.client.users().getUserEndpoint("carol")));
 
         RuntimeException expected = new RuntimeException("wait failed");
         fixture.waiter.synchronousFailure = expected;
         UserEndpointException mapped = assertInstanceOf(
                 UserEndpointException.class,
-                failureOf(() -> Blocking.await(fixture.client.users().getUserEndpoint("dave"))));
+                failureOf(() -> fixture.client.users().getUserEndpoint("dave")));
         assertSame(expected, mapped.getCause());
         fixture.close();
     }
@@ -115,14 +110,14 @@ class EngineEndpointTest {
         cache.value = CacheLookupResult.found(ENDPOINT);
         Fixture fixture = new Fixture(cache);
 
-        assertEquals(ENDPOINT, Blocking.await(fixture.client.users().getUserEndpoint("alice")));
+        assertEquals(ENDPOINT, fixture.client.users().getUserEndpoint("alice"));
         assertEquals(0, fixture.connection.writes);
         assertEquals(0, fixture.waiter.registrations);
 
         cache.value = CacheLookupResult.notFound();
         InetSocketAddress second = new InetSocketAddress(InetAddress.getLoopbackAddress(), 46002);
         fixture.waiter.result = CompletableFuture.completedFuture(new UserAddressResponse("bob", second));
-        assertEquals(second, Blocking.await(fixture.client.users().getUserEndpoint("bob")));
+        assertEquals(second, fixture.client.users().getUserEndpoint("bob"));
         assertEquals("bob", cache.updatedUsername);
         assertEquals(second, cache.updatedEndpoint);
         fixture.close();
@@ -136,7 +131,7 @@ class EngineEndpointTest {
         Fixture readFixture = new Fixture(readCache);
         UserEndpointCacheException readMapped = assertThrows(
                 UserEndpointCacheException.class,
-                () -> Blocking.await(readFixture.client.users().getUserEndpoint("alice")));
+                () -> readFixture.client.users().getUserEndpoint("alice"));
         assertSame(readFailure, readMapped.getCause());
         readFixture.close();
 
@@ -148,7 +143,7 @@ class EngineEndpointTest {
         updateFixture.waiter.result = CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT));
         UserEndpointCacheException updateMapped = assertInstanceOf(
                 UserEndpointCacheException.class,
-                failureOf(() -> Blocking.await(updateFixture.client.users().getUserEndpoint("alice"))));
+                failureOf(() -> updateFixture.client.users().getUserEndpoint("alice")));
         assertSame(updateFailure, updateMapped.getCause());
         updateFixture.close();
     }
@@ -167,10 +162,10 @@ class EngineEndpointTest {
         // response.
         java.util.concurrent.atomic.AtomicReference<InetSocketAddress> first = new AtomicReference<>();
         java.util.concurrent.atomic.AtomicReference<InetSocketAddress> second = new AtomicReference<>();
-        Thread firstCaller = Thread.ofVirtual()
-                .start(() -> first.set(Blocking.await(fixture.client.users().getUserEndpoint("alice"))));
-        Thread secondCaller = Thread.ofVirtual()
-                .start(() -> second.set(Blocking.await(fixture.client.users().getUserEndpoint("alice"))));
+        Thread firstCaller =
+                Thread.ofVirtual().start(() -> first.set(fixture.client.users().getUserEndpoint("alice")));
+        Thread secondCaller =
+                Thread.ofVirtual().start(() -> second.set(fixture.client.users().getUserEndpoint("alice")));
 
         // Both callers run on their own threads; wait for the write as well as
         // the registration before asserting on either.
@@ -193,16 +188,16 @@ class EngineEndpointTest {
         Fixture fixture = new Fixture(cache);
         fixture.waiter.result = CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT));
 
-        assertEquals(ENDPOINT, Blocking.await(fixture.client.users().getUserEndpoint("alice")));
+        assertEquals(ENDPOINT, fixture.client.users().getUserEndpoint("alice"));
         assertEquals(1, fixture.connection.writes);
 
         // The second caller reads the value the first stored rather than repeating the request.
         cache.value = CacheLookupResult.found(ENDPOINT);
-        assertEquals(ENDPOINT, Blocking.await(fixture.client.users().getUserEndpoint("alice")));
+        assertEquals(ENDPOINT, fixture.client.users().getUserEndpoint("alice"));
         assertEquals(1, fixture.connection.writes);
 
         // The idle per-user semaphore is reclaimed, matching the source's periodic sweep.
-        fixture.client.cleanupUserEndpointSemaphoresAsync().join();
+        fixture.client.cleanupUserEndpointSemaphores();
         assertEquals(0, fixture.client.getUserEndpointSemaphoresForTest().size());
         fixture.close();
     }
@@ -217,14 +212,13 @@ class EngineEndpointTest {
         java.util.concurrent.atomic.AtomicReference<InetSocketAddress> second = new AtomicReference<>();
         Thread firstCaller = Thread.ofVirtual().start(() -> {
             try {
-                Blocking.await(fixture.client.users().getUserEndpoint("alice", firstSource.getSignal()));
+                fixture.client.users().getUserEndpoint("alice", firstSource.getSignal());
             } catch (RuntimeException cancelled) {
                 // Expected; this caller is the one being cancelled.
             }
         });
         Thread secondCaller = Thread.ofVirtual()
-                .start(() -> second.set(
-                        Blocking.await(fixture.client.users().getUserEndpoint("alice", CancellationSignal.none()))));
+                .start(() -> second.set(fixture.client.users().getUserEndpoint("alice", CancellationSignal.none())));
 
         awaitValue(() -> fixture.waiter.registrations == 2);
         firstSource.cancel();
@@ -387,7 +381,7 @@ class EngineEndpointTest {
                 Proxy.newProxyInstance(Waiter.class.getClassLoader(), new Class<?>[] {Waiter.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) throws Throwable {
-            if (method.getName().equals("waitAsync") && arguments.length == 4) {
+            if (method.getName().equals("register") && arguments.length == 4) {
                 registrations++;
                 key = (WaitKey) arguments[0];
                 resultType = (Class<?>) arguments[1];
@@ -409,7 +403,7 @@ class EngineEndpointTest {
                 if (token != null) {
                     token.register(() -> registered.completeExceptionally(new CancellationException("cancelled")));
                 }
-                return registered;
+                return (Wait<Object>) () -> Outcomes.raise(registered);
             }
             return defaultValue(method.getReturnType());
         }

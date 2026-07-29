@@ -8,6 +8,7 @@ import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.RoomJoinForbiddenException;
 import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Failures;
+import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.messages.JoinRoomRequest;
@@ -22,8 +23,6 @@ import dev.slsk.internal.messaging.messages.RoomListRequest;
 import dev.slsk.internal.messaging.messages.RoomMessageCommand;
 import dev.slsk.internal.messaging.messages.SetRoomTickerCommand;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -44,60 +43,54 @@ final class RoomRegistry {
         this.context = Objects.requireNonNull(context, "context");
     }
 
-    CompletableFuture<RoomData> joinRoom(String roomName) {
+    RoomData joinRoom(String roomName) {
         return joinRoom(roomName, false, CancellationSignal.none());
     }
 
-    CompletableFuture<RoomData> joinRoom(String roomName, boolean isPrivate) {
+    RoomData joinRoom(String roomName, boolean isPrivate) {
         return joinRoom(roomName, isPrivate, CancellationSignal.none());
     }
 
-    CompletableFuture<RoomData> joinRoom(String roomName, CancellationSignal cancellationSignal) {
+    RoomData joinRoom(String roomName, CancellationSignal cancellationSignal) {
         return joinRoom(roomName, false, cancellationSignal);
     }
 
-    CompletableFuture<RoomData> joinRoom(String roomName, boolean isPrivate, CancellationSignal cancellationSignal) {
+    RoomData joinRoom(String roomName, boolean isPrivate, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
         context.requireLoggedIn("join a chat room");
         CancellationSignal token = context.defaultToken(cancellationSignal);
-        CompletableFuture<RoomData> wait;
         try {
-            wait = context.getWaiter()
-                    .waitAsync(new WaitKey(MessageCode.Server.JOIN_ROOM, roomName), RoomData.class, null, token);
+            // Registered before the write, because the server can answer
+            // before the write call returns.
+            Wait<RoomData> wait = context.getWaiter()
+                    .register(new WaitKey(MessageCode.Server.JOIN_ROOM, roomName), RoomData.class, null, token);
+            context.writeToServer(new JoinRoomRequest(roomName, isPrivate), token);
+            try {
+                return wait.await();
+            } catch (Throwable failure) {
+                Throwable cause = Failures.unwrap(failure);
+                if (cause instanceof TimeoutException) {
+                    throw new NoResponseException("The server didn't respond to the request "
+                            + "to join chat room " + roomName
+                            + ". This probably indicates that the "
+                            + "room is already joined.");
+                }
+                throw Failures.propagate(cause);
+            }
         } catch (Throwable failure) {
-            return Failures.map(
-                    CompletableFuture.failedFuture(failure),
+            throw Failures.raise(
+                    failure,
                     "Failed to join chat room " + roomName + ": ",
                     RoomJoinForbiddenException.class,
                     NoResponseException.class);
         }
-        CompletableFuture<RoomData> translatedWait = wait.handle((response, failure) -> {
-            if (failure == null) {
-                return response;
-            }
-            Throwable cause = Failures.unwrap(failure);
-            if (cause instanceof TimeoutException) {
-                throw new CompletionException(new NoResponseException("The server didn't respond to the request "
-                        + "to join chat room " + roomName
-                        + ". This probably indicates that the "
-                        + "room is already joined."));
-            }
-            throw new CompletionException(cause);
-        });
-        CompletableFuture<RoomData> operation = context.writeToServer(new JoinRoomRequest(roomName, isPrivate), token)
-                .thenCompose(ignored -> translatedWait);
-        return Failures.map(
-                operation,
-                "Failed to join chat room " + roomName + ": ",
-                RoomJoinForbiddenException.class,
-                NoResponseException.class);
     }
 
-    CompletableFuture<RoomList> getRoomList() {
+    RoomList getRoomList() {
         return getRoomList(CancellationSignal.none());
     }
 
-    CompletableFuture<RoomList> getRoomList(CancellationSignal cancellationSignal) {
+    RoomList getRoomList(CancellationSignal cancellationSignal) {
         context.requireLoggedIn("fetch the list of chat rooms");
         return context.executeCorrelatedRequest(
                 new RoomListRequest(),
@@ -107,158 +100,151 @@ final class RoomRegistry {
                 "Failed to fetch the list of chat rooms from the server: ");
     }
 
-    CompletableFuture<Void> addPrivateRoomMember(String roomName, String requestedUsername) {
-        return addPrivateRoomMember(roomName, requestedUsername, CancellationSignal.none());
+    void addPrivateRoomMember(String roomName, String requestedUsername) {
+        addPrivateRoomMember(roomName, requestedUsername, CancellationSignal.none());
     }
 
-    CompletableFuture<Void> addPrivateRoomMember(
-            String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
+    void addPrivateRoomMember(String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
         CommonUtils.requireText(requestedUsername, "username");
         context.requireLoggedIn("add members to private rooms");
-        return context.executeCorrelatedCommand(
+        context.executeCorrelatedCommand(
                 new PrivateRoomAddUser(roomName, requestedUsername),
                 new WaitKey(MessageCode.Server.PRIVATE_ROOM_ADD_USER, roomName, requestedUsername),
                 cancellationSignal,
                 "Failed to add user " + requestedUsername + " as member of private room " + roomName + ": ");
     }
 
-    CompletableFuture<Void> addPrivateRoomModerator(String roomName, String requestedUsername) {
-        return addPrivateRoomModerator(roomName, requestedUsername, CancellationSignal.none());
+    void addPrivateRoomModerator(String roomName, String requestedUsername) {
+        addPrivateRoomModerator(roomName, requestedUsername, CancellationSignal.none());
     }
 
-    CompletableFuture<Void> addPrivateRoomModerator(
-            String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
+    void addPrivateRoomModerator(String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
         CommonUtils.requireText(requestedUsername, "username");
         context.requireLoggedIn("add moderators to private rooms");
-        return context.executeCorrelatedCommand(
+        context.executeCorrelatedCommand(
                 new PrivateRoomAddOperator(roomName, requestedUsername),
                 new WaitKey(MessageCode.Server.PRIVATE_ROOM_ADD_OPERATOR, roomName, requestedUsername),
                 cancellationSignal,
                 "Failed to add user " + requestedUsername + " as moderator of private room " + roomName + ": ");
     }
 
-    CompletableFuture<Void> dropPrivateRoomMembership(String roomName) {
-        return dropPrivateRoomMembership(roomName, CancellationSignal.none());
+    void dropPrivateRoomMembership(String roomName) {
+        dropPrivateRoomMembership(roomName, CancellationSignal.none());
     }
 
-    CompletableFuture<Void> dropPrivateRoomMembership(String roomName, CancellationSignal cancellationSignal) {
+    void dropPrivateRoomMembership(String roomName, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
         context.requireLoggedIn("drop private room membership");
-        return context.executeCorrelatedCommand(
+        context.executeCorrelatedCommand(
                 new PrivateRoomDropMembershipCommand(roomName),
                 new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVED, roomName),
                 cancellationSignal,
                 "Failed to drop membership of private room " + roomName + ": ");
     }
 
-    CompletableFuture<Void> dropPrivateRoomOwnership(String roomName) {
-        return dropPrivateRoomOwnership(roomName, CancellationSignal.none());
+    void dropPrivateRoomOwnership(String roomName) {
+        dropPrivateRoomOwnership(roomName, CancellationSignal.none());
     }
 
-    CompletableFuture<Void> dropPrivateRoomOwnership(String roomName, CancellationSignal cancellationSignal) {
+    void dropPrivateRoomOwnership(String roomName, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
         context.requireLoggedIn("drop private room ownership");
-        return context.executeCorrelatedCommand(
+        context.executeCorrelatedCommand(
                 new PrivateRoomDropOwnershipCommand(roomName),
                 new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVED, roomName),
                 cancellationSignal,
                 "Failed to drop ownership of private room " + roomName + ": ");
     }
 
-    CompletableFuture<Void> leaveRoom(String roomName) {
-        return leaveRoom(roomName, CancellationSignal.none());
+    void leaveRoom(String roomName) {
+        leaveRoom(roomName, CancellationSignal.none());
     }
 
-    CompletableFuture<Void> leaveRoom(String roomName, CancellationSignal cancellationSignal) {
+    void leaveRoom(String roomName, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
         context.requireLoggedIn("leave a chat room");
         CancellationSignal token = context.defaultToken(cancellationSignal);
-        CompletableFuture<Void> wait;
         try {
-            wait = context.getWaiter().waitAsync(new WaitKey(MessageCode.Server.LEAVE_ROOM, roomName), null, token);
+            Wait<Void> wait =
+                    context.getWaiter().register(new WaitKey(MessageCode.Server.LEAVE_ROOM, roomName), null, token);
+            context.writeToServer(new LeaveRoomRequest(roomName), token);
+            try {
+                wait.await();
+            } catch (Throwable failure) {
+                Throwable cause = Failures.unwrap(failure);
+                if (cause instanceof TimeoutException) {
+                    throw new NoResponseException("The server didn't respond to the request "
+                            + "to leave chat room " + roomName
+                            + ".  This probably indicates that the "
+                            + "room is not joined.");
+                }
+                throw Failures.propagate(cause);
+            }
         } catch (Throwable failure) {
-            return Failures.map(
-                    CompletableFuture.failedFuture(failure),
-                    "Failed to leave chat room " + roomName + ": ",
-                    NoResponseException.class);
+            throw Failures.raise(failure, "Failed to leave chat room " + roomName + ": ", NoResponseException.class);
         }
-        CompletableFuture<Void> translatedWait = wait.handle((ignored, failure) -> {
-            if (failure == null) {
-                return null;
-            }
-            Throwable cause = Failures.unwrap(failure);
-            if (cause instanceof TimeoutException) {
-                throw new CompletionException(new NoResponseException("The server didn't respond to the request "
-                        + "to leave chat room " + roomName
-                        + ".  This probably indicates that the "
-                        + "room is not joined."));
-            }
-            throw new CompletionException(cause);
-        });
-        CompletableFuture<Void> operation =
-                context.writeToServer(new LeaveRoomRequest(roomName), token).thenCompose(ignored -> translatedWait);
-        return Failures.map(operation, "Failed to leave chat room " + roomName + ": ", NoResponseException.class);
     }
 
-    CompletableFuture<Void> removePrivateRoomMember(String roomName, String requestedUsername) {
-        return removePrivateRoomMember(roomName, requestedUsername, CancellationSignal.none());
+    void removePrivateRoomMember(String roomName, String requestedUsername) {
+        removePrivateRoomMember(roomName, requestedUsername, CancellationSignal.none());
     }
 
-    CompletableFuture<Void> removePrivateRoomMember(
-            String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
+    void removePrivateRoomMember(String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
         CommonUtils.requireText(requestedUsername, "username");
         context.requireLoggedIn("remove users from private rooms");
-        return context.executeCorrelatedCommand(
+        context.executeCorrelatedCommand(
                 new PrivateRoomRemoveUser(roomName, requestedUsername),
                 new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVE_USER, roomName, requestedUsername),
                 cancellationSignal,
                 "Failed to remove user " + requestedUsername + " as member of private room " + roomName + ": ");
     }
 
-    CompletableFuture<Void> removePrivateRoomModerator(String roomName, String requestedUsername) {
-        return removePrivateRoomModerator(roomName, requestedUsername, CancellationSignal.none());
+    void removePrivateRoomModerator(String roomName, String requestedUsername) {
+        removePrivateRoomModerator(roomName, requestedUsername, CancellationSignal.none());
     }
 
-    CompletableFuture<Void> removePrivateRoomModerator(
-            String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
+    void removePrivateRoomModerator(String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
         CommonUtils.requireText(requestedUsername, "username");
         context.requireLoggedIn("remove moderators from private rooms");
-        return context.executeCorrelatedCommand(
+        context.executeCorrelatedCommand(
                 new PrivateRoomRemoveOperator(roomName, requestedUsername),
                 new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVE_OPERATOR, roomName, requestedUsername),
                 cancellationSignal,
                 "Failed to remove user " + requestedUsername + " as moderator of private room " + roomName + ": ");
     }
 
-    CompletableFuture<Void> sendRoomMessage(String roomName, String message) {
-        return sendRoomMessage(roomName, message, CancellationSignal.none());
+    void sendRoomMessage(String roomName, String message) {
+        sendRoomMessage(roomName, message, CancellationSignal.none());
     }
 
-    CompletableFuture<Void> sendRoomMessage(String roomName, String message, CancellationSignal cancellationSignal) {
+    void sendRoomMessage(String roomName, String message, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
         CommonUtils.requireNonEmpty(message, "message");
         context.requireLoggedIn("send a chat room message");
-        return Failures.map(
-                context.writeToServer(
-                        new RoomMessageCommand(roomName, message), context.defaultToken(cancellationSignal)),
-                "Failed to send message to room " + roomName + ": ");
+        try {
+            context.writeToServer(new RoomMessageCommand(roomName, message), context.defaultToken(cancellationSignal));
+        } catch (Throwable failure) {
+            throw Failures.raise(failure, "Failed to send message to room " + roomName + ": ");
+        }
     }
 
-    CompletableFuture<Void> setRoomTicker(String roomName, String message) {
-        return setRoomTicker(roomName, message, CancellationSignal.none());
+    void setRoomTicker(String roomName, String message) {
+        setRoomTicker(roomName, message, CancellationSignal.none());
     }
 
-    CompletableFuture<Void> setRoomTicker(String roomName, String message, CancellationSignal cancellationSignal) {
+    void setRoomTicker(String roomName, String message, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
         CommonUtils.requireNonEmpty(message, "message");
         context.requireLoggedIn("set chat room tickers");
-        return Failures.map(
-                context.writeToServer(
-                        new SetRoomTickerCommand(roomName, message), context.defaultToken(cancellationSignal)),
-                "Failed to set chat room ticker in room " + roomName + ": ");
+        try {
+            context.writeToServer(
+                    new SetRoomTickerCommand(roomName, message), context.defaultToken(cancellationSignal));
+        } catch (Throwable failure) {
+            throw Failures.raise(failure, "Failed to set chat room ticker in room " + roomName + ": ");
+        }
     }
 }

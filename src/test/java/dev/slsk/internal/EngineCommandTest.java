@@ -13,7 +13,6 @@ import dev.slsk.CancellationController;
 import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
-import dev.slsk.internal.common.Blocking;
 import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.messaging.messages.AcknowledgePrivateMessageCommand;
 import dev.slsk.internal.messaging.messages.AcknowledgePrivilegeNotificationCommand;
@@ -45,15 +44,15 @@ class EngineCommandTest {
             CancellationController source = new CancellationController();
             CancellationSignal token = source.getSignal();
 
-            Blocking.await(client.server().sendPrivateMessage("alice", "private", token));
-            Blocking.await(client.rooms().sendRoomMessage("room", "public", token));
-            Blocking.await(client.server().sendUploadSpeed(1234, token));
-            Blocking.await(client.rooms().setRoomTicker("room", "ticker", token));
-            Blocking.await(client.server().setSharedCounts(12, 34, token));
-            Blocking.await(client.server().setStatus(UserPresence.AWAY, token));
-            Blocking.await(client.server().startPublicChat(token));
-            Blocking.await(client.server().stopPublicChat(token));
-            Blocking.await(client.users().unwatchUser("bob", token));
+            client.server().sendPrivateMessage("alice", "private", token);
+            client.rooms().sendRoomMessage("room", "public", token);
+            client.server().sendUploadSpeed(1234, token);
+            client.rooms().setRoomTicker("room", "ticker", token);
+            client.server().setSharedCounts(12, 34, token);
+            client.server().setStatus(UserPresence.AWAY, token);
+            client.server().startPublicChat(token);
+            client.server().stopPublicChat(token);
+            client.users().unwatchUser("bob", token);
 
             assertEquals(9, connection.messages.size());
             PrivateMessageCommand privateMessage =
@@ -91,54 +90,28 @@ class EngineCommandTest {
     void validatesTextRangeAndStateInSourceOrder() {
         ConnectionProbe connection = new ConnectionProbe();
         try (SoulseekEngine client = loggedInClient(connection)) {
-            assertThrows(
-                    IllegalArgumentException.class,
-                    () -> Blocking.await(client.server().sendPrivateMessage(" ", "message")));
-            assertThrows(
-                    IllegalArgumentException.class,
-                    () -> Blocking.await(client.server().sendPrivateMessage("user", "")));
-            assertThrows(
-                    IllegalArgumentException.class,
-                    () -> Blocking.await(client.rooms().sendRoomMessage(null, "message")));
-            assertThrows(
-                    IllegalArgumentException.class,
-                    () -> Blocking.await(client.rooms().sendRoomMessage("room", null)));
-            assertThrows(
-                    IllegalArgumentException.class,
-                    () -> Blocking.await(client.rooms().setRoomTicker("\t", "message")));
-            assertThrows(
-                    IllegalArgumentException.class,
-                    () -> Blocking.await(client.rooms().setRoomTicker("room", "")));
-            assertThrows(
-                    IllegalArgumentException.class,
-                    () -> Blocking.await(client.server().setSharedCounts(-1, 0)));
-            assertThrows(
-                    IllegalArgumentException.class,
-                    () -> Blocking.await(client.server().setSharedCounts(0, -1)));
-            assertThrows(
-                    IllegalArgumentException.class,
-                    () -> Blocking.await(client.server().sendUploadSpeed(0)));
-            assertThrows(
-                    IllegalArgumentException.class,
-                    () -> Blocking.await(client.users().unwatchUser(" ")));
+            assertThrows(IllegalArgumentException.class, () -> client.server().sendPrivateMessage(" ", "message"));
+            assertThrows(IllegalArgumentException.class, () -> client.server().sendPrivateMessage("user", ""));
+            assertThrows(IllegalArgumentException.class, () -> client.rooms().sendRoomMessage(null, "message"));
+            assertThrows(IllegalArgumentException.class, () -> client.rooms().sendRoomMessage("room", null));
+            assertThrows(IllegalArgumentException.class, () -> client.rooms().setRoomTicker("\t", "message"));
+            assertThrows(IllegalArgumentException.class, () -> client.rooms().setRoomTicker("room", ""));
+            assertThrows(IllegalArgumentException.class, () -> client.server().setSharedCounts(-1, 0));
+            assertThrows(IllegalArgumentException.class, () -> client.server().setSharedCounts(0, -1));
+            assertThrows(IllegalArgumentException.class, () -> client.server().sendUploadSpeed(0));
+            assertThrows(IllegalArgumentException.class, () -> client.users().unwatchUser(" "));
 
-            Blocking.await(client.server().sendPrivateMessage("user", " "));
-            Blocking.await(client.rooms().sendRoomMessage("room", " "));
-            Blocking.await(client.rooms().setRoomTicker("room", " "));
+            client.server().sendPrivateMessage("user", " ");
+            client.rooms().sendRoomMessage("room", " ");
+            client.rooms().setRoomTicker("room", " ");
 
             client.setStateForTest(SoulseekClientState.DISCONNECTED);
             for (Operation operation : operations(client)) {
                 assertThrows(IllegalStateException.class, operation::run);
             }
-            assertThrows(
-                    IllegalArgumentException.class,
-                    () -> Blocking.await(client.server().sendPrivateMessage(null, "message")));
-            assertThrows(
-                    IllegalArgumentException.class,
-                    () -> Blocking.await(client.server().setSharedCounts(-1, 0)));
-            assertThrows(
-                    IllegalStateException.class,
-                    () -> Blocking.await(client.server().sendUploadSpeed(0)));
+            assertThrows(IllegalArgumentException.class, () -> client.server().sendPrivateMessage(null, "message"));
+            assertThrows(IllegalArgumentException.class, () -> client.server().setSharedCounts(-1, 0));
+            assertThrows(IllegalStateException.class, () -> client.server().sendUploadSpeed(0));
         }
     }
 
@@ -182,8 +155,8 @@ class EngineCommandTest {
     void acknowledgementCommandsAlsoUseGuardedWritePath() {
         ConnectionProbe connection = new ConnectionProbe();
         try (SoulseekEngine client = loggedInClient(connection)) {
-            Blocking.await(client.server().acknowledgePrivateMessage(123));
-            Blocking.await(client.server().acknowledgePrivilegeNotification(456));
+            client.server().acknowledgePrivateMessage(123);
+            client.server().acknowledgePrivilegeNotification(456);
             assertEquals(
                     123,
                     assertInstanceOf(AcknowledgePrivateMessageCommand.class, connection.messages.get(0))
@@ -197,7 +170,7 @@ class EngineCommandTest {
             connection.synchronousFailure = expected;
             SoulseekClientException mapped = assertInstanceOf(
                     SoulseekClientException.class,
-                    failureOf(() -> Blocking.await(client.server().acknowledgePrivateMessage(789))));
+                    failureOf(() -> client.server().acknowledgePrivateMessage(789)));
             assertSame(expected, mapped.getCause());
         }
     }
@@ -211,17 +184,17 @@ class EngineCommandTest {
 
     private static List<Operation> operations(SoulseekEngine client) {
         return List.of(
-                () -> Blocking.await(client.server().sendPrivateMessage("user", "message")),
-                () -> Blocking.await(client.rooms().sendRoomMessage("room", "message")),
-                () -> Blocking.await(client.server().sendUploadSpeed(1)),
-                () -> Blocking.await(client.rooms().setRoomTicker("room", "message")),
-                () -> Blocking.await(client.server().setSharedCounts(1, 2)),
-                () -> Blocking.await(client.server().setStatus(UserPresence.ONLINE)),
-                () -> Blocking.await(client.server().startPublicChat()),
-                () -> Blocking.await(client.server().stopPublicChat()),
-                () -> Blocking.await(client.users().unwatchUser("user")),
-                () -> Blocking.await(client.server().acknowledgePrivateMessage(1)),
-                () -> Blocking.await(client.server().acknowledgePrivilegeNotification(1)));
+                () -> client.server().sendPrivateMessage("user", "message"),
+                () -> client.rooms().sendRoomMessage("room", "message"),
+                () -> client.server().sendUploadSpeed(1),
+                () -> client.rooms().setRoomTicker("room", "message"),
+                () -> client.server().setSharedCounts(1, 2),
+                () -> client.server().setStatus(UserPresence.ONLINE),
+                () -> client.server().startPublicChat(),
+                () -> client.server().stopPublicChat(),
+                () -> client.users().unwatchUser("user"),
+                () -> client.server().acknowledgePrivateMessage(1),
+                () -> client.server().acknowledgePrivilegeNotification(1));
     }
 
     /**

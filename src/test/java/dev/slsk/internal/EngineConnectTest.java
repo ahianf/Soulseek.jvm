@@ -23,6 +23,7 @@ import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Outcomes;
+import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.messaging.MessageCode;
@@ -443,13 +444,13 @@ class EngineConnectTest {
         }
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("waitAsync") && arguments.length == 4) {
+            if (method.getName().equals("register") && arguments.length == 4) {
                 assertEquals(new WaitKey(MessageCode.Server.LOGIN), arguments[0]);
                 assertSame(LoginResponse.class, arguments[1]);
                 assertNull(arguments[2]);
                 token = (CancellationSignal) arguments[3];
                 sequence.add("wait");
-                return CompletableFuture.completedFuture(response);
+                return (Wait<Object>) () -> response;
             }
             return defaultValue(method.getReturnType());
         }
