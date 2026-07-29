@@ -9,7 +9,7 @@
 
   <groupId>dev.slsk</groupId>
   <artifactId>slsk-jvm</artifactId>
-  <version>0.22.0</version>
+  <version>0.22.1</version>
   <name>Soulseek.jvm</name>
   <description>A Java library for the Soulseek network.</description>
   <url>https://github.com/ahianf/Soulseek.jvm</url>
