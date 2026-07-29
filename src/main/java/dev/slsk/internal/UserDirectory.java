@@ -352,24 +352,27 @@ final class UserDirectory {
         }
 
         // The permit is released only on the path that acquired it; a cancelled acquisition must
-        // not release a permit it never held.
-        return Permits.acquire(semaphore, token).thenCompose(ignored -> {
-            CompletableFuture<InetSocketAddress> operation;
-            try {
-                CacheLookupResult<InetSocketAddress> second = tryCacheGet(cache, requestedUsername);
-                if (second.found()) {
-                    context.getDiagnostic()
-                            .debug("Endpoint cache HIT for " + requestedUsername + ": " + second.value());
-                    operation = CompletableFuture.completedFuture(second.value());
-                } else {
-                    operation = retrieveUserEndpoint(requestedUsername, token, cache);
-                }
-            } catch (Throwable failure) {
-                semaphore.release();
-                throw failure;
+        // not release a permit it never held, which is why the acquire is outside the try.
+        try {
+            Permits.acquire(semaphore, token);
+        } catch (RuntimeException failure) {
+            return CompletableFuture.failedFuture(failure);
+        }
+
+        CompletableFuture<InetSocketAddress> operation;
+        try {
+            CacheLookupResult<InetSocketAddress> second = tryCacheGet(cache, requestedUsername);
+            if (second.found()) {
+                context.getDiagnostic().debug("Endpoint cache HIT for " + requestedUsername + ": " + second.value());
+                operation = CompletableFuture.completedFuture(second.value());
+            } else {
+                operation = retrieveUserEndpoint(requestedUsername, token, cache);
             }
-            return operation.whenComplete((result, failure) -> semaphore.release());
-        });
+        } catch (Throwable failure) {
+            semaphore.release();
+            throw failure;
+        }
+        return operation.whenComplete((result, failure) -> semaphore.release());
     }
 
     CompletableFuture<InetSocketAddress> retrieveUserEndpoint(

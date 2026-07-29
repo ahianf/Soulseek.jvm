@@ -329,52 +329,53 @@ final class SearchCoordinator {
                             + searchSemaphore.availablePermits()
                             + " available)");
             updateState.accept(SearchState.QUEUED);
-            operation = acquireSearchPermit(cancellationSignal).thenCompose(ignored -> {
-                context.getDiagnostic()
-                        .debug("Acquired search semaphore for search '"
-                                + invocation.query().getSearchText() + "'");
-                CompletableFuture<Search> activeSearch;
-                try {
-                    byte[] message = buildSearchMessage(invocation.scope(), search);
-                    search.setResponseReceived(response -> {
-                        responseHandler.accept(response);
-                        SearchResponseReceivedEvent eventData =
-                                new SearchResponseReceivedEvent(response, search.toSearch());
-                        if (invocation.options().getResponseReceived() != null) {
-                            invocation
-                                    .options()
-                                    .getResponseReceived()
-                                    .onResponseReceived(
-                                            new SearchResponseReceived(eventData.getSearch(), eventData.getResponse()));
-                        }
-                        context.raiseEvent(Kind.SEARCH_RESPONSE_RECEIVED, eventData);
-                    });
-                    activeSearch = context.writeBytesToServer(message, cancellationSignal)
-                            .thenRun(() -> updateState.accept(SearchState.IN_PROGRESS))
-                            .thenCompose(ignoredWrite -> search.waitForCompletion(cancellationSignal))
-                            .thenApply(ignoredCompletion -> {
-                                updateState.accept(SearchState.COMPLETED.or(search.getState()));
-                                context.getDiagnostic()
-                                        .debug("Search for '"
-                                                + invocation.query().getSearchText()
-                                                + "' completed: "
-                                                + search.getState());
-                                return search.toSearch();
-                            });
-                } catch (Throwable failure) {
-                    activeSearch = CompletableFuture.failedFuture(failure);
-                }
-                return activeSearch.whenComplete((result, failure) -> {
-                    searchSemaphore.release();
-                    context.getDiagnostic()
-                            .debug("Released search semaphore for search '"
-                                    + invocation.query().getSearchText()
-                                    + "' ("
-                                    + searchSemaphore.availablePermits()
-                                    + " available)");
+            acquireSearchPermit(cancellationSignal);
+            context.getDiagnostic()
+                    .debug("Acquired search semaphore for search '"
+                            + invocation.query().getSearchText() + "'");
+            CompletableFuture<Search> activeSearch;
+            try {
+                byte[] message = buildSearchMessage(invocation.scope(), search);
+                search.setResponseReceived(response -> {
+                    responseHandler.accept(response);
+                    SearchResponseReceivedEvent eventData =
+                            new SearchResponseReceivedEvent(response, search.toSearch());
+                    if (invocation.options().getResponseReceived() != null) {
+                        invocation
+                                .options()
+                                .getResponseReceived()
+                                .onResponseReceived(
+                                        new SearchResponseReceived(eventData.getSearch(), eventData.getResponse()));
+                    }
+                    context.raiseEvent(Kind.SEARCH_RESPONSE_RECEIVED, eventData);
                 });
+                activeSearch = context.writeBytesToServer(message, cancellationSignal)
+                        .thenRun(() -> updateState.accept(SearchState.IN_PROGRESS))
+                        .thenCompose(ignoredWrite -> search.waitForCompletion(cancellationSignal))
+                        .thenApply(ignoredCompletion -> {
+                            updateState.accept(SearchState.COMPLETED.or(search.getState()));
+                            context.getDiagnostic()
+                                    .debug("Search for '"
+                                            + invocation.query().getSearchText()
+                                            + "' completed: "
+                                            + search.getState());
+                            return search.toSearch();
+                        });
+            } catch (Throwable failure) {
+                activeSearch = CompletableFuture.failedFuture(failure);
+            }
+            operation = activeSearch.whenComplete((result, failure) -> {
+                searchSemaphore.release();
+                context.getDiagnostic()
+                        .debug("Released search semaphore for search '"
+                                + invocation.query().getSearchText()
+                                + "' ("
+                                + searchSemaphore.availablePermits()
+                                + " available)");
             });
         } catch (Throwable failure) {
+            // Reaches here only if the permit was never taken; anything after
+            // the acquire releases it through the whenComplete above.
             operation = CompletableFuture.failedFuture(failure);
         }
 
@@ -407,8 +408,8 @@ final class SearchCoordinator {
                 });
     }
 
-    CompletableFuture<Void> acquireSearchPermit(CancellationSignal cancellationSignal) {
-        return Permits.acquire(searchSemaphore, cancellationSignal);
+    void acquireSearchPermit(CancellationSignal cancellationSignal) {
+        Permits.acquire(searchSemaphore, cancellationSignal);
     }
 
     static byte[] buildSearchMessage(SearchScope scope, SearchInternal search) {

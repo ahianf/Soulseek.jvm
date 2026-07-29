@@ -1109,19 +1109,31 @@ final class SoulseekEngine
             String requestedUsername,
             String password,
             CancellationSignal cancellationSignal) {
-        CompletableFuture<Void> serialized = Permits.acquire(stateSemaphore, cancellationSignal)
-                .thenCompose(ignored -> {
-                    CompletableFuture<Void> attempt;
-                    if (state.contains(SoulseekClientState.CONNECTED)
-                            && state.contains(SoulseekClientState.LOGGED_IN)) {
-                        attempt = CompletableFuture.completedFuture(null);
-                    } else {
-                        attempt = performConnectAsync(
-                                requestedAddress, requestedEndpoint, requestedUsername, password, cancellationSignal);
-                    }
-                    return attempt.whenComplete((result, failure) -> stateSemaphore.release());
-                });
+        try {
+            Permits.acquire(stateSemaphore, cancellationSignal);
+        } catch (RuntimeException failure) {
+            // The permit was never held, so there is nothing to release. The
+            // failure is still reported the same way as any other.
+            return reportConnectFailure(CompletableFuture.failedFuture(failure));
+        }
 
+        CompletableFuture<Void> attempt;
+        try {
+            if (state.contains(SoulseekClientState.CONNECTED) && state.contains(SoulseekClientState.LOGGED_IN)) {
+                attempt = CompletableFuture.completedFuture(null);
+            } else {
+                attempt = performConnectAsync(
+                        requestedAddress, requestedEndpoint, requestedUsername, password, cancellationSignal);
+            }
+        } catch (RuntimeException | Error failure) {
+            stateSemaphore.release();
+            throw failure;
+        }
+        return reportConnectFailure(attempt.whenComplete((result, failure) -> stateSemaphore.release()));
+    }
+
+    /** Classifies a connect failure and tears the connection down. */
+    private CompletableFuture<Void> reportConnectFailure(CompletableFuture<Void> serialized) {
         return serialized.handle((result, failure) -> {
             if (failure == null) {
                 return result;
@@ -1310,16 +1322,25 @@ final class SoulseekEngine
 
     private CompletableFuture<Boolean> reconfigureOptionsInternalAsync(
             SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
-        CompletableFuture<Boolean> serialized = Permits.acquire(stateSemaphore, cancellationSignal)
-                .thenCompose(ignored -> {
-                    CompletableFuture<Boolean> operation;
-                    try {
-                        operation = performReconfigureOptionsAsync(patch, cancellationSignal);
-                    } catch (Throwable failure) {
-                        operation = CompletableFuture.failedFuture(failure);
-                    }
-                    return operation.whenComplete((result, failure) -> stateSemaphore.release());
-                });
+        CompletableFuture<Boolean> serialized;
+        try {
+            Permits.acquire(stateSemaphore, cancellationSignal);
+        } catch (RuntimeException failure) {
+            // Never held, so nothing to release.
+            return reportReconfigureFailure(CompletableFuture.failedFuture(failure));
+        }
+        CompletableFuture<Boolean> operation;
+        try {
+            operation = performReconfigureOptionsAsync(patch, cancellationSignal);
+        } catch (Throwable failure) {
+            operation = CompletableFuture.failedFuture(failure);
+        }
+        serialized = operation.whenComplete((result, failure) -> stateSemaphore.release());
+        return reportReconfigureFailure(serialized);
+    }
+
+    /** Classifies a reconfiguration failure, which is never rolled back. */
+    private CompletableFuture<Boolean> reportReconfigureFailure(CompletableFuture<Boolean> serialized) {
         return serialized.handle((result, failure) -> {
             if (failure == null) {
                 return result;

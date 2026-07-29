@@ -100,21 +100,23 @@ final class UploadOperation {
 
     Transfer execute() {
         try {
-            await(Permits.acquire(engine.uploadSemaphoreSyncRoot, cancellationSignal));
-            CompletableFuture<Void> perUserWait;
+            Permits.acquire(engine.uploadSemaphoreSyncRoot, cancellationSignal);
             try {
                 perUserSemaphore = engine.uploadSemaphores.computeIfAbsent(
                         upload.getUsername(),
                         ignored ->
                                 new Semaphore(engine.context.getClientOptions().getMaximumConcurrentUploadsPerUser()));
-                perUserWait = Permits.acquire(perUserSemaphore, cancellationSignal);
             } finally {
                 engine.uploadSemaphoreSyncRoot.release();
             }
 
+            // Announced before the wait rather than during it. The wait used to
+            // be started inside the sync root and awaited after, which is the
+            // same two events in the same order; it just needed a future to
+            // carry the not-yet-finished acquisition across the announcement.
             updateState(TransferState.QUEUED.or(TransferState.LOCALLY));
 
-            await(perUserWait);
+            Permits.acquire(perUserSemaphore, cancellationSignal);
             perUserPermit.set(true);
             engine.context
                     .getDiagnostic()
@@ -146,7 +148,7 @@ final class UploadOperation {
                         cause);
             }
 
-            await(Permits.acquire(engine.globalUploadSemaphore, cancellationSignal));
+            Permits.acquire(engine.globalUploadSemaphore, cancellationSignal);
             globalPermit.set(true);
             engine.context
                     .getDiagnostic()

@@ -112,7 +112,7 @@ final class DownloadOperation {
     Transfer execute() {
         try {
             updateState(TransferState.QUEUED.or(TransferState.LOCALLY));
-            await(Permits.acquire(engine.globalDownloadSemaphore, cancellationSignal));
+            Permits.acquire(engine.globalDownloadSemaphore, cancellationSignal);
             globalPermit.set(true);
             engine.context
                     .getDiagnostic()
