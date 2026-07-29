@@ -128,7 +128,62 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
     @Override
     public Connection awaitTransferConnection(
             String username, String filename, int remoteToken, CancellationSignal cancellationSignal) {
-        return await(awaitTransferConnectionAsync(username, filename, remoteToken, cancellationSignal));
+        LinkedCancellation directCancellation = new LinkedCancellation(cancellationSignal);
+        LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationSignal);
+        diagnostic.debug("Waiting for a direct or indirect transfer connection from "
+                + username + " with remote token " + remoteToken + " for "
+                + filename);
+
+        // Both waits are registered before either is awaited, so a peer that
+        // arrives on one path while the other is still being set up is caught.
+        Wait<Connection> indirectWait = client.getWaiter()
+                .register(
+                        new WaitKey(Constants.WaitKey.INDIRECT_TRANSFER, username, filename, remoteToken),
+                        Connection.class,
+                        client.getOptions().getTransferConnectionOptions().getConnectTimeout(),
+                        indirectCancellation.token());
+        Wait<Connection> directWait = client.getWaiter()
+                .register(
+                        new WaitKey(Constants.WaitKey.DIRECT_TRANSFER, username, remoteToken),
+                        Connection.class,
+                        client.getOptions().getTransferConnectionOptions().getConnectTimeout(),
+                        directCancellation.token());
+
+        // Awaiting two waits at once is the whole reason this dispatches
+        // threads; the peer answers on exactly one of them and we cannot know
+        // which.
+        FirstSuccess.Winner<Connection> winner;
+        try {
+            winner = FirstSuccess.race(directWait::await, indirectWait::await);
+        } catch (Throwable failure) {
+            directCancellation.close();
+            indirectCancellation.close();
+            String message = "Failed to establish a direct or indirect transfer "
+                    + "connection to " + username
+                    + " with remote token " + remoteToken + " for "
+                    + filename;
+            diagnostic.debug(message);
+            throw new CompletionException(new ConnectionException(message));
+        }
+
+        boolean directWon = winner.first();
+        Connection connection = winner.value();
+        diagnostic.debug((directWon ? "Direct" : "Indirect")
+                + " transfer connection to " + username + " ("
+                + connection.getIpEndpoint()
+                + ") with remote token " + remoteToken + " for " + filename
+                + " established first, attempting to cancel "
+                + (directWon ? "indirect" : "direct") + " connection.");
+        (directWon ? indirectCancellation : directCancellation).cancel();
+        directCancellation.close();
+        indirectCancellation.close();
+        diagnostic.debug("Transfer connection to " + username + " ("
+                + connection.getIpEndpoint()
+                + ") with remote token " + remoteToken + " for "
+                + filename + " established. (type: "
+                + connection.getType() + ", id: "
+                + connection.getId() + ")");
+        return connection;
     }
 
     @Override
@@ -169,7 +224,57 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
     @Override
     public Connection getTransferConnection(
             String username, InetSocketAddress ipEndpoint, int token, CancellationSignal cancellationSignal) {
-        return await(getTransferConnectionAsync(username, ipEndpoint, token, cancellationSignal));
+        LinkedCancellation directCancellation = new LinkedCancellation(cancellationSignal);
+        LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationSignal);
+        diagnostic.debug("Attempting simultaneous direct and indirect transfer " + "connections to " + username + " ("
+                + ipEndpoint + ")");
+
+        FirstSuccess.Winner<Connection> winner;
+        try {
+            winner = FirstSuccess.race(
+                    () -> establishOutboundDirectTransferConnection(ipEndpoint, token, directCancellation.token()),
+                    () -> establishOutboundIndirectTransferConnection(username, token, indirectCancellation.token()));
+        } catch (Throwable failure) {
+            directCancellation.close();
+            indirectCancellation.close();
+            String message = "Failed to establish a direct or indirect transfer "
+                    + "connection to " + username + " (" + ipEndpoint
+                    + ")";
+            diagnostic.debug(message);
+            throw new CompletionException(new ConnectionException(message));
+        }
+
+        boolean directWon = winner.first();
+        Connection connection = winner.value();
+        diagnostic.debug((directWon ? "Direct" : "Indirect")
+                + " transfer connection to " + username + " (" + ipEndpoint
+                + ") established first, attempting to cancel "
+                + (directWon ? "indirect" : "direct") + " connection.");
+        (directWon ? indirectCancellation : directCancellation).cancel();
+        try {
+            if (directWon) {
+                connection.write(
+                        new PeerInit(client.getUsername(), Constants.ConnectionType.TRANSFER, token).toByteArray(),
+                        token(cancellationSignal));
+            }
+            connection.write(littleEndianBytes(token), token(cancellationSignal));
+        } catch (Throwable failure) {
+            Throwable cause = unwrap(failure);
+            String message = "Failed to negotiate transfer connection to "
+                    + username + " (" + ipEndpoint + "): "
+                    + message(cause);
+            diagnostic.debug(message + " (type: " + connection.getType() + ", id: " + connection.getId() + ")");
+            connection.close();
+            throw new CompletionException(new ConnectionException(message, cause));
+        } finally {
+            directCancellation.close();
+            indirectCancellation.close();
+        }
+        diagnostic.debug("Transfer connection to " + username + " ("
+                + ipEndpoint + ") established. (type: "
+                + connection.getType() + ", id: "
+                + connection.getId() + ")");
+        return connection;
     }
 
     /**
@@ -213,63 +318,6 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                 throw new CompletionException(new ConnectionException(message, cause));
             }
             return null;
-        });
-    }
-
-    private CompletableFuture<Connection> awaitTransferConnectionAsync(
-            String username, String filename, int remoteToken, CancellationSignal cancellationSignal) {
-        LinkedCancellation directCancellation = new LinkedCancellation(cancellationSignal);
-        LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationSignal);
-        diagnostic.debug("Waiting for a direct or indirect transfer connection from "
-                + username + " with remote token " + remoteToken + " for "
-                + filename);
-
-        // Both waits are registered before either is awaited, so a peer that
-        // arrives on one path while the other is still being set up is caught.
-        Wait<Connection> indirectWait = client.getWaiter()
-                .register(
-                        new WaitKey(Constants.WaitKey.INDIRECT_TRANSFER, username, filename, remoteToken),
-                        Connection.class,
-                        client.getOptions().getTransferConnectionOptions().getConnectTimeout(),
-                        indirectCancellation.token());
-        Wait<Connection> directWait = client.getWaiter()
-                .register(
-                        new WaitKey(Constants.WaitKey.DIRECT_TRANSFER, username, remoteToken),
-                        Connection.class,
-                        client.getOptions().getTransferConnectionOptions().getConnectTimeout(),
-                        directCancellation.token());
-        // A thread apiece, because the two are raced. D12 replaces this.
-        CompletableFuture<Connection> indirect = NetworkExecutor.supplyAsync(indirectWait::await);
-        CompletableFuture<Connection> direct = NetworkExecutor.supplyAsync(directWait::await);
-
-        return firstSuccessful(direct, indirect).handle((winner, failure) -> {
-            if (failure != null) {
-                directCancellation.close();
-                indirectCancellation.close();
-                String message = "Failed to establish a direct or indirect transfer "
-                        + "connection to " + username
-                        + " with remote token " + remoteToken + " for "
-                        + filename;
-                diagnostic.debug(message);
-                throw new CompletionException(new ConnectionException(message));
-            }
-            boolean directWon = winner.source() == direct;
-            diagnostic.debug((directWon ? "Direct" : "Indirect")
-                    + " transfer connection to " + username + " ("
-                    + winner.value().getIpEndpoint()
-                    + ") with remote token " + remoteToken + " for " + filename
-                    + " established first, attempting to cancel "
-                    + (directWon ? "indirect" : "direct") + " connection.");
-            (directWon ? indirectCancellation : directCancellation).cancel();
-            directCancellation.close();
-            indirectCancellation.close();
-            diagnostic.debug("Transfer connection to " + username + " ("
-                    + winner.value().getIpEndpoint()
-                    + ") with remote token " + remoteToken + " for "
-                    + filename + " established. (type: "
-                    + winner.value().getType() + ", id: "
-                    + winner.value().getId() + ")");
-            return winner.value();
         });
     }
 
@@ -353,7 +401,11 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         AtomicBoolean cached = new AtomicBoolean(true);
         CompletableFuture<MessageConnection> future = messageConnections.computeIfAbsent(username, key -> {
             cached.set(false);
-            return establishRacingMessageConnection(username, ipEndpoint, solicitationToken, cancellationSignal);
+            // The establishment is blocking now, and the cache entry is still a
+            // future, so it needs a thread to run on. D11 replaces the entry
+            // with a cell and this call runs on the caller's own thread.
+            return NetworkExecutor.supplyAsync(() ->
+                    establishRacingMessageConnection(username, ipEndpoint, solicitationToken, cancellationSignal));
         });
         return future.handle((connection, failure) -> {
             if (failure != null) {
@@ -457,80 +509,6 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                     + connection.getId() + ")");
             return new TransferConnectionResult(connection, remoteToken);
         });
-    }
-
-    private CompletableFuture<Connection> getTransferConnectionAsync(
-            String username, InetSocketAddress ipEndpoint, int token, CancellationSignal cancellationSignal) {
-        LinkedCancellation directCancellation = new LinkedCancellation(cancellationSignal);
-        LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationSignal);
-        diagnostic.debug("Attempting simultaneous direct and indirect transfer " + "connections to " + username + " ("
-                + ipEndpoint + ")");
-        CompletableFuture<Connection> direct =
-                getTransferConnectionOutboundDirectAsync(ipEndpoint, token, directCancellation.token());
-        CompletableFuture<Connection> indirect =
-                getTransferConnectionOutboundIndirectAsync(username, token, indirectCancellation.token());
-
-        return firstSuccessful(direct, indirect)
-                .thenCompose(winner -> {
-                    boolean directWon = winner.source() == direct;
-                    diagnostic.debug((directWon ? "Direct" : "Indirect")
-                            + " transfer connection to " + username + " (" + ipEndpoint
-                            + ") established first, attempting to cancel "
-                            + (directWon ? "indirect" : "direct") + " connection.");
-                    (directWon ? indirectCancellation : directCancellation).cancel();
-                    return NetworkExecutor.supplyAsync(() -> {
-                        try {
-                            if (directWon) {
-                                winner.value()
-                                        .write(
-                                                new PeerInit(
-                                                                client.getUsername(),
-                                                                Constants.ConnectionType.TRANSFER,
-                                                                token)
-                                                        .toByteArray(),
-                                                token(cancellationSignal));
-                            }
-                            winner.value().write(littleEndianBytes(token), token(cancellationSignal));
-                        } catch (Throwable failure) {
-                            directCancellation.close();
-                            indirectCancellation.close();
-                            Throwable cause = unwrap(failure);
-                            String message = "Failed to negotiate transfer connection to "
-                                    + username + " (" + ipEndpoint + "): "
-                                    + message(cause);
-                            diagnostic.debug(message + " (type: "
-                                    + winner.value().getType() + ", id: "
-                                    + winner.value().getId() + ")");
-                            winner.value().close();
-                            throw new CompletionException(new ConnectionException(message, cause));
-                        }
-                        directCancellation.close();
-                        indirectCancellation.close();
-                        diagnostic.debug("Transfer connection to " + username + " ("
-                                + ipEndpoint + ") established. (type: "
-                                + winner.value().getType() + ", id: "
-                                + winner.value().getId() + ")");
-                        return winner.value();
-                    });
-                })
-                .handle((connection, failure) -> {
-                    if (failure != null) {
-                        directCancellation.close();
-                        indirectCancellation.close();
-                        Throwable cause = unwrap(failure);
-                        if (cause instanceof ConnectionException
-                                && cause.getMessage() != null
-                                && cause.getMessage().startsWith("Failed to negotiate")) {
-                            throw new CompletionException(cause);
-                        }
-                        String message = "Failed to establish a direct or indirect transfer "
-                                + "connection to " + username + " (" + ipEndpoint
-                                + ")";
-                        diagnostic.debug(message);
-                        throw new CompletionException(new ConnectionException(message));
-                    }
-                    return connection;
-                });
     }
 
     @Override
@@ -648,7 +626,7 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         });
     }
 
-    private CompletableFuture<MessageConnection> establishRacingMessageConnection(
+    private MessageConnection establishRacingMessageConnection(
             String username,
             InetSocketAddress ipEndpoint,
             int solicitationToken,
@@ -657,75 +635,65 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationSignal);
         diagnostic.debug("Attempting simultaneous direct and indirect message " + "connections to " + username + " ("
                 + ipEndpoint + ")");
-        CompletableFuture<MessageConnection> direct =
-                getMessageConnectionOutboundDirectAsync(username, ipEndpoint, directCancellation.token());
-        CompletableFuture<MessageConnection> indirect =
-                getMessageConnectionOutboundIndirectAsync(username, solicitationToken, indirectCancellation.token());
 
-        return firstSuccessful(direct, indirect)
-                .thenCompose(winner -> {
-                    MessageConnection connection = winner.value();
-                    connection.addDisconnectedListener(disconnectedListener);
-                    connection.removeDisconnectedListener(provisionalDisconnectedListener);
-                    boolean directWon = winner.source() == direct;
-                    diagnostic.debug((directWon ? "Direct" : "Indirect")
-                            + " message connection to " + username + " (" + ipEndpoint
-                            + ") established first, attempting to cancel "
-                            + (directWon ? "indirect" : "direct") + " connection.");
-                    (directWon ? indirectCancellation : directCancellation).cancel();
+        FirstSuccess.Winner<MessageConnection> winner;
+        try {
+            winner = FirstSuccess.race(
+                    () -> establishOutboundDirectMessageConnection(username, ipEndpoint, directCancellation.token()),
+                    () -> establishOutboundIndirectMessageConnection(
+                            username, solicitationToken, indirectCancellation.token()));
+        } catch (Throwable failure) {
+            directCancellation.close();
+            indirectCancellation.close();
+            Throwable cause = unwrap(failure);
+            if (cause instanceof ConnectionException) {
+                throw new CompletionException(cause);
+            }
+            String message = "Failed to establish a direct or indirect message "
+                    + "connection to " + username + " (" + ipEndpoint
+                    + ")";
+            diagnostic.debug(message);
+            throw new CompletionException(new ConnectionException(message));
+        }
 
-                    return NetworkExecutor.supplyAsync(() -> {
-                        try {
-                            if (directWon) {
-                                connection.write(
-                                        new PeerInit(
-                                                        client.getUsername(),
-                                                        Constants.ConnectionType.PEER,
-                                                        client.getNextToken())
-                                                .toByteArray(),
-                                        token(cancellationSignal));
-                            } else {
-                                connection.startReadingContinuously();
-                            }
-                        } catch (Throwable failure) {
-                            directCancellation.close();
-                            indirectCancellation.close();
-                            Throwable cause = unwrap(failure);
-                            String message = "Failed to negotiate message connection to "
-                                    + username + " (" + ipEndpoint + "): "
-                                    + message(cause);
-                            diagnostic.debug(
-                                    message + " (type: " + connection.getType() + ", id: " + connection.getId() + ")");
-                            connection.close();
-                            throw new CompletionException(new ConnectionException(message, cause));
-                        }
-                        directCancellation.close();
-                        indirectCancellation.close();
-                        diagnostic.debug("Message connection to " + username + " (" + ipEndpoint
-                                + ") established. (type: " + connection.getType()
-                                + ", id: " + connection.getId() + ")");
-                        return connection;
-                    });
-                })
-                .handle((connection, failure) -> {
-                    if (failure != null) {
-                        directCancellation.close();
-                        indirectCancellation.close();
-                        Throwable cause = unwrap(failure);
-                        if (cause instanceof ConnectionException) {
-                            throw new CompletionException(cause);
-                        }
-                        String message = "Failed to establish a direct or indirect message "
-                                + "connection to " + username + " (" + ipEndpoint
-                                + ")";
-                        diagnostic.debug(message);
-                        throw new CompletionException(new ConnectionException(message));
-                    }
-                    return connection;
-                });
+        MessageConnection connection = winner.value();
+        connection.addDisconnectedListener(disconnectedListener);
+        connection.removeDisconnectedListener(provisionalDisconnectedListener);
+        boolean directWon = winner.first();
+        diagnostic.debug((directWon ? "Direct" : "Indirect")
+                + " message connection to " + username + " (" + ipEndpoint
+                + ") established first, attempting to cancel "
+                + (directWon ? "indirect" : "direct") + " connection.");
+        (directWon ? indirectCancellation : directCancellation).cancel();
+
+        try {
+            if (directWon) {
+                connection.write(
+                        new PeerInit(client.getUsername(), Constants.ConnectionType.PEER, client.getNextToken())
+                                .toByteArray(),
+                        token(cancellationSignal));
+            } else {
+                connection.startReadingContinuously();
+            }
+        } catch (Throwable failure) {
+            Throwable cause = unwrap(failure);
+            String message = "Failed to negotiate message connection to "
+                    + username + " (" + ipEndpoint + "): "
+                    + message(cause);
+            diagnostic.debug(message + " (type: " + connection.getType() + ", id: " + connection.getId() + ")");
+            connection.close();
+            throw new CompletionException(new ConnectionException(message, cause));
+        } finally {
+            directCancellation.close();
+            indirectCancellation.close();
+        }
+        diagnostic.debug("Message connection to " + username + " (" + ipEndpoint
+                + ") established. (type: " + connection.getType()
+                + ", id: " + connection.getId() + ")");
+        return connection;
     }
 
-    private CompletableFuture<MessageConnection> getMessageConnectionOutboundDirectAsync(
+    private MessageConnection establishOutboundDirectMessageConnection(
             String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal) {
         diagnostic.debug("Attempting direct message connection to " + username + " (" + ipEndpoint + ")");
         MessageConnection connection = connectionFactory.getMessageConnection(
@@ -733,32 +701,29 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT));
         attachPeerMessageListeners(connection);
         connection.addDisconnectedListener(provisionalDisconnectedListener);
-        // A thread of its own because this is one arm of the direct/indirect
-        // race, and racing is one of the two things in this library a second
-        // thread genuinely buys.
-        return NetworkExecutor.supplyAsync(() -> {
-            try {
-                connection.connect(cancellationSignal);
-            } catch (Throwable failure) {
-                diagnostic.debug("Failed to establish a direct message connection to "
-                        + username + " (" + ipEndpoint + "): "
-                        + message(unwrap(failure)));
-                connection.close();
-                throw new CompletionException(unwrap(failure));
-            }
-            diagnostic.debug("Direct message connection to " + username + " ("
-                    + ipEndpoint + ") established. (type: "
-                    + connection.getType() + ", id: "
-                    + connection.getId() + ")");
-            return connection;
-        });
+        try {
+            connection.connect(cancellationSignal);
+        } catch (Throwable failure) {
+            diagnostic.debug("Failed to establish a direct message connection to "
+                    + username + " (" + ipEndpoint + "): "
+                    + message(unwrap(failure)));
+            connection.close();
+            throw new CompletionException(unwrap(failure));
+        }
+        diagnostic.debug("Direct message connection to " + username + " ("
+                + ipEndpoint + ") established. (type: "
+                + connection.getType() + ", id: "
+                + connection.getId() + ")");
+        return connection;
     }
 
-    private CompletableFuture<MessageConnection> getMessageConnectionOutboundIndirectAsync(
+    private MessageConnection establishOutboundIndirectMessageConnection(
             String username, int solicitationToken, CancellationSignal cancellationSignal) {
         diagnostic.debug("Soliciting indirect message connection to " + username + " with token " + solicitationToken);
         pendingSolicitations.putIfAbsent(solicitationToken, username);
-        CompletableFuture<Connection> incoming = NetworkExecutor.supplyAsync(() -> {
+        try {
+            // Registered before the request that provokes it: the peer can be
+            // knocking on the listener before this write returns.
             Wait<Connection> wait = client.getWaiter()
                     .register(
                             new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),
@@ -769,45 +734,39 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                     .write(
                             new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.PEER),
                             cancellationSignal);
-            return wait.await();
-        });
-
-        return incoming.thenApply(accepted -> {
-                    try {
-                        MessageConnection connection = connectionFactory.getMessageConnection(
-                                username,
-                                accepted.getIpEndpoint(),
-                                client.getOptions().getPeerConnectionOptions(),
-                                accepted.handoffTcpClient());
-                        diagnostic.debug("Indirect message connection to " + username + " ("
-                                + accepted.getIpEndpoint()
-                                + ") handed off. (old: " + accepted.getId()
-                                + ", new: " + connection.getId() + ")");
-                        connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.INDIRECT));
-                        attachPeerMessageListeners(connection);
-                        connection.addDisconnectedListener(provisionalDisconnectedListener);
-                        diagnostic.debug("Indirect message connection to " + username + " ("
-                                + connection.getIpEndpoint()
-                                + ") established. (type: " + connection.getType()
-                                + ", id: " + connection.getId() + ")");
-                        return connection;
-                    } finally {
-                        accepted.close();
-                    }
-                })
-                .handle((connection, failure) -> {
-                    pendingSolicitations.remove(solicitationToken, username);
-                    if (failure != null) {
-                        diagnostic.debug("Failed to establish an indirect message connection to "
-                                + username + " with token " + solicitationToken
-                                + ": " + message(unwrap(failure)));
-                        throw new CompletionException(unwrap(failure));
-                    }
-                    return connection;
-                });
+            Connection accepted = wait.await();
+            try {
+                MessageConnection connection = connectionFactory.getMessageConnection(
+                        username,
+                        accepted.getIpEndpoint(),
+                        client.getOptions().getPeerConnectionOptions(),
+                        accepted.handoffTcpClient());
+                diagnostic.debug("Indirect message connection to " + username + " ("
+                        + accepted.getIpEndpoint()
+                        + ") handed off. (old: " + accepted.getId()
+                        + ", new: " + connection.getId() + ")");
+                connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.INDIRECT));
+                attachPeerMessageListeners(connection);
+                connection.addDisconnectedListener(provisionalDisconnectedListener);
+                diagnostic.debug("Indirect message connection to " + username + " ("
+                        + connection.getIpEndpoint()
+                        + ") established. (type: " + connection.getType()
+                        + ", id: " + connection.getId() + ")");
+                return connection;
+            } finally {
+                accepted.close();
+            }
+        } catch (Throwable failure) {
+            diagnostic.debug("Failed to establish an indirect message connection to "
+                    + username + " with token " + solicitationToken
+                    + ": " + message(unwrap(failure)));
+            throw new CompletionException(unwrap(failure));
+        } finally {
+            pendingSolicitations.remove(solicitationToken, username);
+        }
     }
 
-    private CompletableFuture<Connection> getTransferConnectionOutboundDirectAsync(
+    private Connection establishOutboundDirectTransferConnection(
             InetSocketAddress ipEndpoint, int token, CancellationSignal cancellationSignal) {
         diagnostic.debug("Attempting direct transfer connection for token " + token + " to " + ipEndpoint);
         Connection connection = connectionFactory.getTransferConnection(
@@ -819,84 +778,73 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                         + disconnectMessage(eventData) + ". (type: "
                         + connection.getType() + ", id: "
                         + connection.getId() + ")"));
-        return NetworkExecutor.supplyAsync(() -> {
-            try {
-                connection.connect(cancellationSignal);
-            } catch (Throwable failure) {
-                diagnostic.debug("Failed to establish a direct transfer connection "
-                        + "for token " + token + " to (" + ipEndpoint
-                        + "): " + message(unwrap(failure)));
-                connection.close();
-                throw new CompletionException(unwrap(failure));
-            }
-            diagnostic.debug("Direct transfer connection for " + token + " to "
-                    + connection.getIpEndpoint()
-                    + " established. (type: " + connection.getType()
-                    + ", id: " + connection.getId() + ")");
-            return connection;
-        });
+        try {
+            connection.connect(cancellationSignal);
+        } catch (Throwable failure) {
+            diagnostic.debug("Failed to establish a direct transfer connection "
+                    + "for token " + token + " to (" + ipEndpoint
+                    + "): " + message(unwrap(failure)));
+            connection.close();
+            throw new CompletionException(unwrap(failure));
+        }
+        diagnostic.debug("Direct transfer connection for " + token + " to "
+                + connection.getIpEndpoint()
+                + " established. (type: " + connection.getType()
+                + ", id: " + connection.getId() + ")");
+        return connection;
     }
 
-    private CompletableFuture<Connection> getTransferConnectionOutboundIndirectAsync(
+    private Connection establishOutboundIndirectTransferConnection(
             String username, int token, CancellationSignal cancellationSignal) {
         diagnostic.debug("Soliciting indirect transfer connection to " + username + " with token " + token);
         int solicitationToken = client.getNextToken();
         pendingSolicitations.putIfAbsent(solicitationToken, username);
-        return NetworkExecutor.supplyAsync(() -> {
-                    Wait<Connection> wait = client.getWaiter()
-                            .register(
-                                    new WaitKey(
-                                            Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),
-                                    Connection.class,
-                                    client.getOptions()
-                                            .getTransferConnectionOptions()
-                                            .getConnectTimeout(),
-                                    cancellationSignal);
-                    client.getServerConnection()
-                            .write(
-                                    new ConnectToPeerRequest(
-                                            solicitationToken, username, Constants.ConnectionType.TRANSFER),
-                                    cancellationSignal);
-                    return wait.await();
-                })
-                .thenApply(accepted -> {
-                    try {
-                        Connection connection = connectionFactory.getTransferConnection(
-                                accepted.getIpEndpoint(),
-                                client.getOptions().getTransferConnectionOptions(),
-                                accepted.handoffTcpClient());
-                        diagnostic.debug("Indirect transfer connection to " + username + " ("
+        try {
+            Wait<Connection> wait = client.getWaiter()
+                    .register(
+                            new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),
+                            Connection.class,
+                            client.getOptions().getTransferConnectionOptions().getConnectTimeout(),
+                            cancellationSignal);
+            client.getServerConnection()
+                    .write(
+                            new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.TRANSFER),
+                            cancellationSignal);
+            Connection accepted = wait.await();
+            try {
+                Connection connection = connectionFactory.getTransferConnection(
+                        accepted.getIpEndpoint(),
+                        client.getOptions().getTransferConnectionOptions(),
+                        accepted.handoffTcpClient());
+                diagnostic.debug("Indirect transfer connection to " + username + " ("
+                        + accepted.getIpEndpoint()
+                        + ") handed off. (old: " + accepted.getId()
+                        + ", new: " + connection.getId() + ")");
+                connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.INDIRECT));
+                connection.addDisconnectedListener(
+                        (sender, eventData) -> diagnostic.debug("Transfer connection for token " + token + " ("
                                 + accepted.getIpEndpoint()
-                                + ") handed off. (old: " + accepted.getId()
-                                + ", new: " + connection.getId() + ")");
-                        connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.INDIRECT));
-                        connection.addDisconnectedListener(
-                                (sender, eventData) -> diagnostic.debug("Transfer connection for token " + token + " ("
-                                        + accepted.getIpEndpoint()
-                                        + ") disconnected: "
-                                        + disconnectMessage(eventData) + ". (type: "
-                                        + connection.getType() + ", id: "
-                                        + connection.getId() + ")"));
-                        diagnostic.debug("Indirect transfer connection for " + token + " ("
-                                + connection.getIpEndpoint()
-                                + ") established. (type: "
+                                + ") disconnected: "
+                                + disconnectMessage(eventData) + ". (type: "
                                 + connection.getType() + ", id: "
-                                + connection.getId() + ")");
-                        return connection;
-                    } finally {
-                        accepted.close();
-                    }
-                })
-                .handle((connection, failure) -> {
-                    pendingSolicitations.remove(solicitationToken, username);
-                    if (failure != null) {
-                        diagnostic.debug("Failed to establish an indirect transfer "
-                                + "connection to " + username + " with token "
-                                + token + ": " + message(unwrap(failure)));
-                        throw new CompletionException(unwrap(failure));
-                    }
-                    return connection;
-                });
+                                + connection.getId() + ")"));
+                diagnostic.debug("Indirect transfer connection for " + token + " ("
+                        + connection.getIpEndpoint()
+                        + ") established. (type: "
+                        + connection.getType() + ", id: "
+                        + connection.getId() + ")");
+                return connection;
+            } finally {
+                accepted.close();
+            }
+        } catch (Throwable failure) {
+            diagnostic.debug("Failed to establish an indirect transfer "
+                    + "connection to " + username + " with token "
+                    + token + ": " + message(unwrap(failure)));
+            throw new CompletionException(unwrap(failure));
+        } finally {
+            pendingSolicitations.remove(solicitationToken, username);
+        }
     }
 
     private void attachPeerMessageListeners(MessageConnection connection) {
@@ -950,27 +898,6 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         }
     }
 
-    private static <T> CompletableFuture<Winner<T>> firstSuccessful(
-            CompletableFuture<T> first, CompletableFuture<T> second) {
-        CompletableFuture<Winner<T>> result = new CompletableFuture<>();
-        AtomicReference<Throwable> firstFailure = new AtomicReference<>();
-        first.whenComplete((value, failure) -> {
-            if (failure == null) {
-                result.complete(new Winner<>(value, first));
-            } else if (firstFailure.getAndSet(unwrap(failure)) != null) {
-                result.completeExceptionally(unwrap(failure));
-            }
-        });
-        second.whenComplete((value, failure) -> {
-            if (failure == null) {
-                result.complete(new Winner<>(value, second));
-            } else if (firstFailure.getAndSet(unwrap(failure)) != null) {
-                result.completeExceptionally(unwrap(failure));
-            }
-        });
-        return result;
-    }
-
     private static int littleEndianInteger(byte[] bytes) {
         return ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).getInt();
     }
@@ -1005,8 +932,6 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         }
         return eventData.getMessage();
     }
-
-    private record Winner<T>(T value, CompletableFuture<T> source) {}
 
     private static final class LinkedCancellation implements AutoCloseable {
         private final CancellationController source = new CancellationController();

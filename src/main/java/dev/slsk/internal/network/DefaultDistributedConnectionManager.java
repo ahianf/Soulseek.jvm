@@ -364,9 +364,13 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                 + String.join(
                         ", ", snapshot.stream().map(PeerEndpoint::username).toList()));
         CancellationController cancellation = new CancellationController();
+        // One thread per candidate: every candidate is attempted at once and
+        // the best of whoever answers is adopted. Each attempt is blocking now;
+        // the fan-out over them is what still needs a future, and Phase 3's
+        // DistributedNetwork owns replacing it.
         List<CompletableFuture<ParentCandidate>> tasks = snapshot.stream()
-                .map(candidate -> getParentCandidateConnectionAsync(
-                        candidate.username(), candidate.ipEndpoint(), cancellation.getSignal()))
+                .map(candidate -> NetworkExecutor.supplyAsync(() -> getParentCandidateConnection(
+                        candidate.username(), candidate.ipEndpoint(), cancellation.getSignal())))
                 .toList();
 
         CompletableFuture<Void> settled = CompletableFuture.allOf(
@@ -857,173 +861,156 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         });
     }
 
-    private CompletableFuture<ParentCandidate> getParentCandidateConnectionAsync(
+    private ParentCandidate getParentCandidateConnection(
             String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal) {
         LinkedCancellation directCancellation = new LinkedCancellation(cancellationSignal);
         LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationSignal);
         diagnostic.debug("Attempting simultaneous direct and indirect parent candidate " + "connections to " + username
                 + " (" + ipEndpoint + ")");
-        CompletableFuture<MessageConnection> direct =
-                getParentCandidateConnectionDirectAsync(username, ipEndpoint, directCancellation.token());
-        CompletableFuture<MessageConnection> indirect =
-                getParentCandidateConnectionIndirectAsync(username, indirectCancellation.token());
 
-        return firstSuccessful(direct, indirect)
-                .thenCompose(winner -> {
-                    boolean directWon = winner.source() == direct;
-                    MessageConnection connection = winner.value();
-                    diagnostic.debug((directWon ? "Direct" : "Indirect")
-                            + " parent candidate connection to " + username + " ("
-                            + ipEndpoint
-                            + ") established first, attempting to cancel "
-                            + (directWon ? "indirect" : "direct") + " connection.");
-                    (directWon ? indirectCancellation : directCancellation).cancel();
-                    CompletableFuture<BranchInformation> initialization =
-                            waitForParentCandidateConnectionInitializationAsync(connection, cancellationSignal);
-                    CompletableFuture<Void> negotiation = NetworkExecutor.runAsync(() -> {
-                        if (directWon) {
-                            connection.write(
-                                    new PeerInit(
-                                                    client.getUsername(),
-                                                    Constants.ConnectionType.DISTRIBUTED,
-                                                    client.getNextToken())
-                                            .toByteArray(),
-                                    token(cancellationSignal));
-                        } else {
-                            connection.startReadingContinuously();
-                        }
-                    });
-                    diagnostic.debug((directWon ? "Direct" : "Indirect")
-                            + " parent candidate connection to " + username + " ("
-                            + ipEndpoint + ") initialized.  Waiting for branch "
-                            + "information and first search request. (id: "
-                            + connection.getId() + ")");
-                    return negotiation.thenCompose(ignored -> initialization).handle((branch, failure) -> {
-                        directCancellation.close();
-                        indirectCancellation.close();
-                        if (failure != null) {
-                            Throwable cause = unwrap(failure);
-                            String message = "Failed to negotiate parent candidate "
-                                    + "connection to " + username + " ("
-                                    + ipEndpoint + "): " + message(cause);
-                            diagnostic.debug(
-                                    message + " (type: " + connection.getType() + ", id: " + connection.getId() + ")");
-                            connection.close();
-                            throw new CompletionException(new ConnectionException(message, cause));
-                        }
-                        diagnostic.debug("Parent candidate connection to " + username + " ("
-                                + ipEndpoint + ") established. (type: "
-                                + connection.getType() + ", id: "
-                                + connection.getId() + ")");
-                        return new ParentCandidate(connection, branch.level(), branch.root());
-                    });
-                })
-                .handle((candidate, failure) -> {
-                    if (failure != null) {
-                        directCancellation.close();
-                        indirectCancellation.close();
-                        Throwable cause = unwrap(failure);
-                        if (cause instanceof ConnectionException) {
-                            throw new CompletionException(cause);
-                        }
-                        String message = "Failed to establish a direct or indirect parent "
-                                + "candidate connection to " + username + " ("
-                                + ipEndpoint + ")";
-                        diagnostic.debug(message);
-                        throw new CompletionException(new ConnectionException(message));
-                    }
-                    return candidate;
-                });
+        FirstSuccess.Winner<MessageConnection> winner;
+        try {
+            winner = FirstSuccess.race(
+                    () -> getParentCandidateConnectionDirect(username, ipEndpoint, directCancellation.token()),
+                    () -> getParentCandidateConnectionIndirect(username, indirectCancellation.token()));
+        } catch (Throwable failure) {
+            directCancellation.close();
+            indirectCancellation.close();
+            Throwable cause = unwrap(failure);
+            if (cause instanceof ConnectionException) {
+                throw new CompletionException(cause);
+            }
+            String message = "Failed to establish a direct or indirect parent "
+                    + "candidate connection to " + username + " ("
+                    + ipEndpoint + ")";
+            diagnostic.debug(message);
+            throw new CompletionException(new ConnectionException(message));
+        }
+
+        boolean directWon = winner.first();
+        MessageConnection connection = winner.value();
+        diagnostic.debug((directWon ? "Direct" : "Indirect")
+                + " parent candidate connection to " + username + " ("
+                + ipEndpoint
+                + ") established first, attempting to cancel "
+                + (directWon ? "indirect" : "direct") + " connection.");
+        (directWon ? indirectCancellation : directCancellation).cancel();
+
+        // Registered before the negotiation that provokes them: the candidate
+        // sends its branch information the moment it hears from us.
+        Wait<BranchInformation> initialization = registerParentCandidateInitialization(connection, cancellationSignal);
+        try {
+            if (directWon) {
+                connection.write(
+                        new PeerInit(client.getUsername(), Constants.ConnectionType.DISTRIBUTED, client.getNextToken())
+                                .toByteArray(),
+                        token(cancellationSignal));
+            } else {
+                connection.startReadingContinuously();
+            }
+            diagnostic.debug((directWon ? "Direct" : "Indirect")
+                    + " parent candidate connection to " + username + " ("
+                    + ipEndpoint + ") initialized.  Waiting for branch "
+                    + "information and first search request. (id: "
+                    + connection.getId() + ")");
+            BranchInformation branch = initialization.await();
+            diagnostic.debug("Parent candidate connection to " + username + " ("
+                    + ipEndpoint + ") established. (type: "
+                    + connection.getType() + ", id: "
+                    + connection.getId() + ")");
+            return new ParentCandidate(connection, branch.level(), branch.root());
+        } catch (Throwable failure) {
+            Throwable cause = unwrap(failure);
+            String message = "Failed to negotiate parent candidate "
+                    + "connection to " + username + " ("
+                    + ipEndpoint + "): " + message(cause);
+            diagnostic.debug(message + " (type: " + connection.getType() + ", id: " + connection.getId() + ")");
+            connection.close();
+            throw new CompletionException(new ConnectionException(message, cause));
+        } finally {
+            directCancellation.close();
+            indirectCancellation.close();
+        }
     }
 
-    private CompletableFuture<MessageConnection> getParentCandidateConnectionDirectAsync(
+    private MessageConnection getParentCandidateConnectionDirect(
             String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal) {
         diagnostic.debug("Attempting direct parent candidate connection to " + username + " (" + ipEndpoint + ")");
         MessageConnection connection = connectionFactory.getDistributedConnection(
                 username, ipEndpoint, client.getOptions().getDistributedConnectionOptions());
         connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT));
         connection.addDisconnectedListener(parentCandidateDisconnectedListener);
-        return NetworkExecutor.supplyAsync(() -> {
-            try {
-                connection.connect(cancellationSignal);
-            } catch (Throwable failure) {
-                diagnostic.debug("Failed to establish a direct parent candidate "
-                        + "connection to " + username + " ("
-                        + ipEndpoint + "): "
-                        + message(unwrap(failure)));
-                connection.close();
-                throw new CompletionException(unwrap(failure));
-            }
-            diagnostic.debug("Direct parent candidate connection to " + username
-                    + " (" + connection.getIpEndpoint()
-                    + ") established. (type: " + connection.getType()
-                    + ", id: " + connection.getId() + ")");
-            return connection;
-        });
+        try {
+            connection.connect(cancellationSignal);
+        } catch (Throwable failure) {
+            diagnostic.debug("Failed to establish a direct parent candidate "
+                    + "connection to " + username + " ("
+                    + ipEndpoint + "): "
+                    + message(unwrap(failure)));
+            connection.close();
+            throw new CompletionException(unwrap(failure));
+        }
+        diagnostic.debug("Direct parent candidate connection to " + username
+                + " (" + connection.getIpEndpoint()
+                + ") established. (type: " + connection.getType()
+                + ", id: " + connection.getId() + ")");
+        return connection;
     }
 
-    private CompletableFuture<MessageConnection> getParentCandidateConnectionIndirectAsync(
+    private MessageConnection getParentCandidateConnectionIndirect(
             String username, CancellationSignal cancellationSignal) {
         int solicitationToken = client.getNextToken();
         diagnostic.debug(
                 "Soliciting indirect parent candidate connection to " + username + " with token " + solicitationToken);
         pendingSolicitations.putIfAbsent(solicitationToken, username);
-        return NetworkExecutor.supplyAsync(() -> {
-                    Wait<Connection> wait = client.getWaiter()
-                            .register(
-                                    new WaitKey(
-                                            Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION,
-                                            username,
-                                            solicitationToken),
-                                    Connection.class,
-                                    client.getOptions()
-                                            .getDistributedConnectionOptions()
-                                            .getConnectTimeout(),
-                                    cancellationSignal);
-                    client.getServerConnection()
-                            .write(
-                                    new ConnectToPeerRequest(
-                                            solicitationToken, username, Constants.ConnectionType.DISTRIBUTED),
-                                    cancellationSignal);
-                    return wait.await();
-                })
-                .thenApply(accepted -> {
-                    try {
-                        MessageConnection connection = connectionFactory.getDistributedConnection(
-                                username,
-                                accepted.getIpEndpoint(),
-                                client.getOptions().getDistributedConnectionOptions(),
-                                accepted.handoffTcpClient());
-                        diagnostic.debug("Indirect parent candidate connection to " + username
-                                + " (" + accepted.getIpEndpoint()
-                                + ") handed off. (old: " + accepted.getId()
-                                + ", new: " + connection.getId() + ")");
-                        connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.INDIRECT));
-                        connection.addDisconnectedListener(parentCandidateDisconnectedListener);
-                        diagnostic.debug("Indirect parent candidate connection to " + username
-                                + " (" + connection.getIpEndpoint()
-                                + ") established. (type: "
-                                + connection.getType() + ", id: "
-                                + connection.getId() + ")");
-                        return connection;
-                    } finally {
-                        accepted.close();
-                    }
-                })
-                .handle((connection, failure) -> {
-                    pendingSolicitations.remove(solicitationToken, username);
-                    if (failure != null) {
-                        diagnostic.debug("Failed to establish an indirect parent candidate "
-                                + "connection to " + username + " with token "
-                                + solicitationToken + ": "
-                                + message(unwrap(failure)));
-                        throw new CompletionException(unwrap(failure));
-                    }
-                    return connection;
-                });
+        try {
+            Wait<Connection> wait = client.getWaiter()
+                    .register(
+                            new WaitKey(
+                                    Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION, username, solicitationToken),
+                            Connection.class,
+                            client.getOptions()
+                                    .getDistributedConnectionOptions()
+                                    .getConnectTimeout(),
+                            cancellationSignal);
+            client.getServerConnection()
+                    .write(
+                            new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.DISTRIBUTED),
+                            cancellationSignal);
+            Connection accepted = wait.await();
+            try {
+                MessageConnection connection = connectionFactory.getDistributedConnection(
+                        username,
+                        accepted.getIpEndpoint(),
+                        client.getOptions().getDistributedConnectionOptions(),
+                        accepted.handoffTcpClient());
+                diagnostic.debug("Indirect parent candidate connection to " + username
+                        + " (" + accepted.getIpEndpoint()
+                        + ") handed off. (old: " + accepted.getId()
+                        + ", new: " + connection.getId() + ")");
+                connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.INDIRECT));
+                connection.addDisconnectedListener(parentCandidateDisconnectedListener);
+                diagnostic.debug("Indirect parent candidate connection to " + username
+                        + " (" + connection.getIpEndpoint()
+                        + ") established. (type: "
+                        + connection.getType() + ", id: "
+                        + connection.getId() + ")");
+                return connection;
+            } finally {
+                accepted.close();
+            }
+        } catch (Throwable failure) {
+            diagnostic.debug("Failed to establish an indirect parent candidate "
+                    + "connection to " + username + " with token "
+                    + solicitationToken + ": "
+                    + message(unwrap(failure)));
+            throw new CompletionException(unwrap(failure));
+        } finally {
+            pendingSolicitations.remove(solicitationToken, username);
+        }
     }
 
-    private CompletableFuture<BranchInformation> waitForParentCandidateConnectionInitializationAsync(
+    private Wait<BranchInformation> registerParentCandidateInitialization(
             MessageConnection connection, CancellationSignal cancellationSignal) {
         connection.addMessageReadListener(parentInitializationListener);
         // All three are registered before any is awaited: the candidate sends
@@ -1046,31 +1033,31 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                         new WaitKey(Constants.WaitKey.SEARCH_REQUEST_MESSAGE, connection.getId()),
                         null,
                         token(cancellationSignal));
-        return NetworkExecutor.supplyAsync(() -> {
-                    int level = branchLevel.await();
-                    search.await();
-                    if (level > 0) {
-                        return new BranchInformation(level, branchRoot.await());
-                    }
-                    diagnostic.debug("Received branch level 0 from parent candidate "
-                            + connection.getUsername()
-                            + "; this user is a branch root.");
-                    return new BranchInformation(level, connection.getUsername());
-                })
-                .handle((branch, failure) -> {
-                    connection.removeMessageReadListener(parentInitializationListener);
-                    if (failure != null) {
-                        connection.disconnect("One or more required messages was not received.");
-                        throw new CompletionException(
-                                new ConnectionException("Failed to retrieve branch info from parent "
-                                        + "candidate connection to "
-                                        + connection.getUsername() + " ("
-                                        + connection.getIpEndpoint()
-                                        + "); one or more required messages was not "
-                                        + "received. (id: " + connection.getId() + ")"));
-                    }
-                    return branch;
-                });
+        // The three waits are live from here; awaiting them is the caller's,
+        // after it has written whatever provokes the candidate into answering.
+        return () -> {
+            try {
+                int level = branchLevel.await();
+                search.await();
+                if (level > 0) {
+                    return new BranchInformation(level, branchRoot.await());
+                }
+                diagnostic.debug("Received branch level 0 from parent candidate "
+                        + connection.getUsername()
+                        + "; this user is a branch root.");
+                return new BranchInformation(level, connection.getUsername());
+            } catch (Throwable failure) {
+                connection.disconnect("One or more required messages was not received.");
+                throw new CompletionException(new ConnectionException("Failed to retrieve branch info from parent "
+                        + "candidate connection to "
+                        + connection.getUsername() + " ("
+                        + connection.getIpEndpoint()
+                        + "); one or more required messages was not "
+                        + "received. (id: " + connection.getId() + ")"));
+            } finally {
+                connection.removeMessageReadListener(parentInitializationListener);
+            }
+        };
     }
 
     private void attachChildMessageListeners(MessageConnection connection) {
@@ -1212,27 +1199,6 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         }
     }
 
-    private static <T> CompletableFuture<Winner<T>> firstSuccessful(
-            CompletableFuture<T> first, CompletableFuture<T> second) {
-        CompletableFuture<Winner<T>> result = new CompletableFuture<>();
-        AtomicReference<Throwable> failure = new AtomicReference<>();
-        first.whenComplete((value, firstFailure) -> {
-            if (firstFailure == null) {
-                result.complete(new Winner<>(value, first));
-            } else if (failure.getAndSet(unwrap(firstFailure)) != null) {
-                result.completeExceptionally(unwrap(firstFailure));
-            }
-        });
-        second.whenComplete((value, secondFailure) -> {
-            if (secondFailure == null) {
-                result.complete(new Winner<>(value, second));
-            } else if (failure.getAndSet(unwrap(secondFailure)) != null) {
-                result.completeExceptionally(unwrap(secondFailure));
-            }
-        });
-        return result;
-    }
-
     private static CancellationSignal token(CancellationSignal token) {
         return token == null ? CancellationSignal.none() : token;
     }
@@ -1249,8 +1215,6 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     private static String message(Throwable failure) {
         return failure.getMessage() == null ? "" : failure.getMessage();
     }
-
-    private record Winner<T>(T value, CompletableFuture<T> source) {}
 
     private record ParentCandidate(MessageConnection connection, int branchLevel, String branchRoot) {}
 
