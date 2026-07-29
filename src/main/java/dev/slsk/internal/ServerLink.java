@@ -107,7 +107,7 @@ final class ServerLink {
      * @param cancellationSignal the cancellation signal
      */
     void write(OutgoingMessage message, CancellationSignal cancellationSignal) {
-        connection.write(message, token(cancellationSignal));
+        connection.write(message, CommonUtils.token(cancellationSignal));
     }
 
     /**
@@ -120,7 +120,7 @@ final class ServerLink {
      * @param cancellationSignal the cancellation signal
      */
     void writeBytes(byte[] message, CancellationSignal cancellationSignal) {
-        connection.write(message, token(cancellationSignal));
+        connection.write(message, CommonUtils.token(cancellationSignal));
     }
 
     /**
@@ -133,7 +133,7 @@ final class ServerLink {
      */
     void command(
             OutgoingMessage message, WaitKey waitKey, CancellationSignal cancellationSignal, String failurePrefix) {
-        CancellationSignal signal = token(cancellationSignal);
+        CancellationSignal signal = CommonUtils.token(cancellationSignal);
         try {
             Wait<Void> wait = waiter.register(waitKey, null, signal);
             write(message, signal);
@@ -163,7 +163,7 @@ final class ServerLink {
             CancellationSignal cancellationSignal,
             String failurePrefix,
             Class<? extends Throwable>... preservedFailures) {
-        CancellationSignal signal = token(cancellationSignal);
+        CancellationSignal signal = CommonUtils.token(cancellationSignal);
         try {
             Wait<T> wait = waiter.register(waitKey, resultType, null, signal);
             write(message, signal);
@@ -171,16 +171,6 @@ final class ServerLink {
         } catch (Throwable failure) {
             throw Failures.raise(failure, failurePrefix, preservedFailures);
         }
-    }
-
-    /**
-     * Substitutes an uncancellable signal when the caller supplied none.
-     *
-     * @param cancellationSignal the caller's signal, possibly {@code null}
-     * @return a signal, never {@code null}
-     */
-    static CancellationSignal token(CancellationSignal cancellationSignal) {
-        return cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
     }
 
     void acknowledgePrivateMessage(int privateMessageId) {
@@ -254,7 +244,7 @@ final class ServerLink {
 
     long pingServer(CancellationSignal cancellationSignal) {
         requireLoggedIn("send a ping");
-        CancellationSignal token = token(cancellationSignal);
+        CancellationSignal token = CommonUtils.token(cancellationSignal);
         try {
             Wait<Void> wait = waiter.register(new WaitKey(MessageCode.Server.PING), null, token);
             long started = System.nanoTime();
@@ -340,7 +330,7 @@ final class ServerLink {
     /** Writes a fire-and-forget command, saying what failed if it does. */
     private void send(OutgoingMessage message, CancellationSignal cancellationSignal, String failurePrefix) {
         try {
-            write(message, token(cancellationSignal));
+            write(message, CommonUtils.token(cancellationSignal));
         } catch (Throwable failure) {
             throw Failures.raise(failure, failurePrefix);
         }

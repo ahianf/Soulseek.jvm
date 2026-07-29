@@ -89,8 +89,7 @@ class EngineApiTest {
             "reportBrowseProgress",
             "offerDownload",
             "resolveUserEndpoint",
-            "serveUpload",
-            "writeToPeer");
+            "serveUpload");
 
     /** The connection lifecycle and the state that belongs to it. */
     private static final Set<String> ENGINE = Set.of(

@@ -6,7 +6,6 @@ package dev.slsk.internal;
 import dev.slsk.CancellationSignal;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
-import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.options.SoulseekClientOptions;
 
 /**
@@ -113,16 +112,4 @@ interface EngineContext {
             long currentBytes,
             long totalBytes,
             java.util.concurrent.atomic.AtomicBoolean completed);
-
-    /**
-     * Writes a message to an arbitrary peer connection.
-     *
-     * @param connection the connection to write to
-     * @param message the message to send
-     * @param cancellationSignal the cancellation signal
-     */
-    void writeToPeer(
-            dev.slsk.internal.network.MessageConnection connection,
-            OutgoingMessage message,
-            CancellationSignal cancellationSignal);
 }

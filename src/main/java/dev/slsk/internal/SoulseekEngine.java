@@ -46,7 +46,6 @@ import dev.slsk.internal.messaging.handlers.ServerMessageHandler;
 import dev.slsk.internal.messaging.handlers.ServerMessageHandlerClient;
 import dev.slsk.internal.messaging.messages.LoginRequest;
 import dev.slsk.internal.messaging.messages.LoginResponse;
-import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.messaging.messages.PrivateRoomToggle;
 import dev.slsk.internal.messaging.messages.SetListenPortCommand;
 import dev.slsk.internal.network.ConnectionFactory;
@@ -706,7 +705,7 @@ final class SoulseekEngine
                 new InetSocketAddress(serverAddress, requestedPort),
                 requestedUsername,
                 password,
-                ServerLink.token(cancellationSignal));
+                CommonUtils.token(cancellationSignal));
     }
 
     /**
@@ -751,7 +750,7 @@ final class SoulseekEngine
                 }
             }
         }
-        return reconfigureOptionsInternal(patch, ServerLink.token(cancellationSignal));
+        return reconfigureOptionsInternal(patch, CommonUtils.token(cancellationSignal));
     }
 
     /** Disconnects with the default reason. */
@@ -1381,12 +1380,6 @@ final class SoulseekEngine
     }
 
     @Override
-    public void writeToPeer(
-            MessageConnection connection, OutgoingMessage message, CancellationSignal cancellationSignal) {
-        invokeMessageWrite(connection, message, cancellationSignal);
-    }
-
-    @Override
     public void reportBrowseProgress(
             String requestedUsername,
             BrowseOptions operationOptions,
@@ -1459,11 +1452,6 @@ final class SoulseekEngine
     @Override
     public DiagnosticSink getDiagnostic() {
         return diagnostic;
-    }
-
-    private static void invokeMessageWrite(
-            MessageConnection connection, OutgoingMessage message, CancellationSignal cancellationSignal) {
-        connection.write(message, cancellationSignal == null ? CancellationSignal.none() : cancellationSignal);
     }
 
     @FunctionalInterface

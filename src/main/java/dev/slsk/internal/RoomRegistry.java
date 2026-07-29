@@ -60,7 +60,7 @@ final class RoomRegistry {
     RoomData joinRoom(String roomName, boolean isPrivate, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
         server.requireLoggedIn("join a chat room");
-        CancellationSignal token = ServerLink.token(cancellationSignal);
+        CancellationSignal token = CommonUtils.token(cancellationSignal);
         try {
             // Registered before the write, because the server can answer
             // before the write call returns.
@@ -167,7 +167,7 @@ final class RoomRegistry {
     void leaveRoom(String roomName, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
         server.requireLoggedIn("leave a chat room");
-        CancellationSignal token = ServerLink.token(cancellationSignal);
+        CancellationSignal token = CommonUtils.token(cancellationSignal);
         try {
             Wait<Void> wait =
                     context.getWaiter().register(new WaitKey(MessageCode.Server.LEAVE_ROOM, roomName), null, token);
@@ -228,7 +228,7 @@ final class RoomRegistry {
         CommonUtils.requireNonEmpty(message, "message");
         server.requireLoggedIn("send a chat room message");
         try {
-            server.write(new RoomMessageCommand(roomName, message), ServerLink.token(cancellationSignal));
+            server.write(new RoomMessageCommand(roomName, message), CommonUtils.token(cancellationSignal));
         } catch (Throwable failure) {
             throw Failures.raise(failure, "Failed to send message to room " + roomName + ": ");
         }
@@ -243,7 +243,7 @@ final class RoomRegistry {
         CommonUtils.requireNonEmpty(message, "message");
         server.requireLoggedIn("set chat room tickers");
         try {
-            server.write(new SetRoomTickerCommand(roomName, message), ServerLink.token(cancellationSignal));
+            server.write(new SetRoomTickerCommand(roomName, message), CommonUtils.token(cancellationSignal));
         } catch (Throwable failure) {
             throw Failures.raise(failure, "Failed to set chat room ticker in room " + roomName + ": ");
         }

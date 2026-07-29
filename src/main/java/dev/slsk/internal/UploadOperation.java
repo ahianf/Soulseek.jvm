@@ -18,6 +18,7 @@ import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferStreamException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.internal.EngineEvents.Kind;
+import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Permits;
@@ -179,11 +180,10 @@ final class UploadOperation {
                                     .getPeerConnectionOptions()
                                     .getInactivityTimeout(),
                             cancellationSignal);
-            engine.context.writeToPeer(
-                    messageConnection,
+            messageConnection.write(
                     new TransferRequest(
                             TransferDirection.UPLOAD, upload.getToken(), upload.getFilename(), upload.getSize()),
-                    cancellationSignal);
+                    CommonUtils.token(cancellationSignal));
             engine.context
                     .getDiagnostic()
                     .debug("Wrote transfer request for upload of "
@@ -469,7 +469,7 @@ final class UploadOperation {
             OutgoingMessage message = upload.getState().contains(TransferState.CANCELLED)
                     ? new UploadDenied(upload.getFilename(), "Cancelled")
                     : new UploadFailed(upload.getFilename());
-            engine.context.writeToPeer(messageConnection, message, CancellationSignal.none());
+            messageConnection.write(message, CancellationSignal.none());
         } catch (Throwable ignored) {
             // Failure notification is intentionally best effort.
         }

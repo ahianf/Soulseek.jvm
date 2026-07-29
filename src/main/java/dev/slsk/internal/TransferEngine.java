@@ -309,7 +309,7 @@ final class TransferEngine {
                 startOffset,
                 transferToken,
                 options,
-                ServerLink.token(cancellationSignal));
+                CommonUtils.token(cancellationSignal));
     }
     /** Downloads data to a stream created by a factory. */
     CompletableFuture<Transfer> download(
@@ -435,7 +435,7 @@ final class TransferEngine {
                 transferToken,
                 transferOptions == null ? new TransferOptions() : transferOptions,
                 offer,
-                ServerLink.token(cancellationSignal));
+                CommonUtils.token(cancellationSignal));
     }
     /** Uploads a local file to a peer. */
     CompletableFuture<Transfer> upload(String requestedUsername, String remoteFilename, String localFilename) {
@@ -519,7 +519,7 @@ final class TransferEngine {
                 },
                 transferToken,
                 fileOptions,
-                ServerLink.token(cancellationSignal));
+                CommonUtils.token(cancellationSignal));
     }
     /** Uploads data supplied by an asynchronous stream factory. */
     CompletableFuture<Transfer> upload(
@@ -604,7 +604,7 @@ final class TransferEngine {
                 inputStreamFactory,
                 transferToken,
                 transferOptions == null ? new TransferOptions() : transferOptions,
-                ServerLink.token(cancellationSignal));
+                CommonUtils.token(cancellationSignal));
     }
     /** Enqueues a local-file download. */
     CompletableFuture<CompletableFuture<Transfer>> enqueueDownload(
@@ -910,7 +910,7 @@ final class TransferEngine {
             throw new TransferNotFoundException(
                     "A download of " + filename + " from user " + requestedUsername + " is not active");
         }
-        CancellationSignal token = ServerLink.token(cancellationSignal);
+        CancellationSignal token = CommonUtils.token(cancellationSignal);
         try {
             Wait<PlaceInQueueResponse> responseWait = context.getWaiter()
                     .register(
@@ -921,7 +921,7 @@ final class TransferEngine {
             java.net.InetSocketAddress endpoint = context.resolveUserEndpoint(requestedUsername, token);
             dev.slsk.internal.network.MessageConnection connection =
                     context.getPeerConnectionManager().getOrAddMessageConnection(requestedUsername, endpoint, token);
-            context.writeToPeer(connection, new PlaceInQueueRequest(filename), token);
+            connection.write(new PlaceInQueueRequest(filename), CommonUtils.token(token));
             return responseWait.await().getPlaceInQueue();
         } catch (Throwable failure) {
             throw Failures.raise(

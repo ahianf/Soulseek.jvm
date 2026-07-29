@@ -7,6 +7,7 @@ import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.DuplicateTokenException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.internal.EngineEvents.Kind;
+import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.events.SearchResponseReceivedEvent;
@@ -203,7 +204,7 @@ final class SearchDomain {
             CancellationSignal cancellationSignal) {
         SearchInvocation invocation = validateSearch(query, scope, token, searchOptions);
         List<SearchResponse> responses = Collections.synchronizedList(new ArrayList<>());
-        Search search = searchToCallback(invocation, responses::add, ServerLink.token(cancellationSignal));
+        Search search = searchToCallback(invocation, responses::add, CommonUtils.token(cancellationSignal));
         synchronized (responses) {
             return new SearchResult(search, responses);
         }
@@ -292,7 +293,7 @@ final class SearchDomain {
         SearchQuery validatedQuery = validateSearchQuery(query);
         Objects.requireNonNull(responseHandler, "responseHandler");
         SearchInvocation invocation = validateSearch(validatedQuery, scope, token, searchOptions);
-        return searchToCallback(invocation, responseHandler, ServerLink.token(cancellationSignal));
+        return searchToCallback(invocation, responseHandler, CommonUtils.token(cancellationSignal));
     }
 
     SearchInvocation validateSearch(

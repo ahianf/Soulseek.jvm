@@ -77,7 +77,7 @@ final class UserDirectory {
     UserInfo getUserInfo(String requestedUsername, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("fetch user information");
-        CancellationSignal token = ServerLink.token(cancellationSignal);
+        CancellationSignal token = CommonUtils.token(cancellationSignal);
         try {
             Wait<UserInfo> infoWait = context.getWaiter()
                     .register(
@@ -88,7 +88,7 @@ final class UserDirectory {
             InetSocketAddress endpoint = getUserEndpoint(requestedUsername, token);
             MessageConnection connection =
                     context.getPeerConnectionManager().getOrAddMessageConnection(requestedUsername, endpoint, token);
-            context.writeToPeer(connection, new UserInfoRequest(), token);
+            connection.write(new UserInfoRequest(), CommonUtils.token(token));
             return infoWait.await();
         } catch (Throwable failure) {
             throw Failures.raise(
@@ -173,7 +173,7 @@ final class UserDirectory {
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("add users");
         try {
-            server.write(new UnwatchUserCommand(requestedUsername), ServerLink.token(cancellationSignal));
+            server.write(new UnwatchUserCommand(requestedUsername), CommonUtils.token(cancellationSignal));
         } catch (Throwable failure) {
             throw Failures.raise(failure, "Failed to unwatch user " + requestedUsername + ": ");
         }
@@ -190,7 +190,7 @@ final class UserDirectory {
         }
         server.requireLoggedIn("grant user privileges");
         try {
-            server.write(new GivePrivilegesCommand(requestedUsername, days), ServerLink.token(cancellationSignal));
+            server.write(new GivePrivilegesCommand(requestedUsername, days), CommonUtils.token(cancellationSignal));
         } catch (Throwable failure) {
             throw Failures.raise(
                     failure, "Failed to grant " + days + " days of privileges to " + requestedUsername + ": ");
@@ -214,7 +214,7 @@ final class UserDirectory {
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("browse");
         BrowseOptions operationOptions = browseOptions == null ? new BrowseOptions() : browseOptions;
-        CancellationSignal token = ServerLink.token(cancellationSignal);
+        CancellationSignal token = CommonUtils.token(cancellationSignal);
         WaitKey browseWaitKey = new WaitKey(MessageCode.Peer.BROWSE_RESPONSE, requestedUsername);
         try {
             Wait<BrowseResponse> browseWait =
@@ -231,7 +231,7 @@ final class UserDirectory {
                 InetSocketAddress endpoint = getUserEndpoint(requestedUsername, token);
                 MessageConnection peer = context.getPeerConnectionManager()
                         .getOrAddMessageConnection(requestedUsername, endpoint, token);
-                context.writeToPeer(peer, new BrowseRequest(), token);
+                peer.write(new BrowseRequest(), CommonUtils.token(token));
                 responseConnection = connectionWait.await();
             } catch (Throwable failure) {
                 // The browse wait has no deadline, so nothing else would ever
@@ -287,7 +287,7 @@ final class UserDirectory {
     void connectToUser(String requestedUsername, boolean invalidateCache, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("connect to other users");
-        CancellationSignal token = ServerLink.token(cancellationSignal);
+        CancellationSignal token = CommonUtils.token(cancellationSignal);
         try {
             InetSocketAddress endpoint = getUserEndpoint(requestedUsername, token);
             if (invalidateCache
@@ -308,7 +308,7 @@ final class UserDirectory {
     InetSocketAddress getUserEndpoint(String requestedUsername, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("fetch user endpoint");
-        CancellationSignal token = ServerLink.token(cancellationSignal);
+        CancellationSignal token = CommonUtils.token(cancellationSignal);
         UserEndpointCache cache = context.getClientOptions().getUserEndpointCache();
         if (cache == null) {
             return retrieveUserEndpoint(requestedUsername, token, null);
@@ -402,7 +402,7 @@ final class UserDirectory {
         CommonUtils.requireText(directoryName, "directoryName");
         server.requireLoggedIn("fetch directory contents");
         int tokenValue = operationToken == null ? context.getTokenFactory().nextToken() : operationToken;
-        CancellationSignal token = ServerLink.token(cancellationSignal);
+        CancellationSignal token = CommonUtils.token(cancellationSignal);
         try {
             @SuppressWarnings("unchecked")
             Wait<List<Directory>> contentsWait = (Wait<List<Directory>>) (Wait<?>) context.getWaiter()
@@ -414,7 +414,7 @@ final class UserDirectory {
             InetSocketAddress endpoint = getUserEndpoint(requestedUsername, token);
             MessageConnection connection =
                     context.getPeerConnectionManager().getOrAddMessageConnection(requestedUsername, endpoint, token);
-            context.writeToPeer(connection, new FolderContentsRequest(tokenValue, directoryName), token);
+            connection.write(new FolderContentsRequest(tokenValue, directoryName), CommonUtils.token(token));
             return Collections.unmodifiableList(new ArrayList<>(contentsWait.await()));
         } catch (Throwable failure) {
             throw Failures.raise(

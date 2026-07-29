@@ -19,6 +19,7 @@ import dev.slsk.exceptions.TransferSizeMismatchException;
 import dev.slsk.exceptions.TransferStreamException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.internal.EngineEvents.Kind;
+import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Permits;
@@ -164,10 +165,9 @@ final class DownloadOperation {
                     .getWaiter()
                     .registerIndefinitely(transferStartRequestedWaitKey, TransferRequest.class, cancellationSignal);
 
-            engine.context.writeToPeer(
-                    peerConnection,
+            peerConnection.write(
                     new TransferRequest(TransferDirection.DOWNLOAD, download.getToken(), download.getFilename()),
-                    cancellationSignal);
+                    CommonUtils.token(cancellationSignal));
             engine.context
                     .getDiagnostic()
                     .debug("Wrote transfer request for download of "
@@ -283,10 +283,9 @@ final class DownloadOperation {
                 .getPeerConnectionManager()
                 .awaitTransferConnection(
                         download.getUsername(), download.getFilename(), download.getRemoteToken(), cancellationSignal));
-        engine.context.writeToPeer(
-                refreshed,
+        refreshed.write(
                 new TransferResponse(download.getRemoteToken(), download.getSize() == null ? 0 : download.getSize()),
-                cancellationSignal);
+                CommonUtils.token(cancellationSignal));
         try {
             connection = await(connectionTask);
             engine.context

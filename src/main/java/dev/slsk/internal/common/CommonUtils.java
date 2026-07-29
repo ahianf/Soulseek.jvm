@@ -4,6 +4,7 @@
 
 package dev.slsk.internal.common;
 
+import dev.slsk.CancellationSignal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -16,6 +17,20 @@ import java.util.Queue;
  */
 public final class CommonUtils {
     private CommonUtils() {}
+
+    /**
+     * Substitutes an uncancellable signal when the caller supplied none.
+     *
+     * <p>Every write to the network takes a signal and most callers have none
+     * to give, so the substitution is made once here rather than at each of
+     * them.
+     *
+     * @param cancellationSignal the caller's signal, possibly {@code null}
+     * @return a signal, never {@code null}
+     */
+    public static CancellationSignal token(CancellationSignal cancellationSignal) {
+        return cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
+    }
 
     /**
      * Reports whether a value is null, empty, or consists only of whitespace.
