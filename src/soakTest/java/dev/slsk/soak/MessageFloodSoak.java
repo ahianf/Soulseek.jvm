@@ -42,7 +42,7 @@ class MessageFloodSoak {
             long cpuStart = CpuProbe.processCpuNanos();
             long wallStart = System.nanoTime();
 
-            connection.connectAsync(CancellationSignal.none()).join();
+            connection.connect(CancellationSignal.none());
             Thread.sleep(RUN_MILLIS);
 
             long wallElapsed = System.nanoTime() - wallStart;
@@ -93,7 +93,7 @@ class MessageFloodSoak {
             DefaultMessageConnection connection =
                     new DefaultMessageConnection(peer.endpoint(), new ConnectionOptions(), 4, null);
             try {
-                connection.connectAsync(CancellationSignal.none()).join();
+                connection.connect(CancellationSignal.none());
                 Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
                 int depth = SchedulerProbe.connectionTimerQueueDepth();

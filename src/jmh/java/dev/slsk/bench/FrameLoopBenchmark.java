@@ -28,25 +28,28 @@ import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
 /**
- * Goal 2.1: thread amplification in the framed read path.
+ * Thread amplification in the framed read path: what each plumbing shape costs.
  *
- * <p>Reading one frame currently spans three virtual threads, two of them
- * parked. The loop's own thread calls {@code SocketConnection.readAsync}, which
- * dispatches to a fresh virtual thread and blocks on the future; that thread
- * calls {@code NetworkStream.readAsync}, which dispatches to another fresh
- * virtual thread and blocks on its future; only the third thread touches the
- * stream.
+ * <p>Reading one frame used to span three virtual threads, two of them parked.
+ * The loop's own thread called {@code SocketConnection.readAsync}, which
+ * dispatched to a fresh virtual thread and blocked on the future; that thread
+ * called {@code NetworkStream.readAsync}, which dispatched to another fresh
+ * virtual thread and blocked on its future; only the third thread touched the
+ * stream. It now reads on the loop's own thread, which is {@link
+ * #directBlocking}.
  *
  * <p>This benchmark reads frames from a fixed in-memory byte source through
  * three plumbing strategies over the library's real {@link NetworkExecutor}:
- * direct blocking, one level of dispatch, and the two levels production
- * actually uses. The source is in memory precisely so that the difference
+ * direct blocking, one level of dispatch, and two levels with a cancellation
+ * registration. The source is in memory precisely so that the difference
  * between the three is plumbing and nothing else.
  *
- * <p>The plumbing is modelled rather than driven through {@code
- * SocketConnection}, which needs a socket. The shapes are copied from
- * {@code SocketConnection.async}, {@code SocketConnection.await} and
- * {@code NetworkStreamAdapter.observeCancellation}.
+ * <p><strong>It measures shapes, not this library.</strong> Every strategy is
+ * modelled here rather than driven through {@code SocketConnection}, which
+ * needs a socket, so no change to the library moves these numbers — what moves
+ * is which shape the library is written in. Reading the delta as a before-and-
+ * after of a refactor is a mistake; it is a price list, and the refactor is the
+ * decision to stop paying.
  */
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
@@ -72,7 +75,7 @@ public class FrameLoopBenchmark {
                 .putInt(1);
     }
 
-    /** The floor: read the three fields straight off the stream. */
+    /** The floor, and what the framed read loop does: read straight off the stream. */
     @Benchmark
     public void directBlocking(Blackhole blackhole) throws Exception {
         InputStream source = new ByteArrayInputStream(frame);
@@ -91,12 +94,16 @@ public class FrameLoopBenchmark {
     }
 
     /**
-     * Two dispatches per field plus a cancellation registration, which is what
-     * production does today. The delta against {@link #directBlocking} is the
-     * cost Phase 3 removes.
+     * Two dispatches per field plus a cancellation registration.
+     *
+     * <p>Named {@code productionShape} while it was one. The shapes it mirrors
+     * — {@code SocketConnection.async}, {@code SocketConnection.await} and
+     * {@code NetworkStreamAdapter.observeCancellation} — no longer exist, so
+     * the name would now be a claim about deleted code. Its delta against
+     * {@link #directBlocking} is what the framed read path stopped paying.
      */
     @Benchmark
-    public void productionShape(Blackhole blackhole) throws Exception {
+    public void twoDispatchesPerField(Blackhole blackhole) throws Exception {
         InputStream source = new ByteArrayInputStream(frame);
         blackhole.consume(await(async(() -> await(observed(() -> readDirect(source, 4))))));
         blackhole.consume(await(async(() -> await(observed(() -> readDirect(source, CODE_LENGTH))))));
@@ -116,7 +123,7 @@ public class FrameLoopBenchmark {
         return buffer;
     }
 
-    /** Mirrors {@code SocketConnection.async}. */
+    /** Mirrors the deleted {@code SocketConnection.async}. */
     private <T> CompletableFuture<T> async(Callable<T> callable) {
         CompletableFuture<T> future = new CompletableFuture<>();
         executor.execute(() -> {
@@ -130,7 +137,7 @@ public class FrameLoopBenchmark {
     }
 
     /**
-     * Mirrors {@code NetworkStreamAdapter.readAsync} plus
+     * Mirrors the deleted {@code NetworkStreamAdapter.readAsync} plus
      * {@code observeCancellation}: a second dispatch wrapped in a cancellation
      * registration against the shared non-cancellable singleton.
      */
@@ -142,7 +149,7 @@ public class FrameLoopBenchmark {
         return operation;
     }
 
-    /** Mirrors {@code SocketConnection.await}. */
+    /** Mirrors the deleted {@code SocketConnection.await}. */
     private static <T> T await(CompletableFuture<T> future) throws Exception {
         return future.get();
     }

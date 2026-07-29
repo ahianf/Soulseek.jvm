@@ -120,7 +120,7 @@ class IdleConnectionScalingSoak {
         List<SocketConnection> connections = new ArrayList<>(count);
         for (int index = 0; index < count; index++) {
             SocketConnection connection = new SocketConnection(peer.endpoint(), options);
-            connection.connectAsync(CancellationSignal.none()).join();
+            connection.connect(CancellationSignal.none());
             connections.add(connection);
         }
         return connections;

@@ -31,6 +31,10 @@ import org.junit.jupiter.api.Test;
  */
 class WriteContentionSoak {
 
+    /** A thread per contending writer; a blocking write is what a producer is. */
+    private static final java.util.concurrent.Executor WRITER_THREADS =
+            task -> Thread.ofVirtual().start(task);
+
     private static final int WRITERS = 100;
     private static final int PAYLOAD_BYTES = 8 * 1024 * 1024;
     private static final long OBSERVE_MILLIS = 5_000;
@@ -44,12 +48,16 @@ class WriteContentionSoak {
             ConnectionOptions options = new ConnectionOptions(16_384, 16_384, WRITERS * 2, 10_000, -1, null, null);
             SocketConnection connection = new SocketConnection(peer.endpoint(), options);
             try {
-                connection.connectAsync(CancellationSignal.none()).join();
+                connection.connect(CancellationSignal.none());
 
                 byte[] payload = new byte[PAYLOAD_BYTES];
                 List<CompletableFuture<Void>> writes = new ArrayList<>(WRITERS);
                 for (int index = 0; index < WRITERS; index++) {
-                    writes.add(connection.writeAsync(payload, CancellationSignal.none()));
+                    // A blocking write needs a thread apiece to contend, which
+                    // is what a producer is: these were futures only because
+                    // the write was.
+                    writes.add(CompletableFuture.runAsync(
+                            () -> connection.write(payload, CancellationSignal.none()), WRITER_THREADS));
                 }
 
                 // Let the first write stall against the unread socket, so the
@@ -97,11 +105,12 @@ class WriteContentionSoak {
             ConnectionOptions options = new ConnectionOptions(16_384, 16_384, WRITERS * 2, 10_000, -1, null, null);
             SocketConnection connection = new SocketConnection(peer.endpoint(), options);
             try {
-                connection.connectAsync(CancellationSignal.none()).join();
+                connection.connect(CancellationSignal.none());
 
                 byte[] payload = new byte[PAYLOAD_BYTES];
                 for (int index = 0; index < WRITERS; index++) {
-                    connection.writeAsync(payload, CancellationSignal.none());
+                    CompletableFuture.runAsync(
+                            () -> connection.write(payload, CancellationSignal.none()), WRITER_THREADS);
                 }
                 Thread.sleep(500);
 

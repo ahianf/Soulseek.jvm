@@ -46,7 +46,7 @@ class BlockingListenerSoak {
                     sleepQuietly(LISTENER_BLOCK_MILLIS);
                 });
                 connection.addDisconnectedListener((sender, event) -> allDisconnected.countDown());
-                connection.connectAsync(CancellationSignal.none()).join();
+                connection.connect(CancellationSignal.none());
                 connections[index] = connection;
             }
 

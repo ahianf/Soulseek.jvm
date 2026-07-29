@@ -35,6 +35,19 @@ import org.junit.jupiter.api.Test;
  */
 class CancellationSoak {
 
+    /**
+     * Where a read that is going to be raced against a cancellation runs.
+     *
+     * <p>The reads here are blocking, so racing one needs a thread; the futures
+     * these used to be existed only because the read did.
+     */
+    private static final java.util.concurrent.Executor READERS =
+            task -> Thread.ofVirtual().start(task);
+
+    private static CompletableFuture<Void> reader(Runnable read) {
+        return CompletableFuture.runAsync(read, READERS);
+    }
+
     private static final long TRANSFER_BYTES = 4L * 1024 * 1024 * 1024;
 
     @Test
@@ -45,11 +58,11 @@ class CancellationSoak {
 
             SocketConnection connection = new SocketConnection(peer.endpoint(), new ConnectionOptions());
             try {
-                connection.connectAsync(dev.slsk.CancellationSignal.none()).join();
+                connection.connect(dev.slsk.CancellationSignal.none());
 
                 CancellationController controller = new CancellationController();
-                CompletableFuture<Void> transfer = connection.readAsync(
-                        TRANSFER_BYTES, OutputStream.nullOutputStream(), null, null, controller.getSignal());
+                CompletableFuture<Void> transfer = reader(() -> connection.read(
+                        TRANSFER_BYTES, OutputStream.nullOutputStream(), null, null, controller.getSignal()));
 
                 Thread.sleep(250);
 
@@ -87,11 +100,11 @@ class CancellationSoak {
         try (LoopbackPeer peer = LoopbackPeer.start(LoopbackPeer.Behaviour.IDLE)) {
             SocketConnection connection = new SocketConnection(peer.endpoint(), new ConnectionOptions());
             try {
-                connection.connectAsync(dev.slsk.CancellationSignal.none()).join();
+                connection.connect(dev.slsk.CancellationSignal.none());
 
                 CancellationController controller = new CancellationController();
-                CompletableFuture<Void> read = connection.readAsync(
-                        TRANSFER_BYTES, OutputStream.nullOutputStream(), null, null, controller.getSignal());
+                CompletableFuture<Void> read = reader(() -> connection.read(
+                        TRANSFER_BYTES, OutputStream.nullOutputStream(), null, null, controller.getSignal()));
 
                 // Long enough that the reader is parked in the socket read with
                 // nothing to return.
@@ -127,13 +140,14 @@ class CancellationSoak {
             SocketConnection cancelled = new SocketConnection(peer.endpoint(), new ConnectionOptions());
             SocketConnection bystander = new SocketConnection(peer.endpoint(), new ConnectionOptions());
             try {
-                cancelled.connectAsync(dev.slsk.CancellationSignal.none()).join();
-                bystander.connectAsync(dev.slsk.CancellationSignal.none()).join();
+                cancelled.connect(dev.slsk.CancellationSignal.none());
+                bystander.connect(dev.slsk.CancellationSignal.none());
 
                 CancellationController controller = new CancellationController();
-                CompletableFuture<Void> doomed = cancelled.readAsync(
-                        TRANSFER_BYTES, OutputStream.nullOutputStream(), null, null, controller.getSignal());
-                CompletableFuture<byte[]> survivor = bystander.readAsync(64, dev.slsk.CancellationSignal.none());
+                CompletableFuture<Void> doomed = reader(() -> cancelled.read(
+                        TRANSFER_BYTES, OutputStream.nullOutputStream(), null, null, controller.getSignal()));
+                CompletableFuture<byte[]> survivor = CompletableFuture.supplyAsync(
+                        () -> bystander.read(64, dev.slsk.CancellationSignal.none()), READERS);
 
                 Thread.sleep(250);
                 controller.cancel();

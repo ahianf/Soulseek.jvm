@@ -34,16 +34,14 @@ class LargeTransferSoak {
 
             SocketConnection connection = new SocketConnection(peer.endpoint(), new ConnectionOptions());
             try {
-                connection.connectAsync(CancellationSignal.none()).join();
+                connection.connect(CancellationSignal.none());
 
                 long heapBefore = HeapProbe.liveHeapBytes();
                 long allocStart = HeapProbe.totalAllocatedBytes();
                 long wallStart = System.nanoTime();
 
                 CountingOutputStream sink = new CountingOutputStream();
-                connection
-                        .readAsync(TRANSFER_BYTES, sink, null, null, CancellationSignal.none())
-                        .join();
+                connection.read(TRANSFER_BYTES, sink, null, null, CancellationSignal.none());
 
                 long wallElapsed = System.nanoTime() - wallStart;
                 long allocated = HeapProbe.totalAllocatedBytes() - allocStart;
@@ -95,10 +93,8 @@ class LargeTransferSoak {
             int baseline = SchedulerProbe.connectionTimerQueueDepth();
             SocketConnection connection = new SocketConnection(peer.endpoint(), new ConnectionOptions());
             try {
-                connection.connectAsync(CancellationSignal.none()).join();
-                connection
-                        .readAsync(TRANSFER_BYTES, new CountingOutputStream(), null, null, CancellationSignal.none())
-                        .join();
+                connection.connect(CancellationSignal.none());
+                connection.read(TRANSFER_BYTES, new CountingOutputStream(), null, null, CancellationSignal.none());
 
                 int depth = SchedulerProbe.connectionTimerQueueDepth();
                 assertTrue(
