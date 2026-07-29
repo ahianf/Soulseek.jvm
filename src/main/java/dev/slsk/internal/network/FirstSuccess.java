@@ -25,10 +25,9 @@ import java.util.function.Supplier;
  * <p>This is one of the two places in this library where a second thread buys
  * something a blocking call cannot: two attempts genuinely have to be in flight
  * at the same time. A virtual thread apiece, a one-slot handoff, and the caller
- * blocks on the handoff. It replaces four copies of a {@code firstSuccessful}
- * combinator over {@link java.util.concurrent.CompletableFuture} — two managers
- * with an identical private method each — whose only remaining purpose was to
- * express that rule.
+ * blocks on the handoff. It replaces a private {@code firstSuccessful}
+ * combinator over futures that the two connection managers held a copy of
+ * each, and whose only remaining purpose was to express that rule.
  *
  * <p><strong>The arm that arrives second is closed.</strong> It is a live
  * socket to a peer that nobody will ever read from, and the combinator this

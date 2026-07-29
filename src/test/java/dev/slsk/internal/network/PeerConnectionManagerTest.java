@@ -410,7 +410,17 @@ class PeerConnectionManagerTest {
         assertEquals(1, direct.closeCount);
     }
 
+    /**
+     * The property the cache exists for, and the one the cell has to keep: the
+     * first caller to ask for a peer establishes the connection, and everyone
+     * who asks while that is still in flight gets the same connection rather
+     * than a second socket to the same peer.
+     */
     @Test
+    @org.junit.jupiter.api.Timeout(
+            value = 10,
+            unit = java.util.concurrent.TimeUnit.SECONDS,
+            threadMode = org.junit.jupiter.api.Timeout.ThreadMode.SEPARATE_THREAD)
     void concurrentMessageRequestsShareOneInFlightConnection() {
         Fixture fixture = new Fixture();
         ConnectionProbe direct = ConnectionProbe.message(USERNAME, DIRECT_ENDPOINT);
@@ -419,21 +429,62 @@ class PeerConnectionManagerTest {
         fixture.factory.messageDirect = direct;
         fixture.waiter.defaultFuture = CompletableFuture.failedFuture(new RuntimeException("indirect"));
 
-        // Two callers now block, so each needs a thread; the cache still has
-        // to give them one connection between them.
-        java.util.concurrent.Executor callers = task -> Thread.ofVirtual().start(task);
-        CompletableFuture<MessageConnection> first = CompletableFuture.supplyAsync(
-                () -> fixture.manager()
-                        .getOrAddMessageConnection(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none()),
-                callers);
-        CompletableFuture<MessageConnection> second = CompletableFuture.supplyAsync(
-                () -> fixture.manager()
-                        .getOrAddMessageConnection(USERNAME, DIRECT_ENDPOINT, TOKEN + 1, CancellationSignal.none()),
-                callers);
+        // Every caller blocks, so each needs a thread of its own; the cache
+        // still has to give them one connection between them.
+        List<CompletableFuture<MessageConnection>> callers = requestConcurrently(fixture, 8);
         connect.complete(null);
 
-        assertSame(first.join(), second.join());
+        for (CompletableFuture<MessageConnection> caller : callers) {
+            assertSame(direct.messageConnection(), caller.join());
+        }
         assertEquals(1, fixture.factory.messageDirectCount);
+    }
+
+    /** The other half of the same property: one failure, seen by everyone. */
+    @Test
+    @org.junit.jupiter.api.Timeout(
+            value = 10,
+            unit = java.util.concurrent.TimeUnit.SECONDS,
+            threadMode = org.junit.jupiter.api.Timeout.ThreadMode.SEPARATE_THREAD)
+    void aFailedEstablishmentIsRaisedToEveryConcurrentRequest() {
+        Fixture fixture = new Fixture();
+        ConnectionProbe direct = ConnectionProbe.message(USERNAME, DIRECT_ENDPOINT);
+        CompletableFuture<Void> connect = new CompletableFuture<>();
+        direct.connectFuture = connect;
+        fixture.factory.messageDirect = direct;
+        fixture.waiter.defaultFuture = CompletableFuture.failedFuture(new RuntimeException("indirect"));
+
+        List<CompletableFuture<MessageConnection>> callers = requestConcurrently(fixture, 8);
+        connect.completeExceptionally(new ConnectionException("no route to host"));
+
+        for (CompletableFuture<MessageConnection> caller : callers) {
+            CompletionException thrown = assertThrows(CompletionException.class, caller::join);
+            assertInstanceOf(ConnectionException.class, unwrap(thrown));
+        }
+        assertEquals(1, fixture.factory.messageDirectCount);
+        assertNull(fixture.manager().getCachedMessageConnection(USERNAME));
+    }
+
+    private static List<CompletableFuture<MessageConnection>> requestConcurrently(Fixture fixture, int callers) {
+        java.util.concurrent.Executor threads = task -> Thread.ofVirtual().start(task);
+        List<CompletableFuture<MessageConnection>> requests = new ArrayList<>();
+        for (int caller = 0; caller < callers; caller++) {
+            int solicitationToken = TOKEN + caller;
+            requests.add(CompletableFuture.supplyAsync(
+                    () -> fixture.manager()
+                            .getOrAddMessageConnection(
+                                    USERNAME, DIRECT_ENDPOINT, solicitationToken, CancellationSignal.none()),
+                    threads));
+        }
+        return requests;
+    }
+
+    private static Throwable unwrap(Throwable failure) {
+        Throwable current = failure;
+        while (current instanceof CompletionException && current.getCause() != null) {
+            current = current.getCause();
+        }
+        return current;
     }
 
     @Test

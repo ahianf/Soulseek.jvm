@@ -9,8 +9,6 @@ import dev.slsk.CancellationSignal;
 import dev.slsk.CancellationSubscription;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.internal.common.Constants;
-import dev.slsk.internal.common.Failures;
-import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
@@ -34,13 +32,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 
 /** Manages peer message and transfer connections. */
 public final class DefaultPeerConnectionManager implements PeerConnectionManager {
@@ -48,8 +43,7 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
     private final ConnectionFactory connectionFactory;
     private final DiagnosticSink diagnostic;
     private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
-    private final ConcurrentHashMap<String, CompletableFuture<MessageConnection>> messageConnections =
-            new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ConnectionCell> messageConnections = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, CancellationController> pendingInboundIndirectConnections =
             new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Integer, String> pendingSolicitations = new ConcurrentHashMap<>();
@@ -88,9 +82,9 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
      * Returns the peers there is currently a message connection to.
      *
      * <p>Established ones only. The map holds attempts as well as connections,
-     * and an attempt is a future that does not complete until the peer answers
-     * or the timeout expires — so joining them, as this used to, made reading
-     * the list cost as much as making a connection, and throw when one failed.
+     * and an attempt does not settle until the peer answers or the timeout
+     * expires — so waiting on them, as this used to, made reading the list cost
+     * as much as making a connection, and throw when one failed.
      *
      * <p>That is the wrong shape for something whose only callers are a metrics
      * gauge and a diagnostic. A connection that has not been established is not
@@ -103,11 +97,8 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
     @Override
     public List<PeerEndpoint> getMessageConnections() {
         List<PeerEndpoint> snapshot = new ArrayList<>();
-        for (CompletableFuture<MessageConnection> future : messageConnections.values()) {
-            if (!future.isDone() || future.isCompletedExceptionally()) {
-                continue;
-            }
-            MessageConnection connection = future.getNow(null);
+        for (ConnectionCell cell : messageConnections.values()) {
+            MessageConnection connection = cell.peek();
             if (connection != null) {
                 snapshot.add(new PeerEndpoint(connection.getUsername(), connection.getIpEndpoint()));
             }
@@ -122,7 +113,28 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
 
     @Override
     public void addOrUpdateMessageConnection(String username, Connection incomingConnection) {
-        await(addOrUpdateMessageConnectionAsync(username, incomingConnection));
+        Objects.requireNonNull(incomingConnection, "incomingConnection");
+        // A peer that connects to us wins over whatever we had for it, so this
+        // claims the entry outright rather than waiting to see what is there.
+        ConnectionCell cell = new ConnectionCell();
+        ConnectionCell superseded = messageConnections.put(username, cell);
+
+        try {
+            cell.settle(establishIncomingMessageConnection(username, incomingConnection, superseded));
+        } catch (Throwable failure) {
+            Throwable cause = unwrap(failure);
+            cell.fail(cause);
+            String message = "Failed to establish an inbound message connection to "
+                    + username + " (" + incomingConnection.getIpEndpoint()
+                    + "): " + message(cause);
+            diagnostic.debug(
+                    message + " (type: " + incomingConnection.getType() + ", id: " + incomingConnection.getId() + ")");
+            diagnostic.debug("Purging message connection cache of failed connection "
+                    + "to " + username + " ("
+                    + incomingConnection.getIpEndpoint() + ").");
+            messageConnections.remove(username, cell);
+            throw new CompletionException(new ConnectionException(message, cause));
+        }
     }
 
     @Override
@@ -188,37 +200,114 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
 
     @Override
     public MessageConnection getCachedMessageConnection(String username) {
-        return await(getCachedMessageConnectionAsync(username));
+        ConnectionCell cell = messageConnections.get(username);
+        if (cell == null) {
+            return null;
+        }
+
+        MessageConnection connection;
+        try {
+            connection = cell.await();
+        } catch (Throwable failure) {
+            diagnostic.debug(
+                    "Failed to retrieve cached message connection to " + username + ": " + message(unwrap(failure)));
+            return null;
+        }
+        diagnostic.debug("Retrieved cached message connection to "
+                + connection.getUsername() + " ("
+                + connection.getIpEndpoint() + ") (type: "
+                + connection.getType() + ", id: "
+                + connection.getId() + ")");
+        return connection;
     }
 
     @Override
     public MessageConnection getOrAddMessageConnection(ConnectToPeerResponse connectToPeerResponse) {
-        return await(getOrAddMessageConnectionAsync(connectToPeerResponse));
+        String username = connectToPeerResponse.getUsername();
+        ConnectionCell claim = new ConnectionCell();
+        ConnectionCell cached = messageConnections.putIfAbsent(username, claim);
+        ConnectionCell entry = cached == null ? claim : cached;
+
+        try {
+            if (cached != null) {
+                MessageConnection connection = entry.await();
+                diagnostic.debug("Retrieved cached message connection to "
+                        + username + " ("
+                        + connectToPeerResponse.getIpEndpoint() + ") (type: "
+                        + connection.getType() + ", id: "
+                        + connection.getId() + ")");
+                return connection;
+            }
+            MessageConnection connection = establishInboundIndirectMessageConnection(connectToPeerResponse);
+            entry.settle(connection);
+            return connection;
+        } catch (Throwable failure) {
+            Throwable cause = unwrap(failure);
+            entry.fail(cause);
+            String message = "Failed to establish an inbound indirect message "
+                    + "connection to " + username + " ("
+                    + connectToPeerResponse.getIpEndpoint() + "): " + message(cause);
+            diagnostic.debug(message);
+            if (!(cause instanceof CancellationException)) {
+                diagnostic.debug("Purging message connection cache of failed connection "
+                        + "to " + username + " ("
+                        + connectToPeerResponse.getIpEndpoint() + ").");
+                // Only ever the entry this attempt was waiting on. A direct
+                // connection that superseded it has already replaced the entry,
+                // and purging that one is what the cache used to have to detect
+                // afterwards and undo.
+                messageConnections.remove(username, entry);
+            }
+            throw new CompletionException(new ConnectionException(message, cause));
+        }
     }
 
     @Override
     public MessageConnection getOrAddMessageConnection(
             String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal) {
-        return await(getOrAddMessageConnectionAsync(username, ipEndpoint, cancellationSignal));
+        return getOrAddMessageConnection(username, ipEndpoint, client.getNextToken(), cancellationSignal);
     }
 
+    /**
+     * Returns the message connection to a peer, establishing one if there is
+     * none.
+     *
+     * <p>The cell is claimed before the connection exists, which is what makes
+     * this deduplicate: the caller that claims it establishes the connection,
+     * and every caller that arrives while that is still in flight waits on the
+     * same cell instead of opening a second socket to the same peer.
+     */
     @Override
     public MessageConnection getOrAddMessageConnection(
             String username,
             InetSocketAddress ipEndpoint,
             int solicitationToken,
             CancellationSignal cancellationSignal) {
-        return await(getOrAddMessageConnectionAsync(username, ipEndpoint, solicitationToken, cancellationSignal));
-    }
+        ConnectionCell claim = new ConnectionCell();
+        ConnectionCell cached = messageConnections.putIfAbsent(username, claim);
+        ConnectionCell entry = cached == null ? claim : cached;
 
-    @Override
-    public TransferConnectionResult getTransferConnection(String username, int token, Connection incomingConnection) {
-        return await(getTransferConnectionAsync(username, token, incomingConnection));
-    }
-
-    @Override
-    public TransferConnectionResult getTransferConnection(ConnectToPeerResponse connectToPeerResponse) {
-        return await(getTransferConnectionAsync(connectToPeerResponse));
+        try {
+            if (cached != null) {
+                MessageConnection connection = entry.await();
+                diagnostic.debug("Retrieved cached message connection to " + username
+                        + " (" + ipEndpoint + ") (type: "
+                        + connection.getType() + ", id: "
+                        + connection.getId() + ")");
+                return connection;
+            }
+            MessageConnection connection =
+                    establishRacingMessageConnection(username, ipEndpoint, solicitationToken, cancellationSignal);
+            entry.settle(connection);
+            return connection;
+        } catch (Throwable failure) {
+            Throwable cause = unwrap(failure);
+            entry.fail(cause);
+            diagnostic.debug("Purging message connection cache of failed connection " + "to " + username + " ("
+                    + ipEndpoint + ").");
+            messageConnections.remove(username, entry);
+            throw new CompletionException(cause);
+        }
     }
 
     @Override
@@ -277,155 +366,8 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         return connection;
     }
 
-    /**
-     * Waits for one of the cached or raced operations below.
-     *
-     * <p>The last future in this class that a caller can see, and it stops
-     * here. Two things underneath genuinely need one — the per-user cache that
-     * deduplicates concurrent establishment, and the direct/indirect race — and
-     * D11 and D12 replace both with a connection cell and a first-success
-     * helper. Until they do, this is where the shape converts.
-     */
-    private static <T> T await(CompletableFuture<T> operation) {
-        try {
-            return operation.join();
-        } catch (Throwable failure) {
-            throw Failures.propagate(unwrap(failure));
-        }
-    }
-
-    private CompletableFuture<Void> addOrUpdateMessageConnectionAsync(String username, Connection incomingConnection) {
-        Objects.requireNonNull(incomingConnection, "incomingConnection");
-        AtomicReference<CompletableFuture<MessageConnection>> cached = new AtomicReference<>();
-        CompletableFuture<MessageConnection> replacement = messageConnections.compute(username, (key, old) -> {
-            cached.set(old);
-            return invoke(() -> establishIncomingMessageConnection(username, incomingConnection, old));
-        });
-
-        return replacement.handle((connection, failure) -> {
-            if (failure != null) {
-                Throwable cause = unwrap(failure);
-                String message = "Failed to establish an inbound message connection to "
-                        + username + " (" + incomingConnection.getIpEndpoint()
-                        + "): " + message(cause);
-                diagnostic.debug(message + " (type: "
-                        + incomingConnection.getType() + ", id: "
-                        + incomingConnection.getId() + ")");
-                diagnostic.debug("Purging message connection cache of failed connection "
-                        + "to " + username + " ("
-                        + incomingConnection.getIpEndpoint() + ").");
-                messageConnections.remove(username);
-                throw new CompletionException(new ConnectionException(message, cause));
-            }
-            return null;
-        });
-    }
-
-    private CompletableFuture<MessageConnection> getCachedMessageConnectionAsync(String username) {
-        CompletableFuture<MessageConnection> cached = messageConnections.get(username);
-        if (cached == null) {
-            return CompletableFuture.completedFuture(null);
-        }
-        return cached.handle((connection, failure) -> {
-            if (failure != null) {
-                diagnostic.debug("Failed to retrieve cached message connection to " + username + ": "
-                        + message(unwrap(failure)));
-                return null;
-            }
-            diagnostic.debug("Retrieved cached message connection to "
-                    + connection.getUsername() + " ("
-                    + connection.getIpEndpoint() + ") (type: "
-                    + connection.getType() + ", id: "
-                    + connection.getId() + ")");
-            return connection;
-        });
-    }
-
-    private CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(ConnectToPeerResponse response) {
-        AtomicBoolean cached = new AtomicBoolean(true);
-        CompletableFuture<MessageConnection> future =
-                messageConnections.computeIfAbsent(response.getUsername(), key -> {
-                    cached.set(false);
-                    return invoke(() -> establishInboundIndirectMessageConnection(response));
-                });
-
-        return future.handle((connection, failure) -> {
-            if (failure == null) {
-                if (cached.get()) {
-                    diagnostic.debug("Retrieved cached message connection to "
-                            + response.getUsername() + " ("
-                            + response.getIpEndpoint() + ") (type: "
-                            + connection.getType() + ", id: "
-                            + connection.getId() + ")");
-                }
-                return connection;
-            }
-
-            Throwable cause = unwrap(failure);
-            String message = "Failed to establish an inbound indirect message "
-                    + "connection to " + response.getUsername() + " ("
-                    + response.getIpEndpoint() + "): " + message(cause);
-            diagnostic.debug(message);
-            if (!(cause instanceof CancellationException)) {
-                diagnostic.debug("Purging message connection cache of failed connection "
-                        + "to " + response.getUsername() + " ("
-                        + response.getIpEndpoint() + ").");
-                CompletableFuture<MessageConnection> removedRecord = messageConnections.remove(response.getUsername());
-                if (removedRecord != null) {
-                    removedRecord.handle((removed, ignored) -> {
-                        if (removed != null && removed.getType().hasFlag(ConnectionTypes.DIRECT)) {
-                            diagnostic.warning("Erroneously purged direct message "
-                                    + "connection to "
-                                    + response.getUsername()
-                                    + " upon indirect failure");
-                            messageConnections.putIfAbsent(response.getUsername(), removedRecord);
-                        }
-                        return null;
-                    });
-                }
-            }
-            throw new CompletionException(new ConnectionException(message, cause));
-        });
-    }
-
-    private CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
-            String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal) {
-        return getOrAddMessageConnectionAsync(username, ipEndpoint, client.getNextToken(), cancellationSignal);
-    }
-
-    private CompletableFuture<MessageConnection> getOrAddMessageConnectionAsync(
-            String username,
-            InetSocketAddress ipEndpoint,
-            int solicitationToken,
-            CancellationSignal cancellationSignal) {
-        AtomicBoolean cached = new AtomicBoolean(true);
-        CompletableFuture<MessageConnection> future = messageConnections.computeIfAbsent(username, key -> {
-            cached.set(false);
-            // The establishment is blocking now, and the cache entry is still a
-            // future, so it needs a thread to run on. D11 replaces the entry
-            // with a cell and this call runs on the caller's own thread.
-            return NetworkExecutor.supplyAsync(() ->
-                    establishRacingMessageConnection(username, ipEndpoint, solicitationToken, cancellationSignal));
-        });
-        return future.handle((connection, failure) -> {
-            if (failure != null) {
-                diagnostic.debug("Purging message connection cache of failed connection " + "to " + username + " ("
-                        + ipEndpoint + ").");
-                messageConnections.remove(username);
-                throw new CompletionException(unwrap(failure));
-            }
-            if (cached.get()) {
-                diagnostic.debug("Retrieved cached message connection to " + username
-                        + " (" + ipEndpoint + ") (type: "
-                        + connection.getType() + ", id: "
-                        + connection.getId() + ")");
-            }
-            return connection;
-        });
-    }
-
-    private CompletableFuture<TransferConnectionResult> getTransferConnectionAsync(
-            String username, int token, Connection incomingConnection) {
+    @Override
+    public TransferConnectionResult getTransferConnection(String username, int token, Connection incomingConnection) {
         diagnostic.debug("Inbound transfer connection to " + username + " ("
                 + incomingConnection.getIpEndpoint() + ") for token " + token
                 + " accepted. (type: " + incomingConnection.getType()
@@ -446,31 +388,30 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                 + " handed off. (old: " + incomingConnection.getId()
                 + ", new: " + connection.getId() + ")");
 
-        return NetworkExecutor.supplyAsync(() -> {
-            byte[] bytes;
-            try {
-                bytes = connection.read(4);
-            } catch (Throwable failure) {
-                Throwable cause = unwrap(failure);
-                String message = "Failed to establish an inbound transfer connection to "
-                        + username + " ("
-                        + incomingConnection.getIpEndpoint()
-                        + ") for token " + token + ": " + message(cause);
-                diagnostic.debug(message + " (type: " + connection.getType() + ", id: " + connection.getId() + ")");
-                connection.close();
-                throw new CompletionException(new ConnectionException(message, cause));
-            }
-            int remoteToken = littleEndianInteger(bytes);
-            diagnostic.debug("Transfer connection to " + username + " ("
-                    + connection.getIpEndpoint() + ") for token "
-                    + remoteToken + " established. (type: "
-                    + connection.getType() + ", id: "
-                    + connection.getId() + ")");
-            return new TransferConnectionResult(connection, remoteToken);
-        });
+        byte[] bytes;
+        try {
+            bytes = connection.read(4);
+        } catch (Throwable failure) {
+            Throwable cause = unwrap(failure);
+            String message = "Failed to establish an inbound transfer connection to "
+                    + username + " ("
+                    + incomingConnection.getIpEndpoint()
+                    + ") for token " + token + ": " + message(cause);
+            diagnostic.debug(message + " (type: " + connection.getType() + ", id: " + connection.getId() + ")");
+            connection.close();
+            throw new CompletionException(new ConnectionException(message, cause));
+        }
+        int remoteToken = littleEndianInteger(bytes);
+        diagnostic.debug("Transfer connection to " + username + " ("
+                + connection.getIpEndpoint() + ") for token "
+                + remoteToken + " established. (type: "
+                + connection.getType() + ", id: "
+                + connection.getId() + ")");
+        return new TransferConnectionResult(connection, remoteToken);
     }
 
-    private CompletableFuture<TransferConnectionResult> getTransferConnectionAsync(ConnectToPeerResponse response) {
+    @Override
+    public TransferConnectionResult getTransferConnection(ConnectToPeerResponse response) {
         diagnostic.debug("Attempting inbound indirect transfer connection to "
                 + response.getUsername() + " (" + response.getIpEndpoint()
                 + ") for token " + response.getToken());
@@ -485,43 +426,37 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                         + connection.getType() + ", id: "
                         + connection.getId() + ")"));
 
-        return NetworkExecutor.supplyAsync(() -> {
-            byte[] bytes;
-            try {
-                connection.connect();
-                connection.write(new PierceFirewall(response.getToken()).toByteArray());
-                bytes = connection.read(4);
-            } catch (Throwable failure) {
-                Throwable cause = unwrap(failure);
-                String message = "Failed to establish an inbound indirect transfer "
-                        + "connection to " + response.getUsername() + " ("
-                        + response.getIpEndpoint() + "): "
-                        + message(cause);
-                diagnostic.debug(message);
-                connection.close();
-                throw new CompletionException(new ConnectionException(message, cause));
-            }
-            int remoteToken = littleEndianInteger(bytes);
-            diagnostic.debug("Transfer connection to " + response.getUsername() + " ("
-                    + response.getIpEndpoint() + ") for token "
-                    + response.getToken() + " established. (type: "
-                    + connection.getType() + ", id: "
-                    + connection.getId() + ")");
-            return new TransferConnectionResult(connection, remoteToken);
-        });
+        byte[] bytes;
+        try {
+            connection.connect();
+            connection.write(new PierceFirewall(response.getToken()).toByteArray());
+            bytes = connection.read(4);
+        } catch (Throwable failure) {
+            Throwable cause = unwrap(failure);
+            String message = "Failed to establish an inbound indirect transfer "
+                    + "connection to " + response.getUsername() + " ("
+                    + response.getIpEndpoint() + "): "
+                    + message(cause);
+            diagnostic.debug(message);
+            connection.close();
+            throw new CompletionException(new ConnectionException(message, cause));
+        }
+        int remoteToken = littleEndianInteger(bytes);
+        diagnostic.debug("Transfer connection to " + response.getUsername() + " ("
+                + response.getIpEndpoint() + ") for token "
+                + response.getToken() + " established. (type: "
+                + connection.getType() + ", id: "
+                + connection.getId() + ")");
+        return new TransferConnectionResult(connection, remoteToken);
     }
 
     @Override
     public void removeAndDisposeAll() {
         pendingSolicitations.clear();
         pendingInboundIndirectConnections.clear();
-        messageConnections.forEach((username, future) -> {
-            if (messageConnections.remove(username, future)) {
-                future.thenAccept(connection -> {
-                    if (connection != null) {
-                        connection.close();
-                    }
-                });
+        messageConnections.forEach((username, cell) -> {
+            if (messageConnections.remove(username, cell)) {
+                cell.closeWhenSettled();
             }
         });
     }
@@ -538,8 +473,8 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         }
     }
 
-    private CompletableFuture<MessageConnection> establishIncomingMessageConnection(
-            String username, Connection incomingConnection, CompletableFuture<MessageConnection> cached) {
+    private MessageConnection establishIncomingMessageConnection(
+            String username, Connection incomingConnection, ConnectionCell superseded) {
         diagnostic.debug("Inbound message connection to " + username + " ("
                 + incomingConnection.getIpEndpoint()
                 + ") accepted. (type: " + incomingConnection.getType()
@@ -558,42 +493,41 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         attachPeerMessageListeners(connection);
         connection.addDisconnectedListener(disconnectedListener);
 
-        CompletableFuture<Void> supersede = CompletableFuture.completedFuture(null);
-        if (cached != null) {
+        if (superseded != null) {
             CancellationController pending = pendingInboundIndirectConnections.get(username);
             if (pending != null) {
                 diagnostic.debug("Cancelling pending inbound indirect message connection " + "to " + username);
                 pending.cancel();
             }
-            supersede = cached.handle((old, failure) -> {
-                if (old != null) {
-                    old.removeDisconnectedListener(disconnectedListener);
-                    diagnostic.debug("Superseding cached message connection to "
-                            + username + " (" + old.getIpEndpoint()
-                            + ") (old: " + old.getId() + ", new: "
-                            + connection.getId());
-                }
-                return null;
-            });
+            // An attempt still in flight owns the connection it is about to
+            // produce, so it has to finish before that connection can be let
+            // go of. Cancelling the pending indirect above is what makes it
+            // finish promptly; every other attempt is bounded by its own
+            // connect timeout.
+            MessageConnection old = superseded.awaitQuietly();
+            if (old != null) {
+                old.removeDisconnectedListener(disconnectedListener);
+                diagnostic.debug("Superseding cached message connection to "
+                        + username + " (" + old.getIpEndpoint()
+                        + ") (old: " + old.getId() + ", new: "
+                        + connection.getId());
+            }
         }
 
-        return supersede.thenApply(ignored -> {
-            try {
-                connection.startReadingContinuously();
-            } catch (Throwable failure) {
-                connection.close();
-                throw failure;
-            }
-            diagnostic.debug("Message connection to " + username + " ("
-                    + connection.getIpEndpoint() + ") established. (type: "
-                    + connection.getType() + ", id: "
-                    + connection.getId() + ")");
-            return connection;
-        });
+        try {
+            connection.startReadingContinuously();
+        } catch (Throwable failure) {
+            connection.close();
+            throw failure;
+        }
+        diagnostic.debug("Message connection to " + username + " ("
+                + connection.getIpEndpoint() + ") established. (type: "
+                + connection.getType() + ", id: "
+                + connection.getId() + ")");
+        return connection;
     }
 
-    private CompletableFuture<MessageConnection> establishInboundIndirectMessageConnection(
-            ConnectToPeerResponse response) {
+    private MessageConnection establishInboundIndirectMessageConnection(ConnectToPeerResponse response) {
         diagnostic.debug("Attempting inbound indirect message connection to "
                 + response.getUsername() + " (" + response.getIpEndpoint()
                 + ") for token " + response.getToken());
@@ -606,24 +540,22 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         CancellationController cancellation = new CancellationController();
         pendingInboundIndirectConnections.put(response.getUsername(), cancellation);
 
-        return NetworkExecutor.supplyAsync(() -> {
-            try {
-                connection.connect(cancellation.getSignal());
-                connection.write(new PierceFirewall(response.getToken()).toByteArray(), cancellation.getSignal());
-            } catch (Throwable failure) {
-                connection.close();
-                throw new CompletionException(unwrap(failure));
-            } finally {
-                pendingInboundIndirectConnections.remove(response.getUsername(), cancellation);
-                cancellation.close();
-            }
-            connection.addDisconnectedListener(disconnectedListener);
-            diagnostic.debug("Message connection to " + response.getUsername() + " ("
-                    + response.getIpEndpoint()
-                    + ") established. (type: " + connection.getType()
-                    + ", id: " + connection.getId() + ")");
-            return connection;
-        });
+        try {
+            connection.connect(cancellation.getSignal());
+            connection.write(new PierceFirewall(response.getToken()).toByteArray(), cancellation.getSignal());
+        } catch (Throwable failure) {
+            connection.close();
+            throw new CompletionException(unwrap(failure));
+        } finally {
+            pendingInboundIndirectConnections.remove(response.getUsername(), cancellation);
+            cancellation.close();
+        }
+        connection.addDisconnectedListener(disconnectedListener);
+        diagnostic.debug("Message connection to " + response.getUsername() + " ("
+                + response.getIpEndpoint()
+                + ") established. (type: " + connection.getType()
+                + ", id: " + connection.getId() + ")");
+        return connection;
     }
 
     private MessageConnection establishRacingMessageConnection(
@@ -860,23 +792,16 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                 + connection.getIpEndpoint() + ") disconnected. (type: "
                 + connection.getType() + ", id: " + connection.getId()
                 + ")");
-        if (messageConnections.remove(connection.getUsername(), CompletableFuture.completedFuture(connection))) {
+        // Only if this is still the connection on record. A peer that
+        // reconnects has already replaced the entry, and the disconnect of the
+        // connection it replaced must not evict its successor.
+        ConnectionCell cell = messageConnections.get(connection.getUsername());
+        if (cell != null && cell.peek() == connection && messageConnections.remove(connection.getUsername(), cell)) {
             diagnostic.debug("Removed message connection record for "
                     + connection.getKey().getUsername() + " ("
                     + connection.getIpEndpoint() + ") (type: "
                     + connection.getType() + ", id: "
                     + connection.getId() + ")");
-        } else {
-            CompletableFuture<MessageConnection> cached = messageConnections.get(connection.getUsername());
-            if (cached != null
-                    && cached.getNow(null) == connection
-                    && messageConnections.remove(connection.getUsername(), cached)) {
-                diagnostic.debug("Removed message connection record for "
-                        + connection.getKey().getUsername() + " ("
-                        + connection.getIpEndpoint() + ") (type: "
-                        + connection.getType() + ", id: "
-                        + connection.getId() + ")");
-            }
         }
         connection.close();
         diagnostic.debug("Message connection cache now contains " + messageConnections.size() + " connections.");
@@ -888,14 +813,6 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
 
     private void raiseDiagnostic(DiagnosticEvent eventData) {
         diagnosticListeners.forEach(listener -> listener.handle(this, eventData));
-    }
-
-    private static <T> CompletableFuture<T> invoke(Supplier<CompletableFuture<T>> supplier) {
-        try {
-            return supplier.get();
-        } catch (Throwable failure) {
-            return CompletableFuture.failedFuture(failure);
-        }
     }
 
     private static int littleEndianInteger(byte[] bytes) {
