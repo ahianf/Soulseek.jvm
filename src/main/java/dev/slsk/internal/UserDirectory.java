@@ -466,6 +466,13 @@ final class UserDirectory {
                     continue;
                 }
                 if (userEndpointSemaphores.remove(entry.getKey(), semaphore)) {
+                    // Released even though it just left the map: a caller that
+                    // fetched this semaphore before the removal may be about
+                    // to block on it, and a removed semaphore nobody releases
+                    // would strand that caller forever. The cost is one
+                    // unserialized duplicate lookup in a tiny window; the
+                    // alternative was an unbounded hang.
+                    semaphore.release();
                     context.getDiagnostic().debug("Cleaned up user endpoint semaphore for " + entry.getKey());
                 } else {
                     semaphore.release();

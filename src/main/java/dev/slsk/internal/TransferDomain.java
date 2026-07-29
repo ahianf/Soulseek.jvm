@@ -105,6 +105,10 @@ final class TransferDomain implements PeerServices {
     /** Per-user upload limits, and the lock guarding their creation. */
     private final Map<String, Semaphore> uploadSemaphores = new ConcurrentHashMap<>();
 
+    /** How many runs hold a reference to each user's semaphore; see {@link #uploadSemaphoreFor}. */
+    private final Map<String, java.util.concurrent.atomic.AtomicInteger> uploadSemaphoreLeases =
+            new ConcurrentHashMap<>();
+
     private final Semaphore uploadSemaphoreSyncRoot = new Semaphore(1);
 
     /** Duplicate-transfer keys; owned here, since this is what detects duplicates. */
@@ -223,6 +227,18 @@ final class TransferDomain implements PeerServices {
     Semaphore uploadSemaphoreFor(String username, CancellationSignal cancellationSignal) {
         dev.slsk.internal.common.Permits.acquire(uploadSemaphoreSyncRoot, cancellationSignal);
         try {
+            // The lease is what makes the sweep safe. The C# source starts the
+            // semaphore wait inside this sync root, so its sweep can never see
+            // a fetched-but-unwaited semaphore; the blocking shape acquires
+            // later, on the caller's own thread, and between fetch and acquire
+            // the semaphore sits at full permits — exactly what the sweep
+            // removes. Removing it hands the next upload to the same user a
+            // fresh semaphore, and two uploads run concurrently against one
+            // peer, which Soulseek NS cannot handle. The lease says "a run
+            // holds a reference", permits or not.
+            uploadSemaphoreLeases
+                    .computeIfAbsent(username, ignored -> new java.util.concurrent.atomic.AtomicInteger())
+                    .incrementAndGet();
             return uploadSemaphores.computeIfAbsent(
                     username, ignored -> new Semaphore(clientOptions().getMaximumConcurrentUploadsPerUser()));
         } finally {
@@ -230,7 +246,15 @@ final class TransferDomain implements PeerServices {
         }
     }
 
-    /** Drops the per-user upload semaphores nothing is holding. */
+    /** Returns a run's lease on its per-user semaphore; the sweep may then reclaim it. */
+    void releaseUploadSemaphoreLease(String username) {
+        java.util.concurrent.atomic.AtomicInteger leases = uploadSemaphoreLeases.get(username);
+        if (leases != null) {
+            leases.decrementAndGet();
+        }
+    }
+
+    /** Drops the per-user upload semaphores nothing is holding or about to. */
     void cleanupUploadSemaphores() {
         if (!uploadSemaphoreSyncRoot.tryAcquire()) {
             return;
@@ -241,7 +265,12 @@ final class TransferDomain implements PeerServices {
                 if (semaphore.availablePermits() != clientOptions().getMaximumConcurrentUploadsPerUser()) {
                     continue;
                 }
+                java.util.concurrent.atomic.AtomicInteger leases = uploadSemaphoreLeases.get(entry.getKey());
+                if (leases != null && leases.get() > 0) {
+                    continue;
+                }
                 if (uploadSemaphores.remove(entry.getKey(), semaphore)) {
+                    uploadSemaphoreLeases.remove(entry.getKey());
                     diagnostic.debug("Cleaned up upload semaphore for " + entry.getKey());
                 }
             }

@@ -67,9 +67,21 @@ class EngineCleanupTest {
             transfers.cleanupUploadSemaphores();
             assertSame(taken, transfers.uploadSemaphoresForTest().get("alice"), "a semaphore in use is kept");
 
+            // Between an upload's fetch and its acquire the semaphore sits at
+            // full permits; sweeping it there hands the next upload to the
+            // same user a fresh one, and both run concurrently against one
+            // peer. The lease taken at the fetch is what covers that window.
             taken.release();
             transfers.cleanupUploadSemaphores();
-            assertTrue(transfers.uploadSemaphoresForTest().isEmpty(), "a semaphore nothing holds is swept");
+            assertSame(
+                    taken,
+                    transfers.uploadSemaphoresForTest().get("alice"),
+                    "a semaphore a run still references is kept, permits or not");
+
+            transfers.releaseUploadSemaphoreLease("alice");
+            transfers.cleanupUploadSemaphores();
+            assertTrue(
+                    transfers.uploadSemaphoresForTest().isEmpty(), "a semaphore nothing holds or references is swept");
         }
     }
 

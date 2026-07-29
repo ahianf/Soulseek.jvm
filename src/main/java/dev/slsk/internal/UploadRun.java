@@ -421,6 +421,9 @@ final class UploadRun {
             }
         } finally {
             releasePermits();
+            if (perUserSemaphore != null) {
+                domain.releaseUploadSemaphoreLease(upload.getUsername());
+            }
             domain.uploads().remove(upload.getToken(), upload);
             domain.releaseUniqueKey(uniqueKey);
         }
