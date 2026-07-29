@@ -198,7 +198,6 @@ final class SoulseekEngine
     volatile Listener listener;
     volatile String address;
     volatile InetSocketAddress ipEndpoint;
-    volatile String username;
     private volatile ServerInfo serverInfo = new ServerInfo();
     volatile SoulseekClientState state = SoulseekClientState.DISCONNECTED;
     private volatile Map<Integer, TransferInternal> downloads = new ConcurrentHashMap<>();
@@ -588,7 +587,7 @@ final class SoulseekEngine
     /** Returns the logged-in username, or {@code null}. */
     @Override
     public final String getUsername() {
-        return username;
+        return server.username();
     }
 
     /** Returns the Soulseek network major version. */
@@ -782,7 +781,7 @@ final class SoulseekEngine
         distributedConnectionManager.removeAndDisposeAll();
         distributedConnectionManager.resetStatus();
         searchDomain.cancelAll();
-        username = null;
+        server.username(null);
         changeState(SoulseekClientState.DISCONNECTED, reason, exception);
     }
 
@@ -1182,7 +1181,7 @@ final class SoulseekEngine
         }
         serverInfo = serverInfo.with(null, null, null, response.isSupporter());
         events.raise(Kind.SERVER_INFO_RECEIVED, serverInfo);
-        username = requestedUsername;
+        server.username(requestedUsername);
         changeState(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN), "Logged in", null);
         sendConfigurationMessages(cancellationSignal);
     }
@@ -1441,7 +1440,7 @@ final class SoulseekEngine
 
     @Override
     public String getLoggedInUsername() {
-        return username;
+        return server.username();
     }
 
     @Override

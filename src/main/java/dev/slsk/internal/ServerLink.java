@@ -48,8 +48,13 @@ import java.util.function.Supplier;
  * and disconnecting move the client between states and raise events about it,
  * which is the engine's job; this is asked what the state is — through the
  * supplier it is built with — only to refuse work that needs a login.
+ *
+ * <p>Public, and package-private member by member, because the peer and
+ * distributed networks live in another package and talk to the server. What
+ * they may say to it is {@link #write} and who we are; the rest of this is the
+ * facets' and stays where only they can reach it.
  */
-final class ServerLink {
+public final class ServerLink {
 
     private final Waiter waiter;
     private final DiagnosticSink diagnostic;
@@ -62,6 +67,17 @@ final class ServerLink {
      * old one is closed by the engine's disconnect.
      */
     private volatile MessageConnection connection;
+
+    /**
+     * Who the server accepted us as, or {@code null} when not logged in.
+     *
+     * <p>Ours rather than the engine's: it is what the login handshake
+     * established over this connection, it goes away when this connection does,
+     * and everything that reads it — a {@code PeerInit} naming us to a peer, a
+     * distributed message we must not answer because it is our own search — is
+     * asking about the session rather than about the client.
+     */
+    private volatile String username;
 
     ServerLink(Waiter waiter, DiagnosticSink diagnostic, Supplier<SoulseekClientState> clientState) {
         this.waiter = java.util.Objects.requireNonNull(waiter, "waiter");
@@ -88,11 +104,29 @@ final class ServerLink {
     }
 
     /**
+     * Returns who we are logged in as, or {@code null} if we are not.
+     *
+     * @return the logged-in username
+     */
+    public String username() {
+        return username;
+    }
+
+    /**
+     * Records who the server accepted us as.
+     *
+     * @param value the username, or {@code null} on disconnect
+     */
+    void username(String value) {
+        username = value;
+    }
+
+    /**
      * Throws unless the client is connected and logged in.
      *
      * @param operation what the caller is trying to do, for the message
      */
-    void requireLoggedIn(String operation) {
+    public void requireLoggedIn(String operation) {
         SoulseekClientState state = clientState.get();
         if (!state.contains(SoulseekClientState.CONNECTED) || !state.contains(SoulseekClientState.LOGGED_IN)) {
             throw new IllegalStateException("The server connection must be connected and logged in to " + operation
@@ -106,7 +140,7 @@ final class ServerLink {
      * @param message the message to send
      * @param cancellationSignal the cancellation signal
      */
-    void write(OutgoingMessage message, CancellationSignal cancellationSignal) {
+    public void write(OutgoingMessage message, CancellationSignal cancellationSignal) {
         connection.write(message, CommonUtils.token(cancellationSignal));
     }
 
