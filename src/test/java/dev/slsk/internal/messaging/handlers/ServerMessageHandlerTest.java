@@ -20,6 +20,8 @@ import dev.slsk.internal.RoomList;
 import dev.slsk.internal.SearchQuery;
 import dev.slsk.internal.SearchScope;
 import dev.slsk.internal.ServerInfo;
+import dev.slsk.internal.ServerLink;
+import dev.slsk.internal.ServerLinks;
 import dev.slsk.internal.TransferDirection;
 import dev.slsk.internal.UserPresence;
 import dev.slsk.internal.UserStatistics;
@@ -41,9 +43,12 @@ import dev.slsk.internal.events.RoomTickerRemovedEvent;
 import dev.slsk.internal.events.UserCannotConnectEvent;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
+import dev.slsk.internal.messaging.messages.AcknowledgePrivateMessageCommand;
+import dev.slsk.internal.messaging.messages.AcknowledgePrivilegeNotificationCommand;
 import dev.slsk.internal.messaging.messages.ConnectToPeerResponse;
 import dev.slsk.internal.messaging.messages.LoginResponse;
 import dev.slsk.internal.messaging.messages.NewPassword;
+import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.messaging.messages.PrivateRoomToggle;
 import dev.slsk.internal.messaging.messages.UserAddressResponse;
 import dev.slsk.internal.messaging.messages.WatchUserResponse;
@@ -82,7 +87,19 @@ class ServerMessageHandlerTest {
 
     @Test
     void constructionRequiresClient() {
-        assertThrows(NullPointerException.class, () -> new DefaultServerMessageHandler(null));
+        Fixture fixture = new Fixture(options(true, true));
+        assertThrows(
+                NullPointerException.class,
+                () -> new DefaultServerMessageHandler(
+                        null,
+                        fixture.client.server,
+                        fixture.waiter,
+                        () -> fixture.client.searches,
+                        () -> fixture.client.downloads,
+                        () -> fixture.client.peer,
+                        () -> fixture.client.distributed,
+                        fixture.client::distributedMessages,
+                        () -> fixture.client.responder));
     }
 
     @Test
@@ -111,7 +128,16 @@ class ServerMessageHandlerTest {
         assertTrue(fixture.diagnostic.contains("Server message sent: FILE_SEARCH"));
 
         AtomicInteger generated = new AtomicInteger();
-        DefaultServerMessageHandler defaultDiagnostic = new DefaultServerMessageHandler(fixture.client);
+        DefaultServerMessageHandler defaultDiagnostic = new DefaultServerMessageHandler(
+                () -> fixture.client.options,
+                fixture.client.server,
+                fixture.client.waiter,
+                () -> fixture.client.searches,
+                () -> fixture.client.downloads,
+                () -> fixture.client.peer,
+                () -> fixture.client.distributed,
+                fixture.client::distributedMessages,
+                () -> fixture.client.responder);
         defaultDiagnostic.addDiagnosticGeneratedListener((sender, eventData) -> generated.incrementAndGet());
         defaultDiagnostic
                 .handleMessageReadAsync(
@@ -328,11 +354,10 @@ class ServerMessageHandlerTest {
                 .build());
 
         assertEquals(12, privateMessage.get().getId());
-        assertEquals(1, fixture.client.privateAcknowledgements.size());
-        assertEquals(12, fixture.client.privateAcknowledgements.getFirst());
+        assertEquals(List.of(12), fixture.client.acknowledged(AcknowledgePrivateMessageCommand.class));
         assertNull(privileges.get(0).getId());
         assertEquals(13, privileges.get(1).getId());
-        assertEquals(13, fixture.client.privilegeAcknowledgements.getFirst());
+        assertEquals(List.of(13), fixture.client.acknowledged(AcknowledgePrivilegeNotificationCommand.class));
 
         Fixture disabled = new Fixture(options(false, false));
         disabled.handle(new MessageBuilder()
@@ -348,8 +373,7 @@ class ServerMessageHandlerTest {
                 .writeInteger(15)
                 .writeString(USERNAME)
                 .build());
-        assertTrue(disabled.client.privateAcknowledgements.isEmpty());
-        assertTrue(disabled.client.privilegeAcknowledgements.isEmpty());
+        assertTrue(disabled.client.writes.isEmpty(), "nothing is acknowledged when both are disabled");
     }
 
     @Test
@@ -725,8 +749,18 @@ class ServerMessageHandlerTest {
         private final DefaultServerMessageHandler handler;
 
         private Fixture(SoulseekClientOptions options) {
-            client = new FakeClient(options, waiter, peer.proxy, distributed.proxy, responder.proxy);
-            handler = new DefaultServerMessageHandler(client, diagnostic);
+            client = new FakeClient(options, waiter, peer.proxy, distributed.proxy, responder.proxy, diagnostic);
+            handler = new DefaultServerMessageHandler(
+                    () -> client.options,
+                    client.server,
+                    client.waiter,
+                    () -> client.searches,
+                    () -> client.downloads,
+                    () -> client.peer,
+                    () -> client.distributed,
+                    client::distributedMessages,
+                    () -> client.responder,
+                    diagnostic);
         }
 
         private void handle(byte[] message) {
@@ -734,7 +768,15 @@ class ServerMessageHandlerTest {
         }
     }
 
-    private static final class FakeClient implements ServerMessageHandlerClient {
+    /**
+     * The ports the handler is built from, and the server it acknowledges over.
+     *
+     * <p>The two acknowledgements used to be callbacks this recorded. They go
+     * out over {@code ServerLink} now, so what the tests assert is the command
+     * on the wire rather than a count of calls — which is what the client is
+     * actually obliged to do.
+     */
+    private static final class FakeClient {
         private final SoulseekClientOptions options;
         private final Waiter waiter;
         private final PeerConnectionManager peer;
@@ -742,8 +784,8 @@ class ServerMessageHandlerTest {
         private final SearchResponder responder;
         private final Map<Integer, SearchInternal> searches = new HashMap<>();
         private final Map<Integer, TransferInternal> downloads = new HashMap<>();
-        private final List<Integer> privateAcknowledgements = new ArrayList<>();
-        private final List<Integer> privilegeAcknowledgements = new ArrayList<>();
+        private final List<OutgoingMessage> writes = new ArrayList<>();
+        private final ServerLink server;
         private byte[] embedded;
 
         private FakeClient(
@@ -751,98 +793,55 @@ class ServerMessageHandlerTest {
                 Waiter waiter,
                 PeerConnectionManager peer,
                 DistributedConnectionManager distributed,
-                SearchResponder responder) {
+                SearchResponder responder,
+                DiagnosticSink diagnostic) {
             this.options = options;
             this.waiter = waiter;
             this.peer = peer;
             this.distributed = distributed;
             this.responder = responder;
+            MessageConnection connection = (MessageConnection) Proxy.newProxyInstance(
+                    MessageConnection.class.getClassLoader(),
+                    new Class<?>[] {MessageConnection.class},
+                    (proxy, method, arguments) -> {
+                        if (method.getName().equals("write")
+                                && arguments != null
+                                && arguments[0] instanceof OutgoingMessage outgoing) {
+                            writes.add(outgoing);
+                        }
+                        return defaultValue(method.getReturnType());
+                    });
+            server = ServerLinks.loggedIn(waiter, diagnostic, connection, LOCAL_USER);
         }
 
-        @Override
-        public SoulseekClientOptions getOptions() {
-            return options;
-        }
-
-        @Override
-        public String getUsername() {
-            return LOCAL_USER;
-        }
-
-        @Override
-        public Waiter getWaiter() {
-            return waiter;
-        }
-
-        @Override
-        public Map<Integer, SearchInternal> getSearches() {
-            return searches;
-        }
-
-        @Override
-        public Map<Integer, TransferInternal> getDownloadDictionary() {
-            return downloads;
-        }
-
-        @Override
-        public PeerConnectionManager getPeerConnectionManager() {
-            return peer;
-        }
-
-        @Override
-        public DistributedConnectionManager getDistributedConnectionManager() {
-            return distributed;
-        }
-
-        @Override
-        public DistributedMessageHandler getDistributedMessageHandler() {
-            return new DistributedMessageHandler() {
-                @Override
-                public void handleEmbeddedMessage(byte[] message) {
-                    embedded = message;
+        /** The ids acknowledged, in order, of the given command type. */
+        private List<Integer> acknowledged(Class<?> command) {
+            List<Integer> ids = new ArrayList<>();
+            for (OutgoingMessage message : writes) {
+                if (command.isInstance(message)) {
+                    ids.add(idOf(message));
                 }
-
-                @Override
-                public void addDiagnosticGeneratedListener(
-                        dev.slsk.internal.diagnostics.DiagnosticEventListener listener) {}
-
-                @Override
-                public void removeDiagnosticGeneratedListener(
-                        dev.slsk.internal.diagnostics.DiagnosticEventListener listener) {}
-
-                @Override
-                public void handleMessageRead(MessageConnection sender, MessageEvent eventData) {}
-
-                @Override
-                public void handleMessageRead(MessageConnection sender, byte[] message) {}
-
-                @Override
-                public void handleMessageWritten(MessageConnection sender, MessageEvent eventData) {}
-
-                @Override
-                public void handleChildMessageRead(MessageConnection sender, MessageEvent eventData) {}
-
-                @Override
-                public void handleChildMessageRead(MessageConnection sender, byte[] message) {}
-
-                @Override
-                public void handleChildMessageWritten(MessageConnection sender, MessageEvent eventData) {}
-            };
+            }
+            return ids;
         }
 
-        @Override
-        public SearchResponder getSearchResponder() {
-            return responder;
+        private static int idOf(OutgoingMessage message) {
+            byte[] bytes = message.toByteArray();
+            return java.nio.ByteBuffer.wrap(bytes, 8, 4)
+                    .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                    .getInt();
         }
 
-        @Override
-        public void acknowledgePrivateMessageOperation(int id, CancellationSignal cancellationSignal) {
-            privateAcknowledgements.add(id);
-        }
-
-        @Override
-        public void acknowledgePrivilegeNotificationOperation(int id, CancellationSignal cancellationSignal) {
-            privilegeAcknowledgements.add(id);
+        private DistributedMessageHandler distributedMessages() {
+            return (DistributedMessageHandler) Proxy.newProxyInstance(
+                    DistributedMessageHandler.class.getClassLoader(),
+                    new Class<?>[] {DistributedMessageHandler.class},
+                    (proxy, method, arguments) -> {
+                        if (method.getName().equals("handleEmbeddedMessage")) {
+                            embedded = (byte[]) arguments[0];
+                        }
+                        return defaultValue(method.getReturnType());
+                    });
         }
     }
 

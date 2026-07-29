@@ -10,6 +10,7 @@ import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
+import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.messages.JoinRoomRequest;
 import dev.slsk.internal.messaging.messages.LeaveRoomRequest;
@@ -33,15 +34,16 @@ import java.util.concurrent.TimeoutException;
  * command, translate the reply — and none of them share mutable state with the
  * rest of the client, which makes them the cleanest thing to lift out first.
  *
- * <p>Everything it needs from the client arrives through {@link EngineContext}.
+ * <p>What it needs of the client is the correlator and the server link, and
+ * nothing else; the two are what a room operation is made of.
  */
 final class RoomRegistry {
 
-    private final EngineContext context;
+    private final Waiter waiter;
     private final ServerLink server;
 
-    RoomRegistry(EngineContext context, ServerLink server) {
-        this.context = Objects.requireNonNull(context, "context");
+    RoomRegistry(Waiter waiter, ServerLink server) {
+        this.waiter = Objects.requireNonNull(waiter, "waiter");
         this.server = Objects.requireNonNull(server, "server");
     }
 
@@ -64,8 +66,8 @@ final class RoomRegistry {
         try {
             // Registered before the write, because the server can answer
             // before the write call returns.
-            Wait<RoomData> wait = context.getWaiter()
-                    .register(new WaitKey(MessageCode.Server.JOIN_ROOM, roomName), RoomData.class, null, token);
+            Wait<RoomData> wait =
+                    waiter.register(new WaitKey(MessageCode.Server.JOIN_ROOM, roomName), RoomData.class, null, token);
             server.write(new JoinRoomRequest(roomName, isPrivate), token);
             try {
                 return wait.await();
@@ -169,8 +171,7 @@ final class RoomRegistry {
         server.requireLoggedIn("leave a chat room");
         CancellationSignal token = CommonUtils.token(cancellationSignal);
         try {
-            Wait<Void> wait =
-                    context.getWaiter().register(new WaitKey(MessageCode.Server.LEAVE_ROOM, roomName), null, token);
+            Wait<Void> wait = waiter.register(new WaitKey(MessageCode.Server.LEAVE_ROOM, roomName), null, token);
             server.write(new LeaveRoomRequest(roomName), token);
             try {
                 wait.await();

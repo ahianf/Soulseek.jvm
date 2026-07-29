@@ -127,7 +127,7 @@ final class DefaultMe implements Me {
 
     @Override
     public UserProfile profile() {
-        return client.getProfile();
+        return client.profile();
     }
 
     @Override

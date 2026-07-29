@@ -31,25 +31,8 @@ class UploadAdmissionTest {
     private final AtomicReference<Map<Integer, TransferInternal>> uploads = new AtomicReference<>(Map.of());
     private final AtomicReference<String> warned = new AtomicReference<>();
 
-    private final UploadAdmission admission = new UploadAdmission(new UploadAdmission.Host() {
-        @Override
-        public UploadPolicy uploadPolicy() {
-            return policy.get();
-        }
-
-        @Override
-        public Map<Integer, TransferInternal> uploads() {
-            return uploads.get();
-        }
-
-        @Override
-        public boolean isPrivileged(String username) {
-            return "vip".equals(username);
-        }
-
-        @Override
-        public DiagnosticSink diagnostic() {
-            return new DiagnosticSink() {
+    private final UploadAdmission admission =
+            new UploadAdmission(policy::get, uploads::get, username -> "vip".equals(username), new DiagnosticSink() {
                 @Override
                 public void trace(String message) {}
 
@@ -74,9 +57,7 @@ class UploadAdmissionTest {
                 public void warning(String message, Throwable exception) {
                     warned.set(message);
                 }
-            };
-        }
-    });
+            });
 
     /**
      * A ban is an invariant rather than a default. Checking it inside the

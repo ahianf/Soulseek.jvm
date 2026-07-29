@@ -38,12 +38,10 @@ import dev.slsk.internal.messaging.handlers.DefaultDistributedMessageHandler;
 import dev.slsk.internal.messaging.handlers.DefaultPeerMessageHandler;
 import dev.slsk.internal.messaging.handlers.DefaultServerMessageHandler;
 import dev.slsk.internal.messaging.handlers.DistributedMessageHandler;
-import dev.slsk.internal.messaging.handlers.DistributedMessageHandlerClient;
 import dev.slsk.internal.messaging.handlers.PeerMessageHandler;
-import dev.slsk.internal.messaging.handlers.PeerMessageHandlerClient;
+import dev.slsk.internal.messaging.handlers.PeerServices;
 import dev.slsk.internal.messaging.handlers.ServerMessageEvent;
 import dev.slsk.internal.messaging.handlers.ServerMessageHandler;
-import dev.slsk.internal.messaging.handlers.ServerMessageHandlerClient;
 import dev.slsk.internal.messaging.messages.LoginRequest;
 import dev.slsk.internal.messaging.messages.LoginResponse;
 import dev.slsk.internal.messaging.messages.PrivateRoomToggle;
@@ -91,21 +89,20 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * interface with a hundred and eighty-five methods. Both are gone. What is left
  * is not a client — nothing outside this package can name it, let alone hold
  * one — but the machinery a client needs: the connection and login state
- * machine, the wiring of every component, {@link EngineContext} for the
- * collaborators to delegate through, and {@link EngineEvents} for the facets to
- * subscribe to.
+ * machine, the wiring of every component, and {@link EngineEvents} for the
+ * facets to subscribe to.
  *
- * <p>It also answers the callbacks of every message handler and connection
- * manager, which is why it implements so many of their interfaces: incoming
- * messages are dispatched against registries it owns.
+ * <p>It implemented nine collaborator interfaces once. Eight are gone: each
+ * component takes what it uses, and what it used was almost entirely one-line
+ * accessors. The ninth is {@link PeerServices} — what this client offers a
+ * peer — and the state behind it is the upload, share and profile state that
+ * leaves with {@code TransferEngine} in Phase 4.
+ *
+ * <p>What is left below the lifecycle is what the in-package collaborators
+ * still read through the engine. It is package-private now that no interface
+ * declares it, and it shrinks as each of them takes its own ports.
  */
-final class SoulseekEngine
-        implements AutoCloseable,
-                EngineContext,
-                UploadAdmission.Host,
-                DistributedMessageHandlerClient,
-                PeerMessageHandlerClient,
-                ServerMessageHandlerClient {
+final class SoulseekEngine implements AutoCloseable, PeerServices {
 
     private static final int MAJOR_VERSION = 170;
     private static final String DEFAULT_ADDRESS = "server.slsknet.org";
@@ -142,7 +139,7 @@ final class SoulseekEngine
     private volatile ShareCatalog catalog = ShareCatalog.empty();
     private volatile UserProfile profile = UserProfile.empty();
     private volatile UploadPolicy uploadPolicy = UploadPolicy.standard(2, 1);
-    private volatile UploadAdmission uploadAdmission = new UploadAdmission(this);
+    private volatile UploadAdmission uploadAdmission;
 
     /**
      * How a running upload is stopped.
@@ -262,7 +259,7 @@ final class SoulseekEngine
                 : diagnosticFactory;
         this.server = new ServerLink(this.waiter, diagnostic, () -> state);
         this.server.connection(serverConnection);
-        this.rooms = new RoomRegistry(this, server);
+        this.rooms = new RoomRegistry(this.waiter, server);
         this.users = new UserDirectory(this, server);
         this.searchDomain = new SearchDomain(this, server);
         this.transfers = new TransferEngine(this, server);
@@ -294,12 +291,26 @@ final class SoulseekEngine
                         this::getPeerConnectionManager,
                         this.tokenFactory,
                         users::getUserEndpoint,
-                        this::getShareCatalog,
+                        this::catalog,
                         server::username)
                 : searchResponder;
-        this.peerMessageHandler = peerMessageHandler == null ? new DefaultPeerMessageHandler(this) : peerMessageHandler;
+        this.peerMessageHandler = peerMessageHandler == null
+                ? new DefaultPeerMessageHandler(
+                        this::getOptions,
+                        this.waiter,
+                        searchDomain::registry,
+                        this::getDownloadRegistry,
+                        server::username,
+                        this)
+                : peerMessageHandler;
         this.distributedMessageHandler = distributedMessageHandler == null
-                ? new DefaultDistributedMessageHandler(this)
+                ? new DefaultDistributedMessageHandler(
+                        this::getOptions,
+                        server,
+                        this.tokenFactory,
+                        this.waiter,
+                        this::getDistributedConnectionManager,
+                        this::getSearchResponder)
                 : distributedMessageHandler;
         this.peerConnectionManager = peerConnectionManager == null
                 ? new PeerNetwork(this::getOptions, server, this.waiter, this.tokenFactory, this.peerMessageHandler)
@@ -315,8 +326,21 @@ final class SoulseekEngine
                         null,
                         scheduler)
                 : distributedConnectionManager;
-        this.serverMessageHandler =
-                serverMessageHandler == null ? new DefaultServerMessageHandler(this) : serverMessageHandler;
+        this.serverMessageHandler = serverMessageHandler == null
+                ? new DefaultServerMessageHandler(
+                        this::getOptions,
+                        server,
+                        this.waiter,
+                        searchDomain::registry,
+                        this::getDownloadRegistry,
+                        this::getPeerConnectionManager,
+                        this::getDistributedConnectionManager,
+                        this::getDistributedMessageHandler,
+                        this::getSearchResponder)
+                : serverMessageHandler;
+
+        uploadAdmission =
+                new UploadAdmission(this::uploadPolicy, this::getUploadRegistry, this::isPrivileged, diagnostic);
 
         bindEvents();
 
@@ -351,7 +375,7 @@ final class SoulseekEngine
      * with, which is the only thing a snapshot-shaped read can promise.
      */
     @Override
-    public ShareCatalog getShareCatalog() {
+    public ShareCatalog catalog() {
         return catalog;
     }
 
@@ -370,7 +394,7 @@ final class SoulseekEngine
      * @return the profile, never {@code null}
      */
     @Override
-    public UserProfile getProfile() {
+    public UserProfile profile() {
         return profile;
     }
 
@@ -380,23 +404,8 @@ final class SoulseekEngine
      * @return the upload policy, never {@code null}
      */
     @Override
-    public UploadPolicy getUploadPolicy() {
-        return uploadPolicy;
-    }
-
-    @Override
     public UploadPolicy uploadPolicy() {
         return uploadPolicy;
-    }
-
-    @Override
-    public java.util.Map<Integer, dev.slsk.internal.transfer.TransferInternal> uploads() {
-        return getUploadRegistry();
-    }
-
-    @Override
-    public DiagnosticSink diagnostic() {
-        return diagnostic;
     }
 
     /**
@@ -414,7 +423,7 @@ final class SoulseekEngine
      * @return the admission
      */
     @Override
-    public UploadAdmission getUploadAdmission() {
+    public UploadAdmission admission() {
         return uploadAdmission;
     }
 
@@ -451,7 +460,7 @@ final class SoulseekEngine
     /** Answers a peer's unsolicited offer of a file. */
     @FunctionalInterface
     interface DownloadOffers {
-        PeerMessageHandlerClient.OfferDisposition offered(
+        PeerServices.OfferDisposition offered(
                 String username, String filename, dev.slsk.internal.messaging.messages.TransferRequest offer);
     }
 
@@ -464,14 +473,14 @@ final class SoulseekEngine
      * handler already checked.
      */
     private volatile DownloadOffers downloadOffers =
-            (username, filename, offer) -> PeerMessageHandlerClient.OfferDisposition.UNKNOWN;
+            (username, filename, offer) -> PeerServices.OfferDisposition.UNKNOWN;
 
     void downloadOffers(DownloadOffers value) {
         this.downloadOffers = Objects.requireNonNull(value, "downloadOffers");
     }
 
     @Override
-    public PeerMessageHandlerClient.OfferDisposition offerDownload(
+    public PeerServices.OfferDisposition offered(
             String username, String filename, dev.slsk.internal.messaging.messages.TransferRequest offer) {
         return downloadOffers.offered(username, filename, offer);
     }
@@ -493,7 +502,7 @@ final class SoulseekEngine
      * @param path the file they asked for
      */
     @Override
-    public void serveUpload(dev.slsk.Username user, String path) {
+    public void serve(dev.slsk.Username user, String path) {
         dev.slsk.internal.common.NetworkExecutor.runAsync(() -> {
             java.util.Optional<dev.slsk.spi.ResolvedFile> resolved;
             try {
@@ -550,8 +559,7 @@ final class SoulseekEngine
      * @param username who
      * @return whether they are privileged
      */
-    @Override
-    public boolean isPrivileged(String username) {
+    boolean isPrivileged(String username) {
         return username != null && privilegedUsers.contains(username);
     }
 
@@ -580,7 +588,6 @@ final class SoulseekEngine
     }
 
     /** Returns the configured client options. */
-    @Override
     public final SoulseekClientOptions getOptions() {
         return options;
     }
@@ -601,7 +608,6 @@ final class SoulseekEngine
     }
 
     /** Returns the logged-in username, or {@code null}. */
-    @Override
     public final String getUsername() {
         return server.username();
     }
@@ -617,7 +623,6 @@ final class SoulseekEngine
     }
 
     /** Returns the next operation token. */
-    @Override
     public int getNextToken() {
         return tokenFactory.nextToken();
     }
@@ -822,42 +827,35 @@ final class SoulseekEngine
         scheduler.close();
     }
 
-    @Override
-    public final Waiter getWaiter() {
+    final Waiter getWaiter() {
         return waiter;
     }
 
-    @Override
-    public final Map<Integer, SearchInternal> getSearches() {
+    final Map<Integer, SearchInternal> getSearches() {
         return searchDomain.registry();
     }
 
-    @Override
-    public final Map<Integer, TransferInternal> getDownloadDictionary() {
+    final Map<Integer, TransferInternal> getDownloadDictionary() {
         return downloads;
     }
 
-    @Override
-    public final PeerConnectionManager getPeerConnectionManager() {
+    final PeerConnectionManager getPeerConnectionManager() {
         return peerConnectionManager;
     }
 
-    @Override
-    public final DistributedConnectionManager getDistributedConnectionManager() {
+    final DistributedConnectionManager getDistributedConnectionManager() {
         return distributedConnectionManager;
     }
 
-    @Override
-    public final DistributedMessageHandler getDistributedMessageHandler() {
+    final DistributedMessageHandler getDistributedMessageHandler() {
         return distributedMessageHandler;
     }
 
-    @Override
-    public final SearchResponder getSearchResponder() {
+    final SearchResponder getSearchResponder() {
         return searchResponder;
     }
 
-    public final MessageConnection getServerConnection() {
+    final MessageConnection getServerConnection() {
         return server.connection();
     }
 
@@ -873,18 +871,15 @@ final class SoulseekEngine
         return connectionFactory;
     }
 
-    @Override
-    public IOAdapter getIoAdapter() {
+    IOAdapter getIoAdapter() {
         return ioAdapter;
     }
 
-    @Override
-    public TokenBucket getUploadTokenBucket() {
+    TokenBucket getUploadTokenBucket() {
         return uploadTokenBucket;
     }
 
-    @Override
-    public TokenBucket getDownloadTokenBucket() {
+    TokenBucket getDownloadTokenBucket() {
         return downloadTokenBucket;
     }
 
@@ -1202,7 +1197,7 @@ final class SoulseekEngine
     // Applying an option patch to a running client: swapping the listener,
     // resizing the rate-limit buckets, and deciding whether the change needs a
     // reconnect. This lived in a class of its own that took the client whole,
-    // because routing it through EngineContext would have meant a dozen
+    // because routing it through a seam interface would have meant a dozen
     // accessors for one caller. Now that the client is an engine rather than an
     // API, it is simply the engine's own work.
     //
@@ -1366,20 +1361,18 @@ final class SoulseekEngine
         }
     }
 
-    // ---- EngineContext, the seam the components delegate through ----------
+    // ---- what the in-package collaborators still read here ----------------
 
     /** The periodic endpoint-semaphore sweep; exposed for tests. */
     void cleanupUserEndpointSemaphores() {
         users.cleanupUserEndpointSemaphores();
     }
 
-    @Override
-    public java.net.InetSocketAddress resolveUserEndpoint(String username, CancellationSignal cancellationSignal) {
+    java.net.InetSocketAddress resolveUserEndpoint(String username, CancellationSignal cancellationSignal) {
         return users.getUserEndpoint(username, cancellationSignal);
     }
 
-    @Override
-    public void reportBrowseProgress(
+    void reportBrowseProgress(
             String requestedUsername,
             BrowseOptions operationOptions,
             long bytesTransferred,
@@ -1403,53 +1396,35 @@ final class SoulseekEngine
         events.raise(Kind.BROWSE_PROGRESS_UPDATED, eventData);
     }
 
-    @Override
-    public void acknowledgePrivateMessageOperation(int privateMessageId, CancellationSignal cancellationSignal) {
-        server.acknowledgePrivateMessage(privateMessageId, cancellationSignal);
-    }
-
-    @Override
-    public void acknowledgePrivilegeNotificationOperation(int notificationId, CancellationSignal cancellationSignal) {
-        server.acknowledgePrivilegeNotification(notificationId, cancellationSignal);
-    }
-
-    @Override
-    public TokenFactory getTokenFactory() {
+    TokenFactory getTokenFactory() {
         return tokenFactory;
     }
 
-    @Override
-    public Scheduler getScheduler() {
+    Scheduler getScheduler() {
         return scheduler;
     }
 
-    @Override
-    public <T> void raiseEvent(EngineEvents.Kind kind, T eventData) {
+    <T> void raiseEvent(EngineEvents.Kind kind, T eventData) {
         events.raise(kind, eventData);
     }
 
-    @Override
-    public java.util.Map<Integer, TransferInternal> getDownloadRegistry() {
+    java.util.Map<Integer, TransferInternal> getDownloadRegistry() {
         return downloads;
     }
 
-    @Override
-    public java.util.Map<Integer, TransferInternal> getUploadRegistry() {
+    java.util.Map<Integer, TransferInternal> getUploadRegistry() {
         return uploads;
     }
 
-    @Override
-    public String getLoggedInUsername() {
+    String getLoggedInUsername() {
         return server.username();
     }
 
-    @Override
-    public SoulseekClientOptions getClientOptions() {
+    SoulseekClientOptions getClientOptions() {
         return options;
     }
 
-    @Override
-    public DiagnosticSink getDiagnostic() {
+    DiagnosticSink getDiagnostic() {
         return diagnostic;
     }
 

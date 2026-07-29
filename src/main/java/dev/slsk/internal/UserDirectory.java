@@ -47,12 +47,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p>The second piece lifted out of {@code SoulseekEngine}. These
  * operations are peer-facing rather than server-facing, but they share the same
- * correlate-and-translate shape, so they reach the rest of the client through
- * {@link EngineContext} like the rooms do.
+ * correlate-and-translate shape. What they still reach the engine for is the
+ * peer connection manager, the correlator and the browse-progress event; the
+ * first two are ports of their own and the third is the engine's own event
+ * machinery.
  */
 final class UserDirectory {
 
-    private final EngineContext context;
+    private final SoulseekEngine context;
     private final ServerLink server;
 
     /**
@@ -65,7 +67,7 @@ final class UserDirectory {
 
     private final java.util.concurrent.Semaphore userEndpointSemaphoreSyncRoot = new java.util.concurrent.Semaphore(1);
 
-    UserDirectory(EngineContext context, ServerLink server) {
+    UserDirectory(SoulseekEngine context, ServerLink server) {
         this.context = Objects.requireNonNull(context, "context");
         this.server = Objects.requireNonNull(server, "server");
     }

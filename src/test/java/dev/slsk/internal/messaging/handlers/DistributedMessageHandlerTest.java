@@ -11,8 +11,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
+import dev.slsk.internal.ServerLink;
+import dev.slsk.internal.ServerLinks;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Outcomes;
+import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
@@ -50,7 +53,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class DistributedMessageHandlerTest {
@@ -60,8 +62,17 @@ class DistributedMessageHandlerTest {
     private static final int TOKEN = 0x10203040;
 
     @Test
-    void constructionRequiresClient() {
-        assertThrows(NullPointerException.class, () -> new DefaultDistributedMessageHandler(null));
+    void constructionRequiresItsPorts() {
+        Fixture fixture = new Fixture(true);
+        assertThrows(
+                NullPointerException.class,
+                () -> new DefaultDistributedMessageHandler(
+                        null,
+                        fixture.server,
+                        new TokenFactory(TOKEN),
+                        fixture.waiter,
+                        () -> fixture.manager.proxy,
+                        () -> fixture.responder.proxy));
     }
 
     @Test
@@ -248,61 +259,19 @@ class DistributedMessageHandlerTest {
         private final FakeWaiter waiter = new FakeWaiter();
         private final ManagerProbe manager = new ManagerProbe();
         private final ResponderProbe responder = new ResponderProbe();
-        private final FakeClient client;
+        private final ServerLink server = ServerLinks.loggedIn(waiter, diagnostic, null, LOCAL_USER);
         private final DefaultDistributedMessageHandler handler;
 
         private Fixture(boolean deduplicate) {
-            client = new FakeClient(options(deduplicate), waiter, manager.proxy, responder.proxy);
-            handler = new DefaultDistributedMessageHandler(client, diagnostic);
-        }
-    }
-
-    private static final class FakeClient implements DistributedMessageHandlerClient {
-        private final SoulseekClientOptions options;
-        private final Waiter waiter;
-        private final DistributedConnectionManager manager;
-        private final SearchResponder responder;
-        private final AtomicInteger token = new AtomicInteger(TOKEN);
-
-        private FakeClient(
-                SoulseekClientOptions options,
-                Waiter waiter,
-                DistributedConnectionManager manager,
-                SearchResponder responder) {
-            this.options = options;
-            this.waiter = waiter;
-            this.manager = manager;
-            this.responder = responder;
-        }
-
-        @Override
-        public SoulseekClientOptions getOptions() {
-            return options;
-        }
-
-        @Override
-        public String getUsername() {
-            return LOCAL_USER;
-        }
-
-        @Override
-        public int getNextToken() {
-            return token.getAndIncrement();
-        }
-
-        @Override
-        public Waiter getWaiter() {
-            return waiter;
-        }
-
-        @Override
-        public DistributedConnectionManager getDistributedConnectionManager() {
-            return manager;
-        }
-
-        @Override
-        public SearchResponder getSearchResponder() {
-            return responder;
+            SoulseekClientOptions options = options(deduplicate);
+            handler = new DefaultDistributedMessageHandler(
+                    () -> options,
+                    server,
+                    new TokenFactory(TOKEN),
+                    waiter,
+                    () -> manager.proxy,
+                    () -> responder.proxy,
+                    diagnostic);
         }
     }
 

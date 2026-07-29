@@ -44,49 +44,21 @@ import org.junit.jupiter.api.Test;
 class EngineApiTest {
 
     /**
-     * {@code EngineContext} plus the accessors the handlers reach the engine by.
+     * The one collaborator interface the engine still answers.
      *
-     * <p>It shrinks as each domain takes its own. The server write path, the
-     * correlated command and request, the login check and the default signal
-     * left together for {@code ServerLink}, which owns the server connection;
-     * nothing reaches the server through the engine any more. The search
-     * registry left for {@code SearchDomain}, and with it the second name the
-     * engine had for the same map.
+     * <p>It was nine. Eight went the same way: the members were one-line
+     * accessors, so each component took what it used as a constructor argument
+     * and the interface was deleted — {@code EngineContext} with them, and with
+     * it every public method that existed only because an interface declared
+     * it. The engine's public surface went from forty-eight names to
+     * twenty-one in one commit without one line of behaviour moving.
+     *
+     * <p>What is left is {@link dev.slsk.internal.messaging.handlers.PeerServices}:
+     * what this client offers a peer. Its six members are the upload, share and
+     * profile state, and they leave with {@code TransferEngine} in Phase 4.
      */
-    private static final Set<String> SEAM = Set.of(
-            "acknowledgePrivateMessageOperation",
-            "acknowledgePrivilegeNotificationOperation",
-            "getClientOptions",
-            "getDiagnostic",
-            "getDistributedConnectionManager",
-            "getDistributedMessageHandler",
-            "getDownloadDictionary",
-            "getDownloadRegistry",
-            "getDownloadTokenBucket",
-            "getIoAdapter",
-            "getLoggedInUsername",
-            "getPeerConnectionManager",
-            "getProfile",
-            "getScheduler",
-            "getSearchResponder",
-            "getSearches",
-            "getServerConnection",
-            "getShareCatalog",
-            "getUploadAdmission",
-            "getUploadPolicy",
-            "getTokenFactory",
-            "getUploadRegistry",
-            "uploadPolicy",
-            "uploads",
-            "diagnostic",
-            "isPrivileged",
-            "getUploadTokenBucket",
-            "getWaiter",
-            "raiseEvent",
-            "reportBrowseProgress",
-            "offerDownload",
-            "resolveUserEndpoint",
-            "serveUpload");
+    private static final Set<String> SEAM =
+            Set.of("admission", "catalog", "offered", "profile", "serve", "uploadPolicy");
 
     /** The connection lifecycle and the state that belongs to it. */
     private static final Set<String> ENGINE = Set.of(

@@ -59,7 +59,7 @@ import java.util.function.Supplier;
  * <p>Was an inner class of {@link TransferEngine}. Lifted out so neither type
  * carries the other's bulk; it keeps an explicit reference to the engine for
  * the concurrency limits and duplicate keys the engine owns, and reaches the
- * client through the same {@link EngineContext} seam.
+ * client through the same engine the transfer engine holds.
  */
 final class DownloadOperation {
 

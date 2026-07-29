@@ -42,7 +42,7 @@ import java.util.function.Consumer;
  */
 final class SearchDomain {
 
-    private final EngineContext context;
+    private final SoulseekEngine context;
     private final ServerLink server;
 
     /** Caps concurrent searches; the limit is a search concern, so it lives here. */
@@ -55,7 +55,7 @@ final class SearchDomain {
      */
     private volatile java.util.Map<Integer, SearchInternal> searches = new java.util.concurrent.ConcurrentHashMap<>();
 
-    SearchDomain(EngineContext context, ServerLink server) {
+    SearchDomain(SoulseekEngine context, ServerLink server) {
         this.context = java.util.Objects.requireNonNull(context, "context");
         this.server = java.util.Objects.requireNonNull(server, "server");
         this.searchSemaphore =

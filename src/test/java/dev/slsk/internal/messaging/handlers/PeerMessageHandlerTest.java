@@ -87,8 +87,17 @@ class PeerMessageHandlerTest {
     private static final InetSocketAddress ENDPOINT = endpoint(44001);
 
     @Test
-    void constructionRequiresClient() {
-        assertThrows(NullPointerException.class, () -> new DefaultPeerMessageHandler(null));
+    void constructionRequiresItsPorts() {
+        Fixture fixture = new Fixture(ShareCatalog.empty());
+        assertThrows(
+                NullPointerException.class,
+                () -> new DefaultPeerMessageHandler(
+                        null,
+                        fixture.waiter,
+                        () -> fixture.client.searches,
+                        () -> fixture.client.downloads,
+                        () -> "me",
+                        fixture.client));
     }
 
     @Test
@@ -373,7 +382,7 @@ class PeerMessageHandlerTest {
     @DisplayName("an offer for a queued download is taken up, silently")
     void offeredDownloadsAreTakenUpRatherThanCancelled() {
         Fixture taken = new Fixture(new SoulseekClientOptions());
-        taken.client.disposition = PeerMessageHandlerClient.OfferDisposition.TAKEN;
+        taken.client.disposition = PeerServices.OfferDisposition.TAKEN;
         taken.handler.handleMessageRead(
                 taken.connection.proxy, new TransferRequest(TransferDirection.UPLOAD, TOKEN, FILENAME).toByteArray());
 
@@ -392,7 +401,7 @@ class PeerMessageHandlerTest {
     @DisplayName("an offer for something already downloaded is refused as Complete")
     void offersForFinishedDownloadsAreRefusedAsComplete() {
         Fixture done = new Fixture(new SoulseekClientOptions());
-        done.client.disposition = PeerMessageHandlerClient.OfferDisposition.COMPLETE;
+        done.client.disposition = PeerServices.OfferDisposition.COMPLETE;
         done.handler.handleMessageRead(
                 done.connection.proxy, new TransferRequest(TransferDirection.UPLOAD, TOKEN, FILENAME).toByteArray());
         assertArrayEquals(
@@ -560,11 +569,19 @@ class PeerMessageHandlerTest {
             // Answers run on the calling thread here. In production they run
             // off the read loop, which is the point of the seam; a test that
             // asserts on an answer should not have to wait for one.
-            handler = new DefaultPeerMessageHandler(client, diagnostic, Runnable::run);
+            handler = new DefaultPeerMessageHandler(
+                    () -> client.options,
+                    client.waiter,
+                    () -> client.searches,
+                    () -> client.downloads,
+                    () -> "me",
+                    client,
+                    diagnostic,
+                    Runnable::run);
         }
     }
 
-    private static final class FakeClient implements PeerMessageHandlerClient {
+    private static final class FakeClient implements PeerServices {
         private final SoulseekClientOptions options;
         private final Waiter waiter;
         private final ShareCatalog catalog;
@@ -579,28 +596,8 @@ class PeerMessageHandlerTest {
         /** Where a misbehaving policy is reported; asserted on by the tests. */
         private final RecordingDiagnostic admissionDiagnostic = new RecordingDiagnostic();
 
-        private final dev.slsk.internal.UploadAdmission admission =
-                new dev.slsk.internal.UploadAdmission(new dev.slsk.internal.UploadAdmission.Host() {
-                    @Override
-                    public UploadPolicy uploadPolicy() {
-                        return policy;
-                    }
-
-                    @Override
-                    public Map<Integer, TransferInternal> uploads() {
-                        return Map.of();
-                    }
-
-                    @Override
-                    public boolean isPrivileged(String username) {
-                        return false;
-                    }
-
-                    @Override
-                    public dev.slsk.internal.diagnostics.DiagnosticSink diagnostic() {
-                        return admissionDiagnostic;
-                    }
-                });
+        private final dev.slsk.internal.UploadAdmission admission = new dev.slsk.internal.UploadAdmission(
+                this::uploadPolicy, Map::of, username -> false, admissionDiagnostic);
         private final Map<Integer, SearchInternal> searches = new HashMap<>();
         private final Map<Integer, TransferInternal> downloads = new HashMap<>();
 
@@ -621,7 +618,7 @@ class PeerMessageHandlerTest {
         private final List<String> served = new java.util.ArrayList<>();
 
         @Override
-        public void serveUpload(Username user, String path) {
+        public void serve(Username user, String path) {
             served.add(user.value() + " " + path);
         }
 
@@ -632,55 +629,30 @@ class PeerMessageHandlerTest {
         private final java.util.List<String> offered = new java.util.ArrayList<>();
 
         @Override
-        public OfferDisposition offerDownload(
+        public OfferDisposition offered(
                 String username, String filename, dev.slsk.internal.messaging.messages.TransferRequest offer) {
             offered.add(username + " " + filename);
             return disposition;
         }
 
         @Override
-        public UploadPolicy getUploadPolicy() {
+        public UploadPolicy uploadPolicy() {
             return policy;
         }
 
         @Override
-        public dev.slsk.internal.UploadAdmission getUploadAdmission() {
+        public dev.slsk.internal.UploadAdmission admission() {
             return admission;
         }
 
         @Override
-        public UserProfile getProfile() {
+        public UserProfile profile() {
             return profile;
         }
 
         @Override
-        public ShareCatalog getShareCatalog() {
+        public ShareCatalog catalog() {
             return catalog;
-        }
-
-        @Override
-        public String getLoggedInUsername() {
-            return "me";
-        }
-
-        @Override
-        public SoulseekClientOptions getOptions() {
-            return options;
-        }
-
-        @Override
-        public Waiter getWaiter() {
-            return waiter;
-        }
-
-        @Override
-        public Map<Integer, SearchInternal> getSearches() {
-            return searches;
-        }
-
-        @Override
-        public Map<Integer, TransferInternal> getDownloadDictionary() {
-            return downloads;
         }
     }
 

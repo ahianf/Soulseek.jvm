@@ -220,7 +220,7 @@ public final class ServerLink {
         acknowledgePrivateMessage(privateMessageId, CancellationSignal.none());
     }
 
-    void acknowledgePrivateMessage(int privateMessageId, CancellationSignal cancellationSignal) {
+    public void acknowledgePrivateMessage(int privateMessageId, CancellationSignal cancellationSignal) {
         if (privateMessageId < 0) {
             throw new IllegalArgumentException("The private message ID must be greater than zero");
         }
@@ -236,7 +236,7 @@ public final class ServerLink {
         acknowledgePrivilegeNotification(privilegeNotificationId, CancellationSignal.none());
     }
 
-    void acknowledgePrivilegeNotification(int privilegeNotificationId, CancellationSignal cancellationSignal) {
+    public void acknowledgePrivilegeNotification(int privilegeNotificationId, CancellationSignal cancellationSignal) {
         if (privilegeNotificationId < 0) {
             throw new IllegalArgumentException("The privilege notification ID must be greater than zero");
         }

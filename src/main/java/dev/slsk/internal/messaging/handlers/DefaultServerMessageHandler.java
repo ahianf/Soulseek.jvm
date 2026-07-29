@@ -13,11 +13,13 @@ import dev.slsk.internal.RoomInfo;
 import dev.slsk.internal.RoomList;
 import dev.slsk.internal.SearchScopeType;
 import dev.slsk.internal.ServerInfo;
+import dev.slsk.internal.ServerLink;
 import dev.slsk.internal.UserStatistics;
 import dev.slsk.internal.UserStatus;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.WaitKey;
+import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
@@ -71,12 +73,16 @@ import dev.slsk.internal.messaging.messages.UserPrivilegeResponse;
 import dev.slsk.internal.messaging.messages.UserStatisticsResponseFactory;
 import dev.slsk.internal.messaging.messages.UserStatusResponseFactory;
 import dev.slsk.internal.messaging.messages.WatchUserResponse;
+import dev.slsk.internal.network.DistributedConnectionManager;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.MessageEvent;
+import dev.slsk.internal.network.PeerConnectionManager;
 import dev.slsk.internal.network.PeerEndpoint;
 import dev.slsk.internal.network.TransferConnectionResult;
 import dev.slsk.internal.network.tcp.Connection;
+import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.search.SearchInternal;
+import dev.slsk.internal.search.SearchResponder;
 import dev.slsk.internal.transfer.TransferInternal;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -87,25 +93,71 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Supplier;
 
 /** Handles incoming messages from the server connection. */
 public final class DefaultServerMessageHandler implements ServerMessageHandler {
-    private final ServerMessageHandlerClient client;
+    private final Supplier<SoulseekClientOptions> options;
+    private final ServerLink server;
+    private final Waiter waiter;
+    private final Supplier<Map<Integer, SearchInternal>> searches;
+    private final Supplier<Map<Integer, TransferInternal>> downloads;
+    private final Supplier<PeerConnectionManager> peers;
+    private final Supplier<DistributedConnectionManager> distributed;
+    private final Supplier<DistributedMessageHandler> distributedMessages;
+    private final Supplier<SearchResponder> searchResponses;
     private final DiagnosticSink diagnostic;
     private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
     private final Map<ServerMessageEvent, CopyOnWriteArrayList<ServerMessageHandlerEventListener<?>>> listeners =
             new EnumMap<>(ServerMessageEvent.class);
 
     /** Creates a handler with its default diagnostic factory. */
-    public DefaultServerMessageHandler(ServerMessageHandlerClient client) {
-        this(client, null);
+    public DefaultServerMessageHandler(
+            Supplier<SoulseekClientOptions> options,
+            ServerLink server,
+            Waiter waiter,
+            Supplier<Map<Integer, SearchInternal>> searches,
+            Supplier<Map<Integer, TransferInternal>> downloads,
+            Supplier<PeerConnectionManager> peers,
+            Supplier<DistributedConnectionManager> distributed,
+            Supplier<DistributedMessageHandler> distributedMessages,
+            Supplier<SearchResponder> searchResponses) {
+        this(
+                options,
+                server,
+                waiter,
+                searches,
+                downloads,
+                peers,
+                distributed,
+                distributedMessages,
+                searchResponses,
+                null);
     }
 
     /** Creates a handler. */
-    public DefaultServerMessageHandler(ServerMessageHandlerClient client, DiagnosticSink diagnosticFactory) {
-        this.client = Objects.requireNonNull(client, "client");
+    public DefaultServerMessageHandler(
+            Supplier<SoulseekClientOptions> options,
+            ServerLink server,
+            Waiter waiter,
+            Supplier<Map<Integer, SearchInternal>> searches,
+            Supplier<Map<Integer, TransferInternal>> downloads,
+            Supplier<PeerConnectionManager> peers,
+            Supplier<DistributedConnectionManager> distributed,
+            Supplier<DistributedMessageHandler> distributedMessages,
+            Supplier<SearchResponder> searchResponses,
+            DiagnosticSink diagnosticFactory) {
+        this.options = Objects.requireNonNull(options, "options");
+        this.server = Objects.requireNonNull(server, "server");
+        this.waiter = Objects.requireNonNull(waiter, "waiter");
+        this.searches = Objects.requireNonNull(searches, "searches");
+        this.downloads = Objects.requireNonNull(downloads, "downloads");
+        this.peers = Objects.requireNonNull(peers, "peers");
+        this.distributed = Objects.requireNonNull(distributed, "distributed");
+        this.distributedMessages = Objects.requireNonNull(distributedMessages, "distributedMessages");
+        this.searchResponses = Objects.requireNonNull(searchResponses, "searchResponses");
         diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(options.get().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
         for (ServerMessageEvent event : ServerMessageEvent.values()) {
             listeners.put(event, new CopyOnWriteArrayList<>());
@@ -164,7 +216,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                     yield completed();
                 }
                 case CHECK_PRIVILEGES -> {
-                    client.getWaiter().complete(new WaitKey(code), integer(message));
+                    waiter.complete(new WaitKey(code), integer(message));
                     yield completed();
                 }
                 case PRIVATE_ROOM_ADDED -> {
@@ -173,7 +225,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 }
                 case PRIVATE_ROOM_REMOVED -> {
                     String room = string(message);
-                    client.getWaiter().complete(new WaitKey(code, room));
+                    waiter.complete(new WaitKey(code, room));
                     raise(ServerMessageEvent.PRIVATE_ROOM_MEMBERSHIP_REMOVED, room);
                     yield completed();
                 }
@@ -183,22 +235,20 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 }
                 case PRIVATE_ROOM_OPERATOR_REMOVED -> {
                     String room = string(message);
-                    client.getWaiter().complete(new WaitKey(code, room));
+                    waiter.complete(new WaitKey(code, room));
                     raise(ServerMessageEvent.PRIVATE_ROOM_MODERATION_REMOVED, room);
                     yield completed();
                 }
                 case NEW_PASSWORD -> {
-                    client.getWaiter()
-                            .complete(
-                                    new WaitKey(code),
-                                    NewPassword.fromByteArray(message).getPassword());
+                    waiter.complete(
+                            new WaitKey(code),
+                            NewPassword.fromByteArray(message).getPassword());
                     yield completed();
                 }
                 case PRIVATE_ROOM_TOGGLE -> {
-                    client.getWaiter()
-                            .complete(
-                                    new WaitKey(code),
-                                    PrivateRoomToggle.fromByteArray(message).isAcceptInvitations());
+                    waiter.complete(
+                            new WaitKey(code),
+                            PrivateRoomToggle.fromByteArray(message).isAcceptInvitations());
                     yield completed();
                 }
                 case EXCLUDED_SEARCH_PHRASES -> {
@@ -212,16 +262,16 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                     yield completed();
                 }
                 case PING -> {
-                    client.getWaiter().complete(new WaitKey(code));
+                    waiter.complete(new WaitKey(code));
                     yield completed();
                 }
                 case LOGIN -> {
-                    client.getWaiter().complete(new WaitKey(code), LoginResponse.fromByteArray(message));
+                    waiter.complete(new WaitKey(code), LoginResponse.fromByteArray(message));
                     yield completed();
                 }
                 case ROOM_LIST -> {
                     RoomList rooms = RoomListResponseFactory.fromByteArray(message);
-                    client.getWaiter().complete(new WaitKey(code), rooms);
+                    waiter.complete(new WaitKey(code), rooms);
                     raise(ServerMessageEvent.ROOM_LIST_RECEIVED, rooms);
                     yield completed();
                 }
@@ -250,15 +300,15 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 case NOTIFY_PRIVILEGES -> handlePrivilegeNotification(message);
                 case USER_PRIVILEGES -> {
                     UserPrivilegeResponse response = UserPrivilegeResponse.fromByteArray(message);
-                    client.getWaiter().complete(new WaitKey(code, response.getUsername()), response.isPrivileged());
+                    waiter.complete(new WaitKey(code, response.getUsername()), response.isPrivileged());
                     yield completed();
                 }
                 case NET_INFO -> handleNetInfo(message);
                 case DISTRIBUTED_RESET -> {
                     diagnostic.info("Distributed network reset received from the server");
                     raise(ServerMessageEvent.DISTRIBUTED_NETWORK_RESET, null);
-                    client.getDistributedConnectionManager().removeAndDisposeAll();
-                    client.getDistributedConnectionManager().resetStatus();
+                    distributed.get().removeAndDisposeAll();
+                    distributed.get().resetStatus();
                     yield completed();
                 }
                 case CANNOT_CONNECT -> {
@@ -267,48 +317,45 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 }
                 case CANNOT_JOIN_ROOM -> {
                     CannotJoinRoomNotification rejected = CannotJoinRoomNotification.fromByteArray(message);
-                    client.getWaiter()
-                            .fail(
-                                    new WaitKey(MessageCode.Server.JOIN_ROOM, rejected.getRoomName()),
-                                    new RoomJoinForbiddenException(
-                                            "The server rejected the request to join room " + rejected.getRoomName()));
+                    waiter.fail(
+                            new WaitKey(MessageCode.Server.JOIN_ROOM, rejected.getRoomName()),
+                            new RoomJoinForbiddenException(
+                                    "The server rejected the request to join room " + rejected.getRoomName()));
                     yield completed();
                 }
                 case CONNECT_TO_PEER -> handleConnectToPeer(message);
                 case WATCH_USER -> {
                     WatchUserResponse response = WatchUserResponse.fromByteArray(message);
-                    client.getWaiter().complete(new WaitKey(code, response.getUsername()), response);
+                    waiter.complete(new WaitKey(code, response.getUsername()), response);
                     yield completed();
                 }
                 case GET_STATUS -> {
                     UserStatus status = UserStatusResponseFactory.fromByteArray(message);
-                    client.getWaiter().complete(new WaitKey(code, status.getUsername()), status);
+                    waiter.complete(new WaitKey(code, status.getUsername()), status);
                     raise(ServerMessageEvent.USER_STATUS_CHANGED, status);
                     yield completed();
                 }
                 case GET_USER_STATS -> {
                     UserStatistics statistics = UserStatisticsResponseFactory.fromByteArray(message);
-                    client.getWaiter().complete(new WaitKey(code, statistics.getUsername()), statistics);
+                    waiter.complete(new WaitKey(code, statistics.getUsername()), statistics);
                     raise(ServerMessageEvent.USER_STATISTICS_CHANGED, statistics);
                     yield completed();
                 }
                 case PRIVATE_MESSAGE -> handlePrivateMessage(message);
                 case GET_PEER_ADDRESS -> {
                     UserAddressResponse response = UserAddressResponse.fromByteArray(message);
-                    client.getWaiter().complete(new WaitKey(code, response.getUsername()), response);
+                    waiter.complete(new WaitKey(code, response.getUsername()), response);
                     yield completed();
                 }
                 case JOIN_ROOM -> {
                     RoomData response = JoinRoomResponse.fromByteArray(message);
-                    client.getWaiter().complete(new WaitKey(code, response.getName()), response);
+                    waiter.complete(new WaitKey(code, response.getName()), response);
                     yield completed();
                 }
                 case LEAVE_ROOM -> {
                     LeaveRoomResponse response = LeaveRoomResponse.fromByteArray(message);
-                    client.getWaiter().complete(new WaitKey(code, response.getRoomName()));
-                    raise(
-                            ServerMessageEvent.ROOM_LEFT,
-                            new RoomLeftEvent(response.getRoomName(), client.getUsername()));
+                    waiter.complete(new WaitKey(code, response.getRoomName()));
+                    raise(ServerMessageEvent.ROOM_LEFT, new RoomLeftEvent(response.getRoomName(), server.username()));
                     yield completed();
                 }
                 case SAY_IN_CHAT_ROOM -> {
@@ -357,22 +404,22 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 }
                 case PRIVATE_ROOM_ADD_USER -> {
                     PrivateRoomAddUser response = PrivateRoomAddUser.fromByteArray(message);
-                    client.getWaiter().complete(new WaitKey(code, response.getRoomName(), response.getUsername()));
+                    waiter.complete(new WaitKey(code, response.getRoomName(), response.getUsername()));
                     yield completed();
                 }
                 case PRIVATE_ROOM_REMOVE_USER -> {
                     PrivateRoomRemoveUser response = PrivateRoomRemoveUser.fromByteArray(message);
-                    client.getWaiter().complete(new WaitKey(code, response.getRoomName(), response.getUsername()));
+                    waiter.complete(new WaitKey(code, response.getRoomName(), response.getUsername()));
                     yield completed();
                 }
                 case PRIVATE_ROOM_ADD_OPERATOR -> {
                     PrivateRoomAddOperator response = PrivateRoomAddOperator.fromByteArray(message);
-                    client.getWaiter().complete(new WaitKey(code, response.getRoomName(), response.getUsername()));
+                    waiter.complete(new WaitKey(code, response.getRoomName(), response.getUsername()));
                     yield completed();
                 }
                 case PRIVATE_ROOM_REMOVE_OPERATOR -> {
                     PrivateRoomRemoveOperator response = PrivateRoomRemoveOperator.fromByteArray(message);
-                    client.getWaiter().complete(new WaitKey(code, response.getRoomName(), response.getUsername()));
+                    waiter.complete(new WaitKey(code, response.getRoomName(), response.getUsername()));
                     yield completed();
                 }
                 case KICKED_FROM_SERVER -> {
@@ -381,7 +428,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 }
                 case FILE_SEARCH -> handleSearchRequest(message);
                 case EMBEDDED_MESSAGE -> {
-                    client.getDistributedMessageHandler().handleEmbeddedMessage(message);
+                    distributedMessages.get().handleEmbeddedMessage(message);
                     yield completed();
                 }
                 default -> {
@@ -413,23 +460,23 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         raise(
                 ServerMessageEvent.PRIVILEGE_NOTIFICATION_RECEIVED,
                 new PrivilegeNotificationReceivedEvent(notification.getUsername(), notification.getId()));
-        if (!client.getOptions().isAutoAcknowledgePrivilegeNotifications()) {
+        if (!options.get().isAutoAcknowledgePrivilegeNotifications()) {
             return completed();
         }
         // Off the server read loop: acknowledging writes back to the server.
-        return NetworkExecutor.runAsync(() ->
-                client.acknowledgePrivilegeNotificationOperation(notification.getId(), CancellationSignal.none()));
+        return NetworkExecutor.runAsync(
+                () -> server.acknowledgePrivilegeNotification(notification.getId(), CancellationSignal.none()));
     }
 
     private CompletableFuture<Void> handlePrivateMessage(byte[] message) {
         PrivateMessageNotification notification = PrivateMessageNotification.fromByteArray(message);
         raise(ServerMessageEvent.PRIVATE_MESSAGE_RECEIVED, new PrivateMessageReceivedEvent(notification));
-        if (!client.getOptions().isAutoAcknowledgePrivateMessages()) {
+        if (!options.get().isAutoAcknowledgePrivateMessages()) {
             return completed();
         }
         // Off the server read loop: acknowledging writes back to the server.
         return NetworkExecutor.runAsync(
-                () -> client.acknowledgePrivateMessageOperation(notification.getId(), CancellationSignal.none()));
+                () -> server.acknowledgePrivateMessage(notification.getId(), CancellationSignal.none()));
     }
 
     private CompletableFuture<Void> handleNetInfo(byte[] message) {
@@ -440,7 +487,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 .toList();
         CompletableFuture<Void> add;
         try {
-            add = client.getDistributedConnectionManager().addParentConnectionAsync(parents);
+            add = distributed.get().addParentConnectionAsync(parents);
         } catch (Throwable failure) {
             add = CompletableFuture.failedFuture(failure);
         }
@@ -461,7 +508,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                                 || cannotConnect.getUsername().isEmpty()
                         ? ""
                         : " from user " + cannotConnect.getUsername()));
-        client.getSearchResponder().tryDiscard(cannotConnect.getToken());
+        searchResponses.get().tryDiscard(cannotConnect.getToken());
         if (cannotConnect.getUsername() != null && !cannotConnect.getUsername().isEmpty()) {
             raise(ServerMessageEvent.USER_CANNOT_CONNECT, new UserCannotConnectEvent(cannotConnect));
         }
@@ -480,14 +527,13 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                     // Off the server read loop: establishing this connects to
                     // a peer and writes to it, and the server has more to say
                     // meanwhile.
-                    yield NetworkExecutor.runAsync(
-                            () -> client.getPeerConnectionManager().getOrAddMessageConnection(response));
+                    yield NetworkExecutor.runAsync(() -> peers.get().getOrAddMessageConnection(response));
                 }
                 case Constants.ConnectionType.DISTRIBUTED -> {
                     diagnostic.debug("Received distributed ConnectToPeer request from "
                             + response.getUsername() + " ("
                             + response.getIpEndpoint() + ")");
-                    yield client.getDistributedConnectionManager().getOrAddChildConnectionAsync(response);
+                    yield distributed.get().getOrAddChildConnectionAsync(response);
                 }
                 default ->
                     CompletableFuture.failedFuture(new MessageException(
@@ -513,8 +559,8 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 + response.getUsername() + " ("
                 + response.getIpEndpoint() + ") for remote token "
                 + response.getToken());
-        boolean expected = !client.getDownloadDictionary().isEmpty()
-                && client.getDownloadDictionary().values().stream()
+        boolean expected = !downloads.get().isEmpty()
+                && downloads.get().values().stream()
                         .anyMatch(transfer -> Objects.equals(transfer.getUsername(), response.getUsername()));
         if (!expected) {
             return CompletableFuture.failedFuture(new SoulseekClientException("Unexpected transfer request from "
@@ -522,12 +568,12 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                     + response.getIpEndpoint() + "); Ignored"));
         }
         // Off the server read loop, as above.
-        return NetworkExecutor.runAsync(() -> correlateTransferConnection(
-                response, client.getPeerConnectionManager().getTransferConnection(response)));
+        return NetworkExecutor.runAsync(
+                () -> correlateTransferConnection(response, peers.get().getTransferConnection(response)));
     }
 
     private void correlateTransferConnection(ConnectToPeerResponse response, TransferConnectionResult result) {
-        TransferInternal download = client.getDownloadDictionary().values().stream()
+        TransferInternal download = downloads.get().values().stream()
                 .filter(transfer -> Objects.equals(transfer.getRemoteToken(), result.remoteToken())
                         && Objects.equals(transfer.getUsername(), response.getUsername()))
                 .findFirst()
@@ -548,26 +594,26 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 + download.getToken() + " (remote: "
                 + download.getRemoteToken() + ") established. (id: "
                 + connection.getId() + ")");
-        client.getWaiter()
-                .complete(
-                        new WaitKey(
-                                Constants.WaitKey.INDIRECT_TRANSFER,
-                                download.getUsername(),
-                                download.getFilename(),
-                                download.getRemoteToken()),
-                        connection);
+        waiter.complete(
+                new WaitKey(
+                        Constants.WaitKey.INDIRECT_TRANSFER,
+                        download.getUsername(),
+                        download.getFilename(),
+                        download.getRemoteToken()),
+                connection);
     }
 
     private CompletableFuture<Void> handleSearchRequest(byte[] message) {
         ServerSearchRequest request = ServerSearchRequest.fromByteArray(message);
-        if (Objects.equals(request.getUsername(), client.getUsername())) {
-            boolean deliberate = client.getSearches().values().stream()
+        if (Objects.equals(request.getUsername(), server.username())) {
+            boolean deliberate = searches.get().values().stream()
                     .anyMatch(search -> deliberatelySearchesSelf(search, request.getToken()));
             if (!deliberate) {
                 return completed();
             }
         }
-        return client.getSearchResponder()
+        return searchResponses
+                .get()
                 .tryRespondAsync(request.getUsername(), request.getToken(), request.getQuery())
                 .thenApply(ignored -> null);
     }
@@ -577,7 +623,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
             return false;
         }
         for (String subject : search.getScope().getSubjects()) {
-            if (subject.equalsIgnoreCase(client.getUsername())) {
+            if (subject.equalsIgnoreCase(server.username())) {
                 return true;
             }
         }

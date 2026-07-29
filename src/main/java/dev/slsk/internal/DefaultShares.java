@@ -170,7 +170,7 @@ final class DefaultShares implements Shares {
 
     @Override
     public ShareIndex index() {
-        return installed.get() ? client.getShareCatalog().index() : index.get();
+        return installed.get() ? client.catalog().index() : index.get();
     }
 
     @Override

@@ -49,7 +49,7 @@ import java.util.function.Supplier;
  */
 final class TransferEngine {
 
-    final EngineContext context;
+    final SoulseekEngine context;
     final ServerLink server;
 
     /** Global transfer concurrency limits; a transfer concern, so owned here. */
@@ -66,7 +66,7 @@ final class TransferEngine {
     /** Duplicate-transfer keys; owned here, since this is what detects duplicates. */
     final java.util.Map<String, Boolean> uniqueKeys = new java.util.concurrent.ConcurrentHashMap<>();
 
-    TransferEngine(EngineContext context, ServerLink server) {
+    TransferEngine(SoulseekEngine context, ServerLink server) {
         this.context = java.util.Objects.requireNonNull(context, "context");
         this.server = java.util.Objects.requireNonNull(server, "server");
         this.globalDownloadSemaphore =

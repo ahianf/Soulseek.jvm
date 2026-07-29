@@ -58,7 +58,7 @@ class DefaultSharesTest {
     }
 
     private static ShareCatalog catalogOf(Soulseek slsk) {
-        return ((DefaultSoulseek) slsk).client().getShareCatalog();
+        return ((DefaultSoulseek) slsk).client().catalog();
     }
 
     private static Path share(Path root) throws IOException {

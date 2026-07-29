@@ -4,9 +4,12 @@
 
 package dev.slsk.internal.messaging.handlers;
 
+import dev.slsk.internal.ServerLink;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.NetworkExecutor;
+import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.WaitKey;
+import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
@@ -19,32 +22,64 @@ import dev.slsk.internal.messaging.messages.DistributedChildDepth;
 import dev.slsk.internal.messaging.messages.DistributedPingResponse;
 import dev.slsk.internal.messaging.messages.DistributedSearchRequest;
 import dev.slsk.internal.messaging.messages.EmbeddedMessage;
+import dev.slsk.internal.network.DistributedConnectionManager;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.MessageEvent;
 import dev.slsk.internal.network.PeerEndpoint;
+import dev.slsk.internal.options.SoulseekClientOptions;
+import dev.slsk.internal.search.SearchResponder;
 import java.util.Base64;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Supplier;
 
-/** Handles incoming messages from distributed connections. */
+/**
+ * Handles incoming messages from distributed connections.
+ *
+ * <p>The mesh and the responder are supplied rather than held: this is built
+ * before the mesh, because the mesh attaches this to every connection it makes.
+ */
 public final class DefaultDistributedMessageHandler implements DistributedMessageHandler {
-    private final DistributedMessageHandlerClient client;
+    private final Supplier<SoulseekClientOptions> options;
+    private final ServerLink server;
+    private final TokenFactory tokens;
+    private final Waiter waiter;
+    private final Supplier<DistributedConnectionManager> mesh;
+    private final Supplier<SearchResponder> searchResponses;
     private final DiagnosticSink diagnostic;
     private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
     private volatile String deduplicationHash;
 
     /** Creates a handler with its default diagnostic factory. */
-    public DefaultDistributedMessageHandler(DistributedMessageHandlerClient client) {
-        this(client, null);
+    public DefaultDistributedMessageHandler(
+            Supplier<SoulseekClientOptions> options,
+            ServerLink server,
+            TokenFactory tokens,
+            Waiter waiter,
+            Supplier<DistributedConnectionManager> mesh,
+            Supplier<SearchResponder> searchResponses) {
+        this(options, server, tokens, waiter, mesh, searchResponses, null);
     }
 
     /** Creates a handler. */
-    public DefaultDistributedMessageHandler(DistributedMessageHandlerClient client, DiagnosticSink diagnosticFactory) {
-        this.client = Objects.requireNonNull(client, "client");
+    public DefaultDistributedMessageHandler(
+            Supplier<SoulseekClientOptions> options,
+            ServerLink server,
+            TokenFactory tokens,
+            Waiter waiter,
+            Supplier<DistributedConnectionManager> mesh,
+            Supplier<SearchResponder> searchResponses,
+            DiagnosticSink diagnosticFactory) {
+        this.options = Objects.requireNonNull(options, "options");
+        this.server = Objects.requireNonNull(server, "server");
+        this.tokens = Objects.requireNonNull(tokens, "tokens");
+        this.waiter = Objects.requireNonNull(waiter, "waiter");
+        this.mesh = Objects.requireNonNull(mesh, "mesh");
+        this.searchResponses = Objects.requireNonNull(searchResponses, "searchResponses");
         diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(options.get().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
     }
 
@@ -85,8 +120,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                 // replaces was: a ping answered in front of the next search
                 // request delays every child behind this one.
                 case PING ->
-                    NetworkExecutor.runAsync(
-                            () -> connection.write(new DistributedPingResponse(client.getNextToken())));
+                    NetworkExecutor.runAsync(() -> connection.write(new DistributedPingResponse(tokens.nextToken())));
                 default -> {
                     diagnostic.debug("Unhandled distributed child message: " + code
                             + " from " + connection.getUsername() + " ("
@@ -143,7 +177,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                     + connection.getUsername() + " ("
                     + connection.getIpEndpoint() + ") (id: "
                     + connection.getId() + ")");
-        } else if (client.getOptions().isDeduplicateSearchRequests()) {
+        } else if (options.get().isDeduplicateSearchRequests()) {
             String current = Base64.getEncoder().encodeToString(message);
             if (Objects.equals(deduplicationHash, current)) {
                 return CompletableFuture.completedFuture(null);
@@ -158,30 +192,27 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                 case SEARCH_REQUEST -> handleSearchRequest(message);
                 case PING -> {
                     DistributedPingResponse ping = DistributedPingResponse.fromByteArray(message);
-                    client.getWaiter()
-                            .complete(new WaitKey(MessageCode.Distributed.PING, connection.getUsername()), ping);
+                    waiter.complete(new WaitKey(MessageCode.Distributed.PING, connection.getUsername()), ping);
                     yield CompletableFuture.completedFuture(null);
                 }
                 case BRANCH_LEVEL -> {
                     DistributedBranchLevel branchLevel = DistributedBranchLevel.fromByteArray(message);
                     if (isParent(connection)) {
-                        client.getDistributedConnectionManager().setParentBranchLevel(branchLevel.getLevel());
+                        mesh.get().setParentBranchLevel(branchLevel.getLevel());
                     }
                     yield CompletableFuture.completedFuture(null);
                 }
                 case BRANCH_ROOT -> {
                     DistributedBranchRoot branchRoot = DistributedBranchRoot.fromByteArray(message);
                     if (isParent(connection)) {
-                        client.getDistributedConnectionManager().setParentBranchRoot(branchRoot.getUsername());
+                        mesh.get().setParentBranchRoot(branchRoot.getUsername());
                     }
                     yield CompletableFuture.completedFuture(null);
                 }
                 case CHILD_DEPTH -> {
                     DistributedChildDepth depth = DistributedChildDepth.fromByteArray(message);
-                    client.getWaiter()
-                            .complete(
-                                    new WaitKey(Constants.WaitKey.CHILD_DEPTH_MESSAGE, connection.getKey()),
-                                    depth.getDepth());
+                    waiter.complete(
+                            new WaitKey(Constants.WaitKey.CHILD_DEPTH_MESSAGE, connection.getKey()), depth.getDepth());
                     yield CompletableFuture.completedFuture(null);
                 }
                 default -> {
@@ -229,10 +260,11 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
             code.value = embedded.getDistributedCode();
             byte[] distributed = embedded.getDistributedMessage();
             if (code.value == MessageCode.Distributed.SEARCH_REQUEST) {
-                client.getDistributedConnectionManager().promoteToBranchRoot();
+                mesh.get().promoteToBranchRoot();
                 DistributedSearchRequest search = DistributedSearchRequest.fromByteArray(distributed);
-                client.getDistributedConnectionManager().broadcastMessageAsync(distributed);
-                operation = client.getSearchResponder()
+                mesh.get().broadcastMessageAsync(distributed);
+                operation = searchResponses
+                        .get()
                         .tryRespondAsync(search.getUsername(), search.getToken(), search.getQuery())
                         .thenApply(ignored -> null);
             } else {
@@ -262,22 +294,24 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
             return CompletableFuture.completedFuture(null);
         }
         DistributedSearchRequest search = DistributedSearchRequest.fromByteArray(embedded.getDistributedMessage());
-        client.getDistributedConnectionManager().broadcastMessageAsync(embedded.getDistributedMessage());
-        if (Objects.equals(search.getUsername(), client.getUsername())) {
+        mesh.get().broadcastMessageAsync(embedded.getDistributedMessage());
+        if (Objects.equals(search.getUsername(), server.username())) {
             return CompletableFuture.completedFuture(null);
         }
-        return client.getSearchResponder()
+        return searchResponses
+                .get()
                 .tryRespondAsync(search.getUsername(), search.getToken(), search.getQuery())
                 .thenApply(ignored -> null);
     }
 
     private CompletableFuture<Void> handleSearchRequest(byte[] message) {
         DistributedSearchRequest search = DistributedSearchRequest.fromByteArray(message);
-        client.getDistributedConnectionManager().broadcastMessageAsync(message);
-        if (Objects.equals(search.getUsername(), client.getUsername())) {
+        mesh.get().broadcastMessageAsync(message);
+        if (Objects.equals(search.getUsername(), server.username())) {
             return CompletableFuture.completedFuture(null);
         }
-        return client.getSearchResponder()
+        return searchResponses
+                .get()
                 .tryRespondAsync(search.getUsername(), search.getToken(), search.getQuery())
                 .thenApply(ignored -> null);
     }
@@ -285,7 +319,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     private boolean isParent(MessageConnection connection) {
         return Objects.equals(
                 new PeerEndpoint(connection.getUsername(), connection.getIpEndpoint()),
-                client.getDistributedConnectionManager().getParent());
+                mesh.get().getParent());
     }
 
     private void raiseDiagnostic(DiagnosticEvent eventData) {

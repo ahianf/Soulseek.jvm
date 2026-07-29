@@ -94,7 +94,7 @@ final class DefaultUploads implements Uploads {
 
     @Override
     public UploadPolicy policy() {
-        return client.getUploadPolicy();
+        return client.uploadPolicy();
     }
 
     @Override
@@ -105,17 +105,17 @@ final class DefaultUploads implements Uploads {
 
     @Override
     public void ban(Username user, String reason) {
-        client.getUploadAdmission().ban(user, reason);
+        client.admission().ban(user, reason);
     }
 
     @Override
     public void unban(Username user) {
-        client.getUploadAdmission().unban(user);
+        client.admission().unban(user);
     }
 
     @Override
     public Map<Username, String> banned() {
-        return client.getUploadAdmission().banned();
+        return client.admission().banned();
     }
 
     @Override

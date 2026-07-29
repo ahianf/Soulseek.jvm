@@ -126,7 +126,7 @@ class DefaultChatAndMeTest {
             slsk.me().profile(mine);
 
             assertEquals(mine, slsk.me().profile());
-            assertEquals(mine, ((DefaultSoulseek) slsk).client().getProfile());
+            assertEquals(mine, ((DefaultSoulseek) slsk).client().profile());
 
             assertThrows(NullPointerException.class, () -> slsk.me().profile(null));
             assertEquals(mine, slsk.me().profile(), "a rejected set leaves the old profile in place");

@@ -30,28 +30,17 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class UploadAdmission {
 
     /**
-     * What an admission reads its context from.
+     * The four things an admission reads, named rather than "the engine".
      *
-     * <p>Four things, named rather than "the engine", so a test can supply them
-     * without standing up a client. The alternative — a test that reimplements
-     * the admission's rules against its own fake — asserts its own copy.
+     * <p>A test supplies them as four lambdas without standing up a client. The
+     * alternative — a test that reimplements the admission's rules against its
+     * own fake — asserts its own copy.
      */
-    public interface Host {
+    private final java.util.function.Supplier<UploadPolicy> uploadPolicy;
 
-        /** Returns who we serve and in what order. */
-        UploadPolicy uploadPolicy();
-
-        /** Returns the live upload registry. */
-        Map<Integer, dev.slsk.internal.transfer.TransferInternal> uploads();
-
-        /** Returns whether the server said a user has bought privileges. */
-        boolean isPrivileged(String username);
-
-        /** Returns where a misbehaving policy is reported. */
-        dev.slsk.internal.diagnostics.DiagnosticSink diagnostic();
-    }
-
-    private final Host client;
+    private final java.util.function.Supplier<Map<Integer, dev.slsk.internal.transfer.TransferInternal>> uploads;
+    private final java.util.function.Predicate<String> privileged;
+    private final dev.slsk.internal.diagnostics.DiagnosticSink diagnostic;
 
     /** Who is refused outright, and what they are told. */
     private final Map<Username, String> bans = new ConcurrentHashMap<>();
@@ -69,8 +58,15 @@ public final class UploadAdmission {
      *
      * @param client what it reads its context from
      */
-    public UploadAdmission(Host client) {
-        this.client = Objects.requireNonNull(client, "client");
+    public UploadAdmission(
+            java.util.function.Supplier<UploadPolicy> uploadPolicy,
+            java.util.function.Supplier<Map<Integer, dev.slsk.internal.transfer.TransferInternal>> uploads,
+            java.util.function.Predicate<String> privileged,
+            dev.slsk.internal.diagnostics.DiagnosticSink diagnostic) {
+        this.uploadPolicy = Objects.requireNonNull(uploadPolicy, "uploadPolicy");
+        this.uploads = Objects.requireNonNull(uploads, "uploads");
+        this.privileged = Objects.requireNonNull(privileged, "privileged");
+        this.diagnostic = Objects.requireNonNull(diagnostic, "diagnostic");
     }
 
     /** Refuses a user until they are unbanned. Idempotent. */
@@ -111,9 +107,9 @@ public final class UploadAdmission {
 
         UploadPolicy.Decision decision;
         try {
-            decision = client.uploadPolicy().decide(new UploadRequest(user, path, 0), context(user));
+            decision = uploadPolicy.get().decide(new UploadRequest(user, path, 0), context(user));
         } catch (RuntimeException failure) {
-            client.diagnostic().warning("The upload policy threw; refusing the request", failure);
+            diagnostic.warning("The upload policy threw; refusing the request", failure);
             return new UploadPolicy.Decision.Deny(RejectionReason.UNKNOWN, "Upload policy failed.");
         }
         if (decision == null) {
@@ -156,8 +152,7 @@ public final class UploadAdmission {
     private UploadContext context(Username user) {
         int active = 0;
         int mine = 0;
-        for (dev.slsk.internal.transfer.TransferInternal upload :
-                client.uploads().values()) {
+        for (dev.slsk.internal.transfer.TransferInternal upload : uploads.get().values()) {
             dev.slsk.internal.TransferState state = upload.getState();
             if (state == null || state.contains(dev.slsk.internal.TransferState.COMPLETED)) {
                 continue;
@@ -186,7 +181,7 @@ public final class UploadAdmission {
 
             @Override
             public boolean requesterIsPrivileged() {
-                return client.isPrivileged(user.value());
+                return privileged.test(user.value());
             }
 
             @Override

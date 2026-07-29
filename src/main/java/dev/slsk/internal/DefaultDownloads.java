@@ -17,7 +17,7 @@ import dev.slsk.TransferState;
 import dev.slsk.Username;
 import dev.slsk.events.DownloadEvent;
 import dev.slsk.exceptions.TransferNotFoundException;
-import dev.slsk.internal.messaging.handlers.PeerMessageHandlerClient;
+import dev.slsk.internal.messaging.handlers.PeerServices;
 import dev.slsk.internal.messaging.messages.TransferRequest;
 import dev.slsk.spi.TransferStore;
 import java.io.IOException;
@@ -83,17 +83,17 @@ final class DefaultDownloads implements Downloads {
      * @param offer their request
      * @return what became of the offer
      */
-    PeerMessageHandlerClient.OfferDisposition offered(String username, String filename, TransferRequest offer) {
+    PeerServices.OfferDisposition offered(String username, String filename, TransferRequest offer) {
         Username user = Username.of(username);
         PeerFile file = new PeerFile(user, filename);
         offers.put(file, offer);
         if (queue.promote(user, filename).isPresent()) {
-            return PeerMessageHandlerClient.OfferDisposition.TAKEN;
+            return PeerServices.OfferDisposition.TAKEN;
         }
         offers.remove(file);
         return queue.isComplete(user, filename)
-                ? PeerMessageHandlerClient.OfferDisposition.COMPLETE
-                : PeerMessageHandlerClient.OfferDisposition.UNKNOWN;
+                ? PeerServices.OfferDisposition.COMPLETE
+                : PeerServices.OfferDisposition.UNKNOWN;
     }
 
     DefaultDownloads(SoulseekEngine client, EventBus<DownloadEvent> events) {
