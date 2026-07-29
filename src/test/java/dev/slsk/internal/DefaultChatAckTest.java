@@ -43,12 +43,16 @@ class DefaultChatAckTest {
     @DisplayName("a message a listener took cleanly is acknowledged")
     void acknowledgesACleanDelivery() {
         try (Fixture fixture = new Fixture()) {
-            CountDownLatch seen = new CountDownLatch(1);
-            fixture.chat.events().subscribe(ChatEvent.MessageReceived.class, event -> seen.countDown());
+            CountDownLatch acknowledged = new CountDownLatch(1);
+            fixture.chat.events().subscribe(ChatEvent.MessageReceived.class, event -> {});
+            fixture.onWrite = acknowledged::countDown;
 
             fixture.receive(41, "bob", "hello");
 
-            assertTrue(await(seen));
+            // The acknowledgement is the continuation, so it lands after the
+            // listener rather than with it; waiting on the write is what says
+            // the whole rule ran.
+            assertTrue(await(acknowledged));
             assertEquals(List.of(41), fixture.acknowledged());
         }
     }

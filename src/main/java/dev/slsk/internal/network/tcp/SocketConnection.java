@@ -985,13 +985,10 @@ public class SocketConnection implements Connection {
                 scopedListener.handle(this, eventData);
             }
         };
-        if (options.isRaiseEventsAsynchronously()) {
-            if (!cancellationSignal.isCancellationRequested()) {
-                IO_EXECUTOR.execute(dispatch);
-            }
-        } else {
-            dispatch.run();
-        }
+        // Inline: these listeners are the library's own progress counters, and
+        // the one place consumer code used to be reachable from a read loop is
+        // now behind the event bus's own delivery thread.
+        dispatch.run();
     }
 
     private static Throwable unwrap(Throwable exception) {

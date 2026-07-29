@@ -36,16 +36,6 @@ public class ConnectionOptions {
     private final int writeBufferSize;
     private final int writeQueueSize;
 
-    /**
-     * Whether progress events are raised on a separate thread.
-     *
-     * <p>Carried here rather than in a static, so two clients in one JVM can
-     * differ and a test that changes it cannot corrupt every other client. Set
-     * by the owning client from its own options; not part of the source's
-     * connection options.
-     */
-    private final boolean raiseEventsAsynchronously;
-
     /** How long a producer waits for room in a full write queue. */
     private final int writeQueueTimeout;
 
@@ -182,7 +172,6 @@ public class ConnectionOptions {
         this.readBufferSize = readBufferSize;
         this.writeBufferSize = writeBufferSize;
         this.writeQueueSize = writeQueueSize;
-        this.raiseEventsAsynchronously = false;
         this.writeQueueTimeout = DEFAULT_WRITE_QUEUE_TIMEOUT;
         this.connectTimeout = connectTimeout;
         this.inactivityTimeout = inactivityTimeout;
@@ -257,7 +246,6 @@ public class ConnectionOptions {
         this.readBufferSize = source.readBufferSize;
         this.writeBufferSize = source.writeBufferSize;
         this.writeQueueSize = source.writeQueueSize;
-        this.raiseEventsAsynchronously = source.raiseEventsAsynchronously;
         this.writeQueueTimeout = writeQueueTimeout;
     }
 
@@ -272,23 +260,6 @@ public class ConnectionOptions {
         return value == writeQueueTimeout ? this : new ConnectionOptions(this, value);
     }
 
-    private ConnectionOptions(ConnectionOptions source, boolean raiseEventsAsynchronously) {
-        this.configureSocket = source.configureSocket;
-        this.connectTimeout = source.connectTimeout;
-        this.inactivityTimeout = source.inactivityTimeout;
-        this.proxyOptions = source.proxyOptions;
-        this.readBufferSize = source.readBufferSize;
-        this.writeBufferSize = source.writeBufferSize;
-        this.writeQueueSize = source.writeQueueSize;
-        this.raiseEventsAsynchronously = raiseEventsAsynchronously;
-        this.writeQueueTimeout = source.writeQueueTimeout;
-    }
-
-    /**
-     * Returns whether progress events are raised on a separate thread.
-     *
-     * @return whether events are raised asynchronously
-     */
     /**
      * Returns how long a producer waits for room in a full write queue.
      *
@@ -296,22 +267,6 @@ public class ConnectionOptions {
      */
     public final int getWriteQueueTimeout() {
         return writeQueueTimeout;
-    }
-
-    public final boolean isRaiseEventsAsynchronously() {
-        return raiseEventsAsynchronously;
-    }
-
-    /**
-     * Returns a copy with the event dispatch policy applied.
-     *
-     * @param value whether to raise progress events on a separate thread
-     * @return a copy carrying the policy
-     */
-    public final ConnectionOptions withEventsRaisedAsynchronously(boolean value) {
-        // Identity matters: callers hold onto the options they passed in and
-        // compare them by reference, so an unchanged policy must not copy.
-        return value == raiseEventsAsynchronously ? this : new ConnectionOptions(this, value);
     }
 
     public final int getWriteQueueSize() {

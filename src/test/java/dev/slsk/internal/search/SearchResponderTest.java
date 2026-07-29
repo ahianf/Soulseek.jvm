@@ -307,8 +307,7 @@ class SearchResponderTest {
                 new ConnectionOptions(),
                 new ConnectionOptions(),
                 null,
-                cache,
-                false);
+                cache);
     }
 
     private static MessageConnection messageConnection(

@@ -56,8 +56,7 @@ class SoulseekClientOptionsTest {
                 incoming,
                 distributed,
                 userCache,
-                searchCache,
-                true);
+                searchCache);
 
         assertFalse(options.isEnableListener());
         assertSame(address, options.getListenIpAddress());
@@ -84,7 +83,6 @@ class SoulseekClientOptionsTest {
         assertSame(distributed, options.getDistributedConnectionOptions());
         assertSame(userCache, options.getUserEndpointCache());
         assertSame(searchCache, options.getSearchResponseCache());
-        assertTrue(options.isRaiseEventsAsynchronously());
         assertEquals(1, options.getMaximumConcurrentUploadsPerUser());
     }
 
@@ -197,7 +195,6 @@ class SoulseekClientOptionsTest {
 
         // The source's internal With overload omits these two values.
         assertEquals(2, copy.getMaximumConcurrentSearches());
-        assertFalse(copy.isRaiseEventsAsynchronously());
     }
 
     @Test
@@ -247,8 +244,7 @@ class SoulseekClientOptionsTest {
                 null,
                 null,
                 null,
-                null,
-                true);
+                null);
     }
 
     private static final class TestUserCache implements UserEndpointCache {

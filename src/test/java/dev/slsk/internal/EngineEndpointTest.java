@@ -290,8 +290,7 @@ class EngineEndpointTest {
                 null,
                 null,
                 cache,
-                null,
-                false);
+                null);
     }
 
     private static Object defaultValue(Class<?> type) {

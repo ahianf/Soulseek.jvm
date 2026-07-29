@@ -289,14 +289,18 @@ public final class DefaultMessageConnection extends SocketConnection implements 
                 cancellationSignal);
     }
 
+    /**
+     * Runs a connection event's listeners inline.
+     *
+     * <p>They are the library's own — the message handlers — and they are
+     * cheap. A per-connection switch used to send them to a virtual thread
+     * instead, because consumer listeners were once reachable from here and a
+     * slow one stalled the read loop. That is the event bus's job now, and it
+     * does it for every facet rather than one connection at a time, so the
+     * switch had nothing left to decide.
+     */
     private void dispatch(Runnable event, CancellationSignal cancellationSignal) {
-        if (getOptions().isRaiseEventsAsynchronously()) {
-            if (!cancellationSignal.isCancellationRequested()) {
-                NetworkExecutor.runAsync(event);
-            }
-        } else {
-            event.run();
-        }
+        event.run();
     }
 
     private static boolean isNullOrWhiteSpace(String value) {

@@ -243,8 +243,7 @@ class ListenerHandlerTest {
                 null,
                 null,
                 null,
-                cache,
-                false);
+                cache);
     }
 
     private record Fixture(

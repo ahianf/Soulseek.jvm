@@ -413,12 +413,12 @@ class ConnectionTest {
         FakeStream stream = new FakeStream();
         stream.readBytes = new byte[] {1};
         FakeTcpClient client = new FakeTcpClient(stream, true);
-        // The dispatch policy is a property of this connection's options now,
-        // so there is no global flag to set and restore — which is the point of
-        // defect 3.2: a test that flipped the static corrupted every other
-        // client in the JVM.
-        SocketConnection connection =
-                new SocketConnection(ENDPOINT, noTimers().withEventsRaisedAsynchronously(true), client);
+        // A data-read listener runs inline on the reading thread. These
+        // listeners are the library's own progress counters; the one place
+        // consumer code was reachable from a read loop is behind the event
+        // bus's delivery thread now, so the per-connection dispatch policy this
+        // used to set had nothing left to decide.
+        SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), client);
         CountDownLatch event = new CountDownLatch(1);
         try {
             connection.addDataReadListener((sender, args) -> event.countDown());

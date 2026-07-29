@@ -45,7 +45,6 @@ public class SoulseekClientOptions {
     private final int messageTimeout;
     private final DiagnosticLevel minimumDiagnosticLevel;
     private final ConnectionOptions peerConnectionOptions;
-    private final boolean raiseEventsAsynchronously;
     private final SearchResponseCache searchResponseCache;
     private final ConnectionOptions serverConnectionOptions;
     private final int startingToken;
@@ -79,8 +78,7 @@ public class SoulseekClientOptions {
                 null,
                 null,
                 null,
-                null,
-                false);
+                null);
     }
 
     /** Creates options through the listener switch. */
@@ -110,8 +108,7 @@ public class SoulseekClientOptions {
                 null,
                 null,
                 null,
-                null,
-                false);
+                null);
     }
 
     /** Creates options through the listener address. */
@@ -141,8 +138,7 @@ public class SoulseekClientOptions {
                 null,
                 null,
                 null,
-                null,
-                false);
+                null);
     }
 
     /** Creates options through the listener port. */
@@ -203,8 +199,7 @@ public class SoulseekClientOptions {
                 null,
                 null,
                 null,
-                null,
-                false);
+                null);
     }
 
     /** Creates complete client options. */
@@ -233,12 +228,7 @@ public class SoulseekClientOptions {
             ConnectionOptions incomingConnectionOptions,
             ConnectionOptions distributedConnectionOptions,
             UserEndpointCache userEndpointCache,
-            SearchResponseCache searchResponseCache,
-            boolean raiseEventsAsynchronously) {
-        // Assigned first: the connection options below are stamped with it, so a
-        // connection reads the dispatch policy from itself rather than a static
-        // (defect 3.2).
-        this.raiseEventsAsynchronously = raiseEventsAsynchronously;
+            SearchResponseCache searchResponseCache) {
         this.enableListener = enableListener;
         this.listenIpAddress = listenIpAddress == null ? wildcardAddress() : listenIpAddress;
         this.listenPort = listenPort;
@@ -286,8 +276,7 @@ public class SoulseekClientOptions {
         this.serverConnectionOptions = (serverConnectionOptions == null
                         ? new ConnectionOptions()
                         : serverConnectionOptions)
-                .withoutInactivityTimeout()
-                .withEventsRaisedAsynchronously(raiseEventsAsynchronously);
+                .withoutInactivityTimeout();
         this.peerConnectionOptions = peerConnectionOptions == null ? new ConnectionOptions() : peerConnectionOptions;
         this.transferConnectionOptions =
                 transferConnectionOptions == null ? new ConnectionOptions() : transferConnectionOptions;
@@ -353,8 +342,7 @@ public class SoulseekClientOptions {
                         ? distributedConnectionOptions
                         : patch.getDistributedConnectionOptions(),
                 patch.getUserEndpointCache() == null ? userEndpointCache : patch.getUserEndpointCache(),
-                patch.getSearchResponseCache() == null ? searchResponseCache : patch.getSearchResponseCache(),
-                false);
+                patch.getSearchResponseCache() == null ? searchResponseCache : patch.getSearchResponseCache());
     }
 
     /** Returns whether distributed child connections are accepted. */
@@ -460,11 +448,6 @@ public class SoulseekClientOptions {
     /** Returns the peer connection options. */
     public final ConnectionOptions getPeerConnectionOptions() {
         return peerConnectionOptions;
-    }
-
-    /** Returns whether events are raised asynchronously. */
-    public final boolean isRaiseEventsAsynchronously() {
-        return raiseEventsAsynchronously;
     }
 
     /** Returns the search response cache, or {@code null}. */
