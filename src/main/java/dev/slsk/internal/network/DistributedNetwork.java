@@ -10,13 +10,16 @@ import dev.slsk.CancellationSubscription;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.internal.DistributedNetworkInfo;
 import dev.slsk.internal.DistributedPeer;
+import dev.slsk.internal.ServerLink;
 import dev.slsk.internal.SoulseekClientState;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Scheduler;
+import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
+import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
@@ -42,6 +45,7 @@ import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.internal.network.tcp.ConnectionEventListener;
 import dev.slsk.internal.network.tcp.ConnectionState;
 import dev.slsk.internal.network.tcp.ConnectionTypes;
+import dev.slsk.internal.options.SoulseekClientOptions;
 import java.io.ByteArrayOutputStream;
 import java.net.InetSocketAddress;
 import java.time.Instant;
@@ -65,13 +69,28 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 /** Manages distributed-network parent and child connections. */
-public final class DefaultDistributedConnectionManager implements DistributedConnectionManager {
+public final class DistributedNetwork implements DistributedConnectionManager {
     static final int STATUS_AGE_LIMIT = 300_000;
     static final int STATUS_DEBOUNCE_TIME = 5_000;
     static final int WATCHDOG_TIME = 900_000;
     static final double LATENCY_ALPHA = 0.005d;
 
-    private final DistributedConnectionManagerClient client;
+    /** The live options; a reconfigure replaces them under a running mesh. */
+    private final Supplier<SoulseekClientOptions> options;
+
+    private final ServerLink server;
+    private final Waiter waiter;
+    private final TokenFactory tokens;
+
+    /**
+     * What answers a distributed message, supplied late.
+     *
+     * <p>The handler acts on this mesh and this mesh attaches the handler to
+     * every connection it makes, so one of the two has to be told about the
+     * other after both exist. The handler is built first, so it is this one.
+     */
+    private final Supplier<DistributedMessageHandler> distributedMessages;
+
     private final ConnectionFactory connectionFactory;
     private final DiagnosticSink diagnostic;
     private final Scheduler scheduler;
@@ -120,37 +139,58 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     private volatile List<PeerEndpoint> parentCandidates = List.of();
     private volatile MessageConnection parentConnection;
 
-    /** Creates a manager with default collaborators. */
-    public DefaultDistributedConnectionManager(DistributedConnectionManagerClient client) {
-        this(client, null, null);
+    /** Creates a distributed network with default collaborators. */
+    public DistributedNetwork(
+            Supplier<SoulseekClientOptions> options,
+            ServerLink server,
+            Waiter waiter,
+            TokenFactory tokens,
+            Supplier<DistributedMessageHandler> distributedMessages) {
+        this(options, server, waiter, tokens, distributedMessages, null, null, null);
     }
 
-    /** Creates a manager. */
-    public DefaultDistributedConnectionManager(
-            DistributedConnectionManagerClient client,
+    /** Creates a distributed network. */
+    public DistributedNetwork(
+            Supplier<SoulseekClientOptions> options,
+            ServerLink server,
+            Waiter waiter,
+            TokenFactory tokens,
+            Supplier<DistributedMessageHandler> distributedMessages,
             ConnectionFactory connectionFactory,
             DiagnosticSink diagnosticFactory) {
-        this(client, connectionFactory, diagnosticFactory, null);
+        this(options, server, waiter, tokens, distributedMessages, connectionFactory, diagnosticFactory, null);
     }
 
     /**
-     * Creates a distributed connection manager sharing a caller-owned
-     * scheduler.
+     * Creates a distributed network sharing a caller-owned scheduler.
      *
-     * @param client the owning client
+     * @param options the live client options
+     * @param server the server link, for our username, the client state and the
+     *     solicitations this sends
+     * @param waiter the response correlator
+     * @param tokens the token allocator
+     * @param distributedMessages what answers a distributed message
      * @param connectionFactory the connection factory
      * @param diagnosticFactory the diagnostic sink
      * @param scheduler the shared scheduler, or {@code null} to own one
      */
-    public DefaultDistributedConnectionManager(
-            DistributedConnectionManagerClient client,
+    public DistributedNetwork(
+            Supplier<SoulseekClientOptions> options,
+            ServerLink server,
+            Waiter waiter,
+            TokenFactory tokens,
+            Supplier<DistributedMessageHandler> distributedMessages,
             ConnectionFactory connectionFactory,
             DiagnosticSink diagnosticFactory,
             Scheduler scheduler) {
-        this.client = Objects.requireNonNull(client, "client");
+        this.options = Objects.requireNonNull(options, "options");
+        this.server = Objects.requireNonNull(server, "server");
+        this.waiter = Objects.requireNonNull(waiter, "waiter");
+        this.tokens = Objects.requireNonNull(tokens, "tokens");
+        this.distributedMessages = Objects.requireNonNull(distributedMessages, "distributedMessages");
         this.connectionFactory = connectionFactory == null ? new DefaultConnectionFactory() : connectionFactory;
         diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(options.get().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
         this.ownsScheduler = scheduler == null;
         this.scheduler = scheduler == null ? new Scheduler("soulseek-distributed-status") : scheduler;
@@ -250,7 +290,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
 
     @Override
     public String getBranchRoot() {
-        String value = hasParent() ? parentBranchRoot : client.getUsername();
+        String value = hasParent() ? parentBranchRoot : server.username();
         return value == null ? "" : value;
     }
 
@@ -264,7 +304,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
 
     @Override
     public int getChildLimit() {
-        return client.getOptions().getDistributedChildLimit();
+        return options.get().getDistributedChildLimit();
     }
 
     @Override
@@ -336,7 +376,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
             diagnostic.debug("Parent connection solicitation ignored; distributed " + "network is not enabled.");
             return CompletableFuture.completedFuture(null);
         }
-        SoulseekClientState state = client.getState();
+        SoulseekClientState state = server.state();
         if (state.contains(SoulseekClientState.DISCONNECTED) || state.contains(SoulseekClientState.DISCONNECTING)) {
             return CompletableFuture.completedFuture(null);
         }
@@ -399,7 +439,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                             + parentBranchLevel);
                     parentConnection.addDisconnectedListener(parentDisconnectedListener);
                     parentConnection.removeDisconnectedListener(parentCandidateDisconnectedListener);
-                    DistributedMessageHandler handler = client.getDistributedMessageHandler();
+                    DistributedMessageHandler handler = distributedMessages.get();
                     parentConnection.addMessageReadListener(handler::handleMessageRead);
                     parentConnection.addMessageWrittenListener(handler::handleMessageWritten);
                     diagnostic.debug("Parent connection to " + parentConnection.getUsername()
@@ -629,7 +669,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
 
     @Override
     public CompletableFuture<Void> updateStatusAsync(CancellationSignal cancellationSignal) {
-        SoulseekClientState state = client.getState();
+        SoulseekClientState state = server.state();
         if (!state.contains(SoulseekClientState.CONNECTED) || !state.contains(SoulseekClientState.LOGGED_IN)) {
             return CompletableFuture.completedFuture(null);
         }
@@ -661,7 +701,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                 new HaveNoParentsCommand(haveNoParents).toByteArray());
         return NetworkExecutor.runAsync(() -> {
             try {
-                client.getServerConnection().write(payload, token(cancellationSignal));
+                server.writeBytes(payload, token(cancellationSignal));
                 raiseStateChanged();
                 diagnostic.info("Updated distributed status; " + status);
                 lastStatus = status;
@@ -669,7 +709,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
             } catch (Throwable failure) {
                 Throwable cause = unwrap(failure);
                 String message = "Failed to update distributed status: " + message(cause);
-                if (!client.getState().equals(SoulseekClientState.DISCONNECTED)) {
+                if (!server.state().equals(SoulseekClientState.DISCONNECTED)) {
                     diagnostic.warning(message, cause);
                 } else {
                     diagnostic.debug(message, cause);
@@ -702,7 +742,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     }
 
     void watchdogElapsed() {
-        SoulseekClientState state = client.getState();
+        SoulseekClientState state = server.state();
         if (isEnabled()
                 && !hasParent()
                 && !isBranchRoot()
@@ -721,24 +761,19 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                 case EMBEDDED_MESSAGE -> {
                     EmbeddedMessage embedded = EmbeddedMessage.fromByteArray(message);
                     if (embedded.getDistributedCode() == MessageCode.Distributed.SEARCH_REQUEST) {
-                        client.getWaiter()
-                                .complete(new WaitKey(Constants.WaitKey.SEARCH_REQUEST_MESSAGE, connection.getId()));
+                        waiter.complete(new WaitKey(Constants.WaitKey.SEARCH_REQUEST_MESSAGE, connection.getId()));
                     }
                 }
                 case SEARCH_REQUEST ->
-                    client.getWaiter()
-                            .complete(new WaitKey(Constants.WaitKey.SEARCH_REQUEST_MESSAGE, connection.getId()));
+                    waiter.complete(new WaitKey(Constants.WaitKey.SEARCH_REQUEST_MESSAGE, connection.getId()));
                 case BRANCH_LEVEL ->
-                    client.getWaiter()
-                            .complete(
-                                    new WaitKey(Constants.WaitKey.BRANCH_LEVEL_MESSAGE, connection.getId()),
-                                    DistributedBranchLevel.fromByteArray(message)
-                                            .getLevel());
+                    waiter.complete(
+                            new WaitKey(Constants.WaitKey.BRANCH_LEVEL_MESSAGE, connection.getId()),
+                            DistributedBranchLevel.fromByteArray(message).getLevel());
                 case BRANCH_ROOT ->
-                    client.getWaiter()
-                            .complete(
-                                    new WaitKey(Constants.WaitKey.BRANCH_ROOT_MESSAGE, connection.getId()),
-                                    DistributedBranchRoot.fromByteArray(message).getUsername());
+                    waiter.complete(
+                            new WaitKey(Constants.WaitKey.BRANCH_ROOT_MESSAGE, connection.getId()),
+                            DistributedBranchRoot.fromByteArray(message).getUsername());
                 default -> {
                     // Source ignores all other distributed messages here.
                 }
@@ -759,7 +794,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         MessageConnection connection = connectionFactory.getDistributedConnection(
                 username,
                 incomingConnection.getIpEndpoint(),
-                client.getOptions().getDistributedConnectionOptions(),
+                options.get().getDistributedConnectionOptions(),
                 incomingConnection.handoffTcpClient());
         diagnostic.debug("Inbound child connection to " + username + " ("
                 + connection.getIpEndpoint() + ") handed off. (old: "
@@ -825,9 +860,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                 + response.getUsername() + " (" + response.getIpEndpoint()
                 + ") for token " + response.getToken());
         MessageConnection connection = connectionFactory.getDistributedConnection(
-                response.getUsername(),
-                response.getIpEndpoint(),
-                client.getOptions().getDistributedConnectionOptions());
+                response.getUsername(), response.getIpEndpoint(), options.get().getDistributedConnectionOptions());
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.INDIRECT));
         attachChildMessageListeners(connection);
         connection.addDisconnectedListener((sender, args) -> sender.close());
@@ -902,7 +935,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         try {
             if (directWon) {
                 connection.write(
-                        new PeerInit(client.getUsername(), Constants.ConnectionType.DISTRIBUTED, client.getNextToken())
+                        new PeerInit(server.username(), Constants.ConnectionType.DISTRIBUTED, tokens.nextToken())
                                 .toByteArray(),
                         token(cancellationSignal));
             } else {
@@ -937,7 +970,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
             String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal) {
         diagnostic.debug("Attempting direct parent candidate connection to " + username + " (" + ipEndpoint + ")");
         MessageConnection connection = connectionFactory.getDistributedConnection(
-                username, ipEndpoint, client.getOptions().getDistributedConnectionOptions());
+                username, ipEndpoint, options.get().getDistributedConnectionOptions());
         connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT));
         connection.addDisconnectedListener(parentCandidateDisconnectedListener);
         try {
@@ -959,30 +992,25 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
 
     private MessageConnection getParentCandidateConnectionIndirect(
             String username, CancellationSignal cancellationSignal) {
-        int solicitationToken = client.getNextToken();
+        int solicitationToken = tokens.nextToken();
         diagnostic.debug(
                 "Soliciting indirect parent candidate connection to " + username + " with token " + solicitationToken);
         pendingSolicitations.putIfAbsent(solicitationToken, username);
         try {
-            Wait<Connection> wait = client.getWaiter()
-                    .register(
-                            new WaitKey(
-                                    Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION, username, solicitationToken),
-                            Connection.class,
-                            client.getOptions()
-                                    .getDistributedConnectionOptions()
-                                    .getConnectTimeout(),
-                            cancellationSignal);
-            client.getServerConnection()
-                    .write(
-                            new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.DISTRIBUTED),
-                            cancellationSignal);
+            Wait<Connection> wait = waiter.register(
+                    new WaitKey(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION, username, solicitationToken),
+                    Connection.class,
+                    options.get().getDistributedConnectionOptions().getConnectTimeout(),
+                    cancellationSignal);
+            server.write(
+                    new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.DISTRIBUTED),
+                    cancellationSignal);
             Connection accepted = wait.await();
             try {
                 MessageConnection connection = connectionFactory.getDistributedConnection(
                         username,
                         accepted.getIpEndpoint(),
-                        client.getOptions().getDistributedConnectionOptions(),
+                        options.get().getDistributedConnectionOptions(),
                         accepted.handoffTcpClient());
                 diagnostic.debug("Indirect parent candidate connection to " + username
                         + " (" + accepted.getIpEndpoint()
@@ -1016,23 +1044,20 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         // All three are registered before any is awaited: the candidate sends
         // them back to back and a wait registered after the first would miss
         // the ones behind it.
-        Wait<Integer> branchLevel = client.getWaiter()
-                .register(
-                        new WaitKey(Constants.WaitKey.BRANCH_LEVEL_MESSAGE, connection.getId()),
-                        Integer.class,
-                        null,
-                        token(cancellationSignal));
-        Wait<String> branchRoot = client.getWaiter()
-                .register(
-                        new WaitKey(Constants.WaitKey.BRANCH_ROOT_MESSAGE, connection.getId()),
-                        String.class,
-                        null,
-                        token(cancellationSignal));
-        Wait<Void> search = client.getWaiter()
-                .register(
-                        new WaitKey(Constants.WaitKey.SEARCH_REQUEST_MESSAGE, connection.getId()),
-                        null,
-                        token(cancellationSignal));
+        Wait<Integer> branchLevel = waiter.register(
+                new WaitKey(Constants.WaitKey.BRANCH_LEVEL_MESSAGE, connection.getId()),
+                Integer.class,
+                null,
+                token(cancellationSignal));
+        Wait<String> branchRoot = waiter.register(
+                new WaitKey(Constants.WaitKey.BRANCH_ROOT_MESSAGE, connection.getId()),
+                String.class,
+                null,
+                token(cancellationSignal));
+        Wait<Void> search = waiter.register(
+                new WaitKey(Constants.WaitKey.SEARCH_REQUEST_MESSAGE, connection.getId()),
+                null,
+                token(cancellationSignal));
         // The three waits are live from here; awaiting them is the caller's,
         // after it has written whatever provokes the candidate into answering.
         return () -> {
@@ -1061,7 +1086,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     }
 
     private void attachChildMessageListeners(MessageConnection connection) {
-        DistributedMessageHandler handler = client.getDistributedMessageHandler();
+        DistributedMessageHandler handler = distributedMessages.get();
         connection.addMessageReadListener(handler::handleChildMessageRead);
         connection.addMessageWrittenListener(handler::handleChildMessageWritten);
     }
@@ -1133,11 +1158,11 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
     }
 
     private boolean isEnabled() {
-        return client.getOptions().isEnableDistributedNetwork();
+        return options.get().isEnableDistributedNetwork();
     }
 
     private boolean isAcceptingChildren() {
-        return client.getOptions().isAcceptDistributedChildren();
+        return options.get().isAcceptDistributedChildren();
     }
 
     private String rejectionMessage(String username, InetSocketAddress endpoint) {
@@ -1225,7 +1250,7 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         private final CancellationSubscription registration;
 
         private LinkedCancellation(CancellationSignal parent) {
-            registration = DefaultDistributedConnectionManager.token(parent).register(source::cancel);
+            registration = DistributedNetwork.token(parent).register(source::cancel);
         }
 
         private CancellationSignal token() {

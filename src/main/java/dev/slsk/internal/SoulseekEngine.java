@@ -50,10 +50,9 @@ import dev.slsk.internal.messaging.messages.PrivateRoomToggle;
 import dev.slsk.internal.messaging.messages.SetListenPortCommand;
 import dev.slsk.internal.network.ConnectionFactory;
 import dev.slsk.internal.network.DefaultConnectionFactory;
-import dev.slsk.internal.network.DefaultDistributedConnectionManager;
 import dev.slsk.internal.network.DefaultListenerHandler;
 import dev.slsk.internal.network.DistributedConnectionManager;
-import dev.slsk.internal.network.DistributedConnectionManagerClient;
+import dev.slsk.internal.network.DistributedNetwork;
 import dev.slsk.internal.network.ListenerHandler;
 import dev.slsk.internal.network.ListenerHandlerClient;
 import dev.slsk.internal.network.MessageConnection;
@@ -106,7 +105,6 @@ final class SoulseekEngine
         implements AutoCloseable,
                 EngineContext,
                 UploadAdmission.Host,
-                DistributedConnectionManagerClient,
                 DistributedMessageHandlerClient,
                 ListenerHandlerClient,
                 PeerMessageHandlerClient,
@@ -295,7 +293,15 @@ final class SoulseekEngine
                 ? new PeerNetwork(this::getOptions, server, this.waiter, this.tokenFactory, this.peerMessageHandler)
                 : peerConnectionManager;
         this.distributedConnectionManager = distributedConnectionManager == null
-                ? new DefaultDistributedConnectionManager(this, null, null, scheduler)
+                ? new DistributedNetwork(
+                        this::getOptions,
+                        server,
+                        this.waiter,
+                        this.tokenFactory,
+                        () -> this.distributedMessageHandler,
+                        null,
+                        null,
+                        scheduler)
                 : distributedConnectionManager;
         this.serverMessageHandler =
                 serverMessageHandler == null ? new DefaultServerMessageHandler(this) : serverMessageHandler;
@@ -578,7 +584,6 @@ final class SoulseekEngine
     }
 
     /** Returns current client state. */
-    @Override
     public final SoulseekClientState getState() {
         return state;
     }
@@ -840,7 +845,6 @@ final class SoulseekEngine
         return searchResponder;
     }
 
-    @Override
     public final MessageConnection getServerConnection() {
         return server.connection();
     }

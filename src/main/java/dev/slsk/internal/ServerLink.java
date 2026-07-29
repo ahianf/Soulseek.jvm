@@ -122,6 +122,15 @@ public final class ServerLink {
     }
 
     /**
+     * Returns what state the client is in.
+     *
+     * @return the client state
+     */
+    public SoulseekClientState state() {
+        return clientState.get();
+    }
+
+    /**
      * Throws unless the client is connected and logged in.
      *
      * @param operation what the caller is trying to do, for the message
@@ -153,7 +162,7 @@ public final class ServerLink {
      * @param message the encoded message
      * @param cancellationSignal the cancellation signal
      */
-    void writeBytes(byte[] message, CancellationSignal cancellationSignal) {
+    public void writeBytes(byte[] message, CancellationSignal cancellationSignal) {
         connection.write(message, CommonUtils.token(cancellationSignal));
     }
 

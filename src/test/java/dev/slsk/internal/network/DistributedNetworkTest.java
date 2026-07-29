@@ -17,9 +17,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.ConnectionException;
+import dev.slsk.internal.ServerLink;
+import dev.slsk.internal.ServerLinks;
 import dev.slsk.internal.SoulseekClientState;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Outcomes;
+import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
@@ -64,24 +67,28 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-class DistributedConnectionManagerTest {
+class DistributedNetworkTest {
     private static final String LOCAL_USER = "local";
     private static final String USERNAME = "peer";
     private static final InetSocketAddress ENDPOINT = endpoint(42001);
     private static final int TOKEN = 0x13572468;
 
-    private final List<DefaultDistributedConnectionManager> managers = new ArrayList<>();
+    private final List<DistributedNetwork> managers = new ArrayList<>();
 
     @AfterEach
     void closeManagers() {
-        managers.forEach(DefaultDistributedConnectionManager::close);
+        managers.forEach(DistributedNetwork::close);
     }
 
     @Test
     void constructionAndInitialPropertiesMatchSource() {
-        assertThrows(NullPointerException.class, () -> new DefaultDistributedConnectionManager(null));
+        Fixture nulls = fixture();
+        assertThrows(
+                NullPointerException.class,
+                () -> new DistributedNetwork(
+                        null, nulls.server, nulls.waiter, nulls.tokens, () -> nulls.distributedMessages));
         Fixture fixture = fixture();
-        DefaultDistributedConnectionManager manager = fixture.manager;
+        DistributedNetwork manager = fixture.manager;
 
         assertNull(manager.getAverageBroadcastLatency());
         assertEquals(0, manager.getBranchLevel());
@@ -131,7 +138,7 @@ class DistributedConnectionManagerTest {
 
         assertEquals(1, incoming.closeCount);
         assertTrue(fixture.manager.getChildren().isEmpty());
-        assertEquals(1, fixture.server.byteWrites.size());
+        assertEquals(1, fixture.serverConnection.byteWrites.size());
         assertTrue(fixture.diagnostic.contains("rejected"));
     }
 
@@ -336,7 +343,7 @@ class DistributedConnectionManagerTest {
     @Test
     void statusWritesExactCommandsAndDeduplicatesUnchangedState() {
         Fixture fixture = fixture();
-        fixture.server.byteWrites.clear();
+        fixture.serverConnection.byteWrites.clear();
         fixture.manager.updateStatusAsync().join();
 
         byte[] expected = concatenate(
@@ -344,21 +351,21 @@ class DistributedConnectionManagerTest {
                 new BranchRootCommand(LOCAL_USER).toByteArray(),
                 new AcceptChildrenCommand(false).toByteArray(),
                 new HaveNoParentsCommand(true).toByteArray());
-        assertArrayEquals(expected, fixture.server.byteWrites.getFirst());
+        assertArrayEquals(expected, fixture.serverConnection.byteWrites.getFirst());
         fixture.manager.updateStatusAsync().join();
-        assertEquals(1, fixture.server.byteWrites.size());
+        assertEquals(1, fixture.serverConnection.byteWrites.size());
         assertTrue(fixture.diagnostic.contains("Update skipped"));
     }
 
     @Test
     void statusSkipsWhenNotConnectedAndReportsWriteFailures() {
         Fixture skipped = fixture();
-        skipped.client.state = SoulseekClientState.DISCONNECTED;
+        skipped.state = SoulseekClientState.DISCONNECTED;
         skipped.manager.updateStatusAsync().join();
-        assertTrue(skipped.server.byteWrites.isEmpty());
+        assertTrue(skipped.serverConnection.byteWrites.isEmpty());
 
         Fixture failed = fixture();
-        failed.server.writeFuture = CompletableFuture.failedFuture(new RuntimeException("server"));
+        failed.serverConnection.writeFuture = CompletableFuture.failedFuture(new RuntimeException("server"));
         failed.manager.updateStatusAsync().join();
         assertTrue(failed.diagnostic.containsWarning("Failed to update distributed status"));
     }
@@ -521,7 +528,7 @@ class DistributedConnectionManagerTest {
         assertTrue(fixture.manager.getPendingSolicitations().isEmpty());
         assertEquals(
                 Constants.ConnectionType.DISTRIBUTED,
-                assertInstanceOf(ConnectToPeerRequest.class, fixture.server.outgoingWrites.getFirst())
+                assertInstanceOf(ConnectToPeerRequest.class, fixture.serverConnection.outgoingWrites.getFirst())
                         .getType());
     }
 
@@ -539,7 +546,7 @@ class DistributedConnectionManagerTest {
             disconnected.incrementAndGet();
         });
         // Avoid reconnecting to the same test candidate.
-        fixture.client.state = SoulseekClientState.DISCONNECTED;
+        fixture.state = SoulseekClientState.DISCONNECTED;
 
         parent.fireDisconnected("gone", null);
 
@@ -552,16 +559,16 @@ class DistributedConnectionManagerTest {
     @Test
     void watchdogRequestsStatusOnlyWhenEligible() {
         Fixture fixture = fixture();
-        fixture.server.byteWrites.clear();
+        fixture.serverConnection.byteWrites.clear();
         fixture.manager.watchdogElapsed();
         assertTrue(fixture.diagnostic.containsWarning("No distributed parent connected"));
         // The status write goes to a thread of its own, as it always has —
         // it used to be a dispatched writeAsync. What changed is only that the
         // probe no longer records it before the dispatch happens.
-        awaitCondition(() -> fixture.server.byteWrites.size() == 1);
+        awaitCondition(() -> fixture.serverConnection.byteWrites.size() == 1);
 
         Fixture disconnected = fixture();
-        disconnected.client.state = SoulseekClientState.DISCONNECTED;
+        disconnected.state = SoulseekClientState.DISCONNECTED;
         disconnected.manager.watchdogElapsed();
         assertFalse(disconnected.diagnostic.containsWarning("No distributed parent connected"));
     }
@@ -625,62 +632,19 @@ class DistributedConnectionManagerTest {
     private static final class Fixture {
         private final RecordingDiagnostic diagnostic = new RecordingDiagnostic();
         private final FakeWaiter waiter = new FakeWaiter();
-        private final ConnectionProbe server = ConnectionProbe.message("", endpoint(2242));
+        private final ConnectionProbe serverConnection = ConnectionProbe.message("", endpoint(2242));
         private final FakeFactory factory = new FakeFactory();
-        private final FakeClient client = new FakeClient(waiter, server.messageConnection());
-        private final DefaultDistributedConnectionManager manager =
-                new DefaultDistributedConnectionManager(client, factory, diagnostic);
-    }
-
-    private static final class FakeClient implements DistributedConnectionManagerClient {
-        private final FakeWaiter waiter;
-        private final MessageConnection server;
-        private final AtomicInteger token = new AtomicInteger(TOKEN);
-        private final DistributedMessageHandler handler = (DistributedMessageHandler) Proxy.newProxyInstance(
-                DistributedMessageHandler.class.getClassLoader(),
-                new Class<?>[] {DistributedMessageHandler.class},
-                (proxy, method, arguments) -> defaultValue(method.getReturnType()));
+        private final TokenFactory tokens = new TokenFactory(TOKEN);
+        private final DistributedMessageHandler distributedMessages =
+                (DistributedMessageHandler) Proxy.newProxyInstance(
+                        DistributedMessageHandler.class.getClassLoader(),
+                        new Class<?>[] {DistributedMessageHandler.class},
+                        (proxy, method, arguments) -> defaultValue(method.getReturnType()));
         private SoulseekClientState state = SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN);
-
-        private FakeClient(FakeWaiter waiter, MessageConnection server) {
-            this.waiter = waiter;
-            this.server = server;
-        }
-
-        @Override
-        public SoulseekClientOptions getOptions() {
-            return new SoulseekClientOptions();
-        }
-
-        @Override
-        public String getUsername() {
-            return LOCAL_USER;
-        }
-
-        @Override
-        public SoulseekClientState getState() {
-            return state;
-        }
-
-        @Override
-        public int getNextToken() {
-            return token.getAndIncrement();
-        }
-
-        @Override
-        public Waiter getWaiter() {
-            return waiter;
-        }
-
-        @Override
-        public MessageConnection getServerConnection() {
-            return server;
-        }
-
-        @Override
-        public DistributedMessageHandler getDistributedMessageHandler() {
-            return handler;
-        }
+        private final ServerLink server =
+                ServerLinks.over(waiter, diagnostic, serverConnection.messageConnection(), LOCAL_USER, () -> state);
+        private final DistributedNetwork manager = new DistributedNetwork(
+                SoulseekClientOptions::new, server, waiter, tokens, () -> distributedMessages, factory, diagnostic);
     }
 
     private static final class FakeFactory implements ConnectionFactory {
