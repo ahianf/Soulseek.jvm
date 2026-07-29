@@ -270,7 +270,15 @@ public final class MessageReader<T extends Enum<T> & ProtocolCode> {
         int attributeCount = readInteger();
         List<FileAttribute> attributes = new ArrayList<>();
         for (int index = 0; index < attributeCount; index++) {
-            attributes.add(new FileAttribute(FileAttributeType.fromValue(readInteger()), readInteger()));
+            // Both integers are consumed either way, so the framing survives
+            // an attribute type this client does not know; only the attribute
+            // is dropped, not the file and not the response it arrived in.
+            int type = readInteger();
+            int value = readInteger();
+            FileAttributeType known = FileAttributeType.tryFromValue(type);
+            if (known != null) {
+                attributes.add(new FileAttribute(known, value));
+            }
         }
         return new File(code, filename, size, extension, attributes);
     }

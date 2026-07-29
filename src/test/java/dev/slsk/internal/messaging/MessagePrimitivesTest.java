@@ -279,6 +279,37 @@ class MessagePrimitivesTest {
         assertEquals(3_000_000_000L, file.getSize());
     }
 
+    /**
+     * Peers run clients newer than this one, and the C# source reads their
+     * attribute types tolerantly. Throwing instead meant one nonstandard
+     * attribute discarded the whole search or browse response it arrived in.
+     */
+    @Test
+    @DisplayName("File reader skips an unknown attribute type and keeps the file")
+    void fileReaderSkipsUnknownAttributeTypes() {
+        byte[] message = new MessageBuilder()
+                .writeCode(MessageCode.Peer.SEARCH_RESPONSE)
+                .writeByte(1)
+                .writeString("song.mp3")
+                .writeLong(1_000L)
+                .writeString("mp3")
+                .writeInteger(3)
+                .writeInteger(0) // BIT_RATE
+                .writeInteger(320)
+                .writeInteger(6) // an attribute type this client does not know
+                .writeInteger(999)
+                .writeInteger(1) // LENGTH — after the unknown one, so framing is proven intact
+                .writeInteger(180)
+                .build();
+
+        File file = new MessageReader<>(message, MessageCode.Peer.class).readFile();
+
+        assertEquals("song.mp3", file.getFilename());
+        assertEquals(2, file.getAttributeCount());
+        assertEquals(320, file.getBitRate());
+        assertEquals(180, file.getLength());
+    }
+
     @Test
     @DisplayName("String null and unknown codes preserve failure behavior")
     void stringNullAndUnknownCodesFail() {

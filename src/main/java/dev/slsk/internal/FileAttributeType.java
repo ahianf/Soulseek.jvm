@@ -46,11 +46,30 @@ public enum FileAttributeType {
      * @throws IllegalArgumentException when the value is unknown
      */
     public static FileAttributeType fromValue(int value) {
+        FileAttributeType type = tryFromValue(value);
+        if (type == null) {
+            throw new IllegalArgumentException("Unknown file attribute type: " + value);
+        }
+        return type;
+    }
+
+    /**
+     * Returns the type represented by a protocol value, or {@code null} for a
+     * value this client does not know.
+     *
+     * <p>Peers run clients newer than this one, and the C# source reads their
+     * attribute types tolerantly. Throwing instead meant one nonstandard
+     * attribute discarded the entire search or browse response it arrived in.
+     *
+     * @param value the protocol value
+     * @return the matching type, or {@code null}
+     */
+    public static FileAttributeType tryFromValue(int value) {
         for (FileAttributeType type : values()) {
             if (type.value == value) {
                 return type;
             }
         }
-        throw new IllegalArgumentException("Unknown file attribute type: " + value);
+        return null;
     }
 }
