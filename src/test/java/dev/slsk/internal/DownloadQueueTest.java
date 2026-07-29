@@ -362,6 +362,46 @@ class DownloadQueueTest {
         queue.close();
     }
 
+    /**
+     * cancel() publishes Finished(Cancelled) while the attempt is still in
+     * flight. The returning attempt used to act on its own outcome anyway —
+     * overwriting the cancellation with a second Finished, or, when the
+     * outcome read as retryable, resurrecting the cancelled download back to
+     * Queued after its terminal event.
+     */
+    @Test
+    @DisplayName("a cancelled download is not finished again by its returning attempt")
+    void aCancelledDownloadIsNotFinishedAgainByItsReturningAttempt() {
+        GatedRunner runner = new GatedRunner();
+        DownloadQueue queue = queue(runner);
+        queue.policy(DownloadPolicy.defaults().maxConcurrent(1).maxConcurrentPerUser(1));
+
+        TransferId one = TransferId.of("one");
+        TransferId two = TransferId.of("two");
+        queue.enqueue(one, request("alice", "music\\one.mp3"));
+        awaitStarted(runner, 1);
+        queue.enqueue(two, request("alice", "music\\two.mp3"));
+
+        queue.cancel(one);
+        runner.releaseAll();
+        // The second download starts only once the first attempt has returned
+        // and been through the queue's decision, so this is the ordering gate.
+        awaitStarted(runner, 2);
+        awaitTerminal(queue, two);
+
+        assertEquals(
+                new TransferState.Finished(new TransferOutcome.Cancelled()),
+                queue.find(one).orElseThrow().snapshot().state(),
+                "the returning attempt must not overwrite the cancellation");
+        assertEquals(
+                1,
+                transitions.stream()
+                        .filter(transition -> transition.startsWith("one:Finished"))
+                        .count(),
+                "one Finished for a cancelled download, not two");
+        queue.close();
+    }
+
     @Test
     void cancelIsTerminalAndRetryPutsItBack() {
         GatedRunner runner = new GatedRunner();

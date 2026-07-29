@@ -216,6 +216,15 @@ public final class PeerNetwork implements PeerConnectionManager {
         } catch (Throwable failure) {
             directCancellation.close();
             indirectCancellation.close();
+            // A cancelled wait is the caller's own doing, not a failed
+            // connection. The C# source lets cancellation propagate and runs
+            // its second-chance connection only on ConnectionException;
+            // collapsing the two here made cancelling a waiting download dial
+            // a pointless second-chance with an already-cancelled signal and
+            // end ERRORED instead of CANCELLED.
+            if (unwrap(failure) instanceof CancellationException cancelled) {
+                throw cancelled;
+            }
             String message = "Failed to establish a direct or indirect transfer "
                     + "connection to " + username
                     + " with remote token " + remoteToken + " for "
@@ -372,6 +381,11 @@ public final class PeerNetwork implements PeerConnectionManager {
         } catch (Throwable failure) {
             directCancellation.close();
             indirectCancellation.close();
+            // As above: cancellation is the caller's, not the connection's,
+            // and must classify as itself.
+            if (unwrap(failure) instanceof CancellationException cancelled) {
+                throw cancelled;
+            }
             String message = "Failed to establish a direct or indirect transfer "
                     + "connection to " + username + " (" + ipEndpoint
                     + ")";

@@ -101,6 +101,18 @@ final class Transfers {
                             : transfer.getException(),
                     true);
         }
+        if (source.contains(dev.slsk.internal.TransferState.ABORTED)) {
+            // A size mismatch: the peer's advertised size cannot change
+            // between attempts, so retrying re-requests the same file to fail
+            // the same way, peer-visibly, up to the attempt cap. The C# source
+            // classifies the mismatch as terminal; falling through to the
+            // retryable branch below is what made it retried forever.
+            return new TransferOutcome.Failed(
+                    transfer.getException() == null
+                            ? new IllegalStateException("the transfer was aborted")
+                            : transfer.getException(),
+                    false);
+        }
         return new TransferOutcome.Failed(
                 transfer.getException() == null
                         ? new IllegalStateException("the transfer failed")

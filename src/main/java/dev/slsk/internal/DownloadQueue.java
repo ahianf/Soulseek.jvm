@@ -674,6 +674,16 @@ final class DownloadQueue {
             return;
         }
 
+        if (entry.isTerminal()) {
+            // Same rule as paused: cancel() already published Finished while
+            // this attempt was still in flight. Acting on the returning
+            // outcome published a second Finished for the same entry — or,
+            // when the outcome read as retryable, resurrected a CANCELLED
+            // download back to Queued after its terminal event.
+            admit();
+            return;
+        }
+
         DownloadPolicy current = policy;
         if (current.retry().shouldRetry(outcome, entry.attempt)) {
             scheduleRetry(entry, current.retry().backoffBefore(entry.attempt + 1));
