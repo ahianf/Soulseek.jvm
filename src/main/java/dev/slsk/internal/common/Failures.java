@@ -6,7 +6,6 @@ package dev.slsk.internal.common;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
 
@@ -42,7 +41,7 @@ public final class Failures {
     }
 
     /**
-     * Rethrows a failure the way {@link CompletableFuture#join()} presented it.
+     * Rethrows a failure the way {@code CompletableFuture.join()} presented it.
      *
      * <p>Blocking internals raise the failures that used to arrive through a
      * future, and every call site in this library was written against what
@@ -85,11 +84,11 @@ public final class Failures {
     /**
      * Rethrows a failed operation's real failure, in this library's terms.
      *
-     * <p>The blocking replacement for {@link #map} composed with the await that
-     * always followed it. Those were two halves of one rule and lived apart
-     * only because one ran inside a future and the other outside it: translate
-     * the fault, pass a decision through, and never hand a caller a wrapper
-     * from the async layer.
+     * <p>The blocking replacement for the deleted {@code map} composed with the
+     * await that always followed it. Those were two halves of one rule and
+     * lived apart only because one ran inside a future and the other outside
+     * it: translate the fault, pass a decision through, and never hand a caller
+     * a wrapper from the async layer.
      *
      * <p>A lapsed deadline arrives as the checked {@link TimeoutException}.
      * Declaring that on every operation that talks to the server would put a
@@ -149,35 +148,5 @@ public final class Failures {
             throw error;
         }
         throw new SoulseekClientException(message, cause);
-    }
-
-    /**
-     * Wraps an operation's ordinary failures in a {@link
-     * SoulseekClientException} with a prefix saying what was being attempted.
-     *
-     * @param operation the operation to translate
-     * @param prefix prefixes any wrapped failure
-     * @param preservedFailures failure types to pass through untranslated
-     * @param <T> the result type
-     * @return the operation, with its failures translated
-     */
-    @SafeVarargs
-    public static <T> CompletableFuture<T> map(
-            CompletableFuture<T> operation, String prefix, Class<? extends Throwable>... preservedFailures) {
-        return operation.handle((result, failure) -> {
-            if (failure == null) {
-                return result;
-            }
-            Throwable cause = unwrap(failure);
-            if (cause instanceof CancellationException || cause instanceof TimeoutException) {
-                throw new CompletionException(cause);
-            }
-            for (Class<? extends Throwable> preserved : preservedFailures) {
-                if (preserved.isInstance(cause)) {
-                    throw new CompletionException(cause);
-                }
-            }
-            throw new CompletionException(new SoulseekClientException(prefix + message(cause), cause));
-        });
     }
 }

@@ -7,11 +7,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.UserOfflineException;
 import java.io.IOException;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.DisplayName;
@@ -24,10 +24,6 @@ import org.junit.jupiter.api.Test;
  * asserted a dozen times over as a side effect of testing something else.
  */
 class FailuresTest {
-
-    private static Throwable failureOf(CompletableFuture<?> operation) {
-        return assertThrows(CompletionException.class, operation::join).getCause();
-    }
 
     @Test
     @DisplayName("nested completion wrappers are stripped down to the real cause")
@@ -50,35 +46,32 @@ class FailuresTest {
     }
 
     @Test
-    void passesASuccessfulOperationThrough() {
-        assertEquals(
-                "value",
-                Failures.map(CompletableFuture.completedFuture("value"), "prefix: ")
-                        .join());
-    }
-
-    @Test
     @DisplayName("an ordinary failure is wrapped, prefixed with what was being attempted")
     void wrapsOrdinaryFailures() {
         IOException cause = new IOException("socket closed");
-        Throwable actual =
-                failureOf(Failures.map(CompletableFuture.failedFuture(cause), "Failed to send a private message: "));
 
-        SoulseekClientException mapped = assertThrows(SoulseekClientException.class, () -> {
-            throw actual;
-        });
+        SoulseekClientException mapped = assertThrows(
+                SoulseekClientException.class, () -> Failures.raise(cause, "Failed to send a private message: "));
+
         assertSame(cause, mapped.getCause());
         assertEquals("Failed to send a private message: socket closed", mapped.getMessage());
     }
 
     @Test
-    @DisplayName("cancellation and timeout are decisions, not faults, and are never rewritten")
-    void preservesCancellationAndTimeout() {
+    @DisplayName("cancellation is a decision, not a fault, and is never rewritten")
+    void preservesCancellation() {
         CancellationException cancelled = new CancellationException("cancelled");
-        assertSame(cancelled, failureOf(Failures.map(CompletableFuture.failedFuture(cancelled), "prefix: ")));
+        assertSame(cancelled, assertThrows(CancellationException.class, () -> Failures.raise(cancelled, "prefix: ")));
+    }
 
+    @Test
+    @DisplayName("a deadline keeps its identity in the cause, under the name the hierarchy has for it")
+    void preservesTimeoutUnderItsUncheckedName() {
         TimeoutException timeout = new TimeoutException("timed out");
-        assertSame(timeout, failureOf(Failures.map(CompletableFuture.failedFuture(timeout), "prefix: ")));
+        assertSame(
+                timeout,
+                assertThrows(NoResponseException.class, () -> Failures.raise(timeout, "prefix: "))
+                        .getCause());
     }
 
     @Test
@@ -87,14 +80,17 @@ class FailuresTest {
         UserOfflineException offline = new UserOfflineException("alice is offline");
         assertSame(
                 offline,
-                failureOf(
-                        Failures.map(CompletableFuture.failedFuture(offline), "prefix: ", UserOfflineException.class)));
+                assertThrows(
+                        UserOfflineException.class,
+                        () -> Failures.raise(offline, "prefix: ", UserOfflineException.class)));
 
         // and only those: an unnamed type is still wrapped
         IllegalStateException other = new IllegalStateException("something else");
         assertSame(
                 other,
-                failureOf(Failures.map(CompletableFuture.failedFuture(other), "prefix: ", UserOfflineException.class))
+                assertThrows(
+                                SoulseekClientException.class,
+                                () -> Failures.raise(other, "prefix: ", UserOfflineException.class))
                         .getCause());
     }
 }
