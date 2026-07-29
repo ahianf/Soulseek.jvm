@@ -262,7 +262,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
             if (code.value == MessageCode.Distributed.SEARCH_REQUEST) {
                 mesh.get().promoteToBranchRoot();
                 DistributedSearchRequest search = DistributedSearchRequest.fromByteArray(distributed);
-                mesh.get().broadcastMessageAsync(distributed);
+                NetworkExecutor.runAsync(() -> mesh.get().broadcastMessage(distributed));
                 operation = searchResponses
                         .get()
                         .tryRespondAsync(search.getUsername(), search.getToken(), search.getQuery())
@@ -294,7 +294,8 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
             return CompletableFuture.completedFuture(null);
         }
         DistributedSearchRequest search = DistributedSearchRequest.fromByteArray(embedded.getDistributedMessage());
-        mesh.get().broadcastMessageAsync(embedded.getDistributedMessage());
+        byte[] forward = embedded.getDistributedMessage();
+        NetworkExecutor.runAsync(() -> mesh.get().broadcastMessage(forward));
         if (Objects.equals(search.getUsername(), server.username())) {
             return CompletableFuture.completedFuture(null);
         }
@@ -306,7 +307,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
 
     private CompletableFuture<Void> handleSearchRequest(byte[] message) {
         DistributedSearchRequest search = DistributedSearchRequest.fromByteArray(message);
-        mesh.get().broadcastMessageAsync(message);
+        NetworkExecutor.runAsync(() -> mesh.get().broadcastMessage(message));
         if (Objects.equals(search.getUsername(), server.username())) {
             return CompletableFuture.completedFuture(null);
         }

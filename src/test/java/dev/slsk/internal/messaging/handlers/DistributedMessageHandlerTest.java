@@ -53,6 +53,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
 class DistributedMessageHandlerTest {
@@ -127,7 +129,7 @@ class DistributedMessageHandlerTest {
         fixture.handler.handleMessageReadAsync(connection.proxy, search).join();
         fixture.handler.handleMessageReadAsync(connection.proxy, search).join();
 
-        assertEquals(1, fixture.manager.broadcasts.size());
+        awaitBroadcasts(fixture, 1);
         assertArrayEquals(search, fixture.manager.broadcasts.getFirst());
         assertEquals(1, fixture.responder.calls.size());
         assertEquals(new SearchCall(USERNAME, TOKEN, "query"), fixture.responder.calls.getFirst());
@@ -145,7 +147,7 @@ class DistributedMessageHandlerTest {
         byte[] own = new DistributedSearchRequest(LOCAL_USER, TOKEN + 1, "own").toByteArray();
         fixture.handler.handleMessageReadAsync(connection.proxy, own).join();
         assertEquals(2, fixture.responder.calls.size());
-        assertEquals(3, fixture.manager.broadcasts.size());
+        awaitBroadcasts(fixture, 3);
     }
 
     @Test
@@ -157,6 +159,7 @@ class DistributedMessageHandlerTest {
 
         fixture.handler.handleMessageReadAsync(connection.proxy, embedded).join();
 
+        awaitBroadcasts(fixture, 1);
         assertArrayEquals(expected, fixture.manager.broadcasts.getFirst());
         assertEquals(new SearchCall(USERNAME, TOKEN, "query"), fixture.responder.calls.getFirst());
     }
@@ -170,6 +173,7 @@ class DistributedMessageHandlerTest {
         fixture.handler.handleEmbeddedMessageAsync(embedded).join();
 
         assertEquals(1, fixture.manager.promotions);
+        awaitBroadcasts(fixture, 1);
         assertArrayEquals(expected, fixture.manager.broadcasts.getFirst());
         assertEquals(new SearchCall(USERNAME, TOKEN, "query"), fixture.responder.calls.getFirst());
     }
@@ -254,6 +258,21 @@ class DistributedMessageHandlerTest {
 
     private record SearchCall(String username, int token, String query) {}
 
+    /**
+     * Waits for the dispatched broadcasts to arrive.
+     *
+     * <p>The handler puts a broadcast on a thread of its own — fanning out to
+     * every child is not the parent read loop's to wait for — so the probe
+     * records it after the call that provoked it has returned.
+     */
+    private static void awaitBroadcasts(Fixture fixture, int count) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (fixture.manager.broadcasts.size() < count && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertEquals(count, fixture.manager.broadcasts.size());
+    }
+
     private static final class Fixture {
         private final RecordingDiagnostic diagnostic = new RecordingDiagnostic();
         private final FakeWaiter waiter = new FakeWaiter();
@@ -280,7 +299,7 @@ class DistributedMessageHandlerTest {
                 DistributedConnectionManager.class.getClassLoader(),
                 new Class<?>[] {DistributedConnectionManager.class},
                 this);
-        private final List<byte[]> broadcasts = new ArrayList<>();
+        private final List<byte[]> broadcasts = new CopyOnWriteArrayList<>();
         private PeerEndpoint parent = new PeerEndpoint("", null);
         private int branchLevel;
         private String branchRoot;
@@ -298,10 +317,10 @@ class DistributedMessageHandlerTest {
                     branchRoot = (String) arguments[0];
                     yield null;
                 }
-                case "broadcastMessageAsync" -> {
+                case "broadcastMessage" -> {
                     byte[] bytes = (byte[]) arguments[0];
                     broadcasts.add(Arrays.copyOf(bytes, bytes.length));
-                    yield CompletableFuture.completedFuture(null);
+                    yield null;
                 }
                 case "promoteToBranchRoot" -> {
                     promotions++;

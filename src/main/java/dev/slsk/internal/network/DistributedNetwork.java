@@ -55,7 +55,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -100,8 +99,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     private final AtomicBoolean parentConnecting = new AtomicBoolean();
     private final AtomicBoolean statusUpdating = new AtomicBoolean();
     private final AtomicBoolean disposed = new AtomicBoolean();
-    private final ConcurrentHashMap<String, CompletableFuture<MessageConnection>> childConnections =
-            new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ConnectionCell> childConnections = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, InetSocketAddress> children = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, CancellationController> pendingInboundIndirectConnections =
             new ConcurrentHashMap<>();
@@ -339,46 +337,64 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     }
 
     @Override
-    public CompletableFuture<Void> addOrUpdateChildConnectionAsync(String username, Connection incomingConnection) {
+    public void addOrUpdateChildConnection(String username, Connection incomingConnection) {
         Objects.requireNonNull(incomingConnection, "incomingConnection");
         if (!canAcceptChildren()) {
             diagnostic.debug(rejectionMessage(username, incomingConnection.getIpEndpoint()));
             incomingConnection.close();
-            return updateStatusAsync();
+            updateStatus();
+            return;
         }
 
-        CompletableFuture<MessageConnection> future = childConnections.compute(username, (key, cached) -> {
-            return invoke(() -> establishDirectChild(username, incomingConnection, cached));
-        });
-        return future.handle((connection, failure) -> {
-            if (failure != null) {
-                Throwable cause = unwrap(failure);
-                String message = "Failed to establish an inbound direct child connection "
-                        + "to " + username + " ("
-                        + incomingConnection.getIpEndpoint() + "): "
-                        + message(cause);
-                diagnostic.debug(message + " (type: "
-                        + incomingConnection.getType() + ", id: "
-                        + incomingConnection.getId() + ")");
-                diagnostic.debug("Purging child connection cache of failed connection to "
-                        + username + " ("
-                        + incomingConnection.getIpEndpoint() + ")");
-                childConnections.remove(username);
-                throw new CompletionException(new ConnectionException(message, cause));
-            }
-            return null;
-        });
+        // A child that connects to us wins over whatever we had for it, so this
+        // claims the entry outright. It used to be claimed inside a compute,
+        // which held the map's bin lock for as long as the establishment took.
+        ConnectionCell cell = new ConnectionCell();
+        ConnectionCell superseded = childConnections.put(username, cell);
+
+        try {
+            cell.settle(establishDirectChild(username, incomingConnection, superseded));
+        } catch (Throwable failure) {
+            Throwable cause = unwrap(failure);
+            cell.fail(cause);
+            String message = "Failed to establish an inbound direct child connection "
+                    + "to " + username + " ("
+                    + incomingConnection.getIpEndpoint() + "): "
+                    + message(cause);
+            diagnostic.debug(
+                    message + " (type: " + incomingConnection.getType() + ", id: " + incomingConnection.getId() + ")");
+            diagnostic.debug("Purging child connection cache of failed connection to "
+                    + username + " ("
+                    + incomingConnection.getIpEndpoint() + ")");
+            childConnections.remove(username, cell);
+            throw new CompletionException(new ConnectionException(message, cause));
+        }
     }
 
+    /**
+     * Attempts every candidate at once and adopts the one with the lowest branch
+     * level.
+     *
+     * <p>One thread per candidate, and every one of them is joined before any is
+     * sorted. This replaced a {@code CompletableFuture.allOf} over the same
+     * threads, which read the results back out of the tasks it had just waited
+     * on: a candidate whose task had settled but whose completion had not yet
+     * propagated was filtered out of the successful list, so on a loaded machine
+     * the mesh adopted the wrong parent and left the loser connected.
+     *
+     * <p>The race inside {@link #getParentCandidateConnection} is a different
+     * thing and stays: direct against indirect for one candidate, first to
+     * answer wins. This wants all of them and then the best.
+     */
     @Override
-    public CompletableFuture<Void> addParentConnectionAsync(Iterable<PeerEndpoint> candidates) {
+    public void addParentConnection(Iterable<PeerEndpoint> candidates) {
         if (!isEnabled()) {
             diagnostic.debug("Parent connection solicitation ignored; distributed " + "network is not enabled.");
-            return CompletableFuture.completedFuture(null);
+            return;
         }
         SoulseekClientState state = server.state();
         if (state.contains(SoulseekClientState.DISCONNECTED) || state.contains(SoulseekClientState.DISCONNECTING)) {
-            return CompletableFuture.completedFuture(null);
+            return;
         }
 
         List<PeerEndpoint> snapshot = new ArrayList<>();
@@ -391,12 +407,13 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                                     + getParent().username()
                             : "Parent candidate cache is empty; requesting a new list "
                                     + "of candidates from the server");
-            return updateStatusAsync();
+            updateStatus();
+            return;
         }
         if (!parentConnecting.compareAndSet(false, true)) {
             diagnostic.debug("Parent connection solicitation ignored; already in the "
                     + "process of establishing a connection.");
-            return CompletableFuture.completedFuture(null);
+            return;
         }
 
         diagnostic.info("Attempting to establish a new parent connection from " + snapshot.size() + " candidates");
@@ -404,92 +421,106 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 + String.join(
                         ", ", snapshot.stream().map(PeerEndpoint::username).toList()));
         CancellationController cancellation = new CancellationController();
-        // One thread per candidate: every candidate is attempted at once and
-        // the best of whoever answers is adopted. Each attempt is blocking now;
-        // the fan-out over them is what still needs a future, and Phase 3's
-        // DistributedNetwork owns replacing it.
-        List<CompletableFuture<ParentCandidate>> tasks = snapshot.stream()
-                .map(candidate -> NetworkExecutor.supplyAsync(() -> getParentCandidateConnection(
-                        candidate.username(), candidate.ipEndpoint(), cancellation.getSignal())))
-                .toList();
-
-        CompletableFuture<Void> settled = CompletableFuture.allOf(
-                tasks.stream().map(task -> task.exceptionally(failure -> null)).toArray(CompletableFuture[]::new));
-        return settled.thenCompose(ignored -> {
-                    List<ParentCandidate> successful = tasks.stream()
-                            .filter(task -> !task.isCompletedExceptionally() && !task.isCancelled())
-                            .map(CompletableFuture::join)
-                            .filter(Objects::nonNull)
-                            .filter(candidate -> candidate.connection().getState() == ConnectionState.CONNECTED)
-                            .sorted(Comparator.comparingInt(ParentCandidate::branchLevel))
-                            .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
-                    if (successful.isEmpty()) {
-                        diagnostic.warning("Failed to connect to any of the available parent " + "candidates");
-                        return CompletableFuture.completedFuture(null);
-                    }
-
-                    diagnostic.debug("Successfully established " + successful.size() + " connections.");
-                    ParentCandidate selected = successful.removeFirst();
-                    parentConnection = selected.connection();
-                    parentBranchLevel = selected.branchLevel();
-                    parentBranchRoot = selected.branchRoot();
-                    diagnostic.debug("Selected " + parentConnection.getUsername()
-                            + " as the best connection; branch root: "
-                            + parentBranchRoot + ", branch level: "
-                            + parentBranchLevel);
-                    parentConnection.addDisconnectedListener(parentDisconnectedListener);
-                    parentConnection.removeDisconnectedListener(parentCandidateDisconnectedListener);
-                    DistributedMessageHandler handler = distributedMessages.get();
-                    parentConnection.addMessageReadListener(handler::handleMessageRead);
-                    parentConnection.addMessageWrittenListener(handler::handleMessageWritten);
-                    diagnostic.debug("Parent connection to " + parentConnection.getUsername()
-                            + " (" + parentConnection.getIpEndpoint()
-                            + ") established. (type: " + parentConnection.getType()
-                            + ", id: " + parentConnection.getId() + ")");
-                    diagnostic.info("Adopted parent connection to "
-                            + parentConnection.getUsername() + " ("
-                            + parentConnection.getIpEndpoint() + ")");
-                    demoteFromBranchRoot();
-                    DistributedParentEvent eventData = new DistributedParentEvent(
-                            parentConnection.getUsername(),
-                            parentConnection.getIpEndpoint(),
-                            parentBranchLevel,
-                            parentBranchRoot);
-                    parentAdoptedListeners.forEach(listener -> listener.handle(this, eventData));
-                    raiseStateChanged();
-
-                    parentCandidates = successful.stream()
-                            .map(candidate -> new PeerEndpoint(
-                                    candidate.connection().getUsername(),
-                                    candidate.connection().getIpEndpoint()))
-                            .toList();
-                    diagnostic.debug("Connected parent candidates not selected: "
-                            + (parentCandidates.isEmpty()
-                                    ? "<none>"
-                                    : String.join(
-                                            ", ",
-                                            parentCandidates.stream()
-                                                    .map(PeerEndpoint::username)
-                                                    .toList())));
-                    successful.forEach(candidate -> {
-                        diagnostic.debug("Disconnecting parent candidate connection to "
-                                + candidate.connection().getUsername() + " ("
-                                + candidate.connection().getIpEndpoint() + ")");
-                        candidate.connection().disconnect("Not selected.");
-                        candidate.connection().close();
-                    });
-                    return updateStatusAsync().thenCompose(value -> broadcastMessageAsync(getBranchInformation()));
-                })
-                .whenComplete((ignored, failure) -> {
-                    cancellation.close();
-                    parentConnecting.set(false);
-                    updateStatusAsync();
-                });
+        try {
+            adoptBestCandidate(attemptCandidates(snapshot, cancellation.getSignal()));
+        } finally {
+            cancellation.close();
+            parentConnecting.set(false);
+            updateStatus();
+        }
     }
 
-    @Override
-    public CompletableFuture<Void> broadcastMessageAsync(byte[] bytes, CancellationSignal cancellationSignal) {
-        return NetworkExecutor.runAsync(() -> broadcastMessage(bytes, cancellationSignal));
+    /**
+     * Attempts every candidate on a thread of its own and returns those that
+     * answered, lowest branch level first.
+     */
+    private List<ParentCandidate> attemptCandidates(
+            List<PeerEndpoint> snapshot, CancellationSignal cancellationSignal) {
+        ExecutorService executor = NetworkExecutor.executor();
+        List<Future<ParentCandidate>> attempts = new ArrayList<>(snapshot.size());
+        for (PeerEndpoint candidate : snapshot) {
+            attempts.add(executor.submit(() ->
+                    getParentCandidateConnection(candidate.username(), candidate.ipEndpoint(), cancellationSignal)));
+        }
+
+        List<ParentCandidate> successful = new ArrayList<>(attempts.size());
+        for (Future<ParentCandidate> attempt : attempts) {
+            ParentCandidate candidate;
+            try {
+                candidate = attempt.get();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                break;
+            } catch (ExecutionException | CancellationException failure) {
+                // Every attempt reports its own failure on the way out; one
+                // candidate refusing us says nothing about the rest.
+                continue;
+            }
+            if (candidate != null && candidate.connection().getState() == ConnectionState.CONNECTED) {
+                successful.add(candidate);
+            }
+        }
+        successful.sort(Comparator.comparingInt(ParentCandidate::branchLevel));
+        return successful;
+    }
+
+    /** Adopts the lowest-branch-level candidate and disposes of the rest. */
+    private void adoptBestCandidate(List<ParentCandidate> successful) {
+        if (successful.isEmpty()) {
+            diagnostic.warning("Failed to connect to any of the available parent " + "candidates");
+            return;
+        }
+
+        diagnostic.debug("Successfully established " + successful.size() + " connections.");
+        ParentCandidate selected = successful.getFirst();
+        List<ParentCandidate> rejected = successful.subList(1, successful.size());
+        parentConnection = selected.connection();
+        parentBranchLevel = selected.branchLevel();
+        parentBranchRoot = selected.branchRoot();
+        diagnostic.debug("Selected " + parentConnection.getUsername()
+                + " as the best connection; branch root: "
+                + parentBranchRoot + ", branch level: "
+                + parentBranchLevel);
+        parentConnection.addDisconnectedListener(parentDisconnectedListener);
+        parentConnection.removeDisconnectedListener(parentCandidateDisconnectedListener);
+        DistributedMessageHandler handler = distributedMessages.get();
+        parentConnection.addMessageReadListener(handler::handleMessageRead);
+        parentConnection.addMessageWrittenListener(handler::handleMessageWritten);
+        diagnostic.debug("Parent connection to " + parentConnection.getUsername()
+                + " (" + parentConnection.getIpEndpoint()
+                + ") established. (type: " + parentConnection.getType()
+                + ", id: " + parentConnection.getId() + ")");
+        diagnostic.info("Adopted parent connection to "
+                + parentConnection.getUsername() + " ("
+                + parentConnection.getIpEndpoint() + ")");
+        demoteFromBranchRoot();
+        DistributedParentEvent eventData = new DistributedParentEvent(
+                parentConnection.getUsername(), parentConnection.getIpEndpoint(), parentBranchLevel, parentBranchRoot);
+        parentAdoptedListeners.forEach(listener -> listener.handle(this, eventData));
+        raiseStateChanged();
+
+        parentCandidates = rejected.stream()
+                .map(candidate -> new PeerEndpoint(
+                        candidate.connection().getUsername(),
+                        candidate.connection().getIpEndpoint()))
+                .toList();
+        diagnostic.debug("Connected parent candidates not selected: "
+                + (parentCandidates.isEmpty()
+                        ? "<none>"
+                        : String.join(
+                                ", ",
+                                parentCandidates.stream()
+                                        .map(PeerEndpoint::username)
+                                        .toList())));
+        rejected.forEach(candidate -> {
+            diagnostic.debug("Disconnecting parent candidate connection to "
+                    + candidate.connection().getUsername() + " ("
+                    + candidate.connection().getIpEndpoint() + ")");
+            candidate.connection().disconnect("Not selected.");
+            candidate.connection().close();
+        });
+        updateStatus();
+        broadcastMessage(getBranchInformation(), CancellationSignal.none());
     }
 
     /**
@@ -508,13 +539,14 @@ public final class DistributedNetwork implements DistributedConnectionManager {
      * cannot force {@code --enable-preview} onto its consumers. Revisit when it
      * is final.
      */
-    void broadcastMessage(byte[] bytes, CancellationSignal cancellationSignal) {
+    @Override
+    public void broadcastMessage(byte[] bytes, CancellationSignal cancellationSignal) {
         long started = System.nanoTime();
         CancellationSignal effectiveToken = token(cancellationSignal);
         ExecutorService executor = NetworkExecutor.executor();
 
         List<Future<?>> writes = new ArrayList<>(childConnections.size());
-        for (CompletableFuture<MessageConnection> pending : childConnections.values()) {
+        for (ConnectionCell pending : childConnections.values()) {
             writes.add(executor.submit(() -> writeToChild(pending, bytes, effectiveToken)));
         }
 
@@ -535,15 +567,10 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         averageBroadcastLatency = current == null ? elapsed : ((elapsed - current) * LATENCY_ALPHA) + current;
     }
 
-    private void writeToChild(
-            CompletableFuture<MessageConnection> pending, byte[] bytes, CancellationSignal cancellationSignal) {
-        MessageConnection connection;
-        try {
-            // The child may still be completing its handshake.
-            connection = pending.join();
-        } catch (RuntimeException notReady) {
-            return;
-        }
+    private void writeToChild(ConnectionCell pending, byte[] bytes, CancellationSignal cancellationSignal) {
+        // The child may still be completing its handshake; one that failed it
+        // answers null rather than throwing.
+        MessageConnection connection = pending.awaitQuietly();
         if (connection == null || connection.getState() != ConnectionState.CONNECTED) {
             return;
         }
@@ -569,52 +596,47 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     }
 
     @Override
-    public CompletableFuture<Void> getOrAddChildConnectionAsync(ConnectToPeerResponse response) {
+    public void getOrAddChildConnection(ConnectToPeerResponse response) {
         if (!canAcceptChildren()) {
             diagnostic.debug(rejectionMessage(response.getUsername(), response.getIpEndpoint()));
-            return updateStatusAsync();
+            updateStatus();
+            return;
         }
 
-        AtomicBoolean cached = new AtomicBoolean(true);
-        CompletableFuture<MessageConnection> future = childConnections.computeIfAbsent(response.getUsername(), key -> {
-            cached.set(false);
-            return establishIndirectChild(response);
-        });
-        return future.handle((connection, failure) -> {
-            if (failure == null) {
-                if (cached.get()) {
-                    diagnostic.debug("Child connection from " + response.getUsername()
-                            + " (" + response.getIpEndpoint()
-                            + ") for token " + response.getToken()
-                            + " ignored; connection already exists.");
-                }
-                return null;
-            }
+        String username = response.getUsername();
+        ConnectionCell claim = new ConnectionCell();
+        ConnectionCell cached = childConnections.putIfAbsent(username, claim);
+        ConnectionCell entry = cached == null ? claim : cached;
 
+        try {
+            if (cached != null) {
+                entry.await();
+                diagnostic.debug("Child connection from " + username
+                        + " (" + response.getIpEndpoint()
+                        + ") for token " + response.getToken()
+                        + " ignored; connection already exists.");
+                return;
+            }
+            entry.settle(establishIndirectChild(response));
+        } catch (Throwable failure) {
             Throwable cause = unwrap(failure);
+            entry.fail(cause);
             String message = "Failed to establish an inbound indirect child connection "
-                    + "to " + response.getUsername() + " ("
+                    + "to " + username + " ("
                     + response.getIpEndpoint() + "): " + message(cause);
             diagnostic.debug(message);
             if (!(cause instanceof CancellationException)) {
                 diagnostic.debug("Purging child connection cache of failed connection to "
-                        + response.getUsername() + " ("
+                        + username + " ("
                         + response.getIpEndpoint() + ").");
-                CompletableFuture<MessageConnection> removedRecord = childConnections.remove(response.getUsername());
-                if (removedRecord != null) {
-                    removedRecord.handle((removed, ignored) -> {
-                        if (removed != null && removed.getType().hasFlag(ConnectionTypes.DIRECT)) {
-                            diagnostic.warning("Erroneously purged direct child connection "
-                                    + "to " + response.getUsername()
-                                    + " upon indirect failure");
-                            childConnections.putIfAbsent(response.getUsername(), removedRecord);
-                        }
-                        return null;
-                    });
-                }
+                // Only ever the entry this attempt was waiting on. A direct
+                // child that superseded it has already replaced the entry, and
+                // purging that one is what the "erroneously purged" warning
+                // used to detect after the fact and undo.
+                childConnections.remove(username, entry);
             }
             throw new CompletionException(new ConnectionException(message, cause));
-        });
+        }
     }
 
     @Override
@@ -636,13 +658,9 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             parent.close();
         }
         parentConnection = null;
-        childConnections.forEach((username, future) -> {
-            if (childConnections.remove(username, future)) {
-                future.thenAccept(connection -> {
-                    if (connection != null) {
-                        connection.close();
-                    }
-                });
+        childConnections.forEach((username, cell) -> {
+            if (childConnections.remove(username, cell)) {
+                cell.closeWhenSettled();
             }
         });
         children.clear();
@@ -658,48 +676,47 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     @Override
     public void setParentBranchLevel(int branchLevel) {
         parentBranchLevel = branchLevel;
-        updateStatusEventuallyAsync();
+        updateStatusEventually();
     }
 
     @Override
     public void setParentBranchRoot(String branchRoot) {
         parentBranchRoot = branchRoot;
-        updateStatusEventuallyAsync();
+        updateStatusEventually();
     }
 
     @Override
-    public CompletableFuture<Void> updateStatusAsync(CancellationSignal cancellationSignal) {
+    public void updateStatus(CancellationSignal cancellationSignal) {
         SoulseekClientState state = server.state();
         if (!state.contains(SoulseekClientState.CONNECTED) || !state.contains(SoulseekClientState.LOGGED_IN)) {
-            return CompletableFuture.completedFuture(null);
+            return;
         }
         if (!statusUpdating.compareAndSet(false, true)) {
-            return CompletableFuture.completedFuture(null);
+            return;
         }
 
-        int branchLevel = getBranchLevel();
-        String branchRoot = getBranchRoot();
-        boolean accept = canAcceptChildren();
-        boolean haveNoParents = isEnabled() && !hasParent();
-        String status = "Requesting parent: " + haveNoParents
-                + ", Branch level: " + branchLevel
-                + ", Branch root: " + branchRoot
-                + ", Number of children: " + children.size() + "/"
-                + getChildLimit()
-                + ", Accepting children: " + accept;
-        if (lastStatus != null && lastStatus.equalsIgnoreCase(status)) {
-            diagnostic.debug("Update skipped; status has not changed: " + status);
-            statusUpdating.set(false);
-            return CompletableFuture.completedFuture(null);
-        }
+        try {
+            int branchLevel = getBranchLevel();
+            String branchRoot = getBranchRoot();
+            boolean accept = canAcceptChildren();
+            boolean haveNoParents = isEnabled() && !hasParent();
+            String status = "Requesting parent: " + haveNoParents
+                    + ", Branch level: " + branchLevel
+                    + ", Branch root: " + branchRoot
+                    + ", Number of children: " + children.size() + "/"
+                    + getChildLimit()
+                    + ", Accepting children: " + accept;
+            if (lastStatus != null && lastStatus.equalsIgnoreCase(status)) {
+                diagnostic.debug("Update skipped; status has not changed: " + status);
+                return;
+            }
 
-        diagnostic.debug("Status changed; " + status);
-        byte[] payload = concatenate(
-                new BranchLevelCommand(branchLevel).toByteArray(),
-                new BranchRootCommand(branchRoot).toByteArray(),
-                new AcceptChildrenCommand(accept).toByteArray(),
-                new HaveNoParentsCommand(haveNoParents).toByteArray());
-        return NetworkExecutor.runAsync(() -> {
+            diagnostic.debug("Status changed; " + status);
+            byte[] payload = concatenate(
+                    new BranchLevelCommand(branchLevel).toByteArray(),
+                    new BranchRootCommand(branchRoot).toByteArray(),
+                    new AcceptChildrenCommand(accept).toByteArray(),
+                    new HaveNoParentsCommand(haveNoParents).toByteArray());
             try {
                 server.writeBytes(payload, token(cancellationSignal));
                 raiseStateChanged();
@@ -707,6 +724,8 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 lastStatus = status;
                 lastStatusTimestamp = Instant.now();
             } catch (Throwable failure) {
+                // A status update is nobody's to fail: every caller here is a
+                // state change reporting itself, not a request with a waiter.
                 Throwable cause = unwrap(failure);
                 String message = "Failed to update distributed status: " + message(cause);
                 if (!server.state().equals(SoulseekClientState.DISCONNECTED)) {
@@ -714,10 +733,10 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 } else {
                     diagnostic.debug(message, cause);
                 }
-            } finally {
-                statusUpdating.set(false);
             }
-        });
+        } finally {
+            statusUpdating.set(false);
+        }
     }
 
     @Override
@@ -749,7 +768,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 && state.contains(SoulseekClientState.CONNECTED)
                 && state.contains(SoulseekClientState.LOGGED_IN)) {
             diagnostic.warning("No distributed parent connected.  Requesting a list of " + "candidates.");
-            updateStatusAsync();
+            updateStatus();
         }
     }
 
@@ -785,8 +804,8 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         }
     }
 
-    private CompletableFuture<MessageConnection> establishDirectChild(
-            String username, Connection incomingConnection, CompletableFuture<MessageConnection> cached) {
+    private MessageConnection establishDirectChild(
+            String username, Connection incomingConnection, ConnectionCell cached) {
         diagnostic.debug("Inbound child connection to " + username + " ("
                 + incomingConnection.getIpEndpoint()
                 + ") accepted. (type: " + incomingConnection.getType()
@@ -804,58 +823,58 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.DIRECT));
         attachChildMessageListeners(connection);
         connection.addDisconnectedListener((sender, args) -> sender.close());
-        AtomicBoolean superseded = new AtomicBoolean();
+        boolean superseded = false;
 
-        CompletableFuture<Void> prior = CompletableFuture.completedFuture(null);
         if (cached != null) {
             CancellationController pending = pendingInboundIndirectConnections.get(username);
             if (pending != null) {
                 diagnostic.debug("Cancelling pending indirect child connection to " + username);
                 pending.cancel();
             }
-            prior = cached.handle((old, failure) -> {
-                if (old != null) {
-                    old.removeDisconnectedListener(childDisconnectedListener);
-                    diagnostic.debug("Superseding existing child connection to "
-                            + username + " (" + old.getIpEndpoint()
-                            + ") (old: " + incomingConnection.getId()
-                            + ", new: " + connection.getId());
-                    old.disconnect("Superseded.");
-                    old.close();
-                    superseded.set(true);
-                }
-                return null;
-            });
+            // An attempt still in flight owns the connection it is about to
+            // produce, so it has to finish before that connection can be let go
+            // of. Cancelling the pending indirect above is what makes it finish
+            // promptly; every other attempt is bounded by its connect timeout.
+            MessageConnection old = cached.awaitQuietly();
+            if (old != null) {
+                old.removeDisconnectedListener(childDisconnectedListener);
+                diagnostic.debug("Superseding existing child connection to "
+                        + username + " (" + old.getIpEndpoint()
+                        + ") (old: " + incomingConnection.getId()
+                        + ", new: " + connection.getId());
+                old.disconnect("Superseded.");
+                old.close();
+                superseded = true;
+            }
         }
-        return prior.thenCompose(ignored -> NetworkExecutor.supplyAsync(() -> {
-            try {
-                connection.startReadingContinuously();
-                connection.write(getBranchInformation());
-            } catch (Throwable failure) {
-                connection.close();
-                throw Failures.propagate(failure);
-            }
-            connection.addDisconnectedListener(childDisconnectedListener);
-            children.put(username, connection.getIpEndpoint());
-            diagnostic.debug("Child connection to " + connection.getUsername()
-                    + " (" + connection.getIpEndpoint()
-                    + ") established. (type: "
-                    + connection.getType() + ", id: "
-                    + connection.getId() + ")");
-            diagnostic.info((superseded.get() ? "Updated" : "Added")
-                    + " child connection to "
-                    + connection.getUsername() + " ("
-                    + connection.getIpEndpoint() + ")");
-            if (!superseded.get()) {
-                raiseChildAdded(connection);
-                raiseStateChanged();
-            }
-            updateStatusEventuallyAsync();
-            return connection;
-        }));
+
+        try {
+            connection.startReadingContinuously();
+            connection.write(getBranchInformation());
+        } catch (Throwable failure) {
+            connection.close();
+            throw Failures.propagate(failure);
+        }
+        connection.addDisconnectedListener(childDisconnectedListener);
+        children.put(username, connection.getIpEndpoint());
+        diagnostic.debug("Child connection to " + connection.getUsername()
+                + " (" + connection.getIpEndpoint()
+                + ") established. (type: "
+                + connection.getType() + ", id: "
+                + connection.getId() + ")");
+        diagnostic.info((superseded ? "Updated" : "Added")
+                + " child connection to "
+                + connection.getUsername() + " ("
+                + connection.getIpEndpoint() + ")");
+        if (!superseded) {
+            raiseChildAdded(connection);
+            raiseStateChanged();
+        }
+        updateStatusEventually();
+        return connection;
     }
 
-    private CompletableFuture<MessageConnection> establishIndirectChild(ConnectToPeerResponse response) {
+    private MessageConnection establishIndirectChild(ConnectToPeerResponse response) {
         diagnostic.debug("Attempting inbound indirect child connection to "
                 + response.getUsername() + " (" + response.getIpEndpoint()
                 + ") for token " + response.getToken());
@@ -867,31 +886,29 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         CancellationController cancellation = new CancellationController();
         pendingInboundIndirectConnections.put(response.getUsername(), cancellation);
 
-        return NetworkExecutor.supplyAsync(() -> {
-            try {
-                connection.connect(cancellation.getSignal());
-                connection.write(new PierceFirewall(response.getToken()).toByteArray(), cancellation.getSignal());
-                connection.write(getBranchInformation(), cancellation.getSignal());
-            } catch (Throwable failure) {
-                connection.close();
-                throw new CompletionException(unwrap(failure));
-            } finally {
-                pendingInboundIndirectConnections.remove(response.getUsername(), cancellation);
-                cancellation.close();
-            }
-            connection.addDisconnectedListener(childDisconnectedListener);
-            children.put(response.getUsername(), connection.getIpEndpoint());
-            diagnostic.debug("Child connection to " + connection.getUsername() + " ("
-                    + connection.getIpEndpoint()
-                    + ") established. (type: " + connection.getType()
-                    + ", id: " + connection.getId() + ")");
-            diagnostic.info(
-                    "Added child connection to " + connection.getUsername() + " (" + connection.getIpEndpoint() + ")");
-            raiseChildAdded(connection);
-            raiseStateChanged();
-            updateStatusEventuallyAsync();
-            return connection;
-        });
+        try {
+            connection.connect(cancellation.getSignal());
+            connection.write(new PierceFirewall(response.getToken()).toByteArray(), cancellation.getSignal());
+            connection.write(getBranchInformation(), cancellation.getSignal());
+        } catch (Throwable failure) {
+            connection.close();
+            throw new CompletionException(unwrap(failure));
+        } finally {
+            pendingInboundIndirectConnections.remove(response.getUsername(), cancellation);
+            cancellation.close();
+        }
+        connection.addDisconnectedListener(childDisconnectedListener);
+        children.put(response.getUsername(), connection.getIpEndpoint());
+        diagnostic.debug("Child connection to " + connection.getUsername() + " ("
+                + connection.getIpEndpoint()
+                + ") established. (type: " + connection.getType()
+                + ", id: " + connection.getId() + ")");
+        diagnostic.info(
+                "Added child connection to " + connection.getUsername() + " (" + connection.getIpEndpoint() + ")");
+        raiseChildAdded(connection);
+        raiseStateChanged();
+        updateStatusEventually();
+        return connection;
     }
 
     private ParentCandidate getParentCandidateConnection(
@@ -1108,7 +1125,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         childDisconnectedListeners.forEach(listener -> listener.handle(this, childEvent));
         raiseStateChanged();
         connection.close();
-        updateStatusEventuallyAsync();
+        updateStatusEventually();
     }
 
     private void parentCandidateDisconnected(Connection sender, ConnectionDisconnectedEvent eventData) {
@@ -1139,22 +1156,31 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         parentBranchRoot = "";
         raiseStateChanged();
         connection.close();
-        addParentConnectionAsync(parentCandidates).exceptionally(failure -> null);
+        // On a thread of its own: this runs from the dying connection's own
+        // disconnect handler, and re-parenting negotiates with every remaining
+        // candidate before it returns.
+        List<PeerEndpoint> candidates = parentCandidates;
+        NetworkExecutor.executor().execute(() -> {
+            try {
+                addParentConnection(candidates);
+            } catch (Throwable failure) {
+                diagnostic.debug(
+                        "Failed to re-establish a parent connection: " + message(unwrap(failure)), unwrap(failure));
+            }
+        });
     }
 
-    private CompletableFuture<Void> updateStatusEventuallyAsync() {
+    private void updateStatusEventually() {
         if (lastStatusTimestamp != null
                 && lastStatusTimestamp.plusMillis(STATUS_AGE_LIMIT).isBefore(Instant.now())) {
             diagnostic.debug("Distributed status age exceeds limit of " + STATUS_AGE_LIMIT + "ms, forcing an update");
-            updateStatusAsync();
+            updateStatus();
         }
-        ScheduledFuture<?> next =
-                scheduler.schedule(() -> updateStatusAsync(), STATUS_DEBOUNCE_TIME, TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> next = scheduler.schedule(this::updateStatus, STATUS_DEBOUNCE_TIME, TimeUnit.MILLISECONDS);
         ScheduledFuture<?> prior = statusDebounce.getAndSet(next);
         if (prior != null) {
             prior.cancel(false);
         }
-        return CompletableFuture.completedFuture(null);
     }
 
     private boolean isEnabled() {
@@ -1214,14 +1240,6 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             output.writeBytes(array);
         }
         return output.toByteArray();
-    }
-
-    private static <T> CompletableFuture<T> invoke(Supplier<CompletableFuture<T>> supplier) {
-        try {
-            return supplier.get();
-        } catch (Throwable failure) {
-            return CompletableFuture.failedFuture(failure);
-        }
     }
 
     private static CancellationSignal token(CancellationSignal token) {

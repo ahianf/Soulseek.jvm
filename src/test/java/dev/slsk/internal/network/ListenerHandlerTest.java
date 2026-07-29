@@ -400,10 +400,10 @@ class ListenerHandlerTest {
                 (ignored, method, arguments) -> {
                     return switch (method.getName()) {
                         case "getPendingSolicitations" -> pending;
-                        case "addOrUpdateChildConnectionAsync" -> {
+                        case "addOrUpdateChildConnection" -> {
                             addedUsername = (String) arguments[0];
                             addedConnection = (Connection) arguments[1];
-                            yield CompletableFuture.completedFuture(null);
+                            yield null;
                         }
                         case "toString" -> "distributedManager";
                         default -> defaultValue(method.getReturnType());

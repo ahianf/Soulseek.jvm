@@ -470,11 +470,11 @@ class EngineConnectTest {
         }
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("updateStatusAsync")) {
+            if (method.getName().equals("updateStatus") && arguments != null) {
                 updateCount++;
                 updateToken = (CancellationSignal) arguments[0];
                 sequence.add("distributed");
-                return CompletableFuture.completedFuture(null);
+                return null;
             }
             return defaultValue(method.getReturnType());
         }

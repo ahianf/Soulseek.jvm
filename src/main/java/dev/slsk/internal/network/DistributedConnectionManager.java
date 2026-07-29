@@ -13,7 +13,6 @@ import dev.slsk.internal.messaging.messages.ConnectToPeerResponse;
 import dev.slsk.internal.network.tcp.Connection;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /** Manages distributed-network parent and child connections. */
 public interface DistributedConnectionManager extends AutoCloseable, DiagnosticSource {
@@ -65,19 +64,51 @@ public interface DistributedConnectionManager extends AutoCloseable, DiagnosticS
 
     Map<Integer, String> getPendingSolicitations();
 
-    CompletableFuture<Void> addOrUpdateChildConnectionAsync(String username, Connection incomingConnection);
+    /**
+     * Adopts an inbound direct child connection, superseding any existing one.
+     *
+     * <p>Blocking, and it throws what stopped it. A caller on a read loop
+     * dispatches it rather than waiting.
+     *
+     * @param username the child's username
+     * @param incomingConnection the accepted connection to hand off
+     */
+    void addOrUpdateChildConnection(String username, Connection incomingConnection);
 
-    CompletableFuture<Void> addParentConnectionAsync(Iterable<PeerEndpoint> parentCandidates);
+    /**
+     * Attempts every candidate at once and adopts the one with the lowest branch
+     * level.
+     *
+     * <p>Blocking: it returns when every candidate has settled and the best of
+     * them is the parent. A caller on a read loop dispatches it.
+     *
+     * @param parentCandidates the candidates to attempt
+     */
+    void addParentConnection(Iterable<PeerEndpoint> parentCandidates);
 
-    CompletableFuture<Void> broadcastMessageAsync(byte[] bytes, CancellationSignal cancellationSignal);
+    /**
+     * Writes a message to every child, blocking until all of them have settled.
+     *
+     * @param bytes the message
+     * @param cancellationSignal the cancellation signal
+     */
+    void broadcastMessage(byte[] bytes, CancellationSignal cancellationSignal);
 
-    default CompletableFuture<Void> broadcastMessageAsync(byte[] bytes) {
-        return broadcastMessageAsync(bytes, CancellationSignal.none());
+    default void broadcastMessage(byte[] bytes) {
+        broadcastMessage(bytes, CancellationSignal.none());
     }
 
     void demoteFromBranchRoot();
 
-    CompletableFuture<Void> getOrAddChildConnectionAsync(ConnectToPeerResponse connectToPeerResponse);
+    /**
+     * Establishes an inbound indirect child connection, or leaves the cached one
+     * in place.
+     *
+     * <p>Blocking, and it throws what stopped it.
+     *
+     * @param connectToPeerResponse the server's solicitation response
+     */
+    void getOrAddChildConnection(ConnectToPeerResponse connectToPeerResponse);
 
     void promoteToBranchRoot();
 
@@ -89,10 +120,18 @@ public interface DistributedConnectionManager extends AutoCloseable, DiagnosticS
 
     void setParentBranchRoot(String branchRoot);
 
-    CompletableFuture<Void> updateStatusAsync(CancellationSignal cancellationSignal);
+    /**
+     * Writes this node's distributed status to the server if it has changed.
+     *
+     * <p>Blocking, and it reports its own failures; a status update is nobody's
+     * to fail.
+     *
+     * @param cancellationSignal the cancellation signal
+     */
+    void updateStatus(CancellationSignal cancellationSignal);
 
-    default CompletableFuture<Void> updateStatusAsync() {
-        return updateStatusAsync(CancellationSignal.none());
+    default void updateStatus() {
+        updateStatus(CancellationSignal.none());
     }
 
     @Override

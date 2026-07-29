@@ -181,7 +181,10 @@ public final class DefaultListenerHandler implements ListenerHandler {
                     });
         }
         if (Constants.ConnectionType.DISTRIBUTED.equals(peerInit.getConnectionType())) {
-            return distributed.get().addOrUpdateChildConnectionAsync(peerInit.getUsername(), connection);
+            // On this thread: the listener gave the accepted connection a thread
+            // of its own and this handshake is all it has to do.
+            distributed.get().addOrUpdateChildConnection(peerInit.getUsername(), connection);
+            return CompletableFuture.completedFuture(null);
         }
         return CompletableFuture.completedFuture(null);
     }

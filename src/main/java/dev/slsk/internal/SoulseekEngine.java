@@ -982,7 +982,7 @@ final class SoulseekEngine implements AutoCloseable {
     void sendConfigurationMessages(CancellationSignal cancellationSignal) {
         server.write(new SetListenPortCommand(options.getListenPort()), cancellationSignal);
         server.write(new PrivateRoomToggle(options.isAcceptPrivateRoomInvitations()), cancellationSignal);
-        distributedConnectionManager.updateStatusAsync(cancellationSignal);
+        distributedConnectionManager.updateStatus(cancellationSignal);
     }
 
     // ---- reconfiguration --------------------------------------------------

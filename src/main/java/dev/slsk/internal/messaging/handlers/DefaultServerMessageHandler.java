@@ -487,7 +487,9 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 .toList();
         CompletableFuture<Void> add;
         try {
-            add = distributed.get().addParentConnectionAsync(parents);
+            // Off the server read loop: this negotiates with every candidate
+            // before it returns, and the server has more to say meanwhile.
+            add = NetworkExecutor.runAsync(() -> distributed.get().addParentConnection(parents));
         } catch (Throwable failure) {
             add = CompletableFuture.failedFuture(failure);
         }
@@ -533,7 +535,8 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                     diagnostic.debug("Received distributed ConnectToPeer request from "
                             + response.getUsername() + " ("
                             + response.getIpEndpoint() + ")");
-                    yield distributed.get().getOrAddChildConnectionAsync(response);
+                    // Off the server read loop, as above.
+                    yield NetworkExecutor.runAsync(() -> distributed.get().getOrAddChildConnection(response));
                 }
                 default ->
                     CompletableFuture.failedFuture(new MessageException(

@@ -455,7 +455,7 @@ class ServerMessageHandlerTest {
         assertEquals(1, fixture.distributed.resets);
         assertEquals(1, resets.get());
 
-        fixture.distributed.addParent = CompletableFuture.failedFuture(new RuntimeException("parent failure"));
+        fixture.distributed.addParent = new RuntimeException("parent failure");
         fixture.handle(netInfo());
         assertTrue(fixture.diagnostic.contains("Error handling NetInfo message: parent failure"));
     }
@@ -920,7 +920,7 @@ class ServerMessageHandlerTest {
     private static final class DistributedManagerProbe {
         private final List<ConnectToPeerResponse> childRequests = new ArrayList<>();
         private final List<PeerEndpoint> parents = new ArrayList<>();
-        private CompletableFuture<Void> addParent = CompletableFuture.completedFuture(null);
+        private RuntimeException addParent;
         private int removed;
         private int resets;
         private final DistributedConnectionManager proxy = (DistributedConnectionManager) Proxy.newProxyInstance(
@@ -930,16 +930,19 @@ class ServerMessageHandlerTest {
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             return switch (method.getName()) {
-                case "getOrAddChildConnectionAsync" -> {
+                case "getOrAddChildConnection" -> {
                     childRequests.add((ConnectToPeerResponse) arguments[0]);
-                    yield CompletableFuture.completedFuture(null);
+                    yield null;
                 }
-                case "addParentConnectionAsync" -> {
+                case "addParentConnection" -> {
                     parents.clear();
                     for (PeerEndpoint parent : (Iterable<PeerEndpoint>) arguments[0]) {
                         parents.add(parent);
                     }
-                    yield addParent;
+                    if (addParent != null) {
+                        throw addParent;
+                    }
+                    yield null;
                 }
                 case "removeAndDisposeAll" -> {
                     removed++;

@@ -63,6 +63,8 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -132,9 +134,7 @@ class DistributedNetworkTest {
         Fixture fixture = fixture();
         ConnectionProbe incoming = ConnectionProbe.connection(ENDPOINT);
 
-        fixture.manager
-                .addOrUpdateChildConnectionAsync(USERNAME, incoming.connection())
-                .join();
+        fixture.manager.addOrUpdateChildConnection(USERNAME, incoming.connection());
 
         assertEquals(1, incoming.closeCount);
         assertTrue(fixture.manager.getChildren().isEmpty());
@@ -157,9 +157,7 @@ class DistributedNetworkTest {
         });
         fixture.manager.addStateChangedListener((sender, args) -> states.incrementAndGet());
 
-        fixture.manager
-                .addOrUpdateChildConnectionAsync(USERNAME, incoming.connection())
-                .join();
+        fixture.manager.addOrUpdateChildConnection(USERNAME, incoming.connection());
 
         assertEquals(1, incoming.handoffCount);
         assertEquals(1, incoming.closeCount);
@@ -177,17 +175,13 @@ class DistributedNetworkTest {
         fixture.manager.promoteToBranchRoot();
         ConnectionProbe first = ConnectionProbe.message(USERNAME, ENDPOINT);
         fixture.factory.distributedHandoff = first;
-        fixture.manager
-                .addOrUpdateChildConnectionAsync(
-                        USERNAME, ConnectionProbe.connection(ENDPOINT).connection())
-                .join();
+        fixture.manager.addOrUpdateChildConnection(
+                USERNAME, ConnectionProbe.connection(ENDPOINT).connection());
 
         ConnectionProbe second = ConnectionProbe.message(USERNAME, endpoint(42002));
         fixture.factory.distributedHandoff = second;
-        fixture.manager
-                .addOrUpdateChildConnectionAsync(
-                        USERNAME, ConnectionProbe.connection(endpoint(42002)).connection())
-                .join();
+        fixture.manager.addOrUpdateChildConnection(
+                USERNAME, ConnectionProbe.connection(endpoint(42002)).connection());
 
         assertEquals(1, first.disconnectCount);
         assertEquals("Superseded.", first.lastDisconnectMessage);
@@ -208,10 +202,8 @@ class DistributedNetworkTest {
 
         CompletionException thrown = assertThrows(
                 CompletionException.class,
-                () -> fixture.manager
-                        .addOrUpdateChildConnectionAsync(
-                                USERNAME, ConnectionProbe.connection(ENDPOINT).connection())
-                        .join());
+                () -> fixture.manager.addOrUpdateChildConnection(
+                        USERNAME, ConnectionProbe.connection(ENDPOINT).connection()));
 
         ConnectionException mapped = assertInstanceOf(ConnectionException.class, thrown.getCause());
         assertSame(expected, mapped.getCause());
@@ -230,8 +222,8 @@ class DistributedNetworkTest {
         AtomicInteger added = new AtomicInteger();
         fixture.manager.addChildAddedListener((sender, args) -> added.incrementAndGet());
 
-        fixture.manager.getOrAddChildConnectionAsync(response).join();
-        fixture.manager.getOrAddChildConnectionAsync(response).join();
+        fixture.manager.getOrAddChildConnection(response);
+        fixture.manager.getOrAddChildConnection(response);
 
         assertEquals(1, child.connectCount);
         assertEquals(2, child.byteWrites.size());
@@ -254,10 +246,8 @@ class DistributedNetworkTest {
 
         CompletionException thrown = assertThrows(
                 CompletionException.class,
-                () -> fixture.manager
-                        .getOrAddChildConnectionAsync(new ConnectToPeerResponse(
-                                USERNAME, Constants.ConnectionType.DISTRIBUTED, ENDPOINT, TOKEN, false))
-                        .join());
+                () -> fixture.manager.getOrAddChildConnection(new ConnectToPeerResponse(
+                        USERNAME, Constants.ConnectionType.DISTRIBUTED, ENDPOINT, TOKEN, false)));
 
         ConnectionException mapped = assertInstanceOf(ConnectionException.class, thrown.getCause());
         assertSame(expected, mapped.getCause());
@@ -271,10 +261,8 @@ class DistributedNetworkTest {
         fixture.manager.promoteToBranchRoot();
         ConnectionProbe child = ConnectionProbe.message(USERNAME, ENDPOINT);
         fixture.factory.distributedHandoff = child;
-        fixture.manager
-                .addOrUpdateChildConnectionAsync(
-                        USERNAME, ConnectionProbe.connection(ENDPOINT).connection())
-                .join();
+        fixture.manager.addOrUpdateChildConnection(
+                USERNAME, ConnectionProbe.connection(ENDPOINT).connection());
         AtomicInteger disconnected = new AtomicInteger();
         fixture.manager.addChildDisconnectedListener((sender, args) -> {
             assertEquals(USERNAME, args.getUsername());
@@ -297,24 +285,20 @@ class DistributedNetworkTest {
         fixture.manager.promoteToBranchRoot();
         ConnectionProbe connected = ConnectionProbe.message("a", ENDPOINT);
         fixture.factory.distributedHandoff = connected;
-        fixture.manager
-                .addOrUpdateChildConnectionAsync(
-                        "a", ConnectionProbe.connection(ENDPOINT).connection())
-                .join();
+        fixture.manager.addOrUpdateChildConnection(
+                "a", ConnectionProbe.connection(ENDPOINT).connection());
         ConnectionProbe disconnected = ConnectionProbe.message("b", endpoint(42002));
         disconnected.state = ConnectionState.DISCONNECTED;
         fixture.factory.distributedHandoff = disconnected;
-        fixture.manager
-                .addOrUpdateChildConnectionAsync(
-                        "b", ConnectionProbe.connection(endpoint(42002)).connection())
-                .join();
+        fixture.manager.addOrUpdateChildConnection(
+                "b", ConnectionProbe.connection(endpoint(42002)).connection());
         connected.byteWrites.clear();
         disconnected.byteWrites.clear();
 
         byte[] payload = {1, 2, 3};
-        fixture.manager.broadcastMessageAsync(payload).join();
+        fixture.manager.broadcastMessage(payload);
         Double first = fixture.manager.getAverageBroadcastLatency();
-        fixture.manager.broadcastMessageAsync(payload).join();
+        fixture.manager.broadcastMessage(payload);
 
         assertArrayEquals(payload, connected.byteWrites.getFirst());
         assertTrue(disconnected.byteWrites.isEmpty());
@@ -328,14 +312,11 @@ class DistributedNetworkTest {
         fixture.manager.promoteToBranchRoot();
         ConnectionProbe child = ConnectionProbe.message(USERNAME, ENDPOINT);
         fixture.factory.distributedHandoff = child;
-        fixture.manager
-                .addOrUpdateChildConnectionAsync(
-                        USERNAME, ConnectionProbe.connection(ENDPOINT).connection())
-                .join();
+        fixture.manager.addOrUpdateChildConnection(
+                USERNAME, ConnectionProbe.connection(ENDPOINT).connection());
         child.writeFuture = CompletableFuture.failedFuture(new RuntimeException("failure"));
 
-        assertDoesNotThrow(
-                () -> fixture.manager.broadcastMessageAsync(new byte[] {9}).join());
+        assertDoesNotThrow(() -> fixture.manager.broadcastMessage(new byte[] {9}));
         assertEquals(1, child.disconnectCount);
         assertTrue(child.lastDisconnectMessage.contains("Broadcast failure"));
     }
@@ -344,7 +325,7 @@ class DistributedNetworkTest {
     void statusWritesExactCommandsAndDeduplicatesUnchangedState() {
         Fixture fixture = fixture();
         fixture.serverConnection.byteWrites.clear();
-        fixture.manager.updateStatusAsync().join();
+        fixture.manager.updateStatus();
 
         byte[] expected = concatenate(
                 new BranchLevelCommand(0).toByteArray(),
@@ -352,7 +333,7 @@ class DistributedNetworkTest {
                 new AcceptChildrenCommand(false).toByteArray(),
                 new HaveNoParentsCommand(true).toByteArray());
         assertArrayEquals(expected, fixture.serverConnection.byteWrites.getFirst());
-        fixture.manager.updateStatusAsync().join();
+        fixture.manager.updateStatus();
         assertEquals(1, fixture.serverConnection.byteWrites.size());
         assertTrue(fixture.diagnostic.contains("Update skipped"));
     }
@@ -361,12 +342,12 @@ class DistributedNetworkTest {
     void statusSkipsWhenNotConnectedAndReportsWriteFailures() {
         Fixture skipped = fixture();
         skipped.state = SoulseekClientState.DISCONNECTED;
-        skipped.manager.updateStatusAsync().join();
+        skipped.manager.updateStatus();
         assertTrue(skipped.serverConnection.byteWrites.isEmpty());
 
         Fixture failed = fixture();
         failed.serverConnection.writeFuture = CompletableFuture.failedFuture(new RuntimeException("server"));
-        failed.manager.updateStatusAsync().join();
+        failed.manager.updateStatus();
         assertTrue(failed.diagnostic.containsWarning("Failed to update distributed status"));
     }
 
@@ -445,9 +426,7 @@ class DistributedNetworkTest {
         });
         fixture.manager.addStateChangedListener((sender, args) -> states.incrementAndGet());
 
-        fixture.manager
-                .addParentConnectionAsync(List.of(new PeerEndpoint(USERNAME, ENDPOINT)))
-                .join();
+        fixture.manager.addParentConnection(List.of(new PeerEndpoint(USERNAME, ENDPOINT)));
 
         assertTrue(fixture.manager.hasParent());
         assertEquals(new PeerEndpoint(USERNAME, ENDPOINT), fixture.manager.getParent());
@@ -470,10 +449,8 @@ class DistributedNetworkTest {
         fixture.factory.distributedDirect.put(firstEndpoint, first);
         fixture.factory.distributedDirect.put(secondEndpoint, second);
 
-        fixture.manager
-                .addParentConnectionAsync(
-                        List.of(new PeerEndpoint("one", firstEndpoint), new PeerEndpoint("two", secondEndpoint)))
-                .join();
+        fixture.manager.addParentConnection(
+                List.of(new PeerEndpoint("one", firstEndpoint), new PeerEndpoint("two", secondEndpoint)));
 
         assertEquals("two", fixture.manager.getParent().username());
         assertEquals(1, first.disconnectCount);
@@ -493,9 +470,7 @@ class DistributedNetworkTest {
         };
         fixture.factory.distributedDirect.put(ENDPOINT, parent);
 
-        fixture.manager
-                .addParentConnectionAsync(List.of(new PeerEndpoint(USERNAME, ENDPOINT)))
-                .join();
+        fixture.manager.addParentConnection(List.of(new PeerEndpoint(USERNAME, ENDPOINT)));
 
         assertFalse(fixture.manager.hasParent());
         assertTrue(parent.disconnectCount >= 1);
@@ -518,9 +493,7 @@ class DistributedNetworkTest {
         fixture.factory.distributedHandoff = indirect;
         fixture.waiter.solicitationFuture = CompletableFuture.completedFuture(accepted.connection());
 
-        fixture.manager
-                .addParentConnectionAsync(List.of(new PeerEndpoint(USERNAME, ENDPOINT)))
-                .join();
+        fixture.manager.addParentConnection(List.of(new PeerEndpoint(USERNAME, ENDPOINT)));
 
         assertEquals(new PeerEndpoint(USERNAME, endpoint(42022)), fixture.manager.getParent());
         assertEquals(1, indirect.startReadingCount);
@@ -537,9 +510,7 @@ class DistributedNetworkTest {
         Fixture fixture = fixture();
         ConnectionProbe parent = initializedParent(USERNAME, ENDPOINT, 0, USERNAME);
         fixture.factory.distributedDirect.put(ENDPOINT, parent);
-        fixture.manager
-                .addParentConnectionAsync(List.of(new PeerEndpoint(USERNAME, ENDPOINT)))
-                .join();
+        fixture.manager.addParentConnection(List.of(new PeerEndpoint(USERNAME, ENDPOINT)));
         AtomicInteger disconnected = new AtomicInteger();
         fixture.manager.addParentDisconnectedListener((sender, args) -> {
             assertEquals(USERNAME, args.getUsername());
@@ -562,10 +533,7 @@ class DistributedNetworkTest {
         fixture.serverConnection.byteWrites.clear();
         fixture.manager.watchdogElapsed();
         assertTrue(fixture.diagnostic.containsWarning("No distributed parent connected"));
-        // The status write goes to a thread of its own, as it always has —
-        // it used to be a dispatched writeAsync. What changed is only that the
-        // probe no longer records it before the dispatch happens.
-        awaitCondition(() -> fixture.serverConnection.byteWrites.size() == 1);
+        assertEquals(1, fixture.serverConnection.byteWrites.size());
 
         Fixture disconnected = fixture();
         disconnected.state = SoulseekClientState.DISCONNECTED;
@@ -579,10 +547,8 @@ class DistributedNetworkTest {
         fixture.manager.promoteToBranchRoot();
         ConnectionProbe child = ConnectionProbe.message(USERNAME, ENDPOINT);
         fixture.factory.distributedHandoff = child;
-        fixture.manager
-                .addOrUpdateChildConnectionAsync(
-                        USERNAME, ConnectionProbe.connection(ENDPOINT).connection())
-                .join();
+        fixture.manager.addOrUpdateChildConnection(
+                USERNAME, ConnectionProbe.connection(ENDPOINT).connection());
 
         fixture.manager.removeAndDisposeAll();
 
@@ -688,9 +654,19 @@ class DistributedNetworkTest {
         }
     }
 
+    /**
+     * A correlation registry the candidate threads share.
+     *
+     * <p>Concurrent, and it has to be: the parent fan-out attempts every
+     * candidate at once, and each of them registers three waits and completes
+     * them from its own thread. A {@code HashMap} here is what made
+     * {@code parentSelectionPrefersLowestBranchAndDisposesOthers} flaky — a
+     * concurrent resize lost a branch-level wait, the candidate that owned it
+     * never finished initializing, and the mesh adopted whoever was left.
+     */
     private static final class FakeWaiter implements Waiter {
-        private final Map<WaitKey, CompletableFuture<?>> futures = new HashMap<>();
-        private CompletableFuture<?> solicitationFuture =
+        private final Map<WaitKey, CompletableFuture<?>> futures = new ConcurrentHashMap<>();
+        private volatile CompletableFuture<?> solicitationFuture =
                 CompletableFuture.failedFuture(new IllegalStateException("No solicitation configured"));
 
         @Override
@@ -764,8 +740,8 @@ class DistributedNetworkTest {
     }
 
     private static final class RecordingDiagnostic implements DiagnosticSink {
-        private final List<String> messages = new ArrayList<>();
-        private final List<String> warnings = new ArrayList<>();
+        private final List<String> messages = new CopyOnWriteArrayList<>();
+        private final List<String> warnings = new CopyOnWriteArrayList<>();
 
         private boolean contains(String value) {
             return messages.stream().anyMatch(message -> message.toLowerCase().contains(value.toLowerCase()));
@@ -824,10 +800,11 @@ class DistributedNetworkTest {
                 (proxy, method, arguments) -> defaultValue(method.getReturnType()));
         private final Connection proxy;
         private final List<ConnectionEventListener<ConnectionDisconnectedEvent>> disconnectedListeners =
-                new ArrayList<>();
-        private final List<MessageConnectionEventListener<MessageEvent>> messageReadListeners = new ArrayList<>();
-        private final List<byte[]> byteWrites = new ArrayList<>();
-        private final List<OutgoingMessage> outgoingWrites = new ArrayList<>();
+                new CopyOnWriteArrayList<>();
+        private final List<MessageConnectionEventListener<MessageEvent>> messageReadListeners =
+                new CopyOnWriteArrayList<>();
+        private final List<byte[]> byteWrites = new CopyOnWriteArrayList<>();
+        private final List<OutgoingMessage> outgoingWrites = new CopyOnWriteArrayList<>();
         private ConnectionTypes type = ConnectionTypes.NONE;
         private ConnectionState state = ConnectionState.CONNECTED;
         private CompletableFuture<Void> connectFuture = CompletableFuture.completedFuture(null);
@@ -869,12 +846,12 @@ class DistributedNetworkTest {
 
         private void fireDisconnected(String text, Exception exception) {
             ConnectionDisconnectedEvent eventData = new ConnectionDisconnectedEvent(text, exception);
-            List.copyOf(disconnectedListeners).forEach(listener -> listener.handle(proxy, eventData));
+            disconnectedListeners.forEach(listener -> listener.handle(proxy, eventData));
         }
 
         private void fireMessageRead(byte[] bytes) {
             MessageEvent eventData = new MessageEvent(bytes);
-            List.copyOf(messageReadListeners).forEach(listener -> listener.handle(messageConnection(), eventData));
+            messageReadListeners.forEach(listener -> listener.handle(messageConnection(), eventData));
         }
 
         @Override
@@ -998,11 +975,4 @@ class DistributedNetworkTest {
     }
 
     /** Waits for a condition a dispatched task will satisfy. */
-    private static void awaitCondition(java.util.function.BooleanSupplier condition) {
-        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(2);
-        while (!condition.getAsBoolean() && System.nanoTime() < deadline) {
-            Thread.onSpinWait();
-        }
-        assertTrue(condition.getAsBoolean());
-    }
 }
