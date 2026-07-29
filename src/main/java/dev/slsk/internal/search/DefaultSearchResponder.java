@@ -30,15 +30,8 @@ import java.util.function.Supplier;
 /** Responds to incoming search requests. */
 public final class DefaultSearchResponder implements SearchResponder {
 
-    /**
-     * The most files worth answering one peer's search with.
-     *
-     * <p>The wire has no limit; the reference clients stop well short of one.
-     * A response of ten thousand files is not read by the peer that receives it
-     * — it is discarded for being implausible — and sending it costs us the
-     * bandwidth we would rather spend uploading.
-     */
-    private static final int MAXIMUM_MATCHES = 250;
+    /** The most files worth answering one peer's search with; shared with the direct-request path. */
+    private static final int MAXIMUM_MATCHES = Catalogs.MAXIMUM_SEARCH_MATCHES;
 
     /** Where a peer is, so a response can be delivered to them. */
     @FunctionalInterface

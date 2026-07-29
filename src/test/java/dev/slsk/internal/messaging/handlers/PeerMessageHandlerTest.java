@@ -195,6 +195,47 @@ class PeerMessageHandlerTest {
         assertArrayEquals(new UserInfo("", 0, 0, false).toByteArray(), fixture.connection.bytes.getFirst());
     }
 
+    /**
+     * The concurrency option used to be passed here by mistake, so every
+     * direct peer search was answered with at most two files no matter how
+     * many matched. The limit is the match cap both answer paths share.
+     */
+    @Test
+    void searchRequestAsksTheCatalogForTheSharedMatchCap() {
+        java.util.concurrent.atomic.AtomicInteger askedLimit = new java.util.concurrent.atomic.AtomicInteger(-1);
+        Fixture fixture = new Fixture(new ShareCatalog() {
+            @Override
+            public dev.slsk.BrowseResponse browse(Username requester) {
+                return dev.slsk.BrowseResponse.empty();
+            }
+
+            @Override
+            public List<dev.slsk.Directory> directory(Username requester, String path) {
+                return List.of();
+            }
+
+            @Override
+            public List<SearchFile> search(Username requester, String terms, int limit) {
+                askedLimit.set(limit);
+                return List.of();
+            }
+
+            @Override
+            public Optional<ResolvedFile> resolve(Username requester, String path) {
+                return Optional.empty();
+            }
+
+            @Override
+            public ShareIndex index() {
+                return ShareIndex.empty();
+            }
+        });
+
+        fixture.handler.handleMessageRead(fixture.connection.proxy, peerSearchRequest(TOKEN, "query"));
+
+        assertEquals(Catalogs.MAXIMUM_SEARCH_MATCHES, askedLimit.get());
+    }
+
     @Test
     void searchRequestWritesNonemptyResponseAndSuppressesEmptyOrNull() {
         List<SearchFile> matches = List.of(new SearchFile(FILENAME, 123L, FileAttributes.none()));

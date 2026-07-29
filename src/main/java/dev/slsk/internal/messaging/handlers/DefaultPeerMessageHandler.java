@@ -364,11 +364,14 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 response = Catalogs.searchResponse(
                         loggedInUsername.get(),
                         request.getToken(),
+                        // The match cap, not the concurrency option that used
+                        // to be passed here — which silently answered every
+                        // direct peer search with at most two files.
                         services.catalog()
                                 .search(
                                         dev.slsk.Username.of(connection.getUsername()),
                                         request.getQuery(),
-                                        options.get().getMaximumConcurrentSearches()),
+                                        Catalogs.MAXIMUM_SEARCH_MATCHES),
                         true,
                         0,
                         0);

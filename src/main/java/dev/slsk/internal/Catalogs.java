@@ -23,6 +23,16 @@ import java.util.List;
  */
 public final class Catalogs {
 
+    /**
+     * The most matches any search answer carries, on either answer path.
+     *
+     * <p>The wire has no limit; the reference clients stop well short of one.
+     * A response of ten thousand files is not read by the peer that receives
+     * it — it is discarded for being implausible — and sending it costs us the
+     * bandwidth we would rather spend uploading.
+     */
+    public static final int MAXIMUM_SEARCH_MATCHES = 250;
+
     private Catalogs() {}
 
     /**
