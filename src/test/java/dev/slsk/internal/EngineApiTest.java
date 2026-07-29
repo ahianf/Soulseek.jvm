@@ -6,6 +6,7 @@ package dev.slsk.internal;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -198,13 +199,70 @@ class EngineApiTest {
     }
 
     @Test
-    void staticEventDispatchControlsRemainAvailable() {
-        boolean original = SoulseekEngine.isRaiseEventsAsynchronously();
-        try {
-            SoulseekEngine.setRaiseEventsAsynchronously(!original);
-            assertEquals(!original, SoulseekEngine.isRaiseEventsAsynchronously());
-        } finally {
-            SoulseekEngine.setRaiseEventsAsynchronously(original);
+    @DisplayName("event dispatch and diagnostics are decided per client, never per process")
+    void twoClientsDoNotShareDispatchOrDiagnostics() {
+        // This replaces two tests that covered a static dispatch flag and a
+        // static diagnostic factory. Both were write-only in production: real
+        // dispatch reads the per-connection ConnectionOptions and every
+        // diagnostic goes to the engine's own sink, so the only readers those
+        // globals ever had were the tests defending them. What is worth
+        // asserting is the property that made them safe to delete.
+        try (SoulseekEngine first = new SoulseekEngine(9999, dispatching(true));
+                SoulseekEngine second = new SoulseekEngine(9999, dispatching(false))) {
+            assertTrue(first.getOptions().isRaiseEventsAsynchronously());
+            assertFalse(second.getOptions().isRaiseEventsAsynchronously());
+
+            // And the decision reaches the transport that acts on it, which is
+            // the only place it is ever read.
+            assertTrue(first.getOptions().getServerConnectionOptions().isRaiseEventsAsynchronously());
+            assertFalse(second.getOptions().getServerConnectionOptions().isRaiseEventsAsynchronously());
+
+            assertNotSame(first.getDiagnostic(), second.getDiagnostic());
+        }
+    }
+
+    /** Default options but for the dispatch policy, which is the only thing under test. */
+    private static SoulseekClientOptions dispatching(boolean asynchronously) {
+        SoulseekClientOptions defaults = new SoulseekClientOptions();
+        return new SoulseekClientOptions(
+                defaults.isEnableListener(),
+                defaults.getListenIpAddress(),
+                defaults.getListenPort(),
+                defaults.isEnableDistributedNetwork(),
+                defaults.isAcceptDistributedChildren(),
+                defaults.getDistributedChildLimit(),
+                defaults.getMaximumConcurrentSearches(),
+                defaults.getMaximumConcurrentUploads(),
+                defaults.getMaximumUploadSpeed(),
+                defaults.getMaximumConcurrentDownloads(),
+                defaults.getMaximumDownloadSpeed(),
+                defaults.isDeduplicateSearchRequests(),
+                defaults.getMessageTimeout(),
+                defaults.isAutoAcknowledgePrivateMessages(),
+                defaults.isAutoAcknowledgePrivilegeNotifications(),
+                defaults.isAcceptPrivateRoomInvitations(),
+                defaults.getMinimumDiagnosticLevel(),
+                defaults.getStartingToken(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                asynchronously);
+    }
+
+    @Test
+    @DisplayName("no process-global mutable state survives in the engine")
+    void theEngineHoldsNoStaticMutableState() {
+        for (java.lang.reflect.Field field : SoulseekEngine.class.getDeclaredFields()) {
+            if (!Modifier.isStatic(field.getModifiers())) {
+                continue;
+            }
+            assertTrue(
+                    Modifier.isFinal(field.getModifiers()),
+                    "SoulseekEngine." + field.getName() + " is static and mutable");
         }
     }
 }

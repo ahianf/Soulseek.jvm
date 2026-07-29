@@ -147,6 +147,20 @@ class UploadAdmissionTest {
         assertNull(admission.place(ALICE, "music\\song.mp3"));
     }
 
+    @Test
+    @DisplayName("the queue is keyed by user and path, not by the two joined together")
+    void theQueueKeyIsTyped() {
+        // Joining a username and a path into one string needs a separator no
+        // username and no path can contain, which is why the key used to be a
+        // raw NUL byte written into the source. A pair that would collide under
+        // any printable separator is the cheapest way to say the key is a pair.
+        policy.set((request, context) -> new UploadPolicy.Decision.Queue(3));
+        admission.decide(Username.of("alice bob"), "music\\song.mp3");
+
+        assertEquals(3, admission.place(Username.of("alice bob"), "music\\song.mp3"));
+        assertNull(admission.place(ALICE, "bob music\\song.mp3"));
+    }
+
     /**
      * A peer waiting on a read that never completes is worse than a refusal:
      * their client will sit there until it times out and then treat us as

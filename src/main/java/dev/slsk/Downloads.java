@@ -17,11 +17,14 @@ import java.util.function.Consumer;
  * twice, because the consumer is usually an HTTP handler that cannot know
  * whether its previous request arrived.
  *
- * <p><strong>The managed queue is not built yet</strong>, so {@code pause},
- * {@code resume}, {@code retry} and {@code await} are not declared here; they
- * arrive with it. Declaring a method before it works only moves the discovery
- * of that fact from the developer wiring it up to the user wondering why the
- * button does nothing. Everything declared here works.
+ * <p><strong>Enqueueing does not start anything.</strong> The request goes into
+ * the library's queue, which decides when it runs and against which peer, how
+ * many run at once overall and per peer, and when a failed attempt is worth
+ * retrying. {@link #policy(DownloadPolicy)} is where those rules are set.
+ * Everything declared here works: a method that does not yet do its job is not
+ * declared at all, because declaring it only moves the discovery of that fact
+ * from the developer wiring it up to the user wondering why the button does
+ * nothing.
  */
 public interface Downloads {
 

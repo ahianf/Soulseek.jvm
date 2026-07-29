@@ -75,21 +75,32 @@ public final class SocketListener implements Listener {
 
     @Override
     public void stop() {
-        tcpListener.stop();
+        // Before the socket closes, not after. Closing it makes the pending
+        // accept fail, and the loop reads this flag to tell that failure —
+        // which is expected — from one that means the listener is broken.
         listening = false;
+        tcpListener.stop();
     }
 
     private void listenContinuously() {
-        try {
-            while (listening) {
-                Socket client = tcpListener.acceptTcpClientAsync().join();
-                runInBackground(() -> raiseAccepted(client));
+        while (listening) {
+            Socket client;
+            try {
+                client = tcpListener.acceptTcpClientAsync().join();
+            } catch (RuntimeException failure) {
+                if (!listening) {
+                    // Our own stop() closed the socket out from under the
+                    // accept. Shutting down is a state, not a failure: routing
+                    // it to the uncaught-exception handler trains an operator
+                    // to ignore the one channel that should never be noisy.
+                    return;
+                }
+                // The accept loop really is dead; stop claiming otherwise
+                // before letting the failure reach the uncaught handler.
+                listening = false;
+                throw failure;
             }
-        } catch (RuntimeException failure) {
-            // The accept loop is dead; stop claiming otherwise before letting
-            // the failure reach the thread's uncaught handler.
-            listening = false;
-            throw failure;
+            runInBackground(() -> raiseAccepted(client));
         }
     }
 
