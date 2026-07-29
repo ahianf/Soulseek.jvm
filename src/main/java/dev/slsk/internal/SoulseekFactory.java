@@ -14,7 +14,6 @@ import dev.slsk.internal.options.SoulseekClientOptionsPatch;
 import dev.slsk.spi.ShareCatalog;
 import dev.slsk.spi.TransferStore;
 import dev.slsk.spi.UploadPolicy;
-import java.net.InetAddress;
 import java.util.List;
 
 /**
@@ -65,7 +64,17 @@ public final class SoulseekFactory {
             java.time.Duration messageTimeout) {
         SoulseekClientOptions base = new SoulseekClientOptions(
                 true,
-                InetAddress.getLoopbackAddress(),
+                // Every address, which is what a listener peers are told to
+                // connect to has to be. This bound the loopback address from
+                // the day the builder was written, so the port every client
+                // built this way advertised to the server was a port no peer
+                // could ever reach: inbound direct connections, inbound browse
+                // and every peer that answers a solicitation by connecting back
+                // arrived at an interface nothing outside this machine can see.
+                // Nothing chose that; there is no option for the address, and
+                // the one javadoc claim about the port — "the port peers
+                // connect to us on" — is only true now.
+                null,
                 listenPort,
                 (int) messageTimeout.toMillis(),
                 level(diagnostics));
