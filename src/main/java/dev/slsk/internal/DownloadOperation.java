@@ -386,7 +386,7 @@ final class DownloadOperation {
                     // implementation granted everything, which is what the
                     // bucket already does when the rate is unlimited.
                     (requestedBytes, governorToken) ->
-                            engine.context.getDownloadTokenBucket().getAsync(requestedBytes, governorToken),
+                            engine.context.getDownloadTokenBucket().get(requestedBytes, governorToken),
                     (attemptedBytes, grantedBytes, transferredBytes) -> {
                         if (transferOptions.getReporter() != null) {
                             transferOptions

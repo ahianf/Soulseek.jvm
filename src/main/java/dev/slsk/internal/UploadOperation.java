@@ -314,7 +314,7 @@ final class UploadOperation {
                         remaining,
                         trackingStream,
                         (requestedBytes, governorToken) ->
-                                engine.context.getUploadTokenBucket().getAsync(requestedBytes, cancellationSignal),
+                                engine.context.getUploadTokenBucket().get(requestedBytes, cancellationSignal),
                         (attemptedBytes, grantedBytes, transferredBytes) -> {
                             if (transferOptions.getReporter() != null) {
                                 transferOptions

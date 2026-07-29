@@ -265,7 +265,7 @@ class ConnectionTest {
                 .readAsync(
                         5,
                         output,
-                        (requested, token) -> CompletableFuture.completedFuture(requested),
+                        (requested, token) -> requested,
                         (requested, granted, transferred) -> reports.add(new int[] {requested, granted, transferred}),
                         null)
                 .get(1, TimeUnit.SECONDS);
@@ -299,12 +299,15 @@ class ConnectionTest {
     void readMapsFailures() throws Exception {
         assertReadFailure(new IOException("broken"), ConnectionReadException.class);
         assertReadFailure(new CancellationException("cancelled"), CancellationException.class);
-        // A TimeoutException can no longer originate in the stream: a blocking
-        // read reports a lapsed deadline as SocketTimeoutException, which the
-        // read loop treats as its cancellation check point rather than a
-        // failure. The governor is the remaining source, and readInternal must
-        // still pass it through untranslated.
-        assertGovernorFailurePassesThrough(new TimeoutException("late"), TimeoutException.class);
+        // Neither a TimeoutException nor a CancellationException can originate
+        // in the stream any more: a blocking read reports a lapsed deadline as
+        // SocketTimeoutException, which the read loop treats as its cancellation
+        // check point rather than a failure. The governor is the remaining
+        // source, and readInternal must still pass its failure through
+        // untranslated rather than wrapping it as a read error — the rate
+        // limiter throwing is not the socket failing.
+        assertGovernorFailurePassesThrough(
+                new CancellationException("cancelled while metered"), CancellationException.class);
 
         FakeStream eof = new FakeStream();
         eof.readCounts.add(0);
@@ -333,7 +336,7 @@ class ConnectionTest {
                 .writeAsync(
                         5,
                         new ByteArrayInputStream(new byte[] {1, 2, 3, 4, 5}),
-                        (requested, token) -> CompletableFuture.completedFuture(requested),
+                        (requested, token) -> requested,
                         (requested, granted, transferred) -> reports.add(new int[] {requested, granted, transferred}),
                         null)
                 .get(1, TimeUnit.SECONDS);
@@ -447,7 +450,7 @@ class ConnectionTest {
         connection.close();
     }
 
-    private static void assertGovernorFailurePassesThrough(Exception cause, Class<? extends Throwable> expected)
+    private static void assertGovernorFailurePassesThrough(RuntimeException cause, Class<? extends Throwable> expected)
             throws Exception {
         FakeStream stream = new FakeStream();
         stream.readBytes = new byte[] {1, 2, 3};
@@ -456,7 +459,9 @@ class ConnectionTest {
         Throwable failure = futureFailure(connection.readAsync(
                 3,
                 java.io.OutputStream.nullOutputStream(),
-                (requestedBytes, token) -> CompletableFuture.failedFuture(cause),
+                (requestedBytes, token) -> {
+                    throw cause;
+                },
                 null,
                 null));
 

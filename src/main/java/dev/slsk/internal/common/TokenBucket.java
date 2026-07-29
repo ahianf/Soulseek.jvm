@@ -11,9 +11,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Implements the token-bucket rate-limiting algorithm.
@@ -111,34 +112,62 @@ public final class TokenBucket implements AutoCloseable {
     }
 
     /**
-     * Asynchronously retrieves tokens.
+     * Returns how many callers are queued behind the current balance.
      *
-     * @param count the requested token count
-     * @return a future containing the provided token count
+     * <p>For tests. A queued caller used to be observable through the future it
+     * was handed; a blocking one is not observable from outside at all, and the
+     * ordering rules here are worth asserting deterministically rather than by
+     * sleeping.
+     *
+     * @return the queue depth
      */
-    public CompletableFuture<Integer> getAsync(int count) {
-        return getAsync(count, CancellationSignal.none());
+    synchronized int getQueuedCount() {
+        return requests.size();
     }
 
     /**
-     * Asynchronously retrieves tokens.
+     * Retrieves tokens, blocking until the bucket can grant some.
+     *
+     * @param count the requested token count
+     * @return the granted token count
+     */
+    public int get(int count) {
+        return get(count, CancellationSignal.none());
+    }
+
+    /**
+     * Retrieves tokens, blocking until the bucket can grant some.
+     *
+     * <p>This returned a future, and the caller — the per-chunk loop inside a
+     * connection read or write — awaited it immediately, every chunk. On a
+     * metered transfer that is a future and a continuation per few kilobytes,
+     * for a wait the calling thread was going to do anyway.
+     *
+     * <p>The queue behind it is unchanged and is the whole of the fairness rule:
+     * a request that cannot be satisfied outright goes to the back, only the
+     * head is served, and a request that is not at the head can be cancelled out
+     * of the queue. What changed is that a queued caller parks on its own
+     * request rather than on a future somebody else completes.
      *
      * @param count the requested token count
      * @param cancellationSignal the cancellation signal
-     * @return a future containing the provided token count
+     * @return the granted token count
+     * @throws CancellationException if cancellation is requested first
+     * @throws IllegalStateException if the bucket is closed
      */
-    public CompletableFuture<Integer> getAsync(int count, CancellationSignal cancellationSignal) {
+    public int get(int count, CancellationSignal cancellationSignal) {
         Objects.requireNonNull(cancellationSignal, "cancellationSignal");
 
         if (cancellationSignal.isCancellationRequested()) {
-            return CompletableFuture.failedFuture(new CancellationException("The operation was cancelled"));
+            throw new CancellationException("The operation was cancelled");
         }
 
         int limitedCount = Math.min(count, (int) Math.min(Integer.MAX_VALUE, getCapacity()));
 
+        Request request;
         synchronized (this) {
             if (closed) {
-                return closedFuture();
+                throw new IllegalStateException("The token bucket is closed");
             }
 
             // Nothing has been adding tokens in the background, so the balance
@@ -148,10 +177,10 @@ public final class TokenBucket implements AutoCloseable {
             if (requests.isEmpty() && currentCount != 0) {
                 int available = (int) Math.min(currentCount, limitedCount);
                 currentCount -= available;
-                return CompletableFuture.completedFuture(available);
+                return available;
             }
 
-            Request request = new Request(limitedCount);
+            request = new Request(limitedCount);
             boolean becomesActive = requests.isEmpty();
             requests.addLast(request);
 
@@ -161,14 +190,10 @@ public final class TokenBucket implements AutoCloseable {
                 request.registration = cancellationSignal.register(() -> cancelFromToken(request));
             }
 
-            request.future.whenComplete((result, exception) -> {
-                if (request.future.isCancelled()) {
-                    cancelFromFuture(request);
-                }
-            });
             armWakeup();
-            return request.future;
         }
+
+        return request.awaitGrant();
     }
 
     /**
@@ -243,10 +268,9 @@ public final class TokenBucket implements AutoCloseable {
             scheduler.close();
         }
 
-        IllegalStateException exception = new IllegalStateException("The token bucket is closed");
         for (Request request : pending) {
             request.closeRegistration();
-            request.future.completeExceptionally(exception);
+            request.settle(new IllegalStateException("The token bucket is closed"));
         }
     }
 
@@ -370,16 +394,16 @@ public final class TokenBucket implements AutoCloseable {
     }
 
     /**
-     * Completes decided grants.
+     * Hands decided grants to the callers waiting for them.
      *
-     * <p>Must be called after the monitor is dropped: completing under it ran
-     * every inline continuation — including anything a caller chained onto the
-     * grant — while holding the same lock every other {@code getAsync} caller
-     * needs.
+     * <p>Must be called after the monitor is dropped. It matters less now that
+     * settling only counts a latch down, but it still wakes a waiter that will
+     * immediately want this lock, and the rule that no library lock is held
+     * across a handoff is worth keeping whole.
      */
     private static void publish(List<Grant> grants) {
         for (Grant grant : grants) {
-            grant.request.future.complete(grant.amount);
+            grant.request.settle(grant.amount);
         }
     }
 
@@ -396,7 +420,7 @@ public final class TokenBucket implements AutoCloseable {
             Request request = requests.removeFirst();
             request.closeRegistration();
 
-            if (request.future.isDone()) {
+            if (request.isSettled()) {
                 activateFirstRequest();
                 continue;
             }
@@ -416,7 +440,7 @@ public final class TokenBucket implements AutoCloseable {
         while (!requests.isEmpty()) {
             Request request = requests.getFirst();
             request.closeRegistration();
-            if (request.future.isDone()) {
+            if (request.isSettled()) {
                 requests.removeFirst();
                 continue;
             }
@@ -432,33 +456,63 @@ public final class TokenBucket implements AutoCloseable {
             }
         }
 
-        request.future.completeExceptionally(new CancellationException("The operation was cancelled"));
+        request.settle(new CancellationException("The operation was cancelled"));
     }
 
-    private void cancelFromFuture(Request request) {
-        synchronized (this) {
-            if (!requests.remove(request)) {
-                return;
-            }
-            request.closeRegistration();
-            if (request.active) {
-                activateFirstRequest();
-            }
-        }
-    }
-
-    private static CompletableFuture<Integer> closedFuture() {
-        return CompletableFuture.failedFuture(new IllegalStateException("The token bucket is closed"));
-    }
-
+    /**
+     * One caller's place in the queue, and the cell it is parked on.
+     *
+     * <p>This was a {@link CompletableFuture}, which gave the queue a second way
+     * to be cancelled — the caller could cancel the future directly — and the
+     * bucket had to watch for that and unpick the queue itself. A blocking
+     * caller has no such handle, so the signal is the only route in and the
+     * bookkeeping for the other one is gone.
+     */
     private static final class Request {
         private final int count;
-        private final CompletableFuture<Integer> future = new CompletableFuture<>();
+        private final CountDownLatch settled = new CountDownLatch(1);
+        private final AtomicBoolean decided = new AtomicBoolean();
+        private volatile int granted;
+        private volatile RuntimeException failure;
         private boolean active;
         private CancellationSubscription registration;
 
         private Request(int count) {
             this.count = count;
+        }
+
+        /** Whether this request has already been decided, one way or the other. */
+        private boolean isSettled() {
+            return decided.get();
+        }
+
+        private void settle(int amount) {
+            if (decided.compareAndSet(false, true)) {
+                granted = amount;
+                settled.countDown();
+            }
+        }
+
+        private void settle(RuntimeException reason) {
+            if (decided.compareAndSet(false, true)) {
+                failure = reason;
+                settled.countDown();
+            }
+        }
+
+        /** Blocks until this request is decided, then reports the decision. */
+        private int awaitGrant() {
+            try {
+                settled.await();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new CancellationException("The wait for tokens was interrupted");
+            }
+            RuntimeException reason = failure;
+            if (reason != null) {
+                throw reason;
+            }
+            return granted;
         }
 
         private void closeRegistration() {

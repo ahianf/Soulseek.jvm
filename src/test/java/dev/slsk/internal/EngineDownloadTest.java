@@ -1016,9 +1016,7 @@ class EngineDownloadTest {
                 long transferred = 0;
                 while (transferred < length) {
                     int attempted = (int) Math.min(Integer.MAX_VALUE, length - transferred);
-                    int granted = governor == null
-                            ? attempted
-                            : governor.grantAsync(attempted, token).join();
+                    int granted = governor == null ? attempted : governor.grant(attempted, token);
                     int actual = Math.min(Math.min(granted, maximumActualPerIteration), data.length - sourceOffset);
                     if (actual <= 0) {
                         throw new IOException("source ended early");

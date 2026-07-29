@@ -611,7 +611,7 @@ public class SocketConnection implements Connection {
                 cancellationSignal.throwIfCancellationRequested();
                 long bytesRemaining = length - totalBytesRead;
                 int bytesToRead = bytesRemaining >= buffer.length ? buffer.length : (int) bytesRemaining;
-                int bytesGranted = Math.min(bytesToRead, await(governor.grantAsync(bytesToRead, cancellationSignal)));
+                int bytesGranted = Math.min(bytesToRead, governor.grant(bytesToRead, cancellationSignal));
 
                 int bytesRead;
                 try {
@@ -700,7 +700,7 @@ public class SocketConnection implements Connection {
                 }
                 long bytesRemaining = length - totalBytesWritten;
                 int bytesToRead = bytesRemaining >= buffer.length ? buffer.length : (int) bytesRemaining;
-                int bytesGranted = Math.min(bytesToRead, await(governor.grantAsync(bytesToRead, cancellationSignal)));
+                int bytesGranted = Math.min(bytesToRead, governor.grant(bytesToRead, cancellationSignal));
                 int bytesRead = inputStream.read(buffer, 0, bytesGranted);
                 if (bytesRead < 0) {
                     bytesRead = 0;
@@ -947,8 +947,8 @@ public class SocketConnection implements Connection {
         }
     }
 
-    private static CompletableFuture<Integer> grantAll(int requestedBytes, CancellationSignal cancellationSignal) {
-        return CompletableFuture.completedFuture(Integer.MAX_VALUE);
+    private static int grantAll(int requestedBytes, CancellationSignal cancellationSignal) {
+        return Integer.MAX_VALUE;
     }
 
     /**

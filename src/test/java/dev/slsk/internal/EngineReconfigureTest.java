@@ -225,8 +225,8 @@ class EngineReconfigureTest {
     @Test
     void unchangedSpeedsDoNotResetConsumedBucketCounts() {
         Fixture fixture = new Fixture();
-        fixture.uploadBucket.getAsync(25).join();
-        fixture.downloadBucket.getAsync(25).join();
+        fixture.uploadBucket.get(25);
+        fixture.downloadBucket.get(25);
         long uploadCapacity = fixture.uploadBucket.getCapacity();
         long downloadCapacity = fixture.downloadBucket.getCapacity();
 
