@@ -835,10 +835,6 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
         return searchDomain.registry();
     }
 
-    final Map<Integer, TransferInternal> getDownloadDictionary() {
-        return downloads;
-    }
-
     final PeerConnectionManager getPeerConnectionManager() {
         return peerConnectionManager;
     }
@@ -855,20 +851,8 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
         return searchResponder;
     }
 
-    final MessageConnection getServerConnection() {
-        return server.connection();
-    }
-
     final ServerMessageHandler getServerMessageHandler() {
         return serverMessageHandler;
-    }
-
-    final ListenerHandler getListenerHandler() {
-        return listenerHandler;
-    }
-
-    final ConnectionFactory getConnectionFactory() {
-        return connectionFactory;
     }
 
     IOAdapter getIoAdapter() {
@@ -881,10 +865,6 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
 
     TokenBucket getDownloadTokenBucket() {
         return downloadTokenBucket;
-    }
-
-    final Map<Integer, TransferInternal> getUploadsInternal() {
-        return uploads;
     }
 
     /** Duplicate-transfer keys, owned by the transfer engine. */

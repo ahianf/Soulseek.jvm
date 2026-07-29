@@ -134,7 +134,7 @@ class EngineDownloadTest {
     @Test
     void rejectsDuplicateTokensTransfersAndUniqueKeys() {
         try (Fixture fixture = new Fixture()) {
-            fixture.client.getDownloadDictionary().put(1, transfer(TransferDirection.DOWNLOAD, "other", "other", 1));
+            fixture.client.getDownloadRegistry().put(1, transfer(TransferDirection.DOWNLOAD, "other", "other", 1));
             assertThrows(
                     DuplicateTokenException.class,
                     () -> fixture.client
@@ -144,8 +144,8 @@ class EngineDownloadTest {
                                     .token(1)
                                     .build()));
 
-            fixture.client.getDownloadDictionary().clear();
-            fixture.client.getUploadsInternal().put(2, transfer(TransferDirection.UPLOAD, "other", "other", 2));
+            fixture.client.getDownloadRegistry().clear();
+            fixture.client.getUploadRegistry().put(2, transfer(TransferDirection.UPLOAD, "other", "other", 2));
             assertThrows(
                     DuplicateTokenException.class,
                     () -> fixture.client
@@ -155,8 +155,8 @@ class EngineDownloadTest {
                                     .token(2)
                                     .build()));
 
-            fixture.client.getUploadsInternal().clear();
-            fixture.client.getDownloadDictionary().put(3, transfer(TransferDirection.DOWNLOAD, "alice", "file", 3));
+            fixture.client.getUploadRegistry().clear();
+            fixture.client.getDownloadRegistry().put(3, transfer(TransferDirection.DOWNLOAD, "alice", "file", 3));
             assertThrows(
                     DuplicateTransferException.class,
                     () -> fixture.client
@@ -166,7 +166,7 @@ class EngineDownloadTest {
                                     .token(4)
                                     .build()));
 
-            fixture.client.getDownloadDictionary().clear();
+            fixture.client.getDownloadRegistry().clear();
             fixture.client.getUniqueKeys().put("Download:alice:file", true);
             assertThrows(
                     DuplicateTransferException.class,
@@ -227,7 +227,7 @@ class EngineDownloadTest {
                     states);
             assertTrue(progress.contains(0L));
             assertTrue(progress.contains((long) bytes.length));
-            assertFalse(fixture.client.getDownloadDictionary().containsKey(11));
+            assertFalse(fixture.client.getDownloadRegistry().containsKey(11));
             assertFalse(fixture.client.getUniqueKeys().containsKey("Download:alice:remote\\file"));
         }
     }
@@ -521,7 +521,7 @@ class EngineDownloadTest {
         try (Fixture fixture = new Fixture()) {
             fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(22, 1));
             fixture.transfer.readHook = () -> fixture.client
-                    .getDownloadDictionary()
+                    .getDownloadRegistry()
                     .get(22)
                     .getRemoteTaskCompletionSource()
                     .completeExceptionally(new TransferReportedFailedException("remote failed"));
@@ -556,7 +556,7 @@ class EngineDownloadTest {
             fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(31, 1));
             TransferRejectedException rejection = new TransferRejectedException("download denied");
             fixture.transfer.readHook = () -> fixture.client
-                    .getDownloadDictionary()
+                    .getDownloadRegistry()
                     .get(31)
                     .getRemoteTaskCompletionSource()
                     .completeExceptionally(rejection);

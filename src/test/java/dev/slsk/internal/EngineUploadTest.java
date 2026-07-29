@@ -170,7 +170,7 @@ class EngineUploadTest {
     @Test
     void rejectsTokensUsedByUploadsOrDownloads() {
         try (Fixture fixture = new Fixture()) {
-            fixture.client.getUploadsInternal().put(8, transfer(TransferDirection.UPLOAD, "other", "other", 8));
+            fixture.client.getUploadRegistry().put(8, transfer(TransferDirection.UPLOAD, "other", "other", 8));
             assertThrows(
                     DuplicateTokenException.class,
                     () -> fixture.client
@@ -180,8 +180,8 @@ class EngineUploadTest {
                                     .token(8)
                                     .build()));
 
-            fixture.client.getUploadsInternal().clear();
-            fixture.client.getDownloadDictionary().put(9, transfer(TransferDirection.DOWNLOAD, "other", "other", 9));
+            fixture.client.getUploadRegistry().clear();
+            fixture.client.getDownloadRegistry().put(9, transfer(TransferDirection.DOWNLOAD, "other", "other", 9));
             assertThrows(
                     DuplicateTokenException.class,
                     () -> fixture.client
@@ -196,7 +196,7 @@ class EngineUploadTest {
     @Test
     void rejectsMatchingActiveUploadAndUniqueKey() {
         try (Fixture fixture = new Fixture()) {
-            fixture.client.getUploadsInternal().put(8, transfer(TransferDirection.UPLOAD, "alice", "file", 8));
+            fixture.client.getUploadRegistry().put(8, transfer(TransferDirection.UPLOAD, "alice", "file", 8));
             assertThrows(
                     DuplicateTransferException.class,
                     () -> fixture.client
@@ -206,7 +206,7 @@ class EngineUploadTest {
                                     .token(9)
                                     .build()));
 
-            fixture.client.getUploadsInternal().clear();
+            fixture.client.getUploadRegistry().clear();
             fixture.client.getUniqueKeys().put("Upload:alice:file", true);
             assertThrows(
                     DuplicateTransferException.class,
@@ -222,8 +222,8 @@ class EngineUploadTest {
     @Test
     void allowsOnlyUsernameOrFilenameToMatch() {
         try (Fixture fixture = new Fixture()) {
-            fixture.client.getUploadsInternal().put(8, transfer(TransferDirection.UPLOAD, "alice", "other", 8));
-            fixture.client.getUploadsInternal().put(9, transfer(TransferDirection.UPLOAD, "other", "file", 9));
+            fixture.client.getUploadRegistry().put(8, transfer(TransferDirection.UPLOAD, "alice", "other", 8));
+            fixture.client.getUploadRegistry().put(9, transfer(TransferDirection.UPLOAD, "other", "file", 9));
 
             Transfer result = fixture.client
                     .transfers()
@@ -251,7 +251,7 @@ class EngineUploadTest {
                                     .build())));
 
             assertFalse(upload.isDone());
-            assertTrue(fixture.client.getUploadsInternal().containsKey(12));
+            assertTrue(fixture.client.getUploadRegistry().containsKey(12));
             slot.complete(null);
             assertTrue(upload.await().getState().contains(TransferState.SUCCEEDED));
         }
@@ -305,7 +305,7 @@ class EngineUploadTest {
             assertEquals(bytes.length, request.getFileSize());
             assertTrue(progress.contains(0L));
             assertTrue(progress.contains((long) bytes.length));
-            assertFalse(fixture.client.getUploadsInternal().containsKey(22));
+            assertFalse(fixture.client.getUploadRegistry().containsKey(22));
             assertFalse(fixture.client.getUniqueKeys().containsKey("Upload:alice:remote\\file"));
         }
     }
@@ -586,7 +586,7 @@ class EngineUploadTest {
                             .options(options(20))
                             .build()));
             assertInstanceOf(SoulseekClientException.class, malformed);
-            assertFalse(fixture.client.getUploadsInternal().containsKey(47));
+            assertFalse(fixture.client.getUploadRegistry().containsKey(47));
 
             fixture.transfer.offsetBytes = null;
             fixture.transfer.writeFailure = new IOException("write failed");
