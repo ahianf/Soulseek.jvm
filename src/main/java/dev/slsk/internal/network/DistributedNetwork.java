@@ -143,8 +143,9 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             ServerLink server,
             Waiter waiter,
             TokenFactory tokens,
-            Supplier<DistributedMessageHandler> distributedMessages) {
-        this(options, server, waiter, tokens, distributedMessages, null, null, null);
+            Supplier<DistributedMessageHandler> distributedMessages,
+            ConnectionFactory connectionFactory) {
+        this(options, server, waiter, tokens, distributedMessages, connectionFactory, null, null);
     }
 
     /** Creates a distributed network. */
@@ -186,7 +187,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         this.waiter = Objects.requireNonNull(waiter, "waiter");
         this.tokens = Objects.requireNonNull(tokens, "tokens");
         this.distributedMessages = Objects.requireNonNull(distributedMessages, "distributedMessages");
-        this.connectionFactory = connectionFactory == null ? new DefaultConnectionFactory() : connectionFactory;
+        this.connectionFactory = Objects.requireNonNull(connectionFactory, "connectionFactory");
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(options.get().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;

@@ -19,16 +19,32 @@ public final class SocketListener implements Listener {
     private final int port;
     private final ConnectionOptions connectionOptions;
     private final TcpListener tcpListener;
+    private final ConnectionMonitor monitor;
     private volatile boolean listening;
 
     /** Creates a listener with a socket adapter. */
-    public SocketListener(InetAddress ipAddress, int port, ConnectionOptions connectionOptions) {
-        this(ipAddress, port, connectionOptions, null);
+    public SocketListener(
+            InetAddress ipAddress, int port, ConnectionOptions connectionOptions, ConnectionMonitor monitor) {
+        this(ipAddress, port, connectionOptions, monitor, null);
     }
 
-    /** Creates a listener over an optional listener adapter. */
+    /**
+     * Creates a listener over an optional listener adapter.
+     *
+     * @param ipAddress what to bind
+     * @param port what to bind
+     * @param connectionOptions the options every accepted connection gets
+     * @param monitor the client's monitor, which every accepted connection is
+     *     swept by
+     * @param tcpListener a listener adapter to use, or {@code null}
+     */
     public SocketListener(
-            InetAddress ipAddress, int port, ConnectionOptions connectionOptions, TcpListener tcpListener) {
+            InetAddress ipAddress,
+            int port,
+            ConnectionOptions connectionOptions,
+            ConnectionMonitor monitor,
+            TcpListener tcpListener) {
+        this.monitor = Objects.requireNonNull(monitor, "monitor");
         this.ipAddress = ipAddress;
         this.port = port;
         this.connectionOptions = connectionOptions == null ? new ConnectionOptions() : connectionOptions;
@@ -121,7 +137,8 @@ public final class SocketListener implements Listener {
 
     private void raiseAccepted(Socket client) {
         InetSocketAddress endpoint = (InetSocketAddress) client.getRemoteSocketAddress();
-        Connection connection = new SocketConnection(endpoint, connectionOptions, new TcpClientAdapter(client));
+        Connection connection =
+                new SocketConnection(endpoint, connectionOptions, new TcpClientAdapter(client), monitor);
         for (ListenerAcceptedEventListener listener : acceptedListeners) {
             listener.handle(this, connection);
         }

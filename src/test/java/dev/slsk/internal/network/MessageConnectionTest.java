@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.ConnectionWriteException;
 import dev.slsk.exceptions.MessageException;
+import dev.slsk.internal.common.Monitors;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.network.tcp.ConnectionKey;
 import dev.slsk.internal.network.tcp.NetworkStream;
@@ -44,8 +45,10 @@ class MessageConnectionTest {
     @Test
     @DisplayName("Message connection distinguishes server and peer identity")
     void constructsServerAndPeer() {
-        try (DefaultMessageConnection server = new DefaultMessageConnection(ENDPOINT, OPTIONS, 4, null);
-                DefaultMessageConnection peer = new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 1, null)) {
+        try (DefaultMessageConnection server =
+                        new DefaultMessageConnection(ENDPOINT, OPTIONS, 4, null, Monitors.shared());
+                DefaultMessageConnection peer =
+                        new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 1, null, Monitors.shared())) {
             assertTrue(server.isServerConnection());
             assertEquals("", server.getUsername());
             assertEquals(4, server.getCodeLength());
@@ -63,12 +66,14 @@ class MessageConnectionTest {
     @DisplayName("Peer username rejects null, empty, and whitespace")
     void validatesUsername() {
         assertThrows(
-                IllegalArgumentException.class, () -> new DefaultMessageConnection(null, ENDPOINT, OPTIONS, 4, null));
-        assertThrows(
-                IllegalArgumentException.class, () -> new DefaultMessageConnection("", ENDPOINT, OPTIONS, 4, null));
+                IllegalArgumentException.class,
+                () -> new DefaultMessageConnection(null, ENDPOINT, OPTIONS, 4, null, Monitors.shared()));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new DefaultMessageConnection(" \t\u00a0", ENDPOINT, OPTIONS, 4, null));
+                () -> new DefaultMessageConnection("", ENDPOINT, OPTIONS, 4, null, Monitors.shared()));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new DefaultMessageConnection(" \t\u00a0", ENDPOINT, OPTIONS, 4, null, Monitors.shared()));
     }
 
     @Test
@@ -78,7 +83,8 @@ class MessageConnectionTest {
         stream.blockReads = true;
         FakeTcpClient client = new FakeTcpClient(stream, false);
         client.connectAction = () -> client.connected = true;
-        DefaultMessageConnection connection = new DefaultMessageConnection(ENDPOINT, OPTIONS, 4, client);
+        DefaultMessageConnection connection =
+                new DefaultMessageConnection(ENDPOINT, OPTIONS, 4, client, Monitors.shared());
 
         connection.connect(null);
         awaitCondition(connection::isReadingContinuously);
@@ -94,7 +100,8 @@ class MessageConnectionTest {
         FakeStream stream = new FakeStream();
         stream.blockReads = true;
         FakeTcpClient client = new FakeTcpClient(stream, true);
-        DefaultMessageConnection connection = new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 4, client);
+        DefaultMessageConnection connection =
+                new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 4, client, Monitors.shared());
 
         assertFalse(connection.isReadingContinuously());
         connection.startReadingContinuously();
@@ -115,7 +122,8 @@ class MessageConnectionTest {
         FakeStream stream = new FakeStream(frame);
         stream.maxRead = 1;
         FakeTcpClient client = new FakeTcpClient(stream, true);
-        DefaultMessageConnection connection = new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 4, client);
+        DefaultMessageConnection connection =
+                new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 4, client, Monitors.shared());
         AtomicReference<MessageReceivedEvent> received = new AtomicReference<>();
         AtomicReference<MessageEvent> read = new AtomicReference<>();
         List<MessageDataEvent> progress = new ArrayList<>();
@@ -160,7 +168,8 @@ class MessageConnectionTest {
         byte[] frame = frame(new byte[] {1, 2, 3, 4}, new byte[] {5, 6});
         FakeStream stream = new FakeStream(frame);
         FakeTcpClient client = new FakeTcpClient(stream, true);
-        DefaultMessageConnection connection = new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 4, client);
+        DefaultMessageConnection connection =
+                new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 4, client, Monitors.shared());
 
         IllegalStateException injected = new IllegalStateException("listener exploded");
         connection.addMessageReceivedListener((sender, args) -> {
@@ -179,8 +188,8 @@ class MessageConnectionTest {
     void readsOneByteCode() throws Exception {
         byte[] frame = frame(new byte[] {(byte) 0x93}, new byte[] {4, 5});
         FakeStream stream = new FakeStream(frame);
-        DefaultMessageConnection connection =
-                new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 1, new FakeTcpClient(stream, true));
+        DefaultMessageConnection connection = new DefaultMessageConnection(
+                "alice", ENDPOINT, OPTIONS, 1, new FakeTcpClient(stream, true), Monitors.shared());
         AtomicReference<byte[]> read = new AtomicReference<>();
         CountDownLatch complete = new CountDownLatch(1);
         connection.addMessageReadListener((sender, args) -> {
@@ -200,7 +209,8 @@ class MessageConnectionTest {
     void writesMessage() throws Exception {
         FakeStream stream = new FakeStream();
         FakeTcpClient client = new FakeTcpClient(stream, true);
-        DefaultMessageConnection connection = new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 4, client);
+        DefaultMessageConnection connection =
+                new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 4, client, Monitors.shared());
         byte[] bytes = new byte[] {4, 0, 0, 0, 1, 2, 3, 4};
         AtomicReference<MessageEvent> written = new AtomicReference<>();
         AtomicReference<CancellationSignal> tokenSeen = new AtomicReference<>();
@@ -222,7 +232,8 @@ class MessageConnectionTest {
     @Test
     @DisplayName("Message write validates serialization and state")
     void validatesWrite() {
-        DefaultMessageConnection disconnected = new DefaultMessageConnection("alice", ENDPOINT);
+        DefaultMessageConnection disconnected =
+                new DefaultMessageConnection("alice", ENDPOINT, null, 4, null, Monitors.shared());
         assertThrows(IllegalArgumentException.class, () -> disconnected.write((OutgoingMessage) null));
         RuntimeException cause = new RuntimeException("broken");
         MessageException serialization = assertThrows(
@@ -242,7 +253,7 @@ class MessageConnectionTest {
         IOException cause = new IOException("broken");
         stream.writeFailure = cause;
         DefaultMessageConnection connection =
-                new DefaultMessageConnection(ENDPOINT, OPTIONS, 4, new FakeTcpClient(stream, true));
+                new DefaultMessageConnection(ENDPOINT, OPTIONS, 4, new FakeTcpClient(stream, true), Monitors.shared());
 
         CompletionException failure =
                 assertThrows(CompletionException.class, () -> connection.write(() -> new byte[] {1}));

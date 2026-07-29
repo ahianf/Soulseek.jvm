@@ -6,6 +6,7 @@ package dev.slsk.soak;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
+import dev.slsk.internal.common.Monitors;
 import dev.slsk.internal.network.tcp.SocketConnection;
 import dev.slsk.internal.options.ConnectionOptions;
 import java.util.concurrent.CountDownLatch;
@@ -40,7 +41,8 @@ class BlockingListenerSoak {
 
             SocketConnection[] connections = new SocketConnection[CONNECTIONS];
             for (int index = 0; index < CONNECTIONS; index++) {
-                SocketConnection connection = new SocketConnection(peer.endpoint(), new ConnectionOptions());
+                SocketConnection connection =
+                        new SocketConnection(peer.endpoint(), new ConnectionOptions(), null, Monitors.shared());
                 connection.addStateChangedListener((sender, event) -> {
                     stateEvents.incrementAndGet();
                     sleepQuietly(LISTENER_BLOCK_MILLIS);

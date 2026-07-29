@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationController;
+import dev.slsk.internal.common.Monitors;
 import dev.slsk.internal.network.tcp.ConnectionState;
 import dev.slsk.internal.network.tcp.SocketConnection;
 import dev.slsk.internal.options.ConnectionOptions;
@@ -56,7 +57,8 @@ class CancellationSoak {
         try (LoopbackPeer peer =
                 LoopbackPeer.start(LoopbackPeer.Behaviour.BYTE_SOURCE).withByteSourceLength(TRANSFER_BYTES)) {
 
-            SocketConnection connection = new SocketConnection(peer.endpoint(), new ConnectionOptions());
+            SocketConnection connection =
+                    new SocketConnection(peer.endpoint(), new ConnectionOptions(), null, Monitors.shared());
             try {
                 connection.connect(dev.slsk.CancellationSignal.none());
 
@@ -98,7 +100,8 @@ class CancellationSoak {
     @DisplayName("Cancellation aborts a read from a silent peer")
     void cancellationAbortsAgainstSilentPeer() throws Exception {
         try (LoopbackPeer peer = LoopbackPeer.start(LoopbackPeer.Behaviour.IDLE)) {
-            SocketConnection connection = new SocketConnection(peer.endpoint(), new ConnectionOptions());
+            SocketConnection connection =
+                    new SocketConnection(peer.endpoint(), new ConnectionOptions(), null, Monitors.shared());
             try {
                 connection.connect(dev.slsk.CancellationSignal.none());
 
@@ -137,8 +140,10 @@ class CancellationSoak {
         try (LoopbackPeer peer =
                 LoopbackPeer.start(LoopbackPeer.Behaviour.BYTE_SOURCE).withByteSourceLength(TRANSFER_BYTES)) {
 
-            SocketConnection cancelled = new SocketConnection(peer.endpoint(), new ConnectionOptions());
-            SocketConnection bystander = new SocketConnection(peer.endpoint(), new ConnectionOptions());
+            SocketConnection cancelled =
+                    new SocketConnection(peer.endpoint(), new ConnectionOptions(), null, Monitors.shared());
+            SocketConnection bystander =
+                    new SocketConnection(peer.endpoint(), new ConnectionOptions(), null, Monitors.shared());
             try {
                 cancelled.connect(dev.slsk.CancellationSignal.none());
                 bystander.connect(dev.slsk.CancellationSignal.none());

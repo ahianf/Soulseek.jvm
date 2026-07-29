@@ -31,9 +31,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -46,11 +44,6 @@ public class SocketConnection implements Connection {
     // read unmounts its carrier instead of pinning a bounded pool worker; see
     // NetworkExecutor for why the common pool is unusable here.
     private static final ExecutorService IO_EXECUTOR = NetworkExecutor.executor();
-    private static final ScheduledExecutorService TIMER_EXECUTOR = createTimerExecutor();
-
-    // One sweep task covers every connection; see ConnectionMonitor. Defect 1.6
-    // moves this off a static field so each client owns its own.
-    private static final ConnectionMonitor MONITOR = new ConnectionMonitor(TIMER_EXECUTOR);
 
     /** Fastest monitor tick, so a very short inactivity timeout stays precise. */
     private static final int MIN_MONITOR_INTERVAL_MILLIS = 10;
@@ -107,23 +100,34 @@ public class SocketConnection implements Connection {
     private volatile ConnectionTypes type = ConnectionTypes.NONE;
     private volatile boolean writeQueueFull;
 
+    /**
+     * Whose sweep this connection is liveness- and inactivity-checked by.
+     *
+     * <p>One sweep task covers every connection a client has; see
+     * {@link ConnectionMonitor}. Supplied rather than reached for: it used to be
+     * a static field on this class, which made every client in the JVM share one
+     * and gave none of them anything to shut down.
+     */
+    private final ConnectionMonitor monitor;
+
     protected InetSocketAddress ipEndpoint;
     protected final ConnectionOptions options;
     protected volatile NetworkStream stream;
     protected volatile TcpClient tcpClient;
 
-    /** Creates a connection with source defaults. */
-    public SocketConnection(InetSocketAddress ipEndpoint) {
-        this(ipEndpoint, null, null);
-    }
-
-    /** Creates a connection with the supplied options. */
-    public SocketConnection(InetSocketAddress ipEndpoint, ConnectionOptions options) {
-        this(ipEndpoint, options, null);
-    }
-
-    /** Creates a connection over an optional existing TCP client. */
-    public SocketConnection(InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient) {
+    /**
+     * Creates a connection over an optional existing TCP client.
+     *
+     * @param ipEndpoint where the peer is
+     * @param options the connection options, or {@code null} for the defaults
+     * @param tcpClient an established client to adopt, or {@code null}
+     * @param monitor the client's connection monitor; required, because a
+     *     connection nobody sweeps never notices that it has gone idle or that
+     *     its transport has gone away
+     */
+    public SocketConnection(
+            InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient, ConnectionMonitor monitor) {
+        this.monitor = Objects.requireNonNull(monitor, "monitor");
         this.ipEndpoint = ipEndpoint;
         this.options = options == null ? new ConnectionOptions() : options;
         this.tcpClient = tcpClient == null ? new TcpClientAdapter() : tcpClient;
@@ -806,11 +810,11 @@ public class SocketConnection implements Connection {
     }
 
     private void startTimers() {
-        MONITOR.register(this);
+        monitor.register(this);
     }
 
     private void stopTimers() {
-        MONITOR.unregister(this);
+        monitor.unregister(this);
     }
 
     /**
@@ -852,16 +856,6 @@ public class SocketConnection implements Connection {
                 disconnect(exception.getMessage(), exception);
             }
         }
-    }
-
-    private static ScheduledExecutorService createTimerExecutor() {
-        ScheduledThreadPoolExecutor executor =
-                new ScheduledThreadPoolExecutor(2, daemonFactory("soulseek-connection-timer"));
-        // Without this, a cancelled task stays resident in the delay queue
-        // until its original deadline passes. Defence in depth now that the
-        // per-chunk reschedule is gone.
-        executor.setRemoveOnCancelPolicy(true);
-        return executor;
     }
 
     private void closeTransport() {

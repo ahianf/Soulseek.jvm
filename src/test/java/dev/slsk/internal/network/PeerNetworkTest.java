@@ -74,7 +74,8 @@ class PeerNetworkTest {
         Fixture nulls = new Fixture();
         assertThrows(
                 NullPointerException.class,
-                () -> new PeerNetwork(null, nulls.server, nulls.waiter, nulls.tokens, nulls.peerMessages));
+                () -> new PeerNetwork(
+                        null, nulls.server, nulls.waiter, nulls.tokens, nulls.peerMessages, nulls.factory));
 
         Fixture fixture = new Fixture();
         PeerNetwork manager = fixture.manager();
@@ -90,8 +91,8 @@ class PeerNetworkTest {
         assertDoesNotThrow(manager::close);
         assertDoesNotThrow(manager::close);
 
-        PeerNetwork defaultDiagnostic =
-                new PeerNetwork(fixture.options, fixture.server, fixture.waiter, fixture.tokens, fixture.peerMessages);
+        PeerNetwork defaultDiagnostic = new PeerNetwork(
+                fixture.options, fixture.server, fixture.waiter, fixture.tokens, fixture.peerMessages, fixture.factory);
         defaultDiagnostic.addDiagnosticGeneratedListener(listener);
         // The default factory is covered through a debug-producing failure.
         defaultDiagnostic.getCachedMessageConnection("missing");

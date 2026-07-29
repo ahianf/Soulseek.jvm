@@ -88,7 +88,12 @@ class DistributedNetworkTest {
         assertThrows(
                 NullPointerException.class,
                 () -> new DistributedNetwork(
-                        null, nulls.server, nulls.waiter, nulls.tokens, () -> nulls.distributedMessages));
+                        null,
+                        nulls.server,
+                        nulls.waiter,
+                        nulls.tokens,
+                        () -> nulls.distributedMessages,
+                        nulls.factory));
         Fixture fixture = fixture();
         DistributedNetwork manager = fixture.manager;
 

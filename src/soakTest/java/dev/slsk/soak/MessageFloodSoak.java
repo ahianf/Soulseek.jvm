@@ -6,6 +6,7 @@ package dev.slsk.soak;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
+import dev.slsk.internal.common.Monitors;
 import dev.slsk.internal.network.DefaultMessageConnection;
 import dev.slsk.internal.options.ConnectionOptions;
 import java.util.Locale;
@@ -35,7 +36,8 @@ class MessageFloodSoak {
             AtomicLong messages = new AtomicLong();
             ConnectionOptions options = new ConnectionOptions();
 
-            DefaultMessageConnection connection = new DefaultMessageConnection(peer.endpoint(), options, 4, null);
+            DefaultMessageConnection connection =
+                    new DefaultMessageConnection(peer.endpoint(), options, 4, null, Monitors.shared());
             connection.addMessageReadListener((sender, event) -> messages.incrementAndGet());
 
             long allocStart = HeapProbe.totalAllocatedBytes();
@@ -91,7 +93,7 @@ class MessageFloodSoak {
 
             int baseline = SchedulerProbe.connectionTimerQueueDepth();
             DefaultMessageConnection connection =
-                    new DefaultMessageConnection(peer.endpoint(), new ConnectionOptions(), 4, null);
+                    new DefaultMessageConnection(peer.endpoint(), new ConnectionOptions(), 4, null, Monitors.shared());
             try {
                 connection.connect(CancellationSignal.none());
                 Thread.sleep(TimeUnit.SECONDS.toMillis(3));

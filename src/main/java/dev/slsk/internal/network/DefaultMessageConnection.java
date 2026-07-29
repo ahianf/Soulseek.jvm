@@ -13,6 +13,7 @@ import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.network.tcp.ConnectionDataEvent;
 import dev.slsk.internal.network.tcp.ConnectionEventListener;
 import dev.slsk.internal.network.tcp.ConnectionKey;
+import dev.slsk.internal.network.tcp.ConnectionMonitor;
 import dev.slsk.internal.network.tcp.SocketConnection;
 import dev.slsk.internal.network.tcp.TcpClient;
 import dev.slsk.internal.options.ConnectionOptions;
@@ -39,23 +40,17 @@ public final class DefaultMessageConnection extends SocketConnection implements 
     private final String username;
     private volatile boolean readingContinuously;
 
-    /** Creates a server connection with source defaults. */
-    public DefaultMessageConnection(InetSocketAddress ipEndpoint) {
-        this(ipEndpoint, null, 4, null);
-    }
-
     /** Creates a server connection. */
     public DefaultMessageConnection(
-            InetSocketAddress ipEndpoint, ConnectionOptions options, int codeLength, TcpClient tcpClient) {
-        super(ipEndpoint, options, tcpClient);
+            InetSocketAddress ipEndpoint,
+            ConnectionOptions options,
+            int codeLength,
+            TcpClient tcpClient,
+            ConnectionMonitor monitor) {
+        super(ipEndpoint, options, tcpClient, monitor);
         this.codeLength = codeLength;
         username = "";
         bindConnectedReadLoop();
-    }
-
-    /** Creates a peer connection with source defaults. */
-    public DefaultMessageConnection(String username, InetSocketAddress ipEndpoint) {
-        this(username, ipEndpoint, null, 4, null);
     }
 
     /** Creates a peer connection. */
@@ -64,8 +59,9 @@ public final class DefaultMessageConnection extends SocketConnection implements 
             InetSocketAddress ipEndpoint,
             ConnectionOptions options,
             int codeLength,
-            TcpClient tcpClient) {
-        super(ipEndpoint, options, tcpClient);
+            TcpClient tcpClient,
+            ConnectionMonitor monitor) {
+        super(ipEndpoint, options, tcpClient, monitor);
         this.codeLength = codeLength;
         if (isNullOrWhiteSpace(username)) {
             throw new IllegalArgumentException(

@@ -21,10 +21,17 @@ import java.util.stream.Collectors;
  */
 public final class ThreadCensus {
 
-    /** Name prefixes the library uses for its platform threads. */
+    /**
+     * Name prefixes the library uses for its platform threads.
+     *
+     * <p>{@code soulseek-connection-timer} is gone from this list because it is
+     * gone from the library: the connection sweep ran on a static two-thread
+     * pool of that name and now runs on the client's own
+     * {@code soulseek-client-timer}, which this already counts. Those were the
+     * two platform threads a JVM with no client open still paid for.
+     */
     public static final List<String> LIBRARY_PREFIXES = List.of(
             "soulseek-network-",
-            "soulseek-connection-timer",
             "soulseek-client-timer",
             "soulseek-client-cleanup",
             "soulseek-distributed-status",

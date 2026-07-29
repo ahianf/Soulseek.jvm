@@ -3,10 +3,10 @@
 
 package dev.slsk.internal.network.tcp;
 
+import dev.slsk.internal.common.Scheduler;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -23,22 +23,34 @@ import java.util.concurrent.TimeUnit;
  * recomputed during the sweep itself so it costs nothing extra. That keeps a
  * connection with a 20 ms inactivity timeout as precise as it was while letting
  * a thousand connections at the 15-second default share a single 250 ms task.
+ *
+ * <p>One per client, on the client's own {@link Scheduler}. It ran on a static
+ * two-thread platform {@code ScheduledThreadPoolExecutor} that was created when
+ * this class loaded, shared by every client in the JVM and never shut down —
+ * those were the two platform threads a library with no client open still cost.
+ * A client's connections are that client's to sweep, and its scheduler is what
+ * exists to sweep them.
  */
-final class ConnectionMonitor {
+public final class ConnectionMonitor implements AutoCloseable {
 
-    private final ScheduledExecutorService scheduler;
+    private final Scheduler scheduler;
     private final Set<SocketConnection> connections = ConcurrentHashMap.newKeySet();
     private final Object lock = new Object();
 
     private ScheduledFuture<?> sweepTask;
     private int sweepIntervalMillis;
 
-    ConnectionMonitor(ScheduledExecutorService scheduler) {
+    /**
+     * Creates a monitor sweeping on a client's scheduler.
+     *
+     * @param scheduler the client's scheduler; not owned or closed by this
+     */
+    public ConnectionMonitor(Scheduler scheduler) {
         this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
     }
 
     /** Adds a connection to the sweep, starting or quickening it if needed. */
-    void register(SocketConnection connection) {
+    public void register(SocketConnection connection) {
         connections.add(connection);
 
         int desired = connection.monitorIntervalMillis();
@@ -56,8 +68,21 @@ final class ConnectionMonitor {
      * harmless and the next sweep corrects it; recomputing on every removal
      * would make tearing down N connections O(N^2).
      */
-    void unregister(SocketConnection connection) {
+    public void unregister(SocketConnection connection) {
         connections.remove(connection);
+    }
+
+    /**
+     * Stops sweeping and forgets every connection.
+     *
+     * <p>The scheduler belongs to the client, not to this, so it is left alone.
+     */
+    @Override
+    public void close() {
+        connections.clear();
+        synchronized (lock) {
+            stopSweep();
+        }
     }
 
     /** Returns the number of registered connections, for tests. */

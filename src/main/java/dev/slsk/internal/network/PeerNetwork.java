@@ -91,8 +91,9 @@ public final class PeerNetwork implements PeerConnectionManager {
             ServerLink server,
             Waiter waiter,
             TokenFactory tokens,
-            PeerMessageHandler peerMessages) {
-        this(options, server, waiter, tokens, peerMessages, null, null);
+            PeerMessageHandler peerMessages,
+            ConnectionFactory connectionFactory) {
+        this(options, server, waiter, tokens, peerMessages, connectionFactory, null);
     }
 
     /** Creates a peer network. */
@@ -109,7 +110,7 @@ public final class PeerNetwork implements PeerConnectionManager {
         this.waiter = Objects.requireNonNull(waiter, "waiter");
         this.tokens = Objects.requireNonNull(tokens, "tokens");
         this.peerMessages = Objects.requireNonNull(peerMessages, "peerMessages");
-        this.connectionFactory = connectionFactory == null ? new DefaultConnectionFactory() : connectionFactory;
+        this.connectionFactory = Objects.requireNonNull(connectionFactory, "connectionFactory");
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(options.get().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;

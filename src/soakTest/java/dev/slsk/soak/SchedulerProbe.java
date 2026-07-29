@@ -3,6 +3,8 @@
 
 package dev.slsk.soak;
 
+import dev.slsk.internal.common.Monitors;
+import dev.slsk.internal.common.Scheduler;
 import java.lang.reflect.Field;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -23,11 +25,18 @@ import java.util.concurrent.TimeUnit;
  * refactor turn a real assertion into a no-op, which is the specific failure
  * mode this harness exists to prevent. When a phase relocates the scheduler,
  * update the constants below in the same commit.
+ *
+ * <p>Phase 6 relocated it. The queue was {@code SocketConnection.TIMER_EXECUTOR},
+ * a static two-thread platform pool shared by every client in the JVM; it is now
+ * the timer of whichever {@link Scheduler} a client's {@code ConnectionMonitor}
+ * sweeps on. The soak harness has no client, so it measures the scheduler behind
+ * {@link Monitors}, which is the one every connection these tests open is swept
+ * by — the same quantity, read off an instance rather than a static.
  */
 public final class SchedulerProbe {
 
-    private static final String TIMER_OWNER = "dev.slsk.internal.network.tcp.SocketConnection";
-    private static final String TIMER_FIELD = "TIMER_EXECUTOR";
+    private static final String TIMER_OWNER = "dev.slsk.internal.common.Scheduler";
+    private static final String TIMER_FIELD = "timer";
 
     private SchedulerProbe() {}
 
@@ -38,7 +47,7 @@ public final class SchedulerProbe {
      * @throws IllegalStateException if the probe target has moved
      */
     public static int connectionTimerQueueDepth() {
-        return queueDepth(TIMER_OWNER, TIMER_FIELD);
+        return executor(Monitors.scheduler()).getQueue().size();
     }
 
     /**
@@ -46,7 +55,7 @@ public final class SchedulerProbe {
      * immediately. False is the defect; true is the fixed state.
      */
     public static boolean connectionTimerRemovesOnCancel() {
-        return executor(TIMER_OWNER, TIMER_FIELD).getRemoveOnCancelPolicy();
+        return executor(Monitors.scheduler()).getRemoveOnCancelPolicy();
     }
 
     /**
@@ -65,20 +74,15 @@ public final class SchedulerProbe {
         return depth;
     }
 
-    private static int queueDepth(String className, String fieldName) {
-        return executor(className, fieldName).getQueue().size();
-    }
-
-    private static ScheduledThreadPoolExecutor executor(String className, String fieldName) {
+    private static ScheduledThreadPoolExecutor executor(Scheduler scheduler) {
         Object value;
         try {
-            Class<?> owner = Class.forName(className);
-            Field field = owner.getDeclaredField(fieldName);
+            Field field = Scheduler.class.getDeclaredField(TIMER_FIELD);
             field.setAccessible(true);
-            value = field.get(null);
+            value = field.get(scheduler);
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException(
-                    "SchedulerProbe target " + className + "." + fieldName
+                    "SchedulerProbe target " + TIMER_OWNER + "." + TIMER_FIELD
                             + " has moved. Update SchedulerProbe in the same commit that moved it, "
                             + "so the soak assertion keeps measuring something real.",
                     exception);
@@ -86,7 +90,7 @@ public final class SchedulerProbe {
         if (value instanceof ScheduledThreadPoolExecutor executor) {
             return executor;
         }
-        throw new IllegalStateException(className + "." + fieldName
+        throw new IllegalStateException(TIMER_OWNER + "." + TIMER_FIELD
                 + " is no longer a ScheduledThreadPoolExecutor but a "
                 + (value == null ? "null" : value.getClass().getName())
                 + "; update SchedulerProbe to match.");

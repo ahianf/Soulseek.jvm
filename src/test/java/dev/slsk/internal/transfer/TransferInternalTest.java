@@ -14,6 +14,7 @@ import dev.slsk.internal.Transfer;
 import dev.slsk.internal.TransferDirection;
 import dev.slsk.internal.TransferState;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.Monitors;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.network.tcp.SocketConnection;
 import dev.slsk.internal.options.ConnectionOptions;
@@ -60,7 +61,7 @@ class TransferInternalTest {
     @Test
     void endpointDelegatesToConnection() {
         InetSocketAddress endpoint = new InetSocketAddress("127.0.0.1", 1234);
-        SocketConnection connection = new SocketConnection(endpoint, new ConnectionOptions());
+        SocketConnection connection = new SocketConnection(endpoint, new ConnectionOptions(), null, Monitors.shared());
         TransferInternal transfer = transfer(fixed(EPOCH), 1000);
 
         transfer.setConnection(connection);

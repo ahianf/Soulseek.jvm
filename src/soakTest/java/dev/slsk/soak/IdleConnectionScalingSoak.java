@@ -6,6 +6,7 @@ package dev.slsk.soak;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
+import dev.slsk.internal.common.Monitors;
 import dev.slsk.internal.network.tcp.SocketConnection;
 import dev.slsk.internal.options.ConnectionOptions;
 import java.util.ArrayList;
@@ -44,6 +45,16 @@ class IdleConnectionScalingSoak {
             SoakReport.record("idle-scaling", "timer queue depth at rest", queueBaseline);
             SoakReport.record(
                     "idle-scaling", "timer removeOnCancelPolicy", SchedulerProbe.connectionTimerRemovesOnCancel());
+            // The connections these tests open have no client, so they sweep on
+            // the harness's own scheduler and its platform thread is outside the
+            // library census by name. A real client's sweep runs on its
+            // soulseek-client-timer, which client-lifecycle counts and prices at
+            // 1.0 platform threads per client. The two this used to report were
+            // the static soulseek-connection-timer pool, which no longer exists.
+            SoakReport.note(
+                    "idle-scaling",
+                    "connections sweep on the harness scheduler (1 platform thread, outside the census); "
+                            + "a client's sweep is on its own soulseek-client-timer");
 
             for (int scale : SCALES) {
                 List<SocketConnection> connections = openConnections(peer, scale);
@@ -119,7 +130,7 @@ class IdleConnectionScalingSoak {
         ConnectionOptions options = new ConnectionOptions();
         List<SocketConnection> connections = new ArrayList<>(count);
         for (int index = 0; index < count; index++) {
-            SocketConnection connection = new SocketConnection(peer.endpoint(), options);
+            SocketConnection connection = new SocketConnection(peer.endpoint(), options, null, Monitors.shared());
             connection.connect(CancellationSignal.none());
             connections.add(connection);
         }

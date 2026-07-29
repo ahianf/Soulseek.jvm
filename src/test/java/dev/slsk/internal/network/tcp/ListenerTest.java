@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.slsk.internal.common.Monitors;
 import dev.slsk.internal.options.ConnectionOptions;
 import java.net.InetAddress;
 import java.net.ServerSocket;
@@ -28,7 +29,7 @@ class ListenerTest {
         InetAddress address = InetAddress.getLoopbackAddress();
         ConnectionOptions options = new ConnectionOptions();
         FakeTcpListener tcpListener = new FakeTcpListener();
-        SocketListener listener = new SocketListener(address, 2234, options, tcpListener);
+        SocketListener listener = new SocketListener(address, 2234, options, Monitors.shared(), tcpListener);
 
         assertSame(address, listener.getIpAddress());
         assertEquals(2234, listener.getPort());
@@ -40,7 +41,8 @@ class ListenerTest {
     @DisplayName("SocketListener start and stop delegate and update state")
     void startsAndStops() {
         FakeTcpListener tcpListener = new FakeTcpListener();
-        SocketListener listener = new SocketListener(InetAddress.getLoopbackAddress(), 2234, null, tcpListener);
+        SocketListener listener =
+                new SocketListener(InetAddress.getLoopbackAddress(), 2234, null, Monitors.shared(), tcpListener);
 
         listener.start();
         assertTrue(listener.isListening());
@@ -59,7 +61,8 @@ class ListenerTest {
         try (ServerSocket server = new ServerSocket(0, 1, address)) {
             TcpListenerAdapter adapter = new TcpListenerAdapter(server);
             ConnectionOptions options = new ConnectionOptions(8, 8, 3, 100, -1);
-            SocketListener listener = new SocketListener(address, server.getLocalPort(), options, adapter);
+            SocketListener listener =
+                    new SocketListener(address, server.getLocalPort(), options, Monitors.shared(), adapter);
             AtomicReference<Connection> accepted = new AtomicReference<>();
             AtomicReference<Listener> sender = new AtomicReference<>();
             CountDownLatch raised = new CountDownLatch(1);
@@ -96,8 +99,8 @@ class ListenerTest {
         AtomicReference<Throwable> uncaught = new AtomicReference<>();
         try (ServerSocket server = new ServerSocket(0, 1, address);
                 UncaughtHandler handler = new UncaughtHandler(uncaught)) {
-            SocketListener listener =
-                    new SocketListener(address, server.getLocalPort(), null, new TcpListenerAdapter(server));
+            SocketListener listener = new SocketListener(
+                    address, server.getLocalPort(), null, Monitors.shared(), new TcpListenerAdapter(server));
             listener.start();
             // Let the accept actually block before closing it out from under.
             Thread.sleep(50);
@@ -119,7 +122,8 @@ class ListenerTest {
         AtomicReference<Throwable> uncaught = new AtomicReference<>();
         FakeTcpListener tcpListener = new FakeTcpListener();
         try (UncaughtHandler handler = new UncaughtHandler(uncaught)) {
-            SocketListener listener = new SocketListener(InetAddress.getLoopbackAddress(), 2234, null, tcpListener);
+            SocketListener listener =
+                    new SocketListener(InetAddress.getLoopbackAddress(), 2234, null, Monitors.shared(), tcpListener);
             listener.start();
             Thread.sleep(50);
 

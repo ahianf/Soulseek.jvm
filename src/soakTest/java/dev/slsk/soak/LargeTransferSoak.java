@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
+import dev.slsk.internal.common.Monitors;
 import dev.slsk.internal.network.tcp.SocketConnection;
 import dev.slsk.internal.options.ConnectionOptions;
 import java.io.OutputStream;
@@ -32,7 +33,8 @@ class LargeTransferSoak {
         try (LoopbackPeer peer =
                 LoopbackPeer.start(LoopbackPeer.Behaviour.BYTE_SOURCE).withByteSourceLength(TRANSFER_BYTES)) {
 
-            SocketConnection connection = new SocketConnection(peer.endpoint(), new ConnectionOptions());
+            SocketConnection connection =
+                    new SocketConnection(peer.endpoint(), new ConnectionOptions(), null, Monitors.shared());
             try {
                 connection.connect(CancellationSignal.none());
 
@@ -91,7 +93,8 @@ class LargeTransferSoak {
                 LoopbackPeer.start(LoopbackPeer.Behaviour.BYTE_SOURCE).withByteSourceLength(TRANSFER_BYTES)) {
 
             int baseline = SchedulerProbe.connectionTimerQueueDepth();
-            SocketConnection connection = new SocketConnection(peer.endpoint(), new ConnectionOptions());
+            SocketConnection connection =
+                    new SocketConnection(peer.endpoint(), new ConnectionOptions(), null, Monitors.shared());
             try {
                 connection.connect(CancellationSignal.none());
                 connection.read(TRANSFER_BYTES, new CountingOutputStream(), null, null, CancellationSignal.none());

@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
+import dev.slsk.internal.common.Monitors;
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.NetworkStream;
 import dev.slsk.internal.network.tcp.SocketConnection;
@@ -38,13 +39,14 @@ class ConnectionFactoryTest {
     @DisplayName("Factory creates transfer connection with supplied options")
     void createsTransferConnection() {
         ConnectionOptions options = new ConnectionOptions(1, 2, 3, 4, -1);
-        try (Connection connection = new DefaultConnectionFactory().getTransferConnection(ENDPOINT, options, null)) {
+        try (Connection connection =
+                new DefaultConnectionFactory(Monitors.shared()).getTransferConnection(ENDPOINT, options, null)) {
             assertTrue(connection instanceof SocketConnection);
             assertSame(ENDPOINT, connection.getIpEndpoint());
             assertSame(options, connection.getOptions());
         }
 
-        try (Connection defaults = new DefaultConnectionFactory().getTransferConnection(ENDPOINT)) {
+        try (Connection defaults = new DefaultConnectionFactory(Monitors.shared()).getTransferConnection(ENDPOINT)) {
             assertNotNull(defaults.getOptions());
         }
     }
@@ -53,7 +55,7 @@ class ConnectionFactoryTest {
     @DisplayName("Factory creates peer and distributed message variants")
     void createsPeerVariants() {
         ConnectionOptions options = new ConnectionOptions(1, 2, 3, 4, -1);
-        DefaultConnectionFactory factory = new DefaultConnectionFactory();
+        DefaultConnectionFactory factory = new DefaultConnectionFactory(Monitors.shared());
         try (MessageConnection peer = factory.getMessageConnection("alice", ENDPOINT, options, null);
                 MessageConnection distributed = factory.getDistributedConnection("alice", ENDPOINT, options, null)) {
             assertSame(options, peer.getOptions());
@@ -85,7 +87,7 @@ class ConnectionFactoryTest {
         CountDownLatch readEvent = new CountDownLatch(1);
         ConnectionOptions options = new ConnectionOptions(8, 8, 3, 100, 50);
 
-        MessageConnection connection = new DefaultConnectionFactory()
+        MessageConnection connection = new DefaultConnectionFactory(Monitors.shared())
                 .getServerConnection(
                         ENDPOINT,
                         (sender, args) -> connected.incrementAndGet(),
@@ -118,7 +120,7 @@ class ConnectionFactoryTest {
     @DisplayName("Server factory accepts null handlers and default options")
     void serverDefaults() {
         try (MessageConnection connection =
-                new DefaultConnectionFactory().getServerConnection(ENDPOINT, null, null, null, null)) {
+                new DefaultConnectionFactory(Monitors.shared()).getServerConnection(ENDPOINT, null, null, null, null)) {
             assertNotNull(connection.getOptions());
             assertEquals(-1, connection.getOptions().getInactivityTimeout());
         }
