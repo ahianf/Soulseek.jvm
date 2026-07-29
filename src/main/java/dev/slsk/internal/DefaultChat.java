@@ -48,13 +48,28 @@ final class DefaultChat implements Chat {
         if (event == null) {
             return;
         }
-        int delivered = events.publish(new ChatEvent.MessageReceived(
-                Username.of(event.getUsername()),
-                event.getMessage(),
-                event.isReplayed(),
-                event.getTimestamp(),
-                Instant.now()));
+        // The acknowledgement is a continuation rather than the next statement,
+        // and the rule it encodes is unchanged. What changes is where it runs:
+        // on the bus's delivery thread, so a listener and a full server round
+        // trip no longer sit between the read loop and the next message.
+        events.publish(
+                new ChatEvent.MessageReceived(
+                        Username.of(event.getUsername()),
+                        event.getMessage(),
+                        event.isReplayed(),
+                        event.getTimestamp(),
+                        Instant.now()),
+                delivered -> acknowledge(event, delivered));
+    }
 
+    /**
+     * Acknowledges a private message if, and only if, a listener took it
+     * cleanly.
+     *
+     * @param event the message
+     * @param delivered how many listeners accepted it without throwing
+     */
+    private void acknowledge(PrivateMessageReceivedEvent event, int delivered) {
         if (delivered == 0) {
             diagnostics.warning("Private message " + event.getId() + " from " + event.getUsername()
                     + " reached no listener cleanly and was not acknowledged; "

@@ -4,6 +4,8 @@
 package dev.slsk.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -15,6 +17,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
@@ -74,7 +77,7 @@ class EventBusTest {
         bus.subscribe(first::add);
         bus.subscribe(second::add);
 
-        assertEquals(2, bus.publish(new Signal.Added(1)));
+        assertEquals(2, deliver(bus, new Signal.Added(1)));
 
         assertEquals(List.of(new Signal.Added(1)), first);
         assertEquals(List.of(new Signal.Added(1)), second);
@@ -86,9 +89,9 @@ class EventBusTest {
         List<Signal.Added> added = new ArrayList<>();
         bus.subscribe(Signal.Added.class, added::add);
 
-        bus.publish(new Signal.Added(1));
-        bus.publish(new Signal.Removed(2));
-        bus.publish(new Signal.Added(3));
+        deliver(bus, new Signal.Added(1));
+        deliver(bus, new Signal.Removed(2));
+        deliver(bus, new Signal.Added(3));
 
         assertEquals(List.of(new Signal.Added(1), new Signal.Added(3)), added);
     }
@@ -99,9 +102,9 @@ class EventBusTest {
         List<Signal> seen = new ArrayList<>();
         Subscription subscription = bus.subscribe(seen::add);
 
-        bus.publish(new Signal.Added(1));
+        deliver(bus, new Signal.Added(1));
         subscription.close();
-        bus.publish(new Signal.Added(2));
+        deliver(bus, new Signal.Added(2));
 
         assertEquals(List.of(new Signal.Added(1)), seen);
         assertEquals(0, bus.listenerCount());
@@ -126,7 +129,7 @@ class EventBusTest {
         bus.subscribe(event -> count.incrementAndGet());
 
         first.close();
-        bus.publish(new Signal.Added(1));
+        deliver(bus, new Signal.Added(1));
 
         assertEquals(1, count.get());
         assertEquals(1, bus.listenerCount());
@@ -145,7 +148,7 @@ class EventBusTest {
         // The assertion is that this line does not throw. Before containment,
         // this exception unwound whatever raised the event -- a message handler
         // or a connection read loop.
-        assertEquals(0, bus.publish(new Signal.Added(1)));
+        assertEquals(0, deliver(bus, new Signal.Added(1)));
 
         assertEquals(1, sink.warnings.size());
         assertTrue(sink.warnings.get(0).contains("IllegalStateException"));
@@ -165,7 +168,7 @@ class EventBusTest {
         });
         bus.subscribe(after::add);
 
-        assertEquals(2, bus.publish(new Signal.Added(1)));
+        assertEquals(2, deliver(bus, new Signal.Added(1)));
 
         assertEquals(List.of(new Signal.Added(1)), before);
         assertEquals(List.of(new Signal.Added(1)), after);
@@ -178,7 +181,7 @@ class EventBusTest {
         bus.subscribe(event -> {
             throw new StackOverflowError("deep");
         });
-        assertEquals(0, bus.publish(new Signal.Added(1)));
+        assertEquals(0, deliver(bus, new Signal.Added(1)));
         assertEquals(1, sink.warnings.size());
     }
 
@@ -186,15 +189,15 @@ class EventBusTest {
     @DisplayName("the clean-delivery count is what the private-message ack rule reads")
     void deliveryCountReportsOnlyCleanListeners() {
         EventBus<Signal> bus = bus();
-        assertEquals(0, bus.publish(new Signal.Added(1)), "no listeners means no clean delivery");
+        assertEquals(0, deliver(bus, new Signal.Added(1)), "no listeners means no clean delivery");
 
         bus.subscribe(event -> {
             throw new IllegalStateException("bug");
         });
-        assertEquals(0, bus.publish(new Signal.Added(2)), "every listener threw");
+        assertEquals(0, deliver(bus, new Signal.Added(2)), "every listener threw");
 
         bus.subscribe(event -> {});
-        assertEquals(1, bus.publish(new Signal.Added(3)), "one of two was clean");
+        assertEquals(1, deliver(bus, new Signal.Added(3)), "one of two was clean");
     }
 
     // --- atomicity ---------------------------------------------------------
@@ -206,12 +209,160 @@ class EventBusTest {
 
         try (Attachment<String> attached = bus.attach(() -> "state", seen::add)) {
             assertEquals("state", attached.state());
-            bus.publish(new Signal.Added(1));
+            deliver(bus, new Signal.Added(1));
         }
-        bus.publish(new Signal.Added(2));
+        deliver(bus, new Signal.Added(2));
 
         assertEquals(List.of(new Signal.Added(1)), seen);
         assertEquals(0, bus.listenerCount());
+    }
+
+    // --- delivery is off the publishing thread -----------------------------
+
+    @Test
+    @DisplayName("a listener that blocks for a second does not delay the publisher")
+    void aBlockingListenerDoesNotDelayThePublisher() {
+        EventBus<Signal> bus = bus();
+        CountDownLatch reached = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        bus.subscribe(signal -> {
+            reached.countDown();
+            await(release);
+        });
+
+        long start = System.nanoTime();
+        bus.publish(new Signal.Added(1));
+        await(reached);
+        bus.publish(new Signal.Added(2));
+        long elapsedMillis = (System.nanoTime() - start) / 1_000_000;
+
+        assertTrue(elapsedMillis < 1_000, "published twice in " + elapsedMillis + "ms behind a blocked listener");
+        release.countDown();
+        bus.close();
+    }
+
+    @Test
+    @DisplayName("delivery does not run on the publishing thread")
+    void deliveryIsNotOnThePublishingThread() {
+        EventBus<Signal> bus = bus();
+        AtomicReference<Thread> deliveringThread = new AtomicReference<>();
+        CountDownLatch delivered = new CountDownLatch(1);
+        bus.subscribe(signal -> {
+            deliveringThread.set(Thread.currentThread());
+            delivered.countDown();
+        });
+
+        bus.publish(new Signal.Added(1));
+
+        await(delivered);
+        assertNotEquals(Thread.currentThread(), deliveringThread.get());
+        bus.close();
+    }
+
+    @Test
+    @DisplayName("ordering holds per bus under concurrent publication")
+    void orderingHoldsUnderConcurrentPublication() throws Exception {
+        EventBus<Signal> bus = bus();
+        List<Signal> seen = new CopyOnWriteArrayList<>();
+        bus.subscribe(seen::add);
+
+        // Every publisher's own events must arrive in the order it published
+        // them. Across publishers the interleaving is whatever it is; within
+        // one, one queue and one delivery thread is the guarantee.
+        int publishers = 8;
+        int each = 200;
+        CountDownLatch start = new CountDownLatch(1);
+        List<Thread> threads = new ArrayList<>();
+        for (int p = 0; p < publishers; p++) {
+            int publisher = p;
+            threads.add(Thread.ofVirtual().start(() -> {
+                await(start);
+                for (int i = 0; i < each; i++) {
+                    bus.publish(new Signal.Added(publisher * each + i));
+                }
+            }));
+        }
+        start.countDown();
+        for (Thread thread : threads) {
+            thread.join();
+        }
+        deliver(bus, new Signal.Removed(0));
+
+        assertEquals(publishers * each + 1, seen.size(), "nothing was dropped");
+        for (int p = 0; p < publishers; p++) {
+            int publisher = p;
+            List<Integer> mine = seen.stream()
+                    .filter(Signal.Added.class::isInstance)
+                    .map(signal -> ((Signal.Added) signal).value())
+                    .filter(value -> value / each == publisher)
+                    .toList();
+            List<Integer> expected = new ArrayList<>();
+            for (int i = 0; i < each; i++) {
+                expected.add(publisher * each + i);
+            }
+            assertEquals(expected, mine, "publisher " + publisher + " saw its own events out of order");
+        }
+        bus.close();
+    }
+
+    @Test
+    @DisplayName("an overflowing queue blocks the publisher rather than dropping an event")
+    void overflowBlocksRatherThanDrops() throws Exception {
+        EventBus<Signal> bus = bus();
+        CountDownLatch reached = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        List<Signal> seen = new CopyOnWriteArrayList<>();
+        bus.subscribe(signal -> {
+            if (reached.getCount() > 0) {
+                reached.countDown();
+                await(release);
+            }
+            seen.add(signal);
+        });
+
+        // One more than the queue holds, with the delivery thread wedged on the
+        // first, so the last publisher has to wait for room.
+        int overflow = 1_030;
+        AtomicBoolean finished = new AtomicBoolean();
+        Thread publisher = Thread.ofVirtual().start(() -> {
+            for (int i = 0; i < overflow; i++) {
+                bus.publish(new Signal.Added(i));
+            }
+            finished.set(true);
+        });
+
+        await(reached);
+        assertFalse(publisher.join(java.time.Duration.ofMillis(250)), "the publisher is waiting for room");
+        assertFalse(finished.get());
+
+        release.countDown();
+        publisher.join();
+        deliver(bus, new Signal.Removed(0));
+        assertEquals(
+                overflow, seen.stream().filter(Signal.Added.class::isInstance).count(), "nothing was dropped");
+        bus.close();
+    }
+
+    @Test
+    @DisplayName("close stops the delivery thread")
+    void closeStopsTheDeliveryThread() {
+        EventBus<Signal> bus = bus();
+        CountDownLatch delivered = new CountDownLatch(1);
+        AtomicReference<Thread> deliveringThread = new AtomicReference<>();
+        bus.subscribe(signal -> {
+            deliveringThread.set(Thread.currentThread());
+            delivered.countDown();
+        });
+        deliver(bus, new Signal.Added(1));
+        await(delivered);
+
+        bus.close();
+
+        assertFalse(deliveringThread.get().isAlive());
+        // Publishing after close is a no-op rather than a block on a queue
+        // nobody is draining.
+        bus.publish(new Signal.Added(2));
+        bus.close();
     }
 
     @Test
@@ -246,13 +397,22 @@ class EventBusTest {
             });
             Thread attacher = Thread.ofVirtual().start(() -> {
                 await(start);
-                snapshot.set(
-                        bus.attach(() -> List.copyOf(applied), streamed::add).state());
+                snapshot.set(bus.attach(() -> List.copyOf(applied), signal -> {
+                            if (signal instanceof Signal.Added added) {
+                                streamed.add(added);
+                            }
+                        })
+                        .state());
             });
 
             start.countDown();
             publisher.join();
             attacher.join();
+            // Delivery is off the publishing thread now, so joining the
+            // publisher only means every event is queued. One more event
+            // through the same queue is the barrier: FIFO, one thread, so when
+            // its continuation runs everything ahead of it has been delivered.
+            deliver(bus, new Signal.Removed(0));
 
             // Everything the snapshot already had, then everything the stream
             // delivered, must be exactly 1..50 in order: no value in both, none
@@ -261,7 +421,28 @@ class EventBusTest {
             List<Integer> union = new ArrayList<>(snapshot.get());
             streamed.forEach(signal -> union.add(((Signal.Added) signal).value()));
             assertEquals(expected, union, "attempt " + attempt);
+            bus.close();
         }
+    }
+
+    /**
+     * Publishes and waits for delivery, returning the clean-delivery count.
+     *
+     * <p>Delivery no longer happens on the publishing thread, so a test that
+     * asserts on what listeners saw has to wait for it. The continuation is the
+     * wait: it runs on the delivery thread after every listener has been given
+     * the event, which is exactly the barrier a test needs and exactly what the
+     * private-message acknowledgement uses in production.
+     */
+    private static int deliver(EventBus<Signal> bus, Signal event) {
+        AtomicInteger delivered = new AtomicInteger(-1);
+        CountDownLatch done = new CountDownLatch(1);
+        bus.publish(event, count -> {
+            delivered.set(count);
+            done.countDown();
+        });
+        await(done);
+        return delivered.get();
     }
 
     private static void await(CountDownLatch latch) {
@@ -304,7 +485,7 @@ class EventBusTest {
         bus.clear();
 
         assertEquals(0, bus.listenerCount());
-        assertEquals(0, bus.publish(new Signal.Added(1)));
+        assertEquals(0, deliver(bus, new Signal.Added(1)));
         assertTrue(sink.warnings.isEmpty());
     }
 }

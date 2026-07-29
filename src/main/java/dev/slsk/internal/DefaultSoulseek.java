@@ -43,25 +43,38 @@ public final class DefaultSoulseek implements Soulseek {
     private final DefaultShares shares;
     private final AtomicBoolean closed = new AtomicBoolean();
 
+    /**
+     * Every bus this client owns, so {@link #close()} can stop every delivery
+     * thread. One per facet, plus the mesh bus the diagnostics facet holds
+     * alongside its own.
+     */
+    private final java.util.List<EventBus<?>> buses = new java.util.ArrayList<>();
+
     private DefaultSoulseek(
             SoulseekEngine client, DefaultConnection.Credentials credentials, dev.slsk.spi.TransferStore store) {
         this.client = Objects.requireNonNull(client, "client");
         DiagnosticSink diagnostics = client.getDiagnostic();
-        this.connection = new DefaultConnection(client, credentials, new EventBus<>("connection", diagnostics));
-        this.chat = new DefaultChat(client, new EventBus<>("chat", diagnostics), diagnostics);
+        this.connection = new DefaultConnection(client, credentials, bus("connection", diagnostics));
+        this.chat = new DefaultChat(client, bus("chat", diagnostics), diagnostics);
         this.me = new DefaultMe(
-                client, dev.slsk.Username.of(credentials.username()), new EventBus<>("me", diagnostics), diagnostics);
-        this.users = new DefaultUsers(client, new EventBus<>("users", diagnostics), diagnostics);
-        this.diagnostics = new DefaultDiagnostics(
-                client, new EventBus<>("diagnostics", diagnostics), new EventBus<>("mesh", diagnostics));
-        this.rooms = new DefaultRooms(client, new EventBus<>("rooms", diagnostics));
-        this.search = new DefaultSearch(client, new EventBus<>("search", diagnostics));
-        this.downloads = new DefaultDownloads(client, new EventBus<>("downloads", diagnostics), store);
-        this.uploads = new DefaultUploads(client, new EventBus<>("uploads", diagnostics));
-        this.shares = new DefaultShares(client, new EventBus<>("shares", diagnostics));
+                client, dev.slsk.Username.of(credentials.username()), bus("me", diagnostics), diagnostics);
+        this.users = new DefaultUsers(client, bus("users", diagnostics), diagnostics);
+        this.diagnostics = new DefaultDiagnostics(client, bus("diagnostics", diagnostics), bus("mesh", diagnostics));
+        this.rooms = new DefaultRooms(client, bus("rooms", diagnostics));
+        this.search = new DefaultSearch(client, bus("search", diagnostics));
+        this.downloads = new DefaultDownloads(client, bus("downloads", diagnostics), store);
+        this.uploads = new DefaultUploads(client, bus("uploads", diagnostics));
+        this.shares = new DefaultShares(client, bus("shares", diagnostics));
         // Metrics counts transfers, and the facets that hold them are built
         // after the one that reports on them.
         this.diagnostics.bind(downloads, uploads);
+    }
+
+    /** Creates a bus and records it, so close() can stop its delivery thread. */
+    private <T> EventBus<T> bus(String name, DiagnosticSink diagnostics) {
+        EventBus<T> created = new EventBus<>(name, diagnostics);
+        buses.add(created);
+        return created;
     }
 
     /**
@@ -174,6 +187,9 @@ public final class DefaultSoulseek implements Soulseek {
             downloads.close();
             search.close();
             client.close();
+            // Last: a facet closing above may still publish a terminal event,
+            // and a bus stopped before that would drop it.
+            buses.forEach(EventBus::close);
         }
     }
 

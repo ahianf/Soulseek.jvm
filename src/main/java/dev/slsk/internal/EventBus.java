@@ -10,8 +10,11 @@ import dev.slsk.internal.diagnostics.DiagnosticSink;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 
 /**
@@ -49,14 +52,44 @@ import java.util.function.Supplier;
  * after the capture is not in it, and its subscription began after the change
  * was already visible to a snapshot.
  *
- * <p>Ordering is guaranteed per bus, not across buses. Delivery is synchronous
- * on the publishing thread, which matches the behaviour being replaced and is
- * what makes the clean-delivery count meaningful — the private-message
- * acknowledgement depends on it.
+ * <p><strong>Delivery is not on the publishing thread.</strong> One virtual
+ * thread per bus takes from a bounded queue and runs the listeners, because the
+ * publishing thread is a network read loop: a private message arriving on the
+ * server connection used to run the consumer's listener and then a full
+ * acknowledgement round trip before the loop could read the next protocol
+ * message, so one slow listener stalled chat, room messages, user status and
+ * ticker updates alike. That is not listener misbehaviour — writing to a
+ * database on a chat message is the obviously reasonable thing to do — and the
+ * library is the wrong place for the cost to land.
+ *
+ * <p>Ordering is guaranteed per bus, not across buses: one queue and one thread
+ * per bus is what guarantees it. <strong>An overflowing queue blocks the
+ * publisher rather than dropping.</strong> A dropped event is a lost chat
+ * message or a lost terminal state; blocking degrades, under sustained
+ * overload only, to exactly the behaviour this replaces, and is therefore never
+ * worse than what was there.
+ *
+ * <p>The clean-delivery count that the private-message acknowledgement depends
+ * on is still exact. It cannot be returned to a publisher that has already
+ * moved on, so {@link #publish(Object, IntConsumer)} takes a continuation and
+ * runs it on the delivery thread once every listener has been given the event.
  *
  * @param <T> the facet's event type
  */
-public final class EventBus<T> implements EventStream<T> {
+public final class EventBus<T> implements EventStream<T>, AutoCloseable {
+
+    /**
+     * How many events may be waiting before a publisher blocks.
+     *
+     * <p>Large enough that no burst a read loop can produce reaches it, small
+     * enough that a listener wedged forever cannot grow the queue without
+     * bound. The number is a backstop, not a tuning knob: the design decision
+     * is that reaching it blocks.
+     */
+    private static final int CAPACITY = 1024;
+
+    /** How long {@link #close()} waits for a listener already running. */
+    private static final long CLOSE_TIMEOUT_MILLIS = 2_000;
 
     private final String name;
     private final DiagnosticSink diagnostics;
@@ -66,15 +99,21 @@ public final class EventBus<T> implements EventStream<T> {
 
     private final List<Registration<T>> registrations = new ArrayList<>();
 
+    private final BlockingQueue<Delivery<T>> pending = new ArrayBlockingQueue<>(CAPACITY);
+    private final AtomicBoolean closed = new AtomicBoolean();
+    private final Thread deliveryThread;
+
     /**
      * Creates a bus.
      *
-     * @param name the facet name, used only in diagnostic messages
+     * @param name the facet name, used in diagnostic messages and the delivery
+     *     thread's name
      * @param diagnostics where a throwing listener is reported
      */
     public EventBus(String name, DiagnosticSink diagnostics) {
         this.name = Objects.requireNonNull(name, "name");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
+        this.deliveryThread = Thread.ofVirtual().name("soulseek-events-" + name).start(this::deliverContinuously);
     }
 
     @Override
@@ -119,11 +158,29 @@ public final class EventBus<T> implements EventStream<T> {
      * #mutateAndPublish} instead, or {@link #attach} has a race.
      *
      * @param event the event
-     * @return how many listeners accepted it without throwing
      */
-    public int publish(T event) {
+    public void publish(T event) {
+        publish(event, null);
+    }
+
+    /**
+     * Publishes an event and runs {@code continuation} once it has been
+     * delivered.
+     *
+     * <p>The continuation receives how many listeners accepted the event
+     * without throwing, and runs on the delivery thread — so whatever it does
+     * next is off the read loop too. That is what the private-message
+     * acknowledgement needs: the rule is unchanged, acknowledge if and only if
+     * at least one listener took the message cleanly, but the round trip that
+     * carries it no longer sits between two protocol messages.
+     *
+     * @param event the event
+     * @param continuation what to do with the clean-delivery count, or
+     *     {@code null}
+     */
+    public void publish(T event, IntConsumer continuation) {
         Objects.requireNonNull(event, "event");
-        return dispatch(event, capture());
+        enqueue(new Delivery<>(event, capture(), continuation));
     }
 
     /**
@@ -140,21 +197,19 @@ public final class EventBus<T> implements EventStream<T> {
      * @param change applies the change and returns the event describing it, or
      *     {@code null} to publish nothing. Invoked once, under the lock. It must
      *     not block, and must not call back into this bus.
-     * @return how many listeners accepted the event without throwing; zero if
-     *     nothing was published
      */
-    public int mutateAndPublish(Supplier<T> change) {
+    public void mutateAndPublish(Supplier<T> change) {
         Objects.requireNonNull(change, "change");
         T event;
         List<Registration<T>> targets;
         synchronized (gate) {
             event = change.get();
             if (event == null) {
-                return 0;
+                return;
             }
             targets = new ArrayList<>(registrations);
         }
-        return dispatch(event, targets);
+        enqueue(new Delivery<>(event, targets, null));
     }
 
     /**
@@ -183,10 +238,86 @@ public final class EventBus<T> implements EventStream<T> {
         }
     }
 
+    /**
+     * Stops the delivery thread.
+     *
+     * <p>Whatever is still queued is dropped, deliberately: the client is going
+     * away, and a consumer that has asked for that is not waiting to be told
+     * about events from before it asked. A listener already running is given
+     * {@link #CLOSE_TIMEOUT_MILLIS} to finish, because it is consumer code and
+     * nothing here can make it stop.
+     */
+    @Override
+    public void close() {
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
+        clear();
+        deliveryThread.interrupt();
+        try {
+            deliveryThread.join(CLOSE_TIMEOUT_MILLIS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     /** Drops every listener. Called when the client closes. */
     public void clear() {
         synchronized (gate) {
             registrations.clear();
+        }
+    }
+
+    /**
+     * Hands one delivery to the delivery thread, blocking if it is behind.
+     *
+     * <p>Uninterruptibly: an interrupt belongs to whatever the publisher does
+     * next, and a read loop that is interrupted mid-publish must still not lose
+     * the event it was carrying.
+     */
+    private void enqueue(Delivery<T> delivery) {
+        if (closed.get()) {
+            return;
+        }
+        boolean interrupted = false;
+        try {
+            while (true) {
+                try {
+                    pending.put(delivery);
+                    return;
+                } catch (InterruptedException exception) {
+                    interrupted = true;
+                }
+            }
+        } finally {
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    /** The delivery thread: take one, deliver it, tell whoever asked. */
+    private void deliverContinuously() {
+        while (true) {
+            Delivery<T> delivery;
+            try {
+                delivery = pending.take();
+            } catch (InterruptedException interrupted) {
+                return;
+            }
+            int delivered = dispatch(delivery.event(), delivery.targets());
+            IntConsumer continuation = delivery.continuation();
+            if (continuation == null) {
+                continue;
+            }
+            try {
+                continuation.accept(delivered);
+            } catch (RuntimeException | Error exception) {
+                diagnostics.warning(
+                        "The continuation for a " + name + " event threw "
+                                + exception.getClass().getName() + "; it was contained",
+                        exception);
+            }
         }
     }
 
@@ -244,4 +375,15 @@ public final class EventBus<T> implements EventStream<T> {
             return type == null || type.isInstance(event);
         }
     }
+
+    /**
+     * One event, the listeners it was captured against, and what to do after.
+     *
+     * <p>The listener list travels with the event rather than being read at
+     * delivery time. That is what preserves {@link #attach}'s atomicity now
+     * that delivery is later than publication: a listener that attached after
+     * the capture is not in it, and its own snapshot already includes whatever
+     * this event describes.
+     */
+    private record Delivery<T>(T event, List<Registration<T>> targets, IntConsumer continuation) {}
 }
