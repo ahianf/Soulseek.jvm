@@ -24,7 +24,8 @@ class EngineLiveIT {
     @DisplayName("Client connects")
     void clientConnects() {
         LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
-        try (SoulseekEngine client = new SoulseekEngine(credentials.minorVersion())) {
+        try (SoulseekEngine client =
+                new SoulseekEngine(credentials.minorVersion(), LiveIntegrationSettings.options())) {
             assertDoesNotThrow(() -> client.connect(credentials.username(), credentials.password()));
             assertEquals(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN), client.getState());
         }
@@ -34,7 +35,8 @@ class EngineLiveIT {
     @DisplayName("Client connect raises StateChanged event")
     void clientConnectRaisesStateChangedEvent() {
         LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
-        try (SoulseekEngine client = new SoulseekEngine(credentials.minorVersion())) {
+        try (SoulseekEngine client =
+                new SoulseekEngine(credentials.minorVersion(), LiveIntegrationSettings.options())) {
             List<SoulseekClientStateChangedEvent> events = new ArrayList<>();
             client.events()
                     .on(
@@ -59,7 +61,8 @@ class EngineLiveIT {
     @DisplayName("Client disconnects")
     void clientDisconnects() {
         LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
-        try (SoulseekEngine client = new SoulseekEngine(credentials.minorVersion())) {
+        try (SoulseekEngine client =
+                new SoulseekEngine(credentials.minorVersion(), LiveIntegrationSettings.options())) {
             client.connect(credentials.username(), credentials.password());
 
             assertDoesNotThrow(() -> client.disconnect());
@@ -72,7 +75,8 @@ class EngineLiveIT {
     void clientDisconnectRaisesStateChangedEvent() {
         LiveIntegrationSettings.Credentials credentials = LiveIntegrationSettings.requireCredentials();
         AtomicReference<SoulseekClientStateChangedEvent> event = new AtomicReference<>();
-        try (SoulseekEngine client = new SoulseekEngine(credentials.minorVersion())) {
+        try (SoulseekEngine client =
+                new SoulseekEngine(credentials.minorVersion(), LiveIntegrationSettings.options())) {
             client.connect(credentials.username(), credentials.password());
             client.events()
                     .on(
