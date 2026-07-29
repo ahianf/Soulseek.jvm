@@ -252,7 +252,6 @@ final class SoulseekEngine implements AutoCloseable {
         this.transfers = new TransferDomain(
                 this::getOptions,
                 diagnostic,
-                events::raise,
                 this.waiter,
                 this::getPeerConnectionManager,
                 users::getUserEndpoint,

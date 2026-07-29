@@ -377,8 +377,6 @@ class EngineTest {
             "SearchStateChanged",
             "ServerInfoReceived",
             "StateChanged",
-            "TransferProgressUpdated",
-            "TransferStateChanged",
             "UserCannotConnect",
             "UserStatisticsChanged",
             "UserStatusChanged"

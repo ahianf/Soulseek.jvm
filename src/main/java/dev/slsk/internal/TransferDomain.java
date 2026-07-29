@@ -6,6 +6,7 @@ package dev.slsk.internal;
 import dev.slsk.CancellationController;
 import dev.slsk.CancellationSignal;
 import dev.slsk.TransferId;
+import dev.slsk.TransferOutcome;
 import dev.slsk.UserProfile;
 import dev.slsk.Username;
 import dev.slsk.exceptions.DuplicateTokenException;
@@ -81,16 +82,6 @@ final class TransferDomain implements PeerServices {
 
     final DiagnosticSink diagnostic;
     final Waiter waiter;
-
-    /**
-     * Where a run announces a state change or a progress sample.
-     *
-     * <p>The engine's own broadcast, which the downloads facet subscribes to and
-     * correlates back by token. It is the bridge between the two transfer models
-     * this goal is closing, and it goes when the facet stops needing it.
-     */
-    final java.util.function.BiConsumer<EngineEvents.Kind, Object> events;
-
     private final Supplier<PeerConnectionManager> peers;
     private final EndpointResolver endpoints;
     private final ServerLink server;
@@ -169,7 +160,6 @@ final class TransferDomain implements PeerServices {
     TransferDomain(
             Supplier<SoulseekClientOptions> options,
             DiagnosticSink diagnostic,
-            java.util.function.BiConsumer<EngineEvents.Kind, Object> events,
             Waiter waiter,
             Supplier<PeerConnectionManager> peers,
             EndpointResolver endpoints,
@@ -183,7 +173,6 @@ final class TransferDomain implements PeerServices {
             Predicate<String> privileged) {
         this.options = Objects.requireNonNull(options, "options");
         this.diagnostic = Objects.requireNonNull(diagnostic, "diagnostic");
-        this.events = Objects.requireNonNull(events, "events");
         this.waiter = Objects.requireNonNull(waiter, "waiter");
         this.peers = Objects.requireNonNull(peers, "peers");
         this.endpoints = Objects.requireNonNull(endpoints, "endpoints");
@@ -375,7 +364,7 @@ final class TransferDomain implements PeerServices {
             // Already on a virtual thread of its own, so the upload is simply
             // waited for.
             try {
-                Transfer transfer = upload(UploadRequest.fromStream(user.value(), path, file.size(), offset -> {
+                TransferOutcome outcome = upload(UploadRequest.fromStream(user.value(), path, file.size(), offset -> {
                             try {
                                 return java.nio.channels.Channels.newInputStream(file.open(offset));
                             } catch (IOException failure) {
@@ -385,7 +374,9 @@ final class TransferDomain implements PeerServices {
                         .token(token)
                         .cancellation(cancellation.getSignal())
                         .build());
-                admission.served(user, transfer.getBytesTransferred());
+                if (outcome instanceof TransferOutcome.Succeeded succeeded) {
+                    admission.served(user, succeeded.bytes());
+                }
             } catch (RuntimeException failure) {
                 diagnostic.warning("Failed to serve an upload of " + path + " to " + user, failure);
             } finally {
@@ -468,16 +459,19 @@ final class TransferDomain implements PeerServices {
      * and choosing between them is a property of the request, not of the
      * caller.
      *
+     * <p>Returns how the transfer ended rather than throwing when it ends
+     * badly. Rejected, cancelled and failed are things a transfer does, not
+     * exceptional control flow, and the queue above this decides what to do
+     * about each. What still throws is a request that never became a transfer
+     * at all: a bad argument, a client that is not logged in, a duplicate token
+     * or a duplicate transfer.
+     *
      * @param request the download to perform
-     * @return the completed transfer
+     * @return how it ended
      */
-    Transfer download(DownloadRequest request) {
+    TransferOutcome download(DownloadRequest request) {
         Objects.requireNonNull(request, "request");
-        try {
-            return request.isToStream() ? downloadToStream(request) : downloadToFile(request);
-        } catch (Throwable failure) {
-            throw Failures.surface(failure);
-        }
+        return Transfers.outcomeOf(request.isToStream() ? downloadToStream(request) : downloadToFile(request));
     }
 
     /**
@@ -486,15 +480,11 @@ final class TransferDomain implements PeerServices {
      * <p>The counterpart to {@link #download(DownloadRequest)}; see there.
      *
      * @param request the upload to perform
-     * @return the completed transfer
+     * @return how it ended
      */
-    Transfer upload(UploadRequest request) {
+    TransferOutcome upload(UploadRequest request) {
         Objects.requireNonNull(request, "request");
-        try {
-            return request.isFromStream() ? uploadFromStream(request) : uploadFromFile(request);
-        } catch (Throwable failure) {
-            throw Failures.surface(failure);
-        }
+        return Transfers.outcomeOf(request.isFromStream() ? uploadFromStream(request) : uploadFromFile(request));
     }
 
     /** Downloads to a local path, opening it as the destination stream. */

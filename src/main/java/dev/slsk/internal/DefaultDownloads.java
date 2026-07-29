@@ -19,6 +19,7 @@ import dev.slsk.events.DownloadEvent;
 import dev.slsk.exceptions.TransferNotFoundException;
 import dev.slsk.internal.messaging.handlers.PeerServices;
 import dev.slsk.internal.messaging.messages.TransferRequest;
+import dev.slsk.internal.options.TransferOptions;
 import dev.slsk.spi.TransferStore;
 import java.io.IOException;
 import java.time.Instant;
@@ -52,16 +53,6 @@ final class DefaultDownloads implements Downloads {
     private final EventBus<DownloadEvent> events;
     private final DownloadQueue queue;
     private final ProgressCoalescer progress = new ProgressCoalescer(System::nanoTime);
-
-    /**
-     * Which queue entry a running transfer belongs to.
-     *
-     * <p>The engine knows transfers by the token it was given; the queue knows
-     * them by the id a consumer holds. They are different because a retry is the
-     * same download and a different transfer, which is exactly the distinction
-     * the old surface could not make.
-     */
-    private final Map<Integer, TransferId> running = new ConcurrentHashMap<>();
 
     /**
      * Offers a peer has made for downloads that had not started yet.
@@ -110,21 +101,22 @@ final class DefaultDownloads implements Downloads {
                 events.publish(new DownloadEvent.QueuePositionChanged(entry.id(), place, Instant.now())));
         this.queue.positionProbe(this::place);
         client.transfers().downloadOffers(this::offered);
-        client.events().on(EngineEvents.Kind.TRANSFER_PROGRESS_UPDATED, this::onProgress);
-        client.events().on(EngineEvents.Kind.TRANSFER_STATE_CHANGED, this::onTransferState);
     }
 
     /**
      * Runs one attempt against a peer.
      *
-     * <p>Everything below here is the pre-1.0 transfer path, unchanged: the
-     * queue decides <em>whether</em> to run this, and the engine still knows
-     * <em>how</em>.
+     * <p>A direct call, and the whole of what this method is. It used to
+     * translate a queue entry into the pre-1.0 transfer path, hand the result
+     * back as a bit-flag state on a mutable transfer, correlate the engine's
+     * progress and state broadcasts back to this entry through a token map, and
+     * infer an outcome from all of it. The transfer path speaks the queue's
+     * language now: it takes a request, blocks, and says how it ended.
      */
     private TransferOutcome fetch(DownloadQueue.Entry entry) {
         DownloadRequest request = entry.request();
+        TransferId id = entry.id();
         AtomicReference<SinkOutputStream> stream = new AtomicReference<>();
-        int token = client.getNextToken();
         // What the last attempt left on disk. The peer is asked to start there
         // and the sink is opened there, so a download interrupted at ninety
         // percent costs ten percent to finish rather than another whole file.
@@ -145,30 +137,29 @@ final class DefaultDownloads implements Downloads {
                         })
                 .size(request.expectedSize() == 0 ? null : request.expectedSize())
                 .startOffset(resumeFrom)
-                .token(token)
+                .token(client.getNextToken())
                 // Present only when this attempt exists because a peer offered
                 // the file; the transfer then skips asking for what it has
                 // already been given.
                 .offer(offers.remove(new PeerFile(request.user(), request.path())))
                 .cancellation(entry.signal())
+                .options(new TransferOptions(
+                        change -> observed(id, change.transfer()), update -> progressed(id, update.transfer())))
                 .build();
 
-        running.put(token, entry.id());
         try {
-            Transfer completed = client.transfers().download(internal);
-            TransferState state = Transfers.state(completed);
-            TransferOutcome outcome = state instanceof TransferState.Finished finished
-                    ? finished.outcome()
-                    : new TransferOutcome.Succeeded(completed.getBytesTransferred(), java.time.Duration.ZERO);
+            TransferOutcome outcome = client.transfers().download(internal);
             settle(stream.get(), outcome);
             return outcome;
-        } catch (RuntimeException failure) {
-            TransferOutcome outcome = outcomeOf(failure);
+        } catch (RuntimeException refused) {
+            // A request that never became a transfer: a duplicate, or a client
+            // that is not logged in. The transfer path reports everything that
+            // happened to a transfer as an outcome.
+            TransferOutcome outcome = outcomeOf(refused);
             settle(stream.get(), outcome);
             return outcome;
         } finally {
-            running.remove(token);
-            progress.forget(entry.id());
+            progress.forget(id);
             SinkOutputStream opened = stream.get();
             entry.resumeOffset(opened == null ? resumeFrom : opened.getPosition());
         }
@@ -195,39 +186,24 @@ final class DefaultDownloads implements Downloads {
     }
 
     /**
-     * Records what the engine says a running transfer is doing.
+     * Records what the transfer says it is doing.
      *
      * <p>The queue owns queued, paused and finished; everything between them
      * belongs to the transfer, and without this a download would read as
      * {@code Requesting} from the moment it was admitted to the moment it ended.
      */
-    private void onTransferState(dev.slsk.internal.events.TransferStateChangedEvent event) {
-        if (event == null || event.getTransfer() == null) {
-            return;
-        }
-        Transfer transfer = event.getTransfer();
-        TransferId id = running.get(transfer.getToken());
-        if (id != null) {
-            queue.observed(id, Transfers.state(transfer));
-        }
+    private void observed(TransferId id, Transfer transfer) {
+        queue.observed(id, Transfers.state(transfer));
     }
 
     /**
      * Publishes progress on a fixed cadence, with the rate smoothed.
      *
-     * <p>The engine raises one of these per socket read. Most of them are
+     * <p>The transfer reports one of these per socket read. Most of them are
      * dropped here, which is the point: the event rate a consumer sees is
      * bounded by the library rather than by how fast the network happens to be.
      */
-    private void onProgress(dev.slsk.internal.events.TransferProgressUpdatedEvent event) {
-        if (event == null || event.getTransfer() == null) {
-            return;
-        }
-        Transfer transfer = event.getTransfer();
-        TransferId id = running.get(transfer.getToken());
-        if (id == null) {
-            return;
-        }
+    private void progressed(TransferId id, Transfer transfer) {
         progress.offer(id, transfer.getBytesTransferred(), transfer.getSize()).ifPresent(value -> {
             // Both, and neither is redundant. The event is for a consumer that
             // subscribes; the queue update is for one that polls `all()`, which

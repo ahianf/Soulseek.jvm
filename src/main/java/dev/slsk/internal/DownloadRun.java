@@ -12,20 +12,15 @@ import dev.slsk.CancellationController;
 import dev.slsk.CancellationSignal;
 import dev.slsk.CancellationSubscription;
 import dev.slsk.exceptions.ConnectionException;
-import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferSizeMismatchException;
 import dev.slsk.exceptions.TransferStreamException;
-import dev.slsk.exceptions.UserOfflineException;
-import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
-import dev.slsk.internal.events.TransferProgressUpdatedEvent;
-import dev.slsk.internal.events.TransferStateChangedEvent;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.messages.TransferRequest;
 import dev.slsk.internal.messaging.messages.TransferResponse;
@@ -47,7 +42,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -117,6 +111,17 @@ final class DownloadRun {
                 new WaitKey(MessageCode.Peer.TRANSFER_REQUEST, download.getUsername(), download.getFilename());
     }
 
+    /**
+     * Runs the download to a terminal state and reports what it reached.
+     *
+     * <p>Returns rather than throws. A transfer that fails is not an exceptional
+     * control flow — it is one of four things a transfer can do — and the layer
+     * above turns this snapshot into the {@code TransferOutcome} a consumer
+     * sees. What used to be here was a translation into
+     * {@code SoulseekClientException} for a caller that no longer exists.
+     *
+     * @return the transfer in its terminal state
+     */
     Transfer execute() {
         try {
             updateState(TransferState.QUEUED.or(TransferState.LOCALLY));
@@ -145,7 +150,8 @@ final class DownloadRun {
                         + offer.getToken() + ")");
                 updateState(TransferState.REQUESTED);
                 beginQueuedDownload(() -> offer, peerConnection);
-                return receiveFile();
+                receiveFile();
+                return download.toTransfer();
             }
 
             Wait<TransferResponse> transferRequestAcknowledged = domain.waiter.register(
@@ -179,14 +185,13 @@ final class DownloadRun {
                 peerConnection = beginQueuedDownload(transferStartRequested, peerConnection);
             }
 
-            return receiveFile();
+            receiveFile();
         } catch (Throwable failure) {
-            Throwable cause = Failures.unwrap(failure);
-            handleFailure(cause);
-            throw new CompletionException(mapDownloadFailure(cause));
+            handleFailure(Failures.unwrap(failure));
         } finally {
             cleanup();
         }
+        return download.toTransfer();
     }
 
     /**
@@ -197,10 +202,8 @@ final class DownloadRun {
      * a transfer connection there is exactly one way to receive bytes, and
      * keeping it in one place is what stops the offered path drifting into a
      * second, less-tested copy of the download.
-     *
-     * @return the completed transfer
      */
-    private Transfer receiveFile() throws IOException {
+    private void receiveFile() throws IOException {
         bindConnectionEvents();
         outputStream = Objects.requireNonNull(outputStreamFactory.get(), "outputStreamFactory result");
         positionOutputStream();
@@ -217,7 +220,6 @@ final class DownloadRun {
                 + " from " + download.getUsername() + " complete ("
                 + currentOutputPosition() + " of " + download.getSize() + " bytes).");
         connection.disconnect("Transfer complete");
-        return download.toTransfer();
     }
 
     private MessageConnection beginImmediateDownload(
@@ -442,22 +444,6 @@ final class DownloadRun {
         updateState(TransferState.COMPLETED.or(TransferState.ERRORED));
     }
 
-    private Throwable mapDownloadFailure(Throwable failure) {
-        if (failure instanceof TransferRejectedException
-                || failure instanceof TransferSizeMismatchException
-                || failure instanceof CancellationException
-                || failure instanceof TimeoutException
-                || failure instanceof UserOfflineException) {
-            return failure;
-        }
-        return new SoulseekClientException(
-                "Failed to download file "
-                        + download.getFilename()
-                        + " from user " + download.getUsername()
-                        + ": " + Failures.message(failure),
-                failure);
-    }
-
     private void disconnectTransfer(String message, Throwable failure) {
         if (connection != null) {
             connection.disconnect(
@@ -555,13 +541,11 @@ final class DownloadRun {
     private void updateState(TransferState state) {
         download.setState(state);
         Transfer transfer = download.toTransfer();
-        TransferStateChangedEvent eventData = new TransferStateChangedEvent(lastState, transfer);
         TransferState previous = lastState;
         lastState = state;
         if (transferOptions.getStateChanged() != null) {
             transferOptions.getStateChanged().onStateChanged(new TransferStateChange(previous, transfer));
         }
-        domain.events.accept(Kind.TRANSFER_STATE_CHANGED, eventData);
     }
 
     private void updateProgress(long bytesDownloaded) {
@@ -571,7 +555,6 @@ final class DownloadRun {
         if (transferOptions.getProgressUpdated() != null) {
             transferOptions.getProgressUpdated().onProgressUpdated(new TransferProgressUpdate(previous, transfer));
         }
-        domain.events.accept(Kind.TRANSFER_PROGRESS_UPDATED, new TransferProgressUpdatedEvent(previous, transfer));
     }
 
     private long currentOutputPosition() {

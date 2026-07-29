@@ -63,6 +63,23 @@ final class Transfers {
         return new TransferState.Queued(0);
     }
 
+    /**
+     * Returns how a finished transfer ended.
+     *
+     * <p>What the transfer path reports to everything above it. A transfer that
+     * is somehow not finished is reported as a failure rather than silently
+     * treated as a success, because the only callers are the ones that just ran
+     * it to a terminal state.
+     *
+     * @param transfer the terminal transfer
+     * @return its outcome
+     */
+    static TransferOutcome outcomeOf(Transfer transfer) {
+        return state(transfer) instanceof TransferState.Finished finished
+                ? finished.outcome()
+                : new TransferOutcome.Failed(new IllegalStateException("the transfer did not finish"), true);
+    }
+
     private static TransferOutcome outcome(Transfer transfer, dev.slsk.internal.TransferState source) {
         if (source.contains(dev.slsk.internal.TransferState.SUCCEEDED)) {
             return new TransferOutcome.Succeeded(

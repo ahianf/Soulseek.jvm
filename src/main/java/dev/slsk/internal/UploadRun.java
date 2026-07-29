@@ -11,20 +11,15 @@ import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.ConnectionReadException;
 import dev.slsk.exceptions.MessageReadException;
-import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.TransferException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferStreamException;
-import dev.slsk.exceptions.UserOfflineException;
-import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
-import dev.slsk.internal.events.TransferProgressUpdatedEvent;
-import dev.slsk.internal.events.TransferStateChangedEvent;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.messaging.messages.TransferRequest;
@@ -98,6 +93,13 @@ final class UploadRun {
         this.uniqueKey = uniqueKey;
     }
 
+    /**
+     * Runs the upload to a terminal state and reports what it reached.
+     *
+     * <p>Returns rather than throws; see {@link DownloadRun#execute()}.
+     *
+     * @return the transfer in its terminal state
+     */
     Transfer execute() {
         try {
             perUserSemaphore = domain.uploadSemaphoreFor(upload.getUsername(), cancellationSignal);
@@ -208,14 +210,12 @@ final class UploadRun {
 
             updateProgress(currentStreamPosition());
             updateState(TransferState.COMPLETED.or(TransferState.SUCCEEDED));
-            return upload.toTransfer();
         } catch (Throwable failure) {
-            Throwable cause = Failures.unwrap(failure);
-            handleFailure(cause);
-            throw new CompletionException(mapUploadFailure(cause));
+            handleFailure(Failures.unwrap(failure));
         } finally {
             cleanup();
         }
+        return upload.toTransfer();
     }
 
     private void bindConnectionEvents() {
@@ -391,20 +391,6 @@ final class UploadRun {
         updateState(TransferState.COMPLETED.or(TransferState.ERRORED));
     }
 
-    private Throwable mapUploadFailure(Throwable failure) {
-        if (failure instanceof TransferRejectedException
-                || failure instanceof CancellationException
-                || failure instanceof TimeoutException
-                || failure instanceof UserOfflineException) {
-            return failure;
-        }
-        return new SoulseekClientException(
-                "Failed to upload file " + upload.getFilename()
-                        + " to user " + upload.getUsername() + ": "
-                        + Failures.message(failure),
-                failure);
-    }
-
     private void disconnectTransfer(String message, Throwable failure) {
         if (connection != null) {
             connection.disconnect(
@@ -499,13 +485,11 @@ final class UploadRun {
     private void updateState(TransferState state) {
         upload.setState(state);
         Transfer transfer = upload.toTransfer();
-        TransferStateChangedEvent eventData = new TransferStateChangedEvent(lastState, transfer);
         TransferState previous = lastState;
         lastState = state;
         if (transferOptions.getStateChanged() != null) {
             transferOptions.getStateChanged().onStateChanged(new TransferStateChange(previous, transfer));
         }
-        domain.events.accept(Kind.TRANSFER_STATE_CHANGED, eventData);
     }
 
     private void updateProgress(long bytesUploaded) {
@@ -515,7 +499,6 @@ final class UploadRun {
         if (transferOptions.getProgressUpdated() != null) {
             transferOptions.getProgressUpdated().onProgressUpdated(new TransferProgressUpdate(previous, transfer));
         }
-        domain.events.accept(Kind.TRANSFER_PROGRESS_UPDATED, new TransferProgressUpdatedEvent(previous, transfer));
     }
 
     private long currentStreamPosition() {

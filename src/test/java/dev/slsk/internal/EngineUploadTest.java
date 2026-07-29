@@ -14,15 +14,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationController;
 import dev.slsk.CancellationSignal;
+import dev.slsk.TransferOutcome;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.ConnectionReadException;
 import dev.slsk.exceptions.DuplicateTokenException;
 import dev.slsk.exceptions.DuplicateTransferException;
-import dev.slsk.exceptions.NoResponseException;
-import dev.slsk.exceptions.SoulseekClientException;
+import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.exceptions.TransferException;
 import dev.slsk.exceptions.TransferRejectedException;
-import dev.slsk.internal.EngineEvents.Kind;
+import dev.slsk.exceptions.TransferStreamException;
 import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
@@ -134,18 +134,20 @@ class EngineUploadTest {
             CancellationController source = new CancellationController();
             fixture.transfer.size = 0;
 
-            Transfer result = fixture.client
+            Timeline timeline = new Timeline();
+
+            TransferOutcome outcome = fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "empty", 0, offset -> completedStream(new byte[0]))
                             .token(41)
-                            .options(options(20))
+                            .options(timeline.on(options(20)))
                             .cancellation(source.getSignal())
                             .build());
 
-            assertEquals(0, result.getSize());
+            assertEquals(0, timeline.last().getSize());
             assertSame(source.getSignal(), fixture.message.lastToken);
             assertSame(source.getSignal(), fixture.peerManager.transferToken);
-            assertTrue(result.getState().contains(TransferState.SUCCEEDED));
+            assertInstanceOf(TransferOutcome.Succeeded.class, outcome);
         }
     }
 
@@ -155,14 +157,16 @@ class EngineUploadTest {
         byte[] bytes = new byte[] {5, 4, 3, 2, 1};
         Files.write(file, bytes);
         try (Fixture fixture = new Fixture()) {
-            Transfer result = fixture.client
+            Timeline timeline = new Timeline();
+
+            fixture.client
                     .transfers()
                     .upload(UploadRequest.fromFile("alice", "remote", file.toString())
                             .token(7)
-                            .options(options(20))
+                            .options(timeline.on(options(20)))
                             .build());
 
-            assertEquals(bytes.length, result.getSize());
+            assertEquals(bytes.length, timeline.last().getSize());
             assertArrayEquals(bytes, fixture.transfer.written.toByteArray());
         } finally {
             Files.deleteIfExists(file);
@@ -227,14 +231,14 @@ class EngineUploadTest {
             fixture.client.getUploadRegistry().put(8, transfer(TransferDirection.UPLOAD, "alice", "other", 8));
             fixture.client.getUploadRegistry().put(9, transfer(TransferDirection.UPLOAD, "other", "file", 9));
 
-            Transfer result = fixture.client
+            TransferOutcome outcome = fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(10)
                             .options(options(20))
                             .build());
 
-            assertTrue(result.getState().contains(TransferState.SUCCEEDED));
+            assertInstanceOf(TransferOutcome.Succeeded.class, outcome);
         }
     }
 
@@ -264,7 +268,7 @@ class EngineUploadTest {
                     },
                     null);
 
-            CompletableFuture<Transfer> upload = inBackground(() -> fixture.client
+            CompletableFuture<TransferOutcome> upload = inBackground(() -> fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(12)
@@ -276,7 +280,7 @@ class EngineUploadTest {
             assertFalse(upload.isDone());
 
             fixture.waiter.transferResponse.complete(new TransferResponse(12));
-            assertTrue(upload.join().getState().contains(TransferState.SUCCEEDED));
+            assertInstanceOf(TransferOutcome.Succeeded.class, upload.join());
             assertFalse(fixture.client.getUploadRegistry().containsKey(12));
         }
     }
@@ -286,24 +290,11 @@ class EngineUploadTest {
         try (Fixture fixture = new Fixture()) {
             byte[] bytes = new byte[] {1, 2, 3, 4};
             List<TransferState> optionStates = new ArrayList<>();
-            List<TransferState> eventStates = new ArrayList<>();
-            List<Long> progress = new ArrayList<>();
-            fixture.client
-                    .events()
-                    .on(
-                            Kind.TRANSFER_STATE_CHANGED,
-                            (dev.slsk.internal.events.TransferStateChangedEvent eventData) ->
-                                    eventStates.add(eventData.getTransfer().getState()));
-            fixture.client
-                    .events()
-                    .on(
-                            Kind.TRANSFER_PROGRESS_UPDATED,
-                            (dev.slsk.internal.events.TransferProgressUpdatedEvent eventData) ->
-                                    progress.add(eventData.getTransfer().getBytesTransferred()));
-            TransferOptions options = options(
-                    20, null, change -> optionStates.add(change.transfer().getState()), null);
+            Timeline timeline = new Timeline();
+            TransferOptions options = timeline.on(options(
+                    20, null, change -> optionStates.add(change.transfer().getState()), null));
 
-            Transfer result = fixture.client
+            fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream(
                                     "alice", "remote\\file", bytes.length, offset -> completedStream(bytes))
@@ -317,9 +308,9 @@ class EngineUploadTest {
                     TransferState.INITIALIZING,
                     TransferState.IN_PROGRESS,
                     TransferState.COMPLETED.or(TransferState.SUCCEEDED));
-            assertEquals(expected, optionStates);
-            assertEquals(expected, eventStates);
-            assertEquals(bytes.length, result.getBytesTransferred());
+            assertEquals(expected, optionStates, "a caller's own callback still sees every transition");
+            assertEquals(expected, timeline.states());
+            assertEquals(bytes.length, timeline.last().getBytesTransferred());
             assertArrayEquals(bytes, fixture.transfer.written.toByteArray());
             assertEquals(bytes.length, fixture.transfer.writeLength);
             TransferRequest request = assertInstanceOf(TransferRequest.class, fixture.message.messages.get(0));
@@ -327,8 +318,8 @@ class EngineUploadTest {
             assertEquals(22, request.getToken());
             assertEquals("remote\\file", request.getFilename());
             assertEquals(bytes.length, request.getFileSize());
-            assertTrue(progress.contains(0L));
-            assertTrue(progress.contains((long) bytes.length));
+            assertTrue(timeline.progress.contains(0L));
+            assertTrue(timeline.progress.contains((long) bytes.length));
             assertFalse(fixture.client.getUploadRegistry().containsKey(22));
             assertFalse(fixture.client.getUniqueKeys().containsKey("Upload:alice:remote\\file"));
         }
@@ -340,17 +331,19 @@ class EngineUploadTest {
             fixture.transfer.offset = 2;
             byte[] bytes = new byte[] {1, 2, 3, 4, 5};
 
-            Transfer result = fixture.client
+            Timeline timeline = new Timeline();
+
+            fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "file", bytes.length, offset -> completedStream(bytes))
                             .token(31)
-                            .options(options(20))
+                            .options(timeline.on(options(20)))
                             .build());
 
-            assertEquals(2, result.getStartOffset());
+            assertEquals(2, timeline.last().getStartOffset());
             assertEquals(3, fixture.transfer.writeLength);
             assertArrayEquals(new byte[] {3, 4, 5}, fixture.transfer.written.toByteArray());
-            assertEquals(5, result.getBytesTransferred());
+            assertEquals(5, timeline.last().getBytesTransferred());
         }
     }
 
@@ -359,16 +352,18 @@ class EngineUploadTest {
         try (Fixture fixture = new Fixture()) {
             fixture.transfer.offset = 3;
 
-            Transfer result = fixture.client
+            Timeline timeline = new Timeline();
+
+            fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream(
                                     "alice", "file", 3, offset -> completedStream(new byte[] {1, 2, 3}))
                             .token(32)
-                            .options(options(20))
+                            .options(timeline.on(options(20)))
                             .build());
 
             assertEquals(0, fixture.transfer.writeCalls);
-            assertEquals(3, result.getBytesTransferred());
+            assertEquals(3, timeline.last().getBytesTransferred());
         }
     }
 
@@ -376,18 +371,17 @@ class EngineUploadTest {
     void rejectsOffsetBeyondSizeAndNonSeekableResume() {
         try (Fixture fixture = new Fixture()) {
             fixture.transfer.offset = 4;
-            Throwable tooLong = failureOf(() -> fixture.client
+            TransferOutcome tooLong = fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream(
                                     "alice", "file", 3, offset -> completedStream(new byte[] {1, 2, 3}))
                             .token(33)
                             .options(options(20))
-                            .build()));
-            assertInstanceOf(SoulseekClientException.class, tooLong);
-            assertInstanceOf(TransferException.class, tooLong.getCause());
+                            .build());
+            assertInstanceOf(TransferException.class, causeOf(tooLong));
 
             fixture.transfer.offset = 1;
-            Throwable notSeekable = failureOf(() -> fixture.client
+            TransferOutcome notSeekable = fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "other", 2, offset -> (new InputStream() {
                                 @Override
@@ -397,8 +391,8 @@ class EngineUploadTest {
                             }))
                             .token(34)
                             .options(options(20))
-                            .build()));
-            assertInstanceOf(SoulseekClientException.class, notSeekable);
+                            .build());
+            assertInstanceOf(TransferStreamException.class, causeOf(notSeekable));
         }
     }
 
@@ -408,16 +402,18 @@ class EngineUploadTest {
             fixture.transfer.offset = 1;
             TransferOptions options = new TransferOptions(null, null, null, null, 20, false);
 
-            Transfer result = fixture.client
+            Timeline timeline = new Timeline();
+
+            fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream(
                                     "alice", "file", 3, offset -> completedStream(new byte[] {9, 8, 7}))
                             .token(35)
-                            .options(options)
+                            .options(timeline.on(options))
                             .build());
 
             assertArrayEquals(new byte[] {9, 8}, fixture.transfer.written.toByteArray());
-            assertEquals(3, result.getBytesTransferred());
+            assertEquals(3, timeline.last().getBytesTransferred());
         }
     }
 
@@ -449,26 +445,21 @@ class EngineUploadTest {
     void rejectionSetsFinalStatePreservesExceptionAndNotifiesPeer() {
         try (Fixture fixture = new Fixture()) {
             fixture.waiter.transferResponse = CompletableFuture.completedFuture(new TransferResponse(40, "not shared"));
-            List<Transfer> terminal = new ArrayList<>();
-            fixture.client
-                    .events()
-                    .on(Kind.TRANSFER_STATE_CHANGED, (dev.slsk.internal.events.TransferStateChangedEvent eventData) -> {
-                        if (eventData.getTransfer().getState().contains(TransferState.COMPLETED)) {
-                            terminal.add(eventData.getTransfer());
-                        }
-                    });
+            Timeline timeline = new Timeline();
 
-            Throwable failure = failureOf(() -> fixture.client
+            TransferOutcome outcome = fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(40)
-                            .options(options(20))
-                            .build()));
+                            .options(timeline.on(options(20)))
+                            .build());
 
-            assertInstanceOf(TransferRejectedException.class, failure);
-            assertEquals(1, terminal.size());
-            assertTrue(terminal.get(0).getState().contains(TransferState.REJECTED));
-            assertSame(failure, terminal.get(0).getException());
+            assertEquals(
+                    "Transfer rejected: not shared",
+                    assertInstanceOf(TransferOutcome.Rejected.class, outcome).rawMessage());
+            assertTrue(timeline.terminal().getState().contains(TransferState.REJECTED));
+            assertInstanceOf(
+                    TransferRejectedException.class, timeline.terminal().getException());
             assertInstanceOf(UploadFailed.class, fixture.message.messages.get(fixture.message.messages.size() - 1));
         }
     }
@@ -495,18 +486,15 @@ class EngineUploadTest {
                     },
                     transfer -> released.incrementAndGet());
 
-            Throwable failure = failureOf(() -> fixture.client
+            TransferOutcome outcome = fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(41)
                             .options(options)
                             .cancellation(cancelled.getSignal())
-                            .build()));
+                            .build());
 
-            // Cancellation surfaces as CancellationException; the exact
-            // instance was observable only while the future was the return
-            // value. See the matching note in EngineDownloadTest.
-            assertInstanceOf(CancellationException.class, failure);
+            assertInstanceOf(TransferOutcome.Cancelled.class, outcome);
             assertTrue(terminal.get(0).getState().contains(TransferState.CANCELLED));
             assertEquals(0, released.get(), "a slot that was not acquired is not released");
             assertInstanceOf(UploadDenied.class, fixture.message.messages.get(fixture.message.messages.size() - 1));
@@ -529,16 +517,16 @@ class EngineUploadTest {
                     },
                     null);
 
-            Throwable failure = failureOf(() -> fixture.client
+            TransferOutcome outcome = fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(42)
                             .options(options)
-                            .build()));
+                            .build());
 
-            assertSame(
-                    timeout,
-                    assertInstanceOf(NoResponseException.class, failure).getCause());
+            // The deadline itself, rather than the NoResponseException the old
+            // blocking wrapper renamed it to on the way out.
+            assertSame(timeout, causeOf(outcome));
             assertTrue(terminal.get(0).getState().contains(TransferState.TIMED_OUT));
         }
     }
@@ -552,15 +540,15 @@ class EngineUploadTest {
     @Test
     void aSourceThatWillNotOpenIsWrappedAndTheSlotIsStillReleased() {
         try (Fixture fixture = new Fixture()) {
-            Throwable failure = failureOf(() -> fixture.client
+            TransferOutcome outcome = fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "file", 1, offset -> {
                                 throw new java.io.UncheckedIOException(new java.io.IOException("source is gone"));
                             })
                             .token(43)
                             .options(options(20))
-                            .build()));
-            assertInstanceOf(SoulseekClientException.class, failure);
+                            .build());
+            assertInstanceOf(java.io.UncheckedIOException.class, causeOf(outcome));
 
             AtomicInteger released = new AtomicInteger();
             fixture.client
@@ -603,25 +591,24 @@ class EngineUploadTest {
     void malformedOffsetAndWriteFailureAreWrappedAndCleanedUp() {
         try (Fixture fixture = new Fixture()) {
             fixture.transfer.offsetBytes = new byte[] {1, 2};
-            Throwable malformed = failureOf(() -> fixture.client
+            TransferOutcome malformed = fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(47)
                             .options(options(20))
-                            .build()));
-            assertInstanceOf(SoulseekClientException.class, malformed);
+                            .build());
+            assertInstanceOf(MessageReadException.class, causeOf(malformed));
             assertFalse(fixture.client.getUploadRegistry().containsKey(47));
 
             fixture.transfer.offsetBytes = null;
             fixture.transfer.writeFailure = new IOException("write failed");
-            Throwable write = failureOf(() -> fixture.client
+            TransferOutcome write = fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "other", 1, offset -> completedStream(new byte[] {1}))
                             .token(48)
                             .options(options(20))
-                            .build()));
-            assertInstanceOf(SoulseekClientException.class, write);
-            assertSame(fixture.transfer.writeFailure, write.getCause());
+                            .build());
+            assertSame(fixture.transfer.writeFailure, causeOf(write));
             assertFalse(fixture.client.getUniqueKeys().containsKey("Upload:alice:other"));
         }
     }
@@ -631,28 +618,73 @@ class EngineUploadTest {
         try (Fixture fixture = new Fixture()) {
             IOException socketFailure = new IOException("socket failed");
             fixture.transfer.disconnectOnWrite = socketFailure;
-            List<Transfer> terminal = new ArrayList<>();
-            fixture.client
-                    .events()
-                    .on(Kind.TRANSFER_STATE_CHANGED, (dev.slsk.internal.events.TransferStateChangedEvent eventData) -> {
-                        if (eventData.getTransfer().getState().contains(TransferState.COMPLETED)) {
-                            terminal.add(eventData.getTransfer());
-                        }
-                    });
+            Timeline timeline = new Timeline();
 
-            Throwable failure = failureOf(() -> fixture.client
+            TransferOutcome outcome = fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(49)
-                            .options(options(20))
-                            .build()));
+                            .options(timeline.on(options(20)))
+                            .build());
 
-            SoulseekClientException mapped = assertInstanceOf(SoulseekClientException.class, failure);
-            ConnectionException connection = assertInstanceOf(ConnectionException.class, mapped.getCause());
+            ConnectionException connection = assertInstanceOf(ConnectionException.class, causeOf(outcome));
             assertSame(socketFailure, connection.getCause());
-            assertSame(connection, terminal.get(0).getException());
-            assertTrue(terminal.get(0).getState().contains(TransferState.ERRORED));
+            assertSame(connection, timeline.terminal().getException());
+            assertTrue(timeline.terminal().getState().contains(TransferState.ERRORED));
         }
+    }
+
+    /**
+     * Every snapshot a transfer published; see the twin in
+     * {@code EngineDownloadTest}.
+     */
+    private static final class Timeline {
+        private final List<Transfer> snapshots = new ArrayList<>();
+        private final List<Long> progress = new ArrayList<>();
+
+        private TransferOptions on(TransferOptions base) {
+            return new TransferOptions(
+                    change -> {
+                        snapshots.add(change.transfer());
+                        if (base.getStateChanged() != null) {
+                            base.getStateChanged().onStateChanged(change);
+                        }
+                    },
+                    update -> {
+                        progress.add(update.transfer().getBytesTransferred());
+                        if (base.getProgressUpdated() != null) {
+                            base.getProgressUpdated().onProgressUpdated(update);
+                        }
+                    },
+                    base.getSlotReleased(),
+                    base.getReporter(),
+                    base.getMaximumLingerTime(),
+                    base.isSeekInputStreamAutomatically(),
+                    base.isSeekOutputStreamAutomatically(),
+                    base.isDisposeInputStreamOnCompletion(),
+                    base.isDisposeOutputStreamOnCompletion());
+        }
+
+        private List<TransferState> states() {
+            return snapshots.stream().map(Transfer::getState).toList();
+        }
+
+        private Transfer last() {
+            return snapshots.get(snapshots.size() - 1);
+        }
+
+        /** The snapshot taken as the transfer reached a terminal state. */
+        private Transfer terminal() {
+            return snapshots.stream()
+                    .filter(snapshot -> snapshot.getState().contains(TransferState.COMPLETED))
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError("the transfer never reached a terminal state"));
+        }
+    }
+
+    /** Returns what a failed outcome says went wrong. */
+    private static Throwable causeOf(TransferOutcome outcome) {
+        return assertInstanceOf(TransferOutcome.Failed.class, outcome).cause();
     }
 
     private static InputStream completedStream(byte[] bytes) {

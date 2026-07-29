@@ -134,7 +134,7 @@ class EngineApiTest {
                                 (name.startsWith("add") || name.startsWith("remove")) && name.endsWith("Listener")),
                 "the engine still carries named listener registrations: " + names);
 
-        assertEquals(47, Kind.values().length, "46 client events plus DiagnosticGenerated");
+        assertEquals(45, Kind.values().length, "44 client events plus DiagnosticGenerated");
     }
 
     @Test
