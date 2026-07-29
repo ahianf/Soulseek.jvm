@@ -21,9 +21,10 @@ import java.util.function.Consumer;
  * the library's queue, which decides when it runs and against which peer, how
  * many run at once overall and per peer, and when a failed attempt is worth
  * retrying. {@link #policy(DownloadPolicy)} is where those rules are set.
- * Nothing declared here is a stub: a method that does not work yet is not
- * declared, because declaring it only moves the discovery of that fact from the
- * developer wiring it up to the user wondering why the button does nothing.
+ * Everything declared here works: a method that does not yet do its job is not
+ * declared at all, because declaring it only moves the discovery of that fact
+ * from the developer wiring it up to the user wondering why the button does
+ * nothing.
  */
 public interface Downloads {
 

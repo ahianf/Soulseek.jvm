@@ -27,7 +27,6 @@ import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
-import dev.slsk.internal.diagnostics.GlobalDiagnostic;
 import dev.slsk.internal.events.BrowseProgressUpdatedEvent;
 import dev.slsk.internal.events.DownloadDeniedEvent;
 import dev.slsk.internal.events.DownloadFailedEvent;
@@ -122,7 +121,6 @@ final class SoulseekEngine
     private static final int MAJOR_VERSION = 170;
     private static final String DEFAULT_ADDRESS = "server.slsknet.org";
     private static final int DEFAULT_PORT = 2271;
-    private static volatile boolean raiseEventsAsynchronously;
 
     volatile SoulseekClientOptions options;
     private final int minorVersion;
@@ -264,7 +262,6 @@ final class SoulseekEngine
         }
         this.minorVersion = minorVersion;
         this.options = options == null ? new SoulseekClientOptions() : options;
-        raiseEventsAsynchronously = this.options.isRaiseEventsAsynchronously();
         this.serverConnection = serverConnection;
         this.listener = listener;
         // Constructed before every component that schedules, since they all
@@ -294,7 +291,6 @@ final class SoulseekEngine
                         this.options.getMinimumDiagnosticLevel(),
                         eventData -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData))
                 : diagnosticFactory;
-        GlobalDiagnostic.init(diagnostic);
 
         this.listenerHandler = listenerHandler == null ? new DefaultListenerHandler(this) : listenerHandler;
         this.searchResponder = searchResponder == null ? new DefaultSearchResponder(this) : searchResponder;
@@ -554,16 +550,6 @@ final class SoulseekEngine
      */
     void setProfile(UserProfile value) {
         profile = value == null ? UserProfile.empty() : value;
-    }
-
-    /** Returns whether client events are configured as asynchronous. */
-    public static boolean isRaiseEventsAsynchronously() {
-        return raiseEventsAsynchronously;
-    }
-
-    /** Changes the process-wide source event-dispatch option. */
-    public static void setRaiseEventsAsynchronously(boolean value) {
-        raiseEventsAsynchronously = value;
     }
 
     /** Returns the connected server address text, or {@code null}. */
