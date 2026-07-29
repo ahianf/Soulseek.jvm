@@ -9,6 +9,7 @@ import dev.slsk.CancellationSignal;
 import dev.slsk.CancellationSubscription;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;
@@ -324,8 +325,11 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                 + " handed off. (old: " + incomingConnection.getId()
                 + ", new: " + connection.getId() + ")");
 
-        return connection.readAsync(4).handle((bytes, failure) -> {
-            if (failure != null) {
+        return NetworkExecutor.supplyAsync(() -> {
+            byte[] bytes;
+            try {
+                bytes = connection.read(4);
+            } catch (Throwable failure) {
                 Throwable cause = unwrap(failure);
                 String message = "Failed to establish an inbound transfer connection to "
                         + username + " ("
@@ -361,29 +365,30 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                         + connection.getType() + ", id: "
                         + connection.getId() + ")"));
 
-        return connection
-                .connectAsync()
-                .thenCompose(ignored -> connection.writeAsync(new PierceFirewall(response.getToken()).toByteArray()))
-                .thenCompose(ignored -> connection.readAsync(4))
-                .handle((bytes, failure) -> {
-                    if (failure != null) {
-                        Throwable cause = unwrap(failure);
-                        String message = "Failed to establish an inbound indirect transfer "
-                                + "connection to " + response.getUsername() + " ("
-                                + response.getIpEndpoint() + "): "
-                                + message(cause);
-                        diagnostic.debug(message);
-                        connection.close();
-                        throw new CompletionException(new ConnectionException(message, cause));
-                    }
-                    int remoteToken = littleEndianInteger(bytes);
-                    diagnostic.debug("Transfer connection to " + response.getUsername() + " ("
-                            + response.getIpEndpoint() + ") for token "
-                            + response.getToken() + " established. (type: "
-                            + connection.getType() + ", id: "
-                            + connection.getId() + ")");
-                    return new TransferConnectionResult(connection, remoteToken);
-                });
+        return NetworkExecutor.supplyAsync(() -> {
+            byte[] bytes;
+            try {
+                connection.connect();
+                connection.write(new PierceFirewall(response.getToken()).toByteArray());
+                bytes = connection.read(4);
+            } catch (Throwable failure) {
+                Throwable cause = unwrap(failure);
+                String message = "Failed to establish an inbound indirect transfer "
+                        + "connection to " + response.getUsername() + " ("
+                        + response.getIpEndpoint() + "): "
+                        + message(cause);
+                diagnostic.debug(message);
+                connection.close();
+                throw new CompletionException(new ConnectionException(message, cause));
+            }
+            int remoteToken = littleEndianInteger(bytes);
+            diagnostic.debug("Transfer connection to " + response.getUsername() + " ("
+                    + response.getIpEndpoint() + ") for token "
+                    + response.getToken() + " established. (type: "
+                    + connection.getType() + ", id: "
+                    + connection.getId() + ")");
+            return new TransferConnectionResult(connection, remoteToken);
+        });
     }
 
     @Override
@@ -406,35 +411,40 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                             + ") established first, attempting to cancel "
                             + (directWon ? "indirect" : "direct") + " connection.");
                     (directWon ? indirectCancellation : directCancellation).cancel();
-                    CompletableFuture<Void> negotiation = CompletableFuture.completedFuture(null);
-                    if (directWon) {
-                        byte[] request = new PeerInit(client.getUsername(), Constants.ConnectionType.TRANSFER, token)
-                                .toByteArray();
-                        negotiation = winner.value().writeAsync(request, token(cancellationSignal));
-                    }
-                    return negotiation
-                            .thenCompose(ignored ->
-                                    winner.value().writeAsync(littleEndianBytes(token), token(cancellationSignal)))
-                            .handle((ignored, failure) -> {
-                                directCancellation.close();
-                                indirectCancellation.close();
-                                if (failure != null) {
-                                    Throwable cause = unwrap(failure);
-                                    String message = "Failed to negotiate transfer connection to "
-                                            + username + " (" + ipEndpoint + "): "
-                                            + message(cause);
-                                    diagnostic.debug(message + " (type: "
-                                            + winner.value().getType() + ", id: "
-                                            + winner.value().getId() + ")");
-                                    winner.value().close();
-                                    throw new CompletionException(new ConnectionException(message, cause));
-                                }
-                                diagnostic.debug("Transfer connection to " + username + " ("
-                                        + ipEndpoint + ") established. (type: "
-                                        + winner.value().getType() + ", id: "
-                                        + winner.value().getId() + ")");
-                                return winner.value();
-                            });
+                    return NetworkExecutor.supplyAsync(() -> {
+                        try {
+                            if (directWon) {
+                                winner.value()
+                                        .write(
+                                                new PeerInit(
+                                                                client.getUsername(),
+                                                                Constants.ConnectionType.TRANSFER,
+                                                                token)
+                                                        .toByteArray(),
+                                                token(cancellationSignal));
+                            }
+                            winner.value().write(littleEndianBytes(token), token(cancellationSignal));
+                        } catch (Throwable failure) {
+                            directCancellation.close();
+                            indirectCancellation.close();
+                            Throwable cause = unwrap(failure);
+                            String message = "Failed to negotiate transfer connection to "
+                                    + username + " (" + ipEndpoint + "): "
+                                    + message(cause);
+                            diagnostic.debug(message + " (type: "
+                                    + winner.value().getType() + ", id: "
+                                    + winner.value().getId() + ")");
+                            winner.value().close();
+                            throw new CompletionException(new ConnectionException(message, cause));
+                        }
+                        directCancellation.close();
+                        indirectCancellation.close();
+                        diagnostic.debug("Transfer connection to " + username + " ("
+                                + ipEndpoint + ") established. (type: "
+                                + winner.value().getType() + ", id: "
+                                + winner.value().getId() + ")");
+                        return winner.value();
+                    });
                 })
                 .handle((connection, failure) -> {
                     if (failure != null) {
@@ -551,24 +561,24 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         CancellationController cancellation = new CancellationController();
         pendingInboundIndirectConnections.put(response.getUsername(), cancellation);
 
-        return connection
-                .connectAsync(cancellation.getSignal())
-                .thenCompose(ignored -> connection.writeAsync(
-                        new PierceFirewall(response.getToken()).toByteArray(), cancellation.getSignal()))
-                .handle((ignored, failure) -> {
-                    pendingInboundIndirectConnections.remove(response.getUsername(), cancellation);
-                    cancellation.close();
-                    if (failure != null) {
-                        connection.close();
-                        throw new CompletionException(unwrap(failure));
-                    }
-                    connection.addDisconnectedListener(disconnectedListener);
-                    diagnostic.debug("Message connection to " + response.getUsername() + " ("
-                            + response.getIpEndpoint()
-                            + ") established. (type: " + connection.getType()
-                            + ", id: " + connection.getId() + ")");
-                    return connection;
-                });
+        return NetworkExecutor.supplyAsync(() -> {
+            try {
+                connection.connect(cancellation.getSignal());
+                connection.write(new PierceFirewall(response.getToken()).toByteArray(), cancellation.getSignal());
+            } catch (Throwable failure) {
+                connection.close();
+                throw new CompletionException(unwrap(failure));
+            } finally {
+                pendingInboundIndirectConnections.remove(response.getUsername(), cancellation);
+                cancellation.close();
+            }
+            connection.addDisconnectedListener(disconnectedListener);
+            diagnostic.debug("Message connection to " + response.getUsername() + " ("
+                    + response.getIpEndpoint()
+                    + ") established. (type: " + connection.getType()
+                    + ", id: " + connection.getId() + ")");
+            return connection;
+        });
     }
 
     private CompletableFuture<MessageConnection> establishRacingMessageConnection(
@@ -597,27 +607,22 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                             + (directWon ? "indirect" : "direct") + " connection.");
                     (directWon ? indirectCancellation : directCancellation).cancel();
 
-                    CompletableFuture<Void> negotiation;
-                    try {
-                        if (directWon) {
-                            negotiation = connection.writeAsync(
-                                    new PeerInit(
-                                                    client.getUsername(),
-                                                    Constants.ConnectionType.PEER,
-                                                    client.getNextToken())
-                                            .toByteArray(),
-                                    token(cancellationSignal));
-                        } else {
-                            connection.startReadingContinuously();
-                            negotiation = CompletableFuture.completedFuture(null);
-                        }
-                    } catch (Throwable failure) {
-                        negotiation = CompletableFuture.failedFuture(failure);
-                    }
-                    return negotiation.handle((ignored, failure) -> {
-                        directCancellation.close();
-                        indirectCancellation.close();
-                        if (failure != null) {
+                    return NetworkExecutor.supplyAsync(() -> {
+                        try {
+                            if (directWon) {
+                                connection.write(
+                                        new PeerInit(
+                                                        client.getUsername(),
+                                                        Constants.ConnectionType.PEER,
+                                                        client.getNextToken())
+                                                .toByteArray(),
+                                        token(cancellationSignal));
+                            } else {
+                                connection.startReadingContinuously();
+                            }
+                        } catch (Throwable failure) {
+                            directCancellation.close();
+                            indirectCancellation.close();
                             Throwable cause = unwrap(failure);
                             String message = "Failed to negotiate message connection to "
                                     + username + " (" + ipEndpoint + "): "
@@ -627,6 +632,8 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                             connection.close();
                             throw new CompletionException(new ConnectionException(message, cause));
                         }
+                        directCancellation.close();
+                        indirectCancellation.close();
                         diagnostic.debug("Message connection to " + username + " (" + ipEndpoint
                                 + ") established. (type: " + connection.getType()
                                 + ", id: " + connection.getId() + ")");
@@ -659,8 +666,13 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT));
         attachPeerMessageListeners(connection);
         connection.addDisconnectedListener(provisionalDisconnectedListener);
-        return connection.connectAsync(cancellationSignal).handle((ignored, failure) -> {
-            if (failure != null) {
+        // A thread of its own because this is one arm of the direct/indirect
+        // race, and racing is one of the two things in this library a second
+        // thread genuinely buys.
+        return NetworkExecutor.supplyAsync(() -> {
+            try {
+                connection.connect(cancellationSignal);
+            } catch (Throwable failure) {
                 diagnostic.debug("Failed to establish a direct message connection to "
                         + username + " (" + ipEndpoint + "): "
                         + message(unwrap(failure)));
@@ -679,10 +691,10 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
             String username, int solicitationToken, CancellationSignal cancellationSignal) {
         diagnostic.debug("Soliciting indirect message connection to " + username + " with token " + solicitationToken);
         pendingSolicitations.putIfAbsent(solicitationToken, username);
-        CompletableFuture<Connection> incoming = client.getServerConnection()
-                .writeAsync(
-                        new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.PEER),
-                        cancellationSignal)
+        CompletableFuture<Connection> incoming = NetworkExecutor.runAsync(() -> client.getServerConnection()
+                        .write(
+                                new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.PEER),
+                                cancellationSignal))
                 .thenCompose(ignored -> client.getWaiter()
                         .waitAsync(
                                 new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),
@@ -737,8 +749,10 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
                         + disconnectMessage(eventData) + ". (type: "
                         + connection.getType() + ", id: "
                         + connection.getId() + ")"));
-        return connection.connectAsync(cancellationSignal).handle((ignored, failure) -> {
-            if (failure != null) {
+        return NetworkExecutor.supplyAsync(() -> {
+            try {
+                connection.connect(cancellationSignal);
+            } catch (Throwable failure) {
                 diagnostic.debug("Failed to establish a direct transfer connection "
                         + "for token " + token + " to (" + ipEndpoint
                         + "): " + message(unwrap(failure)));
@@ -758,10 +772,11 @@ public final class DefaultPeerConnectionManager implements PeerConnectionManager
         diagnostic.debug("Soliciting indirect transfer connection to " + username + " with token " + token);
         int solicitationToken = client.getNextToken();
         pendingSolicitations.putIfAbsent(solicitationToken, username);
-        return client.getServerConnection()
-                .writeAsync(
-                        new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.TRANSFER),
-                        cancellationSignal)
+        return NetworkExecutor.runAsync(() -> client.getServerConnection()
+                        .write(
+                                new ConnectToPeerRequest(
+                                        solicitationToken, username, Constants.ConnectionType.TRANSFER),
+                                cancellationSignal))
                 .thenCompose(ignored -> client.getWaiter()
                         .waitAsync(
                                 new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),

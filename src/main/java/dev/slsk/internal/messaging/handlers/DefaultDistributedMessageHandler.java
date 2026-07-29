@@ -5,6 +5,7 @@
 package dev.slsk.internal.messaging.handlers;
 
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;
@@ -80,7 +81,12 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
         try {
             operation = switch (code) {
                 case CHILD_DEPTH -> CompletableFuture.completedFuture(null);
-                case PING -> connection.writeAsync(new DistributedPingResponse(client.getNextToken()));
+                // Off the child's read loop, as the dispatched write it
+                // replaces was: a ping answered in front of the next search
+                // request delays every child behind this one.
+                case PING ->
+                    NetworkExecutor.runAsync(
+                            () -> connection.write(new DistributedPingResponse(client.getNextToken())));
                 default -> {
                     diagnostic.debug("Unhandled distributed child message: " + code
                             + " from " + connection.getUsername() + " ("

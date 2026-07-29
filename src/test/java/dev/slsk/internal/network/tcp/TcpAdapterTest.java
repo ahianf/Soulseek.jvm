@@ -20,7 +20,6 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,15 +34,14 @@ class TcpAdapterTest {
                 TcpClientAdapter client = new TcpClientAdapter()) {
             CompletableFuture<Void> server = CompletableFuture.runAsync(() -> serveAnonymousProxy(proxy));
 
-            TcpClient.ProxyEndpoint endpoint = client.connectThroughProxyAsync(
-                            LOOPBACK,
-                            proxy.getLocalPort(),
-                            InetAddress.getByName("10.20.30.40"),
-                            2234,
-                            null,
-                            null,
-                            CancellationSignal.none())
-                    .get(3, TimeUnit.SECONDS);
+            TcpClient.ProxyEndpoint endpoint = client.connectThroughProxy(
+                    LOOPBACK,
+                    proxy.getLocalPort(),
+                    InetAddress.getByName("10.20.30.40"),
+                    2234,
+                    null,
+                    null,
+                    CancellationSignal.none());
 
             assertEquals("127.0.0.1", endpoint.proxyAddress());
             assertEquals(0x1234, endpoint.proxyPort());
@@ -58,15 +56,14 @@ class TcpAdapterTest {
                 TcpClientAdapter client = new TcpClientAdapter()) {
             CompletableFuture<Void> server = CompletableFuture.runAsync(() -> serveCredentialedProxy(proxy));
 
-            TcpClient.ProxyEndpoint endpoint = client.connectThroughProxyAsync(
-                            LOOPBACK,
-                            proxy.getLocalPort(),
-                            InetAddress.getByName("192.0.2.1"),
-                            80,
-                            "alice",
-                            "secret",
-                            CancellationSignal.none())
-                    .get(3, TimeUnit.SECONDS);
+            TcpClient.ProxyEndpoint endpoint = client.connectThroughProxy(
+                    LOOPBACK,
+                    proxy.getLocalPort(),
+                    InetAddress.getByName("192.0.2.1"),
+                    80,
+                    "alice",
+                    "secret",
+                    CancellationSignal.none());
 
             assertEquals("foo", endpoint.proxyAddress());
             assertEquals(80, endpoint.proxyPort());
@@ -81,19 +78,17 @@ class TcpAdapterTest {
                 TcpClientAdapter client = new TcpClientAdapter()) {
             CompletableFuture<Void> server = CompletableFuture.runAsync(() -> serveInvalidConnectVersion(proxy));
 
-            ExecutionException failure = assertThrows(
-                    ExecutionException.class,
-                    () -> client.connectThroughProxyAsync(
-                                    LOOPBACK,
-                                    proxy.getLocalPort(),
-                                    InetAddress.getByName("192.0.2.1"),
-                                    80,
-                                    null,
-                                    null,
-                                    CancellationSignal.none())
-                            .get(3, TimeUnit.SECONDS));
+            ProxyException exception = assertThrows(
+                    ProxyException.class,
+                    () -> client.connectThroughProxy(
+                            LOOPBACK,
+                            proxy.getLocalPort(),
+                            InetAddress.getByName("192.0.2.1"),
+                            80,
+                            null,
+                            null,
+                            CancellationSignal.none()));
 
-            ProxyException exception = (ProxyException) failure.getCause();
             assertEquals("Invalid SOCKS version (expected: 5, received: 5)", exception.getMessage());
             server.get(3, TimeUnit.SECONDS);
         }
@@ -105,25 +100,25 @@ class TcpAdapterTest {
         try (TcpClientAdapter client = new TcpClientAdapter()) {
             assertThrows(
                     NullPointerException.class,
-                    () -> client.connectThroughProxyAsync(null, 1, LOOPBACK, 1, null, null, null));
+                    () -> client.connectThroughProxy(null, 1, LOOPBACK, 1, null, null, null));
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> client.connectThroughProxyAsync(LOOPBACK, -1, LOOPBACK, 1, null, null, null));
+                    () -> client.connectThroughProxy(LOOPBACK, -1, LOOPBACK, 1, null, null, null));
             assertThrows(
                     NullPointerException.class,
-                    () -> client.connectThroughProxyAsync(LOOPBACK, 1, null, 1, null, null, null));
+                    () -> client.connectThroughProxy(LOOPBACK, 1, null, 1, null, null, null));
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> client.connectThroughProxyAsync(LOOPBACK, 1, LOOPBACK, 65_536, null, null, null));
+                    () -> client.connectThroughProxy(LOOPBACK, 1, LOOPBACK, 65_536, null, null, null));
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> client.connectThroughProxyAsync(LOOPBACK, 1, LOOPBACK, 1, "alice", null, null));
+                    () -> client.connectThroughProxy(LOOPBACK, 1, LOOPBACK, 1, "alice", null, null));
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> client.connectThroughProxyAsync(LOOPBACK, 1, LOOPBACK, 1, "x".repeat(256), "secret", null));
+                    () -> client.connectThroughProxy(LOOPBACK, 1, LOOPBACK, 1, "x".repeat(256), "secret", null));
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> client.connectThroughProxyAsync(LOOPBACK, 1, LOOPBACK, 1, "alice", "x".repeat(256), null));
+                    () -> client.connectThroughProxy(LOOPBACK, 1, LOOPBACK, 1, "alice", "x".repeat(256), null));
         }
     }
 
@@ -142,7 +137,7 @@ class TcpAdapterTest {
                     throw new RuntimeException(exception);
                 }
             });
-            client.connectAsync(LOOPBACK, server.getLocalPort()).join();
+            client.connect(LOOPBACK, server.getLocalPort());
             assertTrue(client.isConnected());
             assertEquals(server.getLocalPort(), client.getRemoteEndpoint().getPort());
 
@@ -185,7 +180,7 @@ class TcpAdapterTest {
             listener.stop();
         }
         assertThrows(IllegalStateException.class, listener::pending);
-        assertThrows(IllegalStateException.class, listener::acceptTcpClientAsync);
+        assertThrows(IllegalStateException.class, listener::acceptTcpClient);
     }
 
     private static Socket acceptPending(TcpListenerAdapter listener) throws Exception {
@@ -194,7 +189,7 @@ class TcpAdapterTest {
             Thread.onSpinWait();
         }
         assertTrue(listener.pending());
-        return listener.acceptTcpClientAsync().get(3, TimeUnit.SECONDS);
+        return listener.acceptTcpClient();
     }
 
     private static ServerSocket loopbackServer() throws Exception {

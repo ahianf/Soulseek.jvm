@@ -1177,18 +1177,11 @@ final class SoulseekEngine
                     serverMessageHandler::handleMessageWritten,
                     options.getServerConnectionOptions());
 
-            CompletableFuture<Void> transportConnect;
-            try {
-                transportConnect = serverConnection.connectAsync(cancellationSignal);
-            } catch (Throwable failure) {
-                transportConnect = CompletableFuture.failedFuture(failure);
-            }
-            return transportConnect.thenCompose(ignored -> {
-                address = requestedAddress;
-                ipEndpoint = requestedEndpoint;
-                changeState(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGING_IN), "Logging in", null);
-                return loginAsync(requestedUsername, password, cancellationSignal);
-            });
+            serverConnection.connect(cancellationSignal);
+            address = requestedAddress;
+            ipEndpoint = requestedEndpoint;
+            changeState(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGING_IN), "Logging in", null);
+            return loginAsync(requestedUsername, password, cancellationSignal);
         } catch (Throwable failure) {
             return CompletableFuture.failedFuture(failure);
         }
@@ -1564,7 +1557,8 @@ final class SoulseekEngine
 
     private CompletableFuture<Void> invokeServerByteWrite(byte[] message, CancellationSignal cancellationSignal) {
         try {
-            return serverConnection.writeAsync(message, defaultToken(cancellationSignal));
+            serverConnection.write(message, defaultToken(cancellationSignal));
+            return CompletableFuture.completedFuture(null);
         } catch (Throwable failure) {
             return CompletableFuture.failedFuture(failure);
         }
@@ -1613,14 +1607,12 @@ final class SoulseekEngine
 
     private static CompletableFuture<Void> invokeMessageWrite(
             MessageConnection connection, OutgoingMessage message, CancellationSignal cancellationSignal) {
-        CompletableFuture<Void> operation;
         try {
-            operation = connection.writeAsync(
-                    message, cancellationSignal == null ? CancellationSignal.none() : cancellationSignal);
+            connection.write(message, cancellationSignal == null ? CancellationSignal.none() : cancellationSignal);
+            return CompletableFuture.completedFuture(null);
         } catch (Throwable failure) {
-            operation = CompletableFuture.failedFuture(failure);
+            return CompletableFuture.failedFuture(failure);
         }
-        return operation;
     }
 
     @Override

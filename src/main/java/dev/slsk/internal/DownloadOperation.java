@@ -20,6 +20,7 @@ import dev.slsk.exceptions.TransferStreamException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Failures;
+import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.events.TransferProgressUpdatedEvent;
@@ -374,11 +375,14 @@ final class DownloadOperation {
                     .order(ByteOrder.LITTLE_ENDIAN)
                     .putLong(download.getStartOffset())
                     .array();
-            await(connection.writeAsync(offset, linkedToken));
+            connection.write(offset, linkedToken);
             updateState(TransferState.IN_PROGRESS);
             updateProgress(download.getStartOffset());
 
-            CompletableFuture<Void> read = connection.readAsync(
+            // A thread of its own because the read is raced against the
+            // connection dropping and against the peer completing the transfer
+            // out from under it; racing is work blocking code cannot do.
+            CompletableFuture<Void> read = NetworkExecutor.runAsync(() -> connection.read(
                     download.getSize() - download.getStartOffset(),
                     trackingStream,
                     // The bucket is the whole of the metering now. A pluggable
@@ -395,7 +399,7 @@ final class DownloadOperation {
                         }
                         engine.context.getDownloadTokenBucket().returnTokens(grantedBytes - transferredBytes);
                     },
-                    linkedToken);
+                    linkedToken));
 
             CompletableFuture<Integer> readRace = read.handle((ignored, failure) -> 0);
             CompletableFuture<Integer> disconnectRace = disconnected.handle((ignored, failure) -> 1);

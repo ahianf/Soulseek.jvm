@@ -15,7 +15,6 @@ import dev.slsk.internal.options.ConnectionOptions;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -50,7 +49,7 @@ class ListenerTest {
         listener.stop();
         assertFalse(listener.isListening());
         assertTrue(tcpListener.stopped);
-        tcpListener.accept.completeExceptionally(new IllegalStateException("stopped"));
+        tcpListener.fail(new IllegalStateException("stopped"));
     }
 
     @Test
@@ -124,7 +123,7 @@ class ListenerTest {
             listener.start();
             Thread.sleep(50);
 
-            tcpListener.accept.completeExceptionally(new java.net.SocketException("the interface went away"));
+            tcpListener.fail(new java.io.UncheckedIOException(new java.net.SocketException("the interface went away")));
 
             long deadline = System.nanoTime() + 2_000_000_000L;
             while (uncaught.get() == null && System.nanoTime() < deadline) {
@@ -150,13 +149,27 @@ class ListenerTest {
     }
 
     private static final class FakeTcpListener implements TcpListener {
-        private final CompletableFuture<Socket> accept = new CompletableFuture<>();
+        private final CountDownLatch accept = new CountDownLatch(1);
+        private volatile RuntimeException failure;
         private boolean started;
         private boolean stopped;
 
+        /** Releases a parked accept with a failure, as a dead socket would. */
+        private void fail(RuntimeException value) {
+            failure = value;
+            accept.countDown();
+        }
+
         @Override
-        public CompletableFuture<Socket> acceptTcpClientAsync() {
-            return accept;
+        public Socket acceptTcpClient() {
+            // Parks the accept loop the way a real one parks on a socket, so a
+            // test that breaks it out from under sees what production sees.
+            try {
+                accept.await();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            throw failure == null ? new IllegalStateException("stopped") : failure;
         }
 
         @Override

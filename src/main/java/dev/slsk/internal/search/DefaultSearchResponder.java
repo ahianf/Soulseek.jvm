@@ -184,18 +184,17 @@ public final class DefaultSearchResponder implements SearchResponder {
         }
 
         return connectionFuture
-                .thenCompose(connection -> connection
-                        .writeAsync(record.searchResponse().toByteArray())
-                        .thenApply(ignored -> {
-                            diagnostic.debug("Sent cached response " + responseToken
-                                    + " containing "
-                                    + totalFiles(record.searchResponse())
-                                    + " files to " + record.username()
-                                    + " for query '" + record.query()
-                                    + "' with token " + record.token());
-                            raiseResponseDelivered(record);
-                            return true;
-                        }))
+                .<Boolean>thenApply(connection -> {
+                    connection.write(record.searchResponse().toByteArray());
+                    diagnostic.debug("Sent cached response " + responseToken
+                            + " containing "
+                            + totalFiles(record.searchResponse())
+                            + " files to " + record.username()
+                            + " for query '" + record.query()
+                            + "' with token " + record.token());
+                    raiseResponseDelivered(record);
+                    return true;
+                })
                 .handle((delivered, failure) -> {
                     if (failure == null) {
                         return delivered;
@@ -240,6 +239,9 @@ public final class DefaultSearchResponder implements SearchResponder {
                         connectionFuture = CompletableFuture.failedFuture(failure);
                     }
 
+                    // Only a connection failure caches the response for later.
+                    // A write that fails on an established connection is a
+                    // delivery we already attempted, not one still owed.
                     return connectionFuture
                             .handle((connection, failure) -> {
                                 if (failure != null) {
@@ -248,7 +250,7 @@ public final class DefaultSearchResponder implements SearchResponder {
                                 }
                                 return connection;
                             })
-                            .thenCompose(connection -> writeResponse(connection, response));
+                            .thenAccept(connection -> writeResponse(connection, response));
                 })
                 .thenApply(ignored -> {
                     diagnostic.debug("Sent response containing " + totalFiles(response)
@@ -271,17 +273,17 @@ public final class DefaultSearchResponder implements SearchResponder {
                 });
     }
 
-    private CompletableFuture<Void> writeResponse(MessageConnection connection, SearchResponse response) {
+    private void writeResponse(MessageConnection connection, SearchResponse response) {
         if (response instanceof RawSearchResponse raw) {
-            return connection.writeAsync(raw.getLength(), raw.getStream()).thenRun(() -> {
-                try {
-                    raw.getStream().close();
-                } catch (Throwable ignored) {
-                    // Source intentionally ignores stream-close failures.
-                }
-            });
+            connection.write(raw.getLength(), raw.getStream());
+            try {
+                raw.getStream().close();
+            } catch (Throwable ignored) {
+                // Source intentionally ignores stream-close failures.
+            }
+            return;
         }
-        return connection.writeAsync(response.toByteArray());
+        connection.write(response.toByteArray());
     }
 
     private void cacheUndelivered(

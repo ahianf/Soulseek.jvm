@@ -18,6 +18,7 @@ import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.ListenException;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
+import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.TokenBucket;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.messaging.messages.PrivateRoomToggle;
@@ -426,7 +427,7 @@ class EngineReconfigureTest {
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("writeAsync")
+            if (method.getName().equals("write")
                     && arguments.length == 2
                     && arguments[0] instanceof OutgoingMessage outgoing) {
                 messages.add(outgoing);
@@ -435,9 +436,9 @@ class EngineReconfigureTest {
                     if (failure instanceof RuntimeException runtime) {
                         throw runtime;
                     }
-                    return CompletableFuture.failedFuture(failure);
+                    return Outcomes.raise(CompletableFuture.<Void>failedFuture(failure));
                 }
-                return CompletableFuture.completedFuture(null);
+                return null;
             }
             return defaultValue(method.getReturnType());
         }

@@ -19,6 +19,7 @@ import dev.slsk.exceptions.UserEndpointException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Blocking;
+import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
@@ -644,7 +645,7 @@ class EnginePeerRequestTest {
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("writeAsync")
+            if (method.getName().equals("write")
                     && arguments.length == 2
                     && arguments[0] instanceof OutgoingMessage outgoing) {
                 message = outgoing;
@@ -652,7 +653,11 @@ class EnginePeerRequestTest {
                 if (synchronousFailure != null) {
                     throw synchronousFailure;
                 }
-                return result;
+                // join() keeps the configured outcome's shape: a cancellation
+                // raw, everything else in a CompletionException, which is what
+                // the blocking write raises now.
+                Outcomes.raise(result);
+                return null;
             }
             if (method.getName().equals("addDisconnectedListener")) {
                 disconnectedListener = cast(arguments[0]);

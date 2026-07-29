@@ -11,7 +11,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 /** Provides client connections for TCP network services. */
 public interface Connection extends AutoCloseable {
@@ -72,12 +72,22 @@ public interface Connection extends AutoCloseable {
     /** Returns the current depth of the double-buffered write queue. */
     int getWriteQueueDepth();
 
-    /** Connects to the configured endpoint. */
-    CompletableFuture<Void> connectAsync(CancellationSignal cancellationSignal);
+    /**
+     * Connects to the configured endpoint, blocking until it lands.
+     *
+     * <p>Failures arrive the way {@link java.util.concurrent.CompletableFuture#join()}
+     * presented them: a {@link java.util.concurrent.CancellationException} raw,
+     * everything else wrapped in a {@link CompletionException}. Every caller in
+     * this library already unwraps, so the shape of a failure did not have to
+     * change when the thread hop that produced it went away.
+     *
+     * @param cancellationSignal the cancellation signal
+     */
+    void connect(CancellationSignal cancellationSignal);
 
     /** Connects without a cancellable token. */
-    default CompletableFuture<Void> connectAsync() {
-        return connectAsync(CancellationSignal.none());
+    default void connect() {
+        connect(CancellationSignal.none());
     }
 
     /** Disconnects without optional details. */
@@ -97,15 +107,15 @@ public interface Connection extends AutoCloseable {
     TcpClient handoffTcpClient();
 
     /** Reads an exact byte count into a new array. */
-    CompletableFuture<byte[]> readAsync(long length, CancellationSignal cancellationSignal);
+    byte[] read(long length, CancellationSignal cancellationSignal);
 
     /** Reads an exact byte count without a cancellable token. */
-    default CompletableFuture<byte[]> readAsync(long length) {
-        return readAsync(length, CancellationSignal.none());
+    default byte[] read(long length) {
+        return read(length, CancellationSignal.none());
     }
 
     /** Reads an exact byte count into a stream. */
-    CompletableFuture<Void> readAsync(
+    void read(
             long length,
             OutputStream outputStream,
             ConnectionGovernor governor,
@@ -113,46 +123,43 @@ public interface Connection extends AutoCloseable {
             CancellationSignal cancellationSignal);
 
     /** Reads to a stream using source defaults. */
-    default CompletableFuture<Void> readAsync(long length, OutputStream outputStream, ConnectionGovernor governor) {
-        return readAsync(length, outputStream, governor, null, CancellationSignal.none());
-    }
-
-    /** Waits for this connection to disconnect. */
-    CompletableFuture<String> waitForDisconnect(CancellationSignal cancellationSignal);
-
-    /** Waits without a cancellable token. */
-    default CompletableFuture<String> waitForDisconnect() {
-        return waitForDisconnect(CancellationSignal.none());
-    }
-
-    /** Writes an array. */
-    CompletableFuture<Void> writeAsync(byte[] bytes, CancellationSignal cancellationSignal);
-
-    /** Writes an array without a cancellable token. */
-    default CompletableFuture<Void> writeAsync(byte[] bytes) {
-        return writeAsync(bytes, CancellationSignal.none());
+    default void read(long length, OutputStream outputStream, ConnectionGovernor governor) {
+        read(length, outputStream, governor, null, CancellationSignal.none());
     }
 
     /**
-     * Writes an array on the calling thread.
+     * Waits for this connection to disconnect and returns the reason.
      *
-     * <p>The blocking sibling of {@link #writeAsync(byte[], CancellationSignal)},
-     * mirroring the blocking read the framed read loop uses. It is for callers
-     * already running on their own virtual thread that would otherwise dispatch
-     * a write and immediately block on the result: that pattern costs a second
-     * thread whose only job is to be waited on. The distributed broadcast did
+     * @param cancellationSignal disconnects the connection when signalled
+     * @return the disconnect message
+     */
+    String awaitDisconnect(CancellationSignal cancellationSignal);
+
+    /** Waits without a cancellable token. */
+    default String awaitDisconnect() {
+        return awaitDisconnect(CancellationSignal.none());
+    }
+
+    /**
+     * Writes an array, blocking until it lands.
+     *
+     * <p>Every caller here already owns a virtual thread, so dispatching the
+     * write onto a second one and immediately blocking on the result bought a
+     * thread whose only job was to be waited on. The distributed broadcast did
      * it once per child, per message.
      *
      * @param bytes the bytes to write
      * @param cancellationSignal the cancellation signal
-     * @throws Exception if the write fails
      */
-    default void write(byte[] bytes, CancellationSignal cancellationSignal) throws Exception {
-        writeAsync(bytes, cancellationSignal).join();
+    void write(byte[] bytes, CancellationSignal cancellationSignal);
+
+    /** Writes an array without a cancellable token. */
+    default void write(byte[] bytes) {
+        write(bytes, CancellationSignal.none());
     }
 
     /** Writes an exact byte count from a stream. */
-    CompletableFuture<Void> writeAsync(
+    void write(
             long length,
             InputStream inputStream,
             ConnectionGovernor governor,
@@ -160,13 +167,13 @@ public interface Connection extends AutoCloseable {
             CancellationSignal cancellationSignal);
 
     /** Writes from a stream using source defaults. */
-    default CompletableFuture<Void> writeAsync(long length, InputStream inputStream) {
-        return writeAsync(length, inputStream, null, null, CancellationSignal.none());
+    default void write(long length, InputStream inputStream) {
+        write(length, inputStream, null, null, CancellationSignal.none());
     }
 
     /** Writes from a stream using a governor. */
-    default CompletableFuture<Void> writeAsync(long length, InputStream inputStream, ConnectionGovernor governor) {
-        return writeAsync(length, inputStream, governor, null, CancellationSignal.none());
+    default void write(long length, InputStream inputStream, ConnectionGovernor governor) {
+        write(length, inputStream, governor, null, CancellationSignal.none());
     }
 
     /** Disposes the connection. */

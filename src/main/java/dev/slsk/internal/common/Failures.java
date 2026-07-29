@@ -41,6 +41,37 @@ public final class Failures {
     }
 
     /**
+     * Rethrows a failure the way {@link CompletableFuture#join()} presented it.
+     *
+     * <p>Blocking internals raise the failures that used to arrive through a
+     * future, and every call site in this library was written against what
+     * {@code join()} produced: a {@link CancellationException} raw, a
+     * {@link CompletionException} passed straight through, and anything else
+     * wrapped in one. Keeping that shape is what let the future come out from
+     * under several hundred call sites without any of them changing how they
+     * read a failure — {@link #unwrap(Throwable)} and an {@code instanceof}
+     * still mean what they meant.
+     *
+     * <p>Declared to return so a caller can write {@code throw propagate(x)}
+     * and the compiler can see the path ends there. It never returns.
+     *
+     * @param failure the failure to rethrow
+     * @return never; the return type exists for definite assignment
+     */
+    public static RuntimeException propagate(Throwable failure) {
+        if (failure instanceof CancellationException cancellation) {
+            throw cancellation;
+        }
+        if (failure instanceof CompletionException completion) {
+            throw completion;
+        }
+        if (failure instanceof Error error) {
+            throw error;
+        }
+        throw new CompletionException(failure);
+    }
+
+    /**
      * Returns a failure's message, never {@code null}.
      *
      * @param failure the failure

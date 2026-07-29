@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
@@ -500,11 +501,12 @@ class DistributedMessageHandlerTest {
                 case "getWriteQueueDepth" -> 0;
                 case "getCodeLength" -> 1;
                 case "isServerConnection", "isReadingContinuously" -> false;
-                case "writeAsync" -> {
+                case "write" -> {
                     if (arguments[0] instanceof OutgoingMessage message) {
                         outgoing.add(message);
                     }
-                    yield writeFuture;
+                    Outcomes.raise(writeFuture);
+                    yield null;
                 }
                 case "toString" -> "ConnectionProbe";
                 default -> defaultValue(method.getReturnType());

@@ -86,7 +86,7 @@ public final class SocketListener implements Listener {
         while (listening) {
             Socket client;
             try {
-                client = tcpListener.acceptTcpClientAsync().join();
+                client = tcpListener.acceptTcpClient();
             } catch (RuntimeException failure) {
                 if (!listening) {
                     // Our own stop() closed the socket out from under the

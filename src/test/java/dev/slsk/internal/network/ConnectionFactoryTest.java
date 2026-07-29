@@ -99,14 +99,14 @@ class ConnectionFactoryTest {
                         client);
 
         client.connectAction = () -> client.connected = true;
-        connection.connectAsync(null).get(1, TimeUnit.SECONDS);
+        connection.connect(null);
         assertTrue(readEvent.await(1, TimeUnit.SECONDS));
         assertEquals(1, connected.get());
         assertEquals(1, read.get());
         assertEquals(-1, connection.getOptions().getInactivityTimeout());
 
         client.connected = true;
-        connection.writeAsync(() -> new byte[] {1}).get(1, TimeUnit.SECONDS);
+        connection.write(() -> new byte[] {1});
         assertEquals(1, written.get());
 
         connection.disconnect("done");
@@ -150,15 +150,14 @@ class ConnectionFactoryTest {
         }
 
         @Override
-        public CompletableFuture<Void> connectAsync(InetAddress address, int port) {
+        public void connect(InetAddress address, int port) {
             if (connectAction != null) {
                 connectAction.run();
             }
-            return CompletableFuture.completedFuture(null);
         }
 
         @Override
-        public CompletableFuture<ProxyEndpoint> connectThroughProxyAsync(
+        public ProxyEndpoint connectThroughProxy(
                 InetAddress proxyAddress,
                 int proxyPort,
                 InetAddress destinationAddress,
@@ -166,7 +165,7 @@ class ConnectionFactoryTest {
                 String username,
                 String password,
                 CancellationSignal cancellationSignal) {
-            return CompletableFuture.completedFuture(new ProxyEndpoint("127.0.0.1", proxyPort));
+            return new ProxyEndpoint("127.0.0.1", proxyPort);
         }
 
         @Override

@@ -10,6 +10,7 @@ import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.ConnectionReadException;
 import dev.slsk.exceptions.ConnectionWriteDroppedException;
 import dev.slsk.exceptions.ConnectionWriteException;
+import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.ProxyOptions;
@@ -23,11 +24,11 @@ import java.net.SocketTimeoutException;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.Callable;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
@@ -85,7 +86,9 @@ public class SocketConnection implements Connection {
             new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<ConnectionEventListener<ConnectionStateChangedEvent>> stateChangedListeners =
             new CopyOnWriteArrayList<>();
-    private final CompletableFuture<String> disconnectFuture = new CompletableFuture<>();
+    private final CountDownLatch disconnected = new CountDownLatch(1);
+    private volatile String disconnectMessage;
+    private volatile Exception disconnectFailure;
     private final Semaphore writeSemaphore = new Semaphore(1);
     private final Semaphore writeQueueSemaphore;
 
@@ -236,8 +239,20 @@ public class SocketConnection implements Connection {
         return options.getWriteQueueSize() - writeQueueSemaphore.availablePermits();
     }
 
+    /**
+     * Connects to the configured endpoint on the calling thread.
+     *
+     * <p>The connect attempt itself still runs on a thread of its own, because
+     * the caller has to be able to give up on it: a lapsed connect timeout, or
+     * a cancellation, abandons the attempt rather than waiting for the
+     * operating system to finish it. That is the one thing here a second thread
+     * genuinely buys, and it is now the only one — the two that used to sit
+     * around it, one to bridge the transport's future and one to hold the
+     * caller's, are gone along with the shared timer this scheduled its
+     * deadline on.
+     */
     @Override
-    public CompletableFuture<Void> connectAsync(CancellationSignal cancellationSignal) {
+    public void connect(CancellationSignal cancellationSignal) {
         if (state != ConnectionState.PENDING && state != ConnectionState.DISCONNECTED) {
             throw new IllegalStateException("Invalid attempt to connect a connected or "
                     + "transitioning connection (current state: "
@@ -247,70 +262,71 @@ public class SocketConnection implements Connection {
 
         changeState(ConnectionState.CONNECTING, "Connecting to " + formatEndpoint(ipEndpoint), null);
 
-        CompletableFuture<?> connectTask;
-        try {
-            ProxyOptions proxy = options.getProxyOptions();
-            if (proxy != null) {
-                connectTask = tcpClient.connectThroughProxyAsync(
-                        proxy.getIpEndpoint().getAddress(),
-                        proxy.getIpEndpoint().getPort(),
-                        ipEndpoint.getAddress(),
-                        ipEndpoint.getPort(),
-                        proxy.getUsername(),
-                        proxy.getPassword(),
-                        token);
-            } else {
-                connectTask = tcpClient.connectAsync(ipEndpoint.getAddress(), ipEndpoint.getPort());
-            }
-        } catch (Exception exception) {
-            return connectFailureFuture(exception);
-        }
-
-        CompletableFuture<Void> gate = new CompletableFuture<>();
-        ScheduledFuture<?> timeoutTask;
         try {
             int timeout = options.getConnectTimeout();
             if (timeout < -1) {
                 throw new IllegalArgumentException("Connect timeout must be -1 or non-negative");
             }
-            timeoutTask = timeout == -1
-                    ? null
-                    : TIMER_EXECUTOR.schedule(
-                            () -> gate.completeExceptionally(
-                                    new TimeoutException("Operation timed out after " + timeout + " milliseconds")),
-                            timeout,
-                            TimeUnit.MILLISECONDS);
+            awaitTransportConnect(token, timeout);
+            startTimers();
+            stream = tcpClient.getStream();
+            setStreamTimeouts();
+            changeState(ConnectionState.CONNECTED, "Connected to " + formatEndpoint(ipEndpoint), null);
         } catch (Exception exception) {
-            return connectFailureFuture(exception);
+            throw Failures.propagate(handleConnectFailure(exception));
         }
+    }
+
+    /**
+     * Runs the transport connect and waits for it, the deadline, or
+     * cancellation — whichever lands first.
+     *
+     * <p>A one-slot queue rather than a future: the first outcome offered wins
+     * and the rest are dropped, which is exactly what completing a future once
+     * did, without the composition.
+     */
+    private void awaitTransportConnect(CancellationSignal token, int timeout) throws Exception {
+        ArrayBlockingQueue<Object> gate = new ArrayBlockingQueue<>(1);
+        Object connected = new Object();
+        IO_EXECUTOR.execute(() -> {
+            try {
+                ProxyOptions proxy = options.getProxyOptions();
+                if (proxy != null) {
+                    tcpClient.connectThroughProxy(
+                            proxy.getIpEndpoint().getAddress(),
+                            proxy.getIpEndpoint().getPort(),
+                            ipEndpoint.getAddress(),
+                            ipEndpoint.getPort(),
+                            proxy.getUsername(),
+                            proxy.getPassword(),
+                            token);
+                } else {
+                    tcpClient.connect(ipEndpoint.getAddress(), ipEndpoint.getPort());
+                }
+                gate.offer(connected);
+            } catch (Throwable failure) {
+                gate.offer(failure);
+            }
+        });
 
         CancellationSubscription registration =
-                token.register(() -> gate.completeExceptionally(new CancellationException("Operation cancelled")));
-        connectTask.whenComplete((ignored, exception) -> {
-            if (exception == null) {
-                gate.complete(null);
-            } else {
-                gate.completeExceptionally(unwrap(exception));
-            }
-        });
+                token.register(() -> gate.offer(new CancellationException("Operation cancelled")));
+        Object outcome;
+        try {
+            outcome = timeout == -1 ? gate.take() : gate.poll(timeout, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new CancellationException("Operation cancelled");
+        } finally {
+            registration.close();
+        }
 
-        return async(() -> {
-            try {
-                await(gate);
-                startTimers();
-                stream = tcpClient.getStream();
-                setStreamTimeouts();
-                changeState(ConnectionState.CONNECTED, "Connected to " + formatEndpoint(ipEndpoint), null);
-                return null;
-            } catch (Exception exception) {
-                throw handleConnectFailure(exception);
-            } finally {
-                registration.close();
-                if (timeoutTask != null) {
-                    timeoutTask.cancel(false);
-                }
-            }
-        });
+        if (outcome == null) {
+            throw new TimeoutException("Operation timed out after " + timeout + " milliseconds");
+        }
+        if (outcome instanceof Throwable failure) {
+            throw asException(unwrap(failure));
+        }
     }
 
     /**
@@ -360,13 +376,14 @@ public class SocketConnection implements Connection {
     }
 
     @Override
-    public CompletableFuture<byte[]> readAsync(long length, CancellationSignal cancellationSignal) {
-        return readAsync(length, null, cancellationSignal);
+    public byte[] read(long length, CancellationSignal cancellationSignal) {
+        return read(length, null, cancellationSignal);
     }
 
     /**
-     * Reads {@code length} bytes, reporting progress to one listener scoped to
-     * this read in addition to the registered data-read listeners.
+     * Reads {@code length} bytes on the calling thread, reporting progress to
+     * one listener scoped to this read in addition to the registered data-read
+     * listeners.
      *
      * <p>Callers that want progress for a single read use this instead of
      * adding and removing themselves from the shared listener list around it.
@@ -376,47 +393,25 @@ public class SocketConnection implements Connection {
      * @param length the number of bytes to read
      * @param scopedProgress the progress listener for this read, or {@code null}
      * @param cancellationSignal the cancellation signal
-     * @return a future containing the bytes read
-     */
-    protected CompletableFuture<byte[]> readAsync(
-            long length,
-            ConnectionEventListener<ConnectionDataEvent> scopedProgress,
-            CancellationSignal cancellationSignal) {
-        // Validated here, before dispatching, so argument and state errors stay
-        // synchronous for the caller instead of surfacing inside the future.
-        validateRead(length);
-        return async(() -> read(length, scopedProgress, cancellationSignal));
-    }
-
-    /**
-     * Reads {@code length} bytes on the calling thread.
-     *
-     * <p>For callers that are already running on their own virtual thread and
-     * would otherwise dispatch a read and immediately block on the result. The
-     * framed read loop does exactly that three times per protocol message, so
-     * going through {@link #readAsync} there cost three thread creations and
-     * three futures per frame to no purpose.
-     *
-     * @param length the number of bytes to read
-     * @param scopedProgress the progress listener for this read, or {@code null}
-     * @param cancellationSignal the cancellation signal
      * @return the bytes read
-     * @throws Exception if the read fails; the connection is disconnected first
      */
     protected final byte[] read(
             long length,
             ConnectionEventListener<ConnectionDataEvent> scopedProgress,
-            CancellationSignal cancellationSignal)
-            throws Exception {
+            CancellationSignal cancellationSignal) {
         validateRead(length);
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        readInternal(length, output, SocketConnection::grantAll, null, scopedProgress, token);
+        try {
+            readInternal(length, output, SocketConnection::grantAll, null, scopedProgress, token);
+        } catch (Exception exception) {
+            throw Failures.propagate(exception);
+        }
         return output.toByteArray();
     }
 
     @Override
-    public CompletableFuture<Void> readAsync(
+    public void read(
             long length,
             OutputStream outputStream,
             ConnectionGovernor governor,
@@ -429,53 +424,59 @@ public class SocketConnection implements Connection {
         validateConnected();
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         ConnectionGovernor effectiveGovernor = governor == null ? SocketConnection::grantAll : governor;
-        return async(() -> {
+        try {
             readInternal(length, outputStream, effectiveGovernor, reporter, null, token);
-            return null;
-        });
+        } catch (Exception exception) {
+            throw Failures.propagate(exception);
+        }
     }
 
     @Override
-    public CompletableFuture<String> waitForDisconnect(CancellationSignal cancellationSignal) {
+    public String awaitDisconnect(CancellationSignal cancellationSignal) {
         if (cancellationSignal != null) {
             cancellationSignal.register(() -> disconnect(null, new CancellationException("Operation cancelled")));
         }
-        return disconnectFuture;
+        // Uninterruptibly, restoring the flag on the way out: this is what
+        // join() did, and an interrupt here belongs to whatever the caller does
+        // next rather than to a connection that has not gone down yet.
+        boolean interrupted = false;
+        try {
+            while (true) {
+                try {
+                    disconnected.await();
+                    break;
+                } catch (InterruptedException exception) {
+                    interrupted = true;
+                }
+            }
+        } finally {
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        if (disconnectFailure != null) {
+            throw Failures.propagate(disconnectFailure);
+        }
+        return disconnectMessage;
     }
 
     @Override
-    public CompletableFuture<Void> writeAsync(byte[] bytes, CancellationSignal cancellationSignal) {
+    public void write(byte[] bytes, CancellationSignal cancellationSignal) {
         if (bytes == null || bytes.length == 0) {
             throw new IllegalArgumentException("Invalid attempt to send empty data");
         }
         validateConnected();
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
-        return async(() -> {
+        try {
             writeInternal(
                     bytes.length, new java.io.ByteArrayInputStream(bytes), SocketConnection::grantAll, null, token);
-            return null;
-        });
-    }
-
-    /**
-     * Writes {@code bytes} on the calling thread.
-     *
-     * <p>Same work as {@link #writeAsync(byte[], CancellationSignal)} without
-     * the dispatch, for callers that already own a virtual thread. See
-     * {@link Connection#write(byte[], CancellationSignal)}.
-     */
-    @Override
-    public void write(byte[] bytes, CancellationSignal cancellationSignal) throws Exception {
-        if (bytes == null || bytes.length == 0) {
-            throw new IllegalArgumentException("Invalid attempt to send empty data");
+        } catch (Exception exception) {
+            throw Failures.propagate(exception);
         }
-        validateConnected();
-        CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
-        writeInternal(bytes.length, new java.io.ByteArrayInputStream(bytes), SocketConnection::grantAll, null, token);
     }
 
     @Override
-    public CompletableFuture<Void> writeAsync(
+    public void write(
             long length,
             InputStream inputStream,
             ConnectionGovernor governor,
@@ -488,10 +489,11 @@ public class SocketConnection implements Connection {
         validateConnected();
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         ConnectionGovernor effectiveGovernor = governor == null ? SocketConnection::grantAll : governor;
-        return async(() -> {
+        try {
             writeInternal(length, inputStream, effectiveGovernor, reporter, token);
-            return null;
-        });
+        } catch (Exception exception) {
+            throw Failures.propagate(exception);
+        }
     }
 
     @Override
@@ -539,18 +541,25 @@ public class SocketConnection implements Connection {
     }
 
     /**
-     * Raises the disconnected event and settles the disconnect future. Must be
+     * Raises the disconnected event and releases the disconnect latch. Must be
      * called with no lock held.
      */
     private void publishDisconnected(String message, Exception exception) {
-        ConnectionDisconnectedEvent disconnected = new ConnectionDisconnectedEvent(message, exception);
+        ConnectionDisconnectedEvent eventData = new ConnectionDisconnectedEvent(message, exception);
         for (ConnectionEventListener<ConnectionDisconnectedEvent> listener : disconnectedListeners) {
-            listener.handle(this, disconnected);
+            listener.handle(this, eventData);
         }
-        if (exception == null) {
-            disconnectFuture.complete(message);
-        } else {
-            disconnectFuture.completeExceptionally(exception);
+        // Written before the latch drops and only for the first caller through,
+        // so a waiter that is released sees the reason that released it and a
+        // second disconnect cannot rewrite it.
+        if (disconnected.getCount() > 0) {
+            synchronized (this) {
+                if (disconnected.getCount() > 0) {
+                    disconnectMessage = message;
+                    disconnectFailure = exception;
+                    disconnected.countDown();
+                }
+            }
         }
     }
 
@@ -874,10 +883,6 @@ public class SocketConnection implements Connection {
         }
     }
 
-    private CompletableFuture<Void> connectFailureFuture(Exception exception) {
-        return failedFuture(handleConnectFailure(exception));
-    }
-
     private Exception handleConnectFailure(Exception exception) {
         Exception actual = asException(unwrap(exception));
         disconnect("SocketConnection Error: " + actual.getMessage(), actual);
@@ -987,37 +992,6 @@ public class SocketConnection implements Connection {
         } else {
             dispatch.run();
         }
-    }
-
-    private static <T> CompletableFuture<T> async(Callable<T> callable) {
-        CompletableFuture<T> future = new CompletableFuture<>();
-        IO_EXECUTOR.execute(() -> {
-            try {
-                future.complete(callable.call());
-            } catch (Throwable exception) {
-                future.completeExceptionally(exception);
-            }
-        });
-        return future;
-    }
-
-    private static <T> T await(CompletableFuture<T> future) throws Exception {
-        try {
-            return future.get();
-        } catch (ExecutionException exception) {
-            Throwable cause = unwrap(exception);
-            if (cause instanceof Exception actual) {
-                throw actual;
-            }
-            throw new RuntimeException(cause);
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new CancellationException("Operation cancelled");
-        }
-    }
-
-    private static <T> CompletableFuture<T> failedFuture(Throwable exception) {
-        return CompletableFuture.failedFuture(exception);
     }
 
     private static Throwable unwrap(Throwable exception) {

@@ -24,6 +24,7 @@ import dev.slsk.exceptions.TransferException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Blocking;
+import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
@@ -829,13 +830,13 @@ class EngineUploadTest {
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("writeAsync")
+            if (method.getName().equals("write")
                     && arguments != null
                     && arguments.length == 2
                     && arguments[0] instanceof OutgoingMessage message) {
                 messages.add(message);
                 lastToken = (CancellationSignal) arguments[1];
-                return CompletableFuture.completedFuture(null);
+                return null;
             }
             if (method.getName().equals("getState")) {
                 return ConnectionState.CONNECTED;
@@ -866,22 +867,21 @@ class EngineUploadTest {
                 Connection.class.getClassLoader(), new Class<?>[] {Connection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) throws IOException {
-            if (method.getName().equals("readAsync")
+            if (method.getName().equals("read")
                     && arguments != null
                     && arguments.length == 2
                     && arguments[0] instanceof Long length) {
                 if (length == 8) {
-                    byte[] bytes = offsetBytes == null
+                    return offsetBytes == null
                             ? ByteBuffer.allocate(8)
                                     .order(ByteOrder.LITTLE_ENDIAN)
                                     .putLong(offset)
                                     .array()
                             : offsetBytes;
-                    return CompletableFuture.completedFuture(bytes);
                 }
-                return CompletableFuture.failedFuture(new ConnectionReadException("peer disconnected"));
+                throw new ConnectionReadException("peer disconnected");
             }
-            if (method.getName().equals("writeAsync")
+            if (method.getName().equals("write")
                     && arguments != null
                     && arguments.length == 5
                     && arguments[0] instanceof Long length) {
@@ -890,10 +890,11 @@ class EngineUploadTest {
                 if (disconnectOnWrite != null) {
                     disconnectedListener.handle(
                             proxy, new ConnectionDisconnectedEvent("connection lost", disconnectOnWrite));
-                    return new CompletableFuture<>();
+                    // Parks like a write to a peer that has stopped reading.
+                    new CompletableFuture<Void>().join();
                 }
                 if (writeFailure != null) {
-                    return CompletableFuture.failedFuture(writeFailure);
+                    return Outcomes.raise(CompletableFuture.<Void>failedFuture(writeFailure));
                 }
                 InputStream stream = (InputStream) arguments[1];
                 ConnectionGovernor governor = (ConnectionGovernor) arguments[2];

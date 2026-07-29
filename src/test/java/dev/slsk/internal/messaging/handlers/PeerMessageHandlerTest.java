@@ -94,20 +94,14 @@ class PeerMessageHandlerTest {
     void correlatedResponsesCompleteExpectedWaits() {
         Fixture fixture = new Fixture(new SoulseekClientOptions());
 
-        fixture.handler
-                .handleMessageReadAsync(
-                        fixture.connection.proxy,
-                        new FolderContentsResponse(TOKEN, "dir", List.of(new Directory("dir"))).toByteArray())
-                .join();
-        fixture.handler
-                .handleMessageReadAsync(fixture.connection.proxy, new UserInfo("description", 2, 3, true).toByteArray())
-                .join();
-        fixture.handler
-                .handleMessageReadAsync(fixture.connection.proxy, new TransferResponse(TOKEN, 123L).toByteArray())
-                .join();
-        fixture.handler
-                .handleMessageReadAsync(fixture.connection.proxy, new PlaceInQueueResponse(FILENAME, 7).toByteArray())
-                .join();
+        fixture.handler.handleMessageRead(
+                fixture.connection.proxy,
+                new FolderContentsResponse(TOKEN, "dir", List.of(new Directory("dir"))).toByteArray());
+        fixture.handler.handleMessageRead(
+                fixture.connection.proxy, new UserInfo("description", 2, 3, true).toByteArray());
+        fixture.handler.handleMessageRead(fixture.connection.proxy, new TransferResponse(TOKEN, 123L).toByteArray());
+        fixture.handler.handleMessageRead(
+                fixture.connection.proxy, new PlaceInQueueResponse(FILENAME, 7).toByteArray());
 
         assertInstanceOf(
                 List.class,
@@ -128,21 +122,17 @@ class PeerMessageHandlerTest {
         Fixture fixture = new Fixture(new SoulseekClientOptions());
         BrowseResponse response = new BrowseResponse(List.of(new Directory("shared")));
 
-        fixture.handler
-                .handleMessageReadAsync(fixture.connection.proxy, response.toByteArray())
-                .join();
+        fixture.handler.handleMessageRead(fixture.connection.proxy, response.toByteArray());
 
         WaitKey key = new WaitKey(MessageCode.Peer.BROWSE_RESPONSE, USERNAME);
         assertInstanceOf(BrowseResponse.class, fixture.waiter.completed.get(key));
 
-        fixture.handler
-                .handleMessageReadAsync(
-                        fixture.connection.proxy,
-                        new MessageBuilder()
-                                .writeCode(MessageCode.Peer.BROWSE_RESPONSE)
-                                .writeByte(1)
-                                .build())
-                .join();
+        fixture.handler.handleMessageRead(
+                fixture.connection.proxy,
+                new MessageBuilder()
+                        .writeCode(MessageCode.Peer.BROWSE_RESPONSE)
+                        .writeByte(1)
+                        .build());
         assertInstanceOf(MessageReadException.class, fixture.waiter.failures.get(key));
         assertTrue(fixture.diagnostic.containsWarning("Error handling peer message"));
     }
@@ -156,13 +146,9 @@ class PeerMessageHandlerTest {
         SearchResponse response =
                 new SearchResponse(USERNAME, TOKEN, true, 100, 0, List.of(new File(1, FILENAME, 123L, "mp3")));
 
-        fixture.handler
-                .handleMessageReadAsync(fixture.connection.proxy, response.toByteArray())
-                .join();
+        fixture.handler.handleMessageRead(fixture.connection.proxy, response.toByteArray());
         fixture.client.searches.clear();
-        fixture.handler
-                .handleMessageReadAsync(fixture.connection.proxy, response.toByteArray())
-                .join();
+        fixture.handler.handleMessageRead(fixture.connection.proxy, response.toByteArray());
 
         assertEquals(1, search.getResponseCount());
         assertEquals(1, search.getFileCount());
@@ -178,11 +164,8 @@ class PeerMessageHandlerTest {
     void infoRequestWritesTheProfileThisAccountSet() {
         Fixture fixture = new Fixture(new UserProfile("resolved", Optional.of(new byte[] {7}), 2, 3, true));
 
-        fixture.handler
-                .handleMessageReadAsync(
-                        fixture.connection.proxy,
-                        new dev.slsk.internal.messaging.messages.UserInfoRequest().toByteArray())
-                .join();
+        fixture.handler.handleMessageRead(
+                fixture.connection.proxy, new dev.slsk.internal.messaging.messages.UserInfoRequest().toByteArray());
 
         assertArrayEquals(
                 new UserInfo("resolved", 2, 3, true, new byte[] {7}).toByteArray(),
@@ -194,11 +177,8 @@ class PeerMessageHandlerTest {
     void infoRequestAnswersEvenWhenNoProfileWasSet() {
         Fixture fixture = new Fixture(new SoulseekClientOptions());
 
-        fixture.handler
-                .handleMessageReadAsync(
-                        fixture.connection.proxy,
-                        new dev.slsk.internal.messaging.messages.UserInfoRequest().toByteArray())
-                .join();
+        fixture.handler.handleMessageRead(
+                fixture.connection.proxy, new dev.slsk.internal.messaging.messages.UserInfoRequest().toByteArray());
 
         // Silence reads as a broken client, and clients that look broken do not
         // get served.
@@ -209,23 +189,17 @@ class PeerMessageHandlerTest {
     void searchRequestWritesNonemptyResponseAndSuppressesEmptyOrNull() {
         List<SearchFile> matches = List.of(new SearchFile(FILENAME, 123L, FileAttributes.none()));
         Fixture fixture = new Fixture(catalog(null, null, (requester, terms) -> matches));
-        fixture.handler
-                .handleMessageReadAsync(fixture.connection.proxy, peerSearchRequest(TOKEN, "query"))
-                .join();
+        fixture.handler.handleMessageRead(fixture.connection.proxy, peerSearchRequest(TOKEN, "query"));
         assertArrayEquals(
                 Catalogs.searchResponse("me", TOKEN, matches, true, 0, 0).toByteArray(),
                 fixture.connection.bytes.getFirst());
 
         fixture = new Fixture(catalog(null, null, (requester, terms) -> List.of()));
-        fixture.handler
-                .handleMessageReadAsync(fixture.connection.proxy, peerSearchRequest(TOKEN, "empty"))
-                .join();
+        fixture.handler.handleMessageRead(fixture.connection.proxy, peerSearchRequest(TOKEN, "empty"));
         assertTrue(fixture.connection.bytes.isEmpty());
 
         fixture = new Fixture(catalog(null, null, (requester, terms) -> List.of()));
-        fixture.handler
-                .handleMessageReadAsync(fixture.connection.proxy, peerSearchRequest(TOKEN, "null"))
-                .join();
+        fixture.handler.handleMessageRead(fixture.connection.proxy, peerSearchRequest(TOKEN, "null"));
         assertTrue(fixture.connection.bytes.isEmpty(), "a search that matches nothing is not answered");
     }
 
@@ -240,9 +214,7 @@ class PeerMessageHandlerTest {
         List<SearchFile> matches = List.of(new SearchFile("shared\\hit.mp3", 42, FileAttributes.none()));
         Fixture matched = new Fixture(catalog(null, null, (requester, terms) -> matches));
 
-        matched.handler
-                .handleMessageReadAsync(matched.connection.proxy, peerSearchRequest(TOKEN, "hit"))
-                .join();
+        matched.handler.handleMessageRead(matched.connection.proxy, peerSearchRequest(TOKEN, "hit"));
 
         assertArrayEquals(
                 Catalogs.searchResponse("me", TOKEN, matches, true, 0, 0).toByteArray(),
@@ -252,9 +224,7 @@ class PeerMessageHandlerTest {
         Fixture failed = new Fixture(catalog(null, null, (requester, terms) -> {
             throw new IllegalStateException("search catalog");
         }));
-        failed.handler
-                .handleMessageReadAsync(failed.connection.proxy, peerSearchRequest(TOKEN, "failed"))
-                .join();
+        failed.handler.handleMessageRead(failed.connection.proxy, peerSearchRequest(TOKEN, "failed"));
         assertTrue(failed.diagnostic.containsWarning("Error resolving search response"));
     }
 
@@ -264,9 +234,7 @@ class PeerMessageHandlerTest {
                 new dev.slsk.Directory("shared", List.of(new SearchFile("shared\\song.mp3", 7, FileAttributes.none())));
         Fixture resolved = new Fixture(catalog(requester -> dev.slsk.BrowseResponse.of(List.of(shared)), null, null));
 
-        resolved.handler
-                .handleMessageReadAsync(resolved.connection.proxy, new BrowseRequest().toByteArray())
-                .join();
+        resolved.handler.handleMessageRead(resolved.connection.proxy, new BrowseRequest().toByteArray());
 
         assertArrayEquals(
                 Catalogs.browse(dev.slsk.BrowseResponse.of(List.of(shared))).toByteArray(),
@@ -280,9 +248,7 @@ class PeerMessageHandlerTest {
                 },
                 null,
                 null));
-        failed.handler
-                .handleMessageReadAsync(failed.connection.proxy, new BrowseRequest().toByteArray())
-                .join();
+        failed.handler.handleMessageRead(failed.connection.proxy, new BrowseRequest().toByteArray());
         assertEquals(1, failed.connection.bytes.size());
         assertArrayEquals(new BrowseResponse().toByteArray(), failed.connection.bytes.getFirst());
         assertTrue(failed.diagnostic.containsWarning("The share catalog failed to answer a browse"));
@@ -294,10 +260,8 @@ class PeerMessageHandlerTest {
                 new dev.slsk.Directory("shared", List.of(new SearchFile(FILENAME, 123L, FileAttributes.none())));
         Fixture resolved = new Fixture(catalog(null, (requester, path) -> List.of(shared), null));
 
-        resolved.handler
-                .handleMessageReadAsync(
-                        resolved.connection.proxy, new FolderContentsRequest(TOKEN, "shared").toByteArray())
-                .join();
+        resolved.handler.handleMessageRead(
+                resolved.connection.proxy, new FolderContentsRequest(TOKEN, "shared").toByteArray());
 
         FolderContentsResponse expected =
                 new FolderContentsResponse(TOKEN, "shared", List.of(Catalogs.directory(shared)));
@@ -310,10 +274,8 @@ class PeerMessageHandlerTest {
                     throw new IllegalStateException("directory catalog");
                 },
                 null));
-        failed.handler
-                .handleMessageReadAsync(
-                        failed.connection.proxy, new FolderContentsRequest(TOKEN, "shared").toByteArray())
-                .join();
+        failed.handler.handleMessageRead(
+                failed.connection.proxy, new FolderContentsRequest(TOKEN, "shared").toByteArray());
         assertTrue(failed.connection.outgoing.isEmpty());
         assertTrue(failed.diagnostic.containsWarning("The share catalog failed to answer a folder request"));
     }
@@ -326,18 +288,14 @@ class PeerMessageHandlerTest {
     @Test
     void queueDownloadSendsThePolicysAnswer() {
         Fixture queued = new Fixture(policy((request, context) -> new UploadPolicy.Decision.Queue(4)));
-        queued.handler
-                .handleMessageReadAsync(queued.connection.proxy, new QueueDownloadRequest(FILENAME).toByteArray())
-                .join();
+        queued.handler.handleMessageRead(queued.connection.proxy, new QueueDownloadRequest(FILENAME).toByteArray());
         assertArrayEquals(
                 new PlaceInQueueResponse(FILENAME, 4).toByteArray(),
                 queued.connection.outgoing.getFirst().toByteArray());
 
         Fixture denied = new Fixture(
                 policy((request, context) -> new UploadPolicy.Decision.Deny(RejectionReason.QUEUE_FULL, "No slot")));
-        denied.handler
-                .handleMessageReadAsync(denied.connection.proxy, new QueueDownloadRequest(FILENAME).toByteArray())
-                .join();
+        denied.handler.handleMessageRead(denied.connection.proxy, new QueueDownloadRequest(FILENAME).toByteArray());
         assertArrayEquals(
                 new UploadDenied(FILENAME, "No slot").toByteArray(),
                 denied.connection.outgoing.getFirst().toByteArray());
@@ -349,9 +307,7 @@ class PeerMessageHandlerTest {
         Fixture failed = new Fixture(policy((request, context) -> {
             throw new IllegalStateException("policy is broken");
         }));
-        failed.handler
-                .handleMessageReadAsync(failed.connection.proxy, new QueueDownloadRequest(FILENAME).toByteArray())
-                .join();
+        failed.handler.handleMessageRead(failed.connection.proxy, new QueueDownloadRequest(FILENAME).toByteArray());
 
         // Silence would leave the peer waiting on a read that never completes.
         assertArrayEquals(
@@ -362,11 +318,9 @@ class PeerMessageHandlerTest {
     @Test
     void downloadTransferRequestSendsQueuedOrTwoRejectionMessages() {
         Fixture queued = new Fixture(policy((request, context) -> new UploadPolicy.Decision.Allow()));
-        queued.handler
-                .handleMessageReadAsync(
-                        queued.connection.proxy,
-                        new TransferRequest(TransferDirection.DOWNLOAD, TOKEN, FILENAME).toByteArray())
-                .join();
+        queued.handler.handleMessageRead(
+                queued.connection.proxy,
+                new TransferRequest(TransferDirection.DOWNLOAD, TOKEN, FILENAME).toByteArray());
         assertEquals(1, queued.connection.outgoing.size());
         assertArrayEquals(
                 new TransferResponse(TOKEN, "Queued").toByteArray(),
@@ -374,11 +328,9 @@ class PeerMessageHandlerTest {
 
         Fixture rejected = new Fixture(policy(
                 (request, context) -> new UploadPolicy.Decision.Deny(RejectionReason.FILE_NOT_SHARED, "Rejected")));
-        rejected.handler
-                .handleMessageReadAsync(
-                        rejected.connection.proxy,
-                        new TransferRequest(TransferDirection.DOWNLOAD, TOKEN, FILENAME).toByteArray())
-                .join();
+        rejected.handler.handleMessageRead(
+                rejected.connection.proxy,
+                new TransferRequest(TransferDirection.DOWNLOAD, TOKEN, FILENAME).toByteArray());
         assertEquals(2, rejected.connection.outgoing.size());
         assertArrayEquals(
                 new TransferResponse(TOKEN, "Rejected").toByteArray(),
@@ -392,22 +344,16 @@ class PeerMessageHandlerTest {
     void uploadTransferRequestCompletesTrackedWaitAndCancelsUnknown() {
         Fixture tracked = new Fixture(new SoulseekClientOptions());
         tracked.client.downloads.put(1, new TransferInternal(TransferDirection.DOWNLOAD, USERNAME, FILENAME, TOKEN));
-        tracked.handler
-                .handleMessageReadAsync(
-                        tracked.connection.proxy,
-                        new TransferRequest(TransferDirection.UPLOAD, TOKEN, FILENAME).toByteArray())
-                .join();
+        tracked.handler.handleMessageRead(
+                tracked.connection.proxy, new TransferRequest(TransferDirection.UPLOAD, TOKEN, FILENAME).toByteArray());
         assertInstanceOf(
                 TransferRequest.class,
                 tracked.waiter.completed.get(new WaitKey(MessageCode.Peer.TRANSFER_REQUEST, USERNAME, FILENAME)));
         assertTrue(tracked.connection.outgoing.isEmpty());
 
         Fixture unknown = new Fixture(new SoulseekClientOptions());
-        unknown.handler
-                .handleMessageReadAsync(
-                        unknown.connection.proxy,
-                        new TransferRequest(TransferDirection.UPLOAD, TOKEN, FILENAME).toByteArray())
-                .join();
+        unknown.handler.handleMessageRead(
+                unknown.connection.proxy, new TransferRequest(TransferDirection.UPLOAD, TOKEN, FILENAME).toByteArray());
         assertArrayEquals(
                 new TransferResponse(TOKEN, "Cancelled").toByteArray(),
                 unknown.connection.outgoing.getFirst().toByteArray());
@@ -427,11 +373,8 @@ class PeerMessageHandlerTest {
     void offeredDownloadsAreTakenUpRatherThanCancelled() {
         Fixture taken = new Fixture(new SoulseekClientOptions());
         taken.client.disposition = PeerMessageHandlerClient.OfferDisposition.TAKEN;
-        taken.handler
-                .handleMessageReadAsync(
-                        taken.connection.proxy,
-                        new TransferRequest(TransferDirection.UPLOAD, TOKEN, FILENAME).toByteArray())
-                .join();
+        taken.handler.handleMessageRead(
+                taken.connection.proxy, new TransferRequest(TransferDirection.UPLOAD, TOKEN, FILENAME).toByteArray());
 
         // No reply from here. The download writes the acceptance once it has a
         // peer connection, which is the same message the tracked path sends —
@@ -449,11 +392,8 @@ class PeerMessageHandlerTest {
     void offersForFinishedDownloadsAreRefusedAsComplete() {
         Fixture done = new Fixture(new SoulseekClientOptions());
         done.client.disposition = PeerMessageHandlerClient.OfferDisposition.COMPLETE;
-        done.handler
-                .handleMessageReadAsync(
-                        done.connection.proxy,
-                        new TransferRequest(TransferDirection.UPLOAD, TOKEN, FILENAME).toByteArray())
-                .join();
+        done.handler.handleMessageRead(
+                done.connection.proxy, new TransferRequest(TransferDirection.UPLOAD, TOKEN, FILENAME).toByteArray());
         assertArrayEquals(
                 new TransferResponse(TOKEN, "Complete").toByteArray(),
                 done.connection.outgoing.getFirst().toByteArray());
@@ -467,21 +407,15 @@ class PeerMessageHandlerTest {
     @Test
     void placeRequestAnswersOnlyForSomeoneActuallyQueued() {
         Fixture placed = new Fixture(policy((request, context) -> new UploadPolicy.Decision.Queue(9)));
-        placed.handler
-                .handleMessageReadAsync(placed.connection.proxy, new QueueDownloadRequest(FILENAME).toByteArray())
-                .join();
+        placed.handler.handleMessageRead(placed.connection.proxy, new QueueDownloadRequest(FILENAME).toByteArray());
         placed.connection.outgoing.clear();
-        placed.handler
-                .handleMessageReadAsync(placed.connection.proxy, new PlaceInQueueRequest(FILENAME).toByteArray())
-                .join();
+        placed.handler.handleMessageRead(placed.connection.proxy, new PlaceInQueueRequest(FILENAME).toByteArray());
         assertArrayEquals(
                 new PlaceInQueueResponse(FILENAME, 9).toByteArray(),
                 placed.connection.outgoing.getFirst().toByteArray());
 
         Fixture absent = new Fixture(policy((request, context) -> new UploadPolicy.Decision.Allow()));
-        absent.handler
-                .handleMessageReadAsync(absent.connection.proxy, new PlaceInQueueRequest(FILENAME).toByteArray())
-                .join();
+        absent.handler.handleMessageRead(absent.connection.proxy, new PlaceInQueueRequest(FILENAME).toByteArray());
         assertTrue(absent.connection.outgoing.isEmpty());
     }
 
@@ -493,12 +427,9 @@ class PeerMessageHandlerTest {
         fixture.handler.addDownloadDeniedListener((sender, eventData) -> deniedEvents.add(eventData));
         fixture.handler.addDownloadFailedListener((sender, eventData) -> failedEvents.add(eventData));
 
-        fixture.handler
-                .handleMessageReadAsync(fixture.connection.proxy, new UploadDenied(FILENAME, "No slot").toByteArray())
-                .join();
-        fixture.handler
-                .handleMessageReadAsync(fixture.connection.proxy, new UploadFailed(FILENAME).toByteArray())
-                .join();
+        fixture.handler.handleMessageRead(
+                fixture.connection.proxy, new UploadDenied(FILENAME, "No slot").toByteArray());
+        fixture.handler.handleMessageRead(fixture.connection.proxy, new UploadFailed(FILENAME).toByteArray());
 
         WaitKey key = new WaitKey(MessageCode.Peer.TRANSFER_REQUEST, USERNAME, FILENAME);
         assertInstanceOf(TransferReportedFailedException.class, fixture.waiter.failures.get(key));
@@ -508,11 +439,8 @@ class PeerMessageHandlerTest {
         assertEquals(FILENAME, failedEvents.getFirst().getFilename());
 
         Fixture deniedOnly = new Fixture(new SoulseekClientOptions());
-        deniedOnly
-                .handler
-                .handleMessageReadAsync(
-                        deniedOnly.connection.proxy, new UploadDenied(FILENAME, "No slot").toByteArray())
-                .join();
+        deniedOnly.handler.handleMessageRead(
+                deniedOnly.connection.proxy, new UploadDenied(FILENAME, "No slot").toByteArray());
         assertInstanceOf(TransferRejectedException.class, deniedOnly.waiter.failures.get(key));
     }
 
@@ -628,7 +556,10 @@ class PeerMessageHandlerTest {
 
         private Fixture(SoulseekClientOptions options, ShareCatalog catalog, UserProfile profile, UploadPolicy policy) {
             client = new FakeClient(options, waiter, catalog, profile, policy);
-            handler = new DefaultPeerMessageHandler(client, diagnostic);
+            // Answers run on the calling thread here. In production they run
+            // off the read loop, which is the point of the seam; a test that
+            // asserts on an answer should not have to wait for one.
+            handler = new DefaultPeerMessageHandler(client, diagnostic, Runnable::run);
         }
     }
 
@@ -859,7 +790,7 @@ class PeerMessageHandlerTest {
                 case "getUsername" -> USERNAME;
                 case "getIpEndpoint" -> ENDPOINT;
                 case "getId" -> UUID.fromString("00000000-0000-0000-0000-000000000001");
-                case "writeAsync" -> {
+                case "write" -> {
                     if (arguments[0] instanceof byte[] value) {
                         bytes.add(Arrays.copyOf(value, value.length));
                     } else if (arguments[0] instanceof OutgoingMessage message) {
@@ -868,7 +799,7 @@ class PeerMessageHandlerTest {
                         rawLength = length;
                         rawStream = (InputStream) arguments[1];
                     }
-                    yield CompletableFuture.completedFuture(null);
+                    yield null;
                 }
                 case "toString" -> "ConnectionProbe";
                 default -> defaultValue(method.getReturnType());

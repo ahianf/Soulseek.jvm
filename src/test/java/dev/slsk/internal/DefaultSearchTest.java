@@ -308,11 +308,9 @@ class DefaultSearchTest {
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("writeAsync")
-                    && arguments.length == 2
-                    && arguments[0] instanceof byte[] bytes) {
+            if (method.getName().equals("write") && arguments.length == 2 && arguments[0] instanceof byte[] bytes) {
                 messages.add(bytes);
-                return CompletableFuture.completedFuture(null);
+                return null;
             }
             return defaultValue(method.getReturnType());
         }

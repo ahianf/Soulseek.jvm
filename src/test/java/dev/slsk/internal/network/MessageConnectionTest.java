@@ -30,8 +30,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
@@ -80,7 +80,7 @@ class MessageConnectionTest {
         client.connectAction = () -> client.connected = true;
         DefaultMessageConnection connection = new DefaultMessageConnection(ENDPOINT, OPTIONS, 4, client);
 
-        connection.connectAsync(null).get(1, TimeUnit.SECONDS);
+        connection.connect(null);
         awaitCondition(connection::isReadingContinuously);
 
         assertTrue(connection.isReadingContinuously());
@@ -99,8 +99,8 @@ class MessageConnectionTest {
         assertFalse(connection.isReadingContinuously());
         connection.startReadingContinuously();
         awaitCondition(connection::isReadingContinuously);
-        CompletableFuture<Void> duplicate = connection.readContinuouslyAsync();
-        duplicate.get(1, TimeUnit.SECONDS);
+        // A second entry returns at once rather than starting a second loop.
+        connection.readContinuously();
 
         connection.close();
         awaitCondition(() -> !connection.isReadingContinuously());
@@ -167,10 +167,9 @@ class MessageConnectionTest {
             throw injected;
         });
 
-        CompletableFuture<String> disconnected = connection.waitForDisconnect(null);
         connection.startReadingContinuously();
 
-        ExecutionException thrown = assertThrows(ExecutionException.class, () -> disconnected.get(1, TimeUnit.SECONDS));
+        CompletionException thrown = assertThrows(CompletionException.class, () -> connection.awaitDisconnect(null));
         assertSame(injected, thrown.getCause());
         connection.close();
     }
@@ -212,7 +211,7 @@ class MessageConnectionTest {
             written.set(args);
         });
 
-        connection.writeAsync(() -> bytes, token).get(1, TimeUnit.SECONDS);
+        connection.write(() -> bytes, token);
 
         assertArrayEquals(bytes, stream.writtenBytes());
         assertSame(bytes, written.get().getMessage());
@@ -224,15 +223,15 @@ class MessageConnectionTest {
     @DisplayName("Message write validates serialization and state")
     void validatesWrite() {
         DefaultMessageConnection disconnected = new DefaultMessageConnection("alice", ENDPOINT);
-        assertThrows(IllegalArgumentException.class, () -> disconnected.writeAsync((OutgoingMessage) null));
+        assertThrows(IllegalArgumentException.class, () -> disconnected.write((OutgoingMessage) null));
         RuntimeException cause = new RuntimeException("broken");
         MessageException serialization = assertThrows(
                 MessageException.class,
-                () -> disconnected.writeAsync(() -> {
+                () -> disconnected.write(() -> {
                     throw cause;
                 }));
         assertSame(cause, serialization.getCause());
-        assertThrows(IllegalStateException.class, () -> disconnected.writeAsync(() -> new byte[] {1}));
+        assertThrows(IllegalStateException.class, () -> disconnected.write(() -> new byte[] {1}));
         disconnected.close();
     }
 
@@ -245,9 +244,8 @@ class MessageConnectionTest {
         DefaultMessageConnection connection =
                 new DefaultMessageConnection(ENDPOINT, OPTIONS, 4, new FakeTcpClient(stream, true));
 
-        ExecutionException failure = assertThrows(
-                ExecutionException.class,
-                () -> connection.writeAsync(() -> new byte[] {1}).get(1, TimeUnit.SECONDS));
+        CompletionException failure =
+                assertThrows(CompletionException.class, () -> connection.write(() -> new byte[] {1}));
 
         assertTrue(failure.getCause() instanceof ConnectionWriteException);
         assertSame(cause, failure.getCause().getCause());
@@ -320,15 +318,14 @@ class MessageConnectionTest {
         }
 
         @Override
-        public CompletableFuture<Void> connectAsync(InetAddress address, int port) {
+        public void connect(InetAddress address, int port) {
             if (connectAction != null) {
                 connectAction.run();
             }
-            return CompletableFuture.completedFuture(null);
         }
 
         @Override
-        public CompletableFuture<ProxyEndpoint> connectThroughProxyAsync(
+        public ProxyEndpoint connectThroughProxy(
                 InetAddress proxyAddress,
                 int proxyPort,
                 InetAddress destinationAddress,
@@ -339,7 +336,7 @@ class MessageConnectionTest {
             if (connectAction != null) {
                 connectAction.run();
             }
-            return CompletableFuture.completedFuture(new ProxyEndpoint("127.0.0.1", proxyPort));
+            return new ProxyEndpoint("127.0.0.1", proxyPort);
         }
 
         @Override

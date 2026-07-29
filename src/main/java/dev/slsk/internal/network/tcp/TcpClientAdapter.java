@@ -6,7 +6,6 @@ package dev.slsk.internal.network.tcp;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.ProxyException;
-import dev.slsk.internal.common.NetworkExecutor;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -15,7 +14,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
 /**
@@ -60,20 +58,18 @@ final class TcpClientAdapter implements TcpClient {
     }
 
     @Override
-    public CompletableFuture<Void> connectAsync(InetAddress address, int port) {
+    public void connect(InetAddress address, int port) {
         Objects.requireNonNull(address, "address");
         validatePort(port, "port");
-        return NetworkExecutor.runAsync(() -> {
-            try {
-                socket.connect(new InetSocketAddress(address, port));
-            } catch (IOException exception) {
-                throw new CompletionException(exception);
-            }
-        });
+        try {
+            socket.connect(new InetSocketAddress(address, port));
+        } catch (IOException exception) {
+            throw new CompletionException(exception);
+        }
     }
 
     @Override
-    public CompletableFuture<ProxyEndpoint> connectThroughProxyAsync(
+    public ProxyEndpoint connectThroughProxy(
             InetAddress proxyAddress,
             int proxyPort,
             InetAddress destinationAddress,
@@ -95,8 +91,8 @@ final class TcpClientAdapter implements TcpClient {
             throw new IllegalArgumentException("The password length must be less than or equal to " + "255 characters");
         }
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
-        return NetworkExecutor.supplyAsync(() -> connectThroughProxyInternal(
-                proxyAddress, proxyPort, destinationAddress, destinationPort, token, username, password));
+        return connectThroughProxyInternal(
+                proxyAddress, proxyPort, destinationAddress, destinationPort, token, username, password);
     }
 
     @Override
@@ -129,8 +125,6 @@ final class TcpClientAdapter implements TcpClient {
         byte[] buffer = new byte[1024];
 
         try {
-            // The proxy handshake already runs on its own virtual thread, so
-            // it connects directly rather than dispatching and blocking.
             socket.connect(new InetSocketAddress(proxyAddress, proxyPort));
             NetworkStream stream = getStream();
 

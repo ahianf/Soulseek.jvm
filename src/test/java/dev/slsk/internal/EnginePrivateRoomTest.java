@@ -16,6 +16,7 @@ import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.internal.common.Blocking;
+import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.messaging.MessageCode;
@@ -320,7 +321,7 @@ class EnginePrivateRoomTest {
         }
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("writeAsync")
+            if (method.getName().equals("write")
                     && arguments.length == 2
                     && arguments[0] instanceof OutgoingMessage outgoing) {
                 sequence.add("write");
@@ -330,7 +331,8 @@ class EnginePrivateRoomTest {
                 if (synchronousFailure != null) {
                     throw synchronousFailure;
                 }
-                return result;
+                Outcomes.raise(result);
+                return null;
             }
             return defaultValue(method.getReturnType());
         }

@@ -7,6 +7,7 @@ package dev.slsk.internal.network;
 import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.internal.common.CommonUtils;
+import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.network.tcp.ConnectionDataEvent;
@@ -20,8 +21,6 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /** Provides framed client connections to the Soulseek network. */
@@ -144,12 +143,13 @@ public final class DefaultMessageConnection extends SocketConnection implements 
     @Override
     public void startReadingContinuously() {
         if (!readingContinuously) {
-            watchReadLoop(readContinuouslyAsync());
+            startReadLoop();
         }
     }
 
     /**
-     * Routes a read-loop failure into the connection's own failure channel.
+     * Starts the read loop on a virtual thread of its own and routes its
+     * failure into the connection's own failure channel.
      *
      * <p>This loop used to be started with a helper that attached
      * {@code exceptionally(e -> null)} and dropped the throwable on the floor —
@@ -158,26 +158,34 @@ public final class DefaultMessageConnection extends SocketConnection implements 
      * throwing listener included, vanished without trace.
      *
      * <p>Disconnecting is the right channel rather than a log line: it is what
-     * {@code ConnectionDisconnectedEvent} and {@code waitForDisconnect} already
+     * {@code ConnectionDisconnectedEvent} and {@code awaitDisconnect} already
      * report, so the failure reaches whoever owns the connection. When the
      * connection has already gone down, this is a no-op and the original reason
      * is preserved.
+     *
+     * <p>The thread is the loop's own, not a future's. The loop runs until the
+     * connection dies, so there is nothing for a caller to compose onto and the
+     * future it used to return existed only to carry the failure back here.
      */
-    private void watchReadLoop(CompletableFuture<Void> loop) {
-        loop.whenComplete((ignored, failure) -> {
-            if (failure == null || isDisposed()) {
-                return;
+    private void startReadLoop() {
+        NetworkExecutor.executor().execute(() -> {
+            try {
+                readContinuously();
+            } catch (Throwable failure) {
+                if (isDisposed()) {
+                    return;
+                }
+                Throwable actual = Failures.unwrap(failure);
+                Exception reported = actual instanceof Exception exception
+                        ? exception
+                        : new MessageException(actual.toString(), actual);
+                disconnect("Read loop failed: " + reported.getMessage(), reported);
             }
-            Throwable actual =
-                    failure instanceof CompletionException && failure.getCause() != null ? failure.getCause() : failure;
-            Exception reported =
-                    actual instanceof Exception exception ? exception : new MessageException(actual.toString(), actual);
-            disconnect("Read loop failed: " + reported.getMessage(), reported);
         });
     }
 
     @Override
-    public CompletableFuture<Void> writeAsync(OutgoingMessage message, CancellationSignal cancellationSignal) {
+    public void write(OutgoingMessage message, CancellationSignal cancellationSignal) {
         if (message == null) {
             throw new IllegalArgumentException("The specified message is null");
         }
@@ -188,65 +196,57 @@ public final class DefaultMessageConnection extends SocketConnection implements 
             throw new MessageException("Failed to convert the message to a byte array", exception);
         }
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
-        return super.writeAsync(bytes, token).thenRun(() -> raiseMessageWritten(bytes, token));
+        super.write(bytes, token);
+        raiseMessageWritten(bytes, token);
     }
 
-    CompletableFuture<Void> readContinuouslyAsync() {
+    void readContinuously() {
         synchronized (this) {
             if (readingContinuously) {
-                return CompletableFuture.completedFuture(null);
+                return;
             }
             readingContinuously = true;
         }
-        return NetworkExecutor.runAsync(() -> {
-            // Holds the code of the message currently being read, so the scoped
-            // progress listener can label its events. Confined to this loop's
-            // single thread.
-            byte[][] codeHolder = new byte[1][];
-            ConnectionEventListener<ConnectionDataEvent> payloadProgress = (sender, args) ->
-                    raiseMessageDataRead(codeHolder[0], args.getCurrentLength(), args.getTotalLength());
-            try {
-                while (!isDisposed()) {
-                    ByteArrayOutputStream message = new ByteArrayOutputStream();
-                    // Read on this thread. Each of these used to dispatch onto
-                    // a fresh virtual thread and block on the future, three
-                    // times per frame, on the path that carries distributed
-                    // search traffic.
-                    byte[] lengthBytes = read(4, null, CancellationSignal.none());
-                    int length = ByteBuffer.wrap(lengthBytes)
-                            .order(ByteOrder.LITTLE_ENDIAN)
-                            .getInt();
-                    message.writeBytes(lengthBytes);
+        // Holds the code of the message currently being read, so the scoped
+        // progress listener can label its events. Confined to this loop's
+        // single thread.
+        byte[][] codeHolder = new byte[1][];
+        ConnectionEventListener<ConnectionDataEvent> payloadProgress =
+                (sender, args) -> raiseMessageDataRead(codeHolder[0], args.getCurrentLength(), args.getTotalLength());
+        try {
+            while (!isDisposed()) {
+                ByteArrayOutputStream message = new ByteArrayOutputStream();
+                // Read on this thread. Each of these used to dispatch onto
+                // a fresh virtual thread and block on the future, three
+                // times per frame, on the path that carries distributed
+                // search traffic.
+                byte[] lengthBytes = read(4, null, CancellationSignal.none());
+                int length = ByteBuffer.wrap(lengthBytes)
+                        .order(ByteOrder.LITTLE_ENDIAN)
+                        .getInt();
+                message.writeBytes(lengthBytes);
 
-                    byte[] codeBytes = read(codeLength, null, CancellationSignal.none());
-                    codeHolder[0] = codeBytes;
-                    message.writeBytes(codeBytes);
+                byte[] codeBytes = read(codeLength, null, CancellationSignal.none());
+                codeHolder[0] = codeBytes;
+                message.writeBytes(codeBytes);
 
-                    raiseMessageDataRead(codeBytes, 0, length - codeLength);
-                    raiseMessageReceived(length, codeBytes);
+                raiseMessageDataRead(codeBytes, 0, length - codeLength);
+                raiseMessageReceived(length, codeBytes);
 
-                    // Passed to the read rather than added to the shared
-                    // listener list and removed afterwards, which cost two
-                    // CopyOnWriteArrayList copies per message.
-                    byte[] payload = read(length - codeLength, payloadProgress, CancellationSignal.none());
-                    message.writeBytes(payload);
-                    raiseMessageRead(message.toByteArray());
-                }
-            } catch (RuntimeException | Error unchecked) {
-                throw unchecked;
-            } catch (Exception checked) {
-                // The loop body is a Runnable, so a checked failure (a lapsed
-                // deadline, say) is wrapped here. watchReadLoop unwraps it
-                // again before reporting the cause.
-                throw new CompletionException(checked);
-            } finally {
-                readingContinuously = false;
+                // Passed to the read rather than added to the shared
+                // listener list and removed afterwards, which cost two
+                // CopyOnWriteArrayList copies per message.
+                byte[] payload = read(length - codeLength, payloadProgress, CancellationSignal.none());
+                message.writeBytes(payload);
+                raiseMessageRead(message.toByteArray());
             }
-        });
+        } finally {
+            readingContinuously = false;
+        }
     }
 
     private void bindConnectedReadLoop() {
-        addConnectedListener((sender, args) -> watchReadLoop(readContinuouslyAsync()));
+        addConnectedListener((sender, args) -> startReadLoop());
     }
 
     private void raiseMessageDataRead(byte[] code, long currentLength, long totalLength) {

@@ -7,7 +7,6 @@ package dev.slsk.internal.network;
 import dev.slsk.CancellationSignal;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.network.tcp.Connection;
-import java.util.concurrent.CompletableFuture;
 
 /** Provides framed client connections to the Soulseek network. */
 public interface MessageConnection extends Connection {
@@ -42,11 +41,11 @@ public interface MessageConnection extends Connection {
     /** Starts the internal continuous read loop if necessary. */
     void startReadingContinuously();
 
-    /** Writes an outgoing message. */
-    CompletableFuture<Void> writeAsync(OutgoingMessage message, CancellationSignal cancellationSignal);
+    /** Writes an outgoing message, blocking until it lands. */
+    void write(OutgoingMessage message, CancellationSignal cancellationSignal);
 
     /** Writes an outgoing message without a cancellable token. */
-    default CompletableFuture<Void> writeAsync(OutgoingMessage message) {
-        return writeAsync(message, CancellationSignal.none());
+    default void write(OutgoingMessage message) {
+        write(message, CancellationSignal.none());
     }
 }

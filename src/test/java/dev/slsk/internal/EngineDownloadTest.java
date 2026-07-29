@@ -950,12 +950,12 @@ class EngineDownloadTest {
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("writeAsync")
+            if (method.getName().equals("write")
                     && arguments != null
                     && arguments.length == 2
                     && arguments[0] instanceof OutgoingMessage message) {
                 messages.add(message);
-                return CompletableFuture.completedFuture(null);
+                return null;
             }
             if (method.getName().equals("getState")) {
                 return ConnectionState.CONNECTED;
@@ -985,14 +985,14 @@ class EngineDownloadTest {
                 Connection.class.getClassLoader(), new Class<?>[] {Connection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) throws IOException {
-            if (method.getName().equals("writeAsync")
+            if (method.getName().equals("write")
                     && arguments != null
                     && arguments.length == 2
                     && arguments[0] instanceof byte[] bytes) {
                 offsetBytes = bytes.clone();
-                return CompletableFuture.completedFuture(null);
+                return null;
             }
-            if (method.getName().equals("readAsync")
+            if (method.getName().equals("read")
                     && arguments != null
                     && arguments.length == 5
                     && arguments[0] instanceof Long length) {
@@ -1003,10 +1003,11 @@ class EngineDownloadTest {
                 if (disconnectOnRead != null) {
                     disconnectedListener.handle(
                             proxy, new ConnectionDisconnectedEvent("connection lost", disconnectOnRead));
-                    return new CompletableFuture<>();
+                    // Parks like a read from a peer that has stopped sending.
+                    new CompletableFuture<Void>().join();
                 }
                 if (blockRead) {
-                    return new CompletableFuture<>();
+                    new CompletableFuture<Void>().join();
                 }
                 OutputStream output = (OutputStream) arguments[1];
                 ConnectionGovernor governor = (ConnectionGovernor) arguments[2];
@@ -1031,7 +1032,7 @@ class EngineDownloadTest {
                         dataReadListener.handle(proxy, new ConnectionDataEvent(transferred, length));
                     }
                 }
-                return CompletableFuture.completedFuture(null);
+                return null;
             }
             if (method.getName().equals("addDataReadListener")) {
                 dataReadListener = cast(arguments[0]);

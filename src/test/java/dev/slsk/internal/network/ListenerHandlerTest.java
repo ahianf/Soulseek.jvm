@@ -17,6 +17,7 @@ import dev.slsk.internal.SearchResponseCache;
 import dev.slsk.internal.SearchResponseCacheRecord;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.DefaultWaiter;
+import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
@@ -332,7 +333,7 @@ class ListenerHandlerTest {
                         return switch (method.getName()) {
                             case "getIpEndpoint" -> endpoint;
                             case "getId" -> id;
-                            case "readAsync" -> reads.removeFirst();
+                            case "read" -> Outcomes.raise(reads.removeFirst());
                             case "disconnect" -> {
                                 disconnectMessage =
                                         arguments == null || arguments.length == 0 ? null : (String) arguments[0];

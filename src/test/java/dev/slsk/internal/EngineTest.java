@@ -508,8 +508,8 @@ class EngineTest {
                 disconnectMessage = (String) arguments[0];
                 return null;
             }
-            if (method.getName().equals("writeAsync")) {
-                return CompletableFuture.completedFuture(null);
+            if (method.getName().equals("write")) {
+                return null;
             }
             return defaultValue(method.getReturnType());
         }

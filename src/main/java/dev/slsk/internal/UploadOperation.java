@@ -19,6 +19,7 @@ import dev.slsk.exceptions.TransferStreamException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Failures;
+import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.events.TransferProgressUpdatedEvent;
@@ -268,7 +269,7 @@ final class UploadOperation {
 
     private void readStartOffset() {
         try {
-            byte[] bytes = await(connection.readAsync(8, cancellationSignal));
+            byte[] bytes = connection.read(8, cancellationSignal);
             if (bytes.length != 8) {
                 throw new IOException("Expected 8 bytes but received " + bytes.length);
             }
@@ -308,9 +309,11 @@ final class UploadOperation {
 
     private void writeAndAwaitDisconnectRace() {
         long remaining = upload.getSize() - upload.getStartOffset();
+        // A thread of its own because the write is raced against the connection
+        // dropping; racing is work blocking code cannot do.
         CompletableFuture<Void> write = remaining == 0
                 ? CompletableFuture.completedFuture(null)
-                : connection.writeAsync(
+                : NetworkExecutor.runAsync(() -> connection.write(
                         remaining,
                         trackingStream,
                         (requestedBytes, governorToken) ->
@@ -323,7 +326,7 @@ final class UploadOperation {
                             }
                             engine.context.getUploadTokenBucket().returnTokens(grantedBytes - transferredBytes);
                         },
-                        cancellationSignal);
+                        cancellationSignal));
         CompletableFuture<Object> first = CompletableFuture.anyOf(write, disconnected);
         await(first);
         if (disconnected.isCompletedExceptionally() && !write.isDone()) {
@@ -344,8 +347,10 @@ final class UploadOperation {
                 }
                 long remainingMillis = Math.max(1, TimeUnit.NANOSECONDS.toMillis(remainingNanos));
                 try {
-                    await(connection
-                            .readAsync(1, cancellationSignal)
+                    // Dispatched so the linger budget can lapse while the read
+                    // is still parked: a peer that says nothing is the ordinary
+                    // case here, and giving up on it is the point.
+                    await(NetworkExecutor.supplyAsync(() -> connection.read(1, cancellationSignal))
                             .orTimeout(remainingMillis, TimeUnit.MILLISECONDS));
                 } catch (Throwable failure) {
                     Throwable cause = Failures.unwrap(failure);

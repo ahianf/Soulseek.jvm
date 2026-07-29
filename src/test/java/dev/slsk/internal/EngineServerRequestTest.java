@@ -19,6 +19,7 @@ import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.UserNotFoundException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.internal.common.Blocking;
+import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.messaging.MessageCode;
@@ -640,7 +641,7 @@ class EngineServerRequestTest {
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("writeAsync")
+            if (method.getName().equals("write")
                     && arguments.length == 2
                     && arguments[0] instanceof dev.slsk.internal.messaging.messages.OutgoingMessage outgoing) {
                 writeCount++;
@@ -649,7 +650,8 @@ class EngineServerRequestTest {
                 if (synchronousFailure != null) {
                     throw synchronousFailure;
                 }
-                return result;
+                Outcomes.raise(result);
+                return null;
             }
             return defaultValue(method.getReturnType());
         }

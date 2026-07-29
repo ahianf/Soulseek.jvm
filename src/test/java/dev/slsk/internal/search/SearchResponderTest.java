@@ -19,6 +19,7 @@ import dev.slsk.internal.File;
 import dev.slsk.internal.SearchResponse;
 import dev.slsk.internal.SearchResponseCache;
 import dev.slsk.internal.SearchResponseCacheRecord;
+import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;
 import dev.slsk.internal.diagnostics.DiagnosticLevel;
@@ -306,9 +307,10 @@ class SearchResponderTest {
                 SearchResponderTest.class.getClassLoader(),
                 new Class<?>[] {MessageConnection.class},
                 (proxy, method, arguments) -> {
-                    if (method.getName().equals("writeAsync") && arguments[0] instanceof byte[] bytes) {
+                    if (method.getName().equals("write") && arguments[0] instanceof byte[] bytes) {
                         written.set(bytes);
-                        return writeResult;
+                        Outcomes.raise(writeResult);
+                        return null;
                     }
                     if (method.getName().equals("toString")) {
                         return "messageConnection";

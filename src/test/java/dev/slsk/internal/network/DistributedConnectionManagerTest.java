@@ -19,6 +19,7 @@ import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.internal.SoulseekClientState;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
@@ -553,7 +554,10 @@ class DistributedConnectionManagerTest {
         fixture.server.byteWrites.clear();
         fixture.manager.watchdogElapsed();
         assertTrue(fixture.diagnostic.containsWarning("No distributed parent connected"));
-        assertEquals(1, fixture.server.byteWrites.size());
+        // The status write goes to a thread of its own, as it always has —
+        // it used to be a dispatched writeAsync. What changed is only that the
+        // probe no longer records it before the dispatch happens.
+        awaitCondition(() -> fixture.server.byteWrites.size() == 1);
 
         Fixture disconnected = fixture();
         disconnected.client.state = SoulseekClientState.DISCONNECTED;
@@ -970,11 +974,16 @@ class DistributedConnectionManagerTest {
                 case "isServerConnection" -> username == null || username.isEmpty();
                 case "isReadingContinuously" -> startReadingCount > 0;
                 case "getUsername" -> username == null ? "" : username;
-                case "connectAsync" -> {
+                // The transport blocks now, so a configured outcome arrives as
+                // a return or a throw rather than as a settled future. join()
+                // is how the future's own failure shape is preserved: a
+                // cancellation raw, everything else in a CompletionException.
+                case "connect" -> {
                     connectCount++;
-                    yield connectFuture;
+                    Outcomes.raise(connectFuture);
+                    yield null;
                 }
-                case "writeAsync" -> {
+                case "write" -> {
                     if (arguments[0] instanceof byte[] bytes) {
                         byteWrites.add(Arrays.copyOf(bytes, bytes.length));
                         if (onByteWrite != null) {
@@ -983,21 +992,7 @@ class DistributedConnectionManagerTest {
                     } else if (arguments[0] instanceof OutgoingMessage value) {
                         outgoingWrites.add(value);
                     }
-                    yield writeFuture;
-                }
-                case "write" -> {
-                    // The blocking sibling of writeAsync. Records the same way,
-                    // but a configured failure surfaces as a throw rather than
-                    // as a failed future. Default interface methods still route
-                    // through the handler on a proxy, so this case has to exist
-                    // or the broadcast silently writes nothing.
-                    if (arguments[0] instanceof byte[] bytes) {
-                        byteWrites.add(Arrays.copyOf(bytes, bytes.length));
-                        if (onByteWrite != null) {
-                            onByteWrite.run();
-                        }
-                    }
-                    writeFuture.join();
+                    Outcomes.raise(writeFuture);
                     yield null;
                 }
                 case "handoffTcpClient" -> {
@@ -1078,5 +1073,14 @@ class DistributedConnectionManagerTest {
             return '\0';
         }
         return null;
+    }
+
+    /** Waits for a condition a dispatched task will satisfy. */
+    private static void awaitCondition(java.util.function.BooleanSupplier condition) {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(2);
+        while (!condition.getAsBoolean() && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertTrue(condition.getAsBoolean());
     }
 }

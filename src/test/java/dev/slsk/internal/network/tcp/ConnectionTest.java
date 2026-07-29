@@ -35,8 +35,10 @@ import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -110,7 +112,7 @@ class ConnectionTest {
         assertEquals(ConnectionState.DISCONNECTING, states.get(0).getCurrentState());
         assertEquals(ConnectionState.DISCONNECTED, states.get(1).getCurrentState());
         assertEquals("done", disconnected.get(0).getMessage());
-        assertEquals("done", connection.waitForDisconnect(null).get(1, TimeUnit.SECONDS));
+        assertEquals("done", connection.awaitDisconnect(null));
         assertTrue(client.closed);
         connection.disconnect("ignored");
         assertEquals(2, states.size());
@@ -129,7 +131,7 @@ class ConnectionTest {
         connection.addStateChangedListener((sender, args) -> states.add(args.getCurrentState()));
         connection.addConnectedListener((sender, args) -> connected.incrementAndGet());
 
-        connection.connectAsync(null).get(1, TimeUnit.SECONDS);
+        connection.connect(null);
 
         assertEquals(1, client.connectCalls);
         assertEquals(0, client.proxyCalls);
@@ -153,7 +155,7 @@ class ConnectionTest {
         ConnectionOptions options = options(8, 8, 3, 100, -1, proxy, null);
         SocketConnection connection = new SocketConnection(ENDPOINT, options, client);
 
-        connection.connectAsync(CancellationSignal.none()).get(1, TimeUnit.SECONDS);
+        connection.connect(CancellationSignal.none());
 
         assertEquals(0, client.connectCalls);
         assertEquals(1, client.proxyCalls);
@@ -173,7 +175,7 @@ class ConnectionTest {
         client.connectFuture = new CompletableFuture<>();
         SocketConnection connection = new SocketConnection(ENDPOINT, options(8, 8, 3, 10, -1, null, null), client);
 
-        Throwable failure = futureFailure(connection.connectAsync(null));
+        Throwable failure = failureOf(() -> connection.connect(null));
 
         assertTrue(failure instanceof TimeoutException);
         assertEquals(ConnectionState.DISCONNECTED, connection.getState());
@@ -189,9 +191,7 @@ class ConnectionTest {
 
         try (CancellationController source = new CancellationController()) {
             source.cancel();
-            assertThrows(
-                    CancellationException.class,
-                    () -> connection.connectAsync(source.getSignal()).get(1, TimeUnit.SECONDS));
+            assertThrows(CancellationException.class, () -> connection.connect(source.getSignal()));
         }
         assertEquals(ConnectionState.DISCONNECTED, connection.getState());
         connection.close();
@@ -205,7 +205,7 @@ class ConnectionTest {
         client.connectFuture = CompletableFuture.failedFuture(cause);
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), client);
 
-        Throwable failure = futureFailure(connection.connectAsync(null));
+        Throwable failure = failureOf(() -> connection.connect(null));
 
         assertTrue(failure instanceof ConnectionException);
         assertSame(cause, failure.getCause());
@@ -219,13 +219,13 @@ class ConnectionTest {
         FakeTcpClient inactiveClient = new FakeTcpClient(new FakeStream(), true);
         SocketConnection inactive =
                 new SocketConnection(ENDPOINT, options(8, 8, 3, 100, 20, null, null), inactiveClient);
-        assertTrue(futureFailure(inactive.waitForDisconnect(null)) instanceof TimeoutException);
+        assertTrue(failureOf(() -> inactive.awaitDisconnect(null)) instanceof TimeoutException);
         inactive.close();
 
         FakeTcpClient watchedClient = new FakeTcpClient(new FakeStream(), true);
         SocketConnection watched = new SocketConnection(ENDPOINT, noTimers(), watchedClient);
         watchedClient.connected = false;
-        Throwable watchdogFailure = futureFailure(watched.waitForDisconnect(null));
+        Throwable watchdogFailure = failureOf(() -> watched.awaitDisconnect(null));
         assertTrue(watchdogFailure instanceof ConnectionException);
         assertEquals("The connection was closed unexpectedly", watchdogFailure.getMessage());
         watched.close();
@@ -237,9 +237,10 @@ class ConnectionTest {
         FakeTcpClient client = new FakeTcpClient(new FakeStream(), true);
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), client);
         try (CancellationController source = new CancellationController()) {
-            CompletableFuture<String> wait = connection.waitForDisconnect(source.getSignal());
+            // Already cancelled, so registering runs the callback inline: the
+            // wait disconnects the connection rather than parking on it.
             source.cancel();
-            assertThrows(CancellationException.class, wait::join);
+            assertThrows(CancellationException.class, () -> connection.awaitDisconnect(source.getSignal()));
         }
         assertEquals(ConnectionState.DISCONNECTED, connection.getState());
         connection.close();
@@ -261,14 +262,12 @@ class ConnectionTest {
         });
         ByteArrayOutputStream output = new ByteArrayOutputStream();
 
-        connection
-                .readAsync(
-                        5,
-                        output,
-                        (requested, token) -> requested,
-                        (requested, granted, transferred) -> reports.add(new int[] {requested, granted, transferred}),
-                        null)
-                .get(1, TimeUnit.SECONDS);
+        connection.read(
+                5,
+                output,
+                (requested, token) -> requested,
+                (requested, granted, transferred) -> reports.add(new int[] {requested, granted, transferred}),
+                null);
 
         assertArrayEquals(new byte[] {1, 2, 3, 4, 5}, output.toByteArray());
         assertEquals(List.of(1L, 3L, 5L), progress);
@@ -288,9 +287,9 @@ class ConnectionTest {
         SocketConnection connection =
                 new SocketConnection(ENDPOINT, options(2, 2, 3, 100, -1, null, null), new FakeTcpClient(stream, true));
 
-        assertArrayEquals(new byte[0], connection.readAsync(0, null).get(1, TimeUnit.SECONDS));
-        assertArrayEquals(new byte[] {9, 8, 7}, connection.readAsync(3L, null).get(1, TimeUnit.SECONDS));
-        assertThrows(IllegalArgumentException.class, () -> connection.readAsync(-1, null));
+        assertArrayEquals(new byte[0], connection.read(0, null));
+        assertArrayEquals(new byte[] {9, 8, 7}, connection.read(3L, null));
+        assertThrows(IllegalArgumentException.class, () -> connection.read(-1, null));
         connection.close();
     }
 
@@ -312,7 +311,7 @@ class ConnectionTest {
         FakeStream eof = new FakeStream();
         eof.readCounts.add(0);
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), new FakeTcpClient(eof, true));
-        Throwable failure = futureFailure(connection.readAsync(1, null));
+        Throwable failure = failureOf(() -> connection.read(1, null));
         assertTrue(failure instanceof ConnectionReadException);
         assertTrue(failure.getCause() instanceof ConnectionException);
         assertEquals(ConnectionState.DISCONNECTED, connection.getState());
@@ -332,14 +331,12 @@ class ConnectionTest {
             progress.add(args.getCurrentLength());
         });
 
-        connection
-                .writeAsync(
-                        5,
-                        new ByteArrayInputStream(new byte[] {1, 2, 3, 4, 5}),
-                        (requested, token) -> requested,
-                        (requested, granted, transferred) -> reports.add(new int[] {requested, granted, transferred}),
-                        null)
-                .get(1, TimeUnit.SECONDS);
+        connection.write(
+                5,
+                new ByteArrayInputStream(new byte[] {1, 2, 3, 4, 5}),
+                (requested, token) -> requested,
+                (requested, granted, transferred) -> reports.add(new int[] {requested, granted, transferred}),
+                null);
 
         assertEquals(
                 List.of(List.of((byte) 1, (byte) 2), List.of((byte) 3, (byte) 4), List.of((byte) 5)), stream.writes);
@@ -364,11 +361,17 @@ class ConnectionTest {
                 options(8, 8, 2, 100, -1, null, null).withWriteQueueTimeout(150),
                 new FakeTcpClient(stream, true));
 
-        CompletableFuture<Void> first = connection.writeAsync(new byte[] {1}, null);
+        // A blocking write needs a thread apiece to contend for the queue,
+        // which is what a producer is: the writers used to be futures only
+        // because the write was.
+        Executor writers = task -> Thread.ofVirtual().start(task);
+        CompletableFuture<Void> first =
+                CompletableFuture.runAsync(() -> connection.write(new byte[] {1}, null), writers);
         awaitCondition(() -> connection.getWriteQueueDepth() == 1);
-        CompletableFuture<Void> second = connection.writeAsync(new byte[] {2}, null);
+        CompletableFuture<Void> second =
+                CompletableFuture.runAsync(() -> connection.write(new byte[] {2}, null), writers);
         awaitCondition(() -> connection.getWriteQueueDepth() == 2);
-        Throwable dropped = futureFailure(connection.writeAsync(new byte[] {3}, null));
+        Throwable dropped = failureOf(() -> connection.write(new byte[] {3}, null));
 
         assertTrue(dropped instanceof ConnectionWriteDroppedException);
         assertEquals(ConnectionState.DISCONNECTED, connection.getState());
@@ -390,17 +393,17 @@ class ConnectionTest {
     void validatesIoArguments() {
         FakeTcpClient connected = new FakeTcpClient(new FakeStream(), true);
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), connected);
-        assertThrows(IllegalArgumentException.class, () -> connection.writeAsync(null, null));
-        assertThrows(IllegalArgumentException.class, () -> connection.writeAsync(new byte[0], null));
+        assertThrows(IllegalArgumentException.class, () -> connection.write((byte[]) null, null));
+        assertThrows(IllegalArgumentException.class, () -> connection.write(new byte[0], null));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> connection.writeAsync(0, new ByteArrayInputStream(new byte[0]), null, null, null));
-        assertThrows(NullPointerException.class, () -> connection.writeAsync(1, null, null, null, null));
-        assertThrows(NullPointerException.class, () -> connection.readAsync(1, null, null, null, null));
-        assertThrows(IllegalStateException.class, () -> connection.connectAsync(null));
+                () -> connection.write(0, new ByteArrayInputStream(new byte[0]), null, null, null));
+        assertThrows(NullPointerException.class, () -> connection.write(1, null, null, null, null));
+        assertThrows(NullPointerException.class, () -> connection.read(1, null, null, null, null));
+        assertThrows(IllegalStateException.class, () -> connection.connect(null));
         connection.disconnect();
-        assertThrows(IllegalStateException.class, () -> connection.readAsync(1, null));
-        assertThrows(IllegalStateException.class, () -> connection.writeAsync(new byte[] {1}, null));
+        assertThrows(IllegalStateException.class, () -> connection.read(1, null));
+        assertThrows(IllegalStateException.class, () -> connection.write(new byte[] {1}, null));
         connection.close();
     }
 
@@ -419,7 +422,7 @@ class ConnectionTest {
         CountDownLatch event = new CountDownLatch(1);
         try {
             connection.addDataReadListener((sender, args) -> event.countDown());
-            connection.readAsync(1, null).get(1, TimeUnit.SECONDS);
+            connection.read(1, null);
             assertTrue(event.await(1, TimeUnit.SECONDS));
 
             assertSame(client, connection.handoffTcpClient());
@@ -434,14 +437,7 @@ class ConnectionTest {
         FakeStream stream = new FakeStream();
         stream.readFailure = cause;
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), new FakeTcpClient(stream, true));
-        Throwable failure;
-        if (cause instanceof CancellationException) {
-            failure = assertThrows(
-                    CancellationException.class,
-                    () -> connection.readAsync(1, null).get());
-        } else {
-            failure = futureFailure(connection.readAsync(1, null));
-        }
+        Throwable failure = failureOf(() -> connection.read(1, null));
         assertTrue(expected.isInstance(failure));
         if (failure instanceof ConnectionReadException) {
             assertSame(cause, failure.getCause());
@@ -456,7 +452,7 @@ class ConnectionTest {
         stream.readBytes = new byte[] {1, 2, 3};
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), new FakeTcpClient(stream, true));
 
-        Throwable failure = futureFailure(connection.readAsync(
+        Throwable failure = failureOf(() -> connection.read(
                 3,
                 java.io.OutputStream.nullOutputStream(),
                 (requestedBytes, token) -> {
@@ -474,20 +470,29 @@ class ConnectionTest {
         FakeStream stream = new FakeStream();
         stream.writeFailure = cause;
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), new FakeTcpClient(stream, true));
-        Throwable failure;
-        if (cause instanceof CancellationException) {
-            failure = assertThrows(
-                    CancellationException.class,
-                    () -> connection.writeAsync(new byte[] {1}, null).get());
-        } else {
-            failure = futureFailure(connection.writeAsync(new byte[] {1}, null));
-        }
+        Throwable failure = failureOf(() -> connection.write(new byte[] {1}, null));
         assertTrue(expected.isInstance(failure));
         if (failure instanceof ConnectionWriteException) {
             assertSame(cause, failure.getCause());
         }
         assertEquals(ConnectionState.DISCONNECTED, connection.getState());
         connection.close();
+    }
+
+    /**
+     * The failure a blocking call raised, with {@code join()}'s wrapper off.
+     *
+     * <p>Blocking internals present a failure the way {@code join()} did — a
+     * cancellation raw, everything else inside a {@link CompletionException} —
+     * so every assertion here reads the same as it did when the operation was a
+     * future.
+     */
+    private static Throwable failureOf(org.junit.jupiter.api.function.Executable call) {
+        Throwable failure = assertThrows(Throwable.class, call);
+        while (failure instanceof CompletionException && failure.getCause() != null) {
+            failure = failure.getCause();
+        }
+        return failure;
     }
 
     private static Throwable futureFailure(CompletableFuture<?> future) throws Exception {
@@ -595,16 +600,20 @@ class ConnectionTest {
         }
 
         @Override
-        public CompletableFuture<Void> connectAsync(InetAddress address, int port) {
+        public void connect(InetAddress address, int port) {
             connectCalls++;
             if (connectAction != null) {
                 connectAction.run();
             }
-            return connectFuture == null ? CompletableFuture.completedFuture(null) : connectFuture;
+            if (connectFuture != null) {
+                // Blocks the way a real connect does, so a test can stall one
+                // and watch the caller give up on it.
+                dev.slsk.internal.common.Outcomes.raise(connectFuture);
+            }
         }
 
         @Override
-        public CompletableFuture<ProxyEndpoint> connectThroughProxyAsync(
+        public ProxyEndpoint connectThroughProxy(
                 InetAddress proxyAddress,
                 int proxyPort,
                 InetAddress destinationAddress,
@@ -623,9 +632,9 @@ class ConnectionTest {
                 connectAction.run();
             }
             if (connectFuture != null) {
-                return connectFuture.thenApply(ignored -> new ProxyEndpoint("127.0.0.1", proxyPort));
+                dev.slsk.internal.common.Outcomes.raise(connectFuture);
             }
-            return CompletableFuture.completedFuture(new ProxyEndpoint("127.0.0.1", proxyPort));
+            return new ProxyEndpoint("127.0.0.1", proxyPort);
         }
 
         @Override

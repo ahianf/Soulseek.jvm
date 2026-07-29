@@ -364,13 +364,13 @@ class EngineEndpointTest {
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("writeAsync")
+            if (method.getName().equals("write")
                     && arguments.length == 2
                     && arguments[0] instanceof OutgoingMessage outgoing) {
                 writes++;
                 message = outgoing;
                 token = (CancellationSignal) arguments[1];
-                return CompletableFuture.completedFuture(null);
+                return null;
             }
             return defaultValue(method.getReturnType());
         }

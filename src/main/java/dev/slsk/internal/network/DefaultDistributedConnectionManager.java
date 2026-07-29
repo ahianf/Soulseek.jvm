@@ -12,6 +12,7 @@ import dev.slsk.internal.DistributedNetworkInfo;
 import dev.slsk.internal.DistributedPeer;
 import dev.slsk.internal.SoulseekClientState;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Scheduler;
 import dev.slsk.internal.common.WaitKey;
@@ -653,26 +654,25 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                 new BranchRootCommand(branchRoot).toByteArray(),
                 new AcceptChildrenCommand(accept).toByteArray(),
                 new HaveNoParentsCommand(haveNoParents).toByteArray());
-        return client.getServerConnection()
-                .writeAsync(payload, token(cancellationSignal))
-                .handle((ignored, failure) -> {
-                    if (failure == null) {
-                        raiseStateChanged();
-                        diagnostic.info("Updated distributed status; " + status);
-                        lastStatus = status;
-                        lastStatusTimestamp = Instant.now();
-                    } else {
-                        Throwable cause = unwrap(failure);
-                        String message = "Failed to update distributed status: " + message(cause);
-                        if (!client.getState().equals(SoulseekClientState.DISCONNECTED)) {
-                            diagnostic.warning(message, cause);
-                        } else {
-                            diagnostic.debug(message, cause);
-                        }
-                    }
-                    statusUpdating.set(false);
-                    return null;
-                });
+        return NetworkExecutor.runAsync(() -> {
+            try {
+                client.getServerConnection().write(payload, token(cancellationSignal));
+                raiseStateChanged();
+                diagnostic.info("Updated distributed status; " + status);
+                lastStatus = status;
+                lastStatusTimestamp = Instant.now();
+            } catch (Throwable failure) {
+                Throwable cause = unwrap(failure);
+                String message = "Failed to update distributed status: " + message(cause);
+                if (!client.getState().equals(SoulseekClientState.DISCONNECTED)) {
+                    diagnostic.warning(message, cause);
+                } else {
+                    diagnostic.debug(message, cause);
+                }
+            } finally {
+                statusUpdating.set(false);
+            }
+        });
     }
 
     @Override
@@ -787,40 +787,32 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                 return null;
             });
         }
-        return prior.thenCompose(ignored -> {
+        return prior.thenCompose(ignored -> NetworkExecutor.supplyAsync(() -> {
             try {
                 connection.startReadingContinuously();
+                connection.write(getBranchInformation());
             } catch (Throwable failure) {
                 connection.close();
-                return CompletableFuture.failedFuture(failure);
+                throw Failures.propagate(failure);
             }
-            return connection
-                    .writeAsync(getBranchInformation())
-                    .thenApply(value -> {
-                        connection.addDisconnectedListener(childDisconnectedListener);
-                        children.put(username, connection.getIpEndpoint());
-                        diagnostic.debug("Child connection to " + connection.getUsername()
-                                + " (" + connection.getIpEndpoint()
-                                + ") established. (type: "
-                                + connection.getType() + ", id: "
-                                + connection.getId() + ")");
-                        diagnostic.info((superseded.get() ? "Updated" : "Added")
-                                + " child connection to "
-                                + connection.getUsername() + " ("
-                                + connection.getIpEndpoint() + ")");
-                        if (!superseded.get()) {
-                            raiseChildAdded(connection);
-                            raiseStateChanged();
-                        }
-                        updateStatusEventuallyAsync();
-                        return connection;
-                    })
-                    .whenComplete((value, failure) -> {
-                        if (failure != null) {
-                            connection.close();
-                        }
-                    });
-        });
+            connection.addDisconnectedListener(childDisconnectedListener);
+            children.put(username, connection.getIpEndpoint());
+            diagnostic.debug("Child connection to " + connection.getUsername()
+                    + " (" + connection.getIpEndpoint()
+                    + ") established. (type: "
+                    + connection.getType() + ", id: "
+                    + connection.getId() + ")");
+            diagnostic.info((superseded.get() ? "Updated" : "Added")
+                    + " child connection to "
+                    + connection.getUsername() + " ("
+                    + connection.getIpEndpoint() + ")");
+            if (!superseded.get()) {
+                raiseChildAdded(connection);
+                raiseStateChanged();
+            }
+            updateStatusEventuallyAsync();
+            return connection;
+        }));
     }
 
     private CompletableFuture<MessageConnection> establishIndirectChild(ConnectToPeerResponse response) {
@@ -837,31 +829,31 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         CancellationController cancellation = new CancellationController();
         pendingInboundIndirectConnections.put(response.getUsername(), cancellation);
 
-        return connection
-                .connectAsync(cancellation.getSignal())
-                .thenCompose(ignored -> connection.writeAsync(
-                        new PierceFirewall(response.getToken()).toByteArray(), cancellation.getSignal()))
-                .thenCompose(ignored -> connection.writeAsync(getBranchInformation(), cancellation.getSignal()))
-                .handle((ignored, failure) -> {
-                    pendingInboundIndirectConnections.remove(response.getUsername(), cancellation);
-                    cancellation.close();
-                    if (failure != null) {
-                        connection.close();
-                        throw new CompletionException(unwrap(failure));
-                    }
-                    connection.addDisconnectedListener(childDisconnectedListener);
-                    children.put(response.getUsername(), connection.getIpEndpoint());
-                    diagnostic.debug("Child connection to " + connection.getUsername() + " ("
-                            + connection.getIpEndpoint()
-                            + ") established. (type: " + connection.getType()
-                            + ", id: " + connection.getId() + ")");
-                    diagnostic.info("Added child connection to " + connection.getUsername() + " ("
-                            + connection.getIpEndpoint() + ")");
-                    raiseChildAdded(connection);
-                    raiseStateChanged();
-                    updateStatusEventuallyAsync();
-                    return connection;
-                });
+        return NetworkExecutor.supplyAsync(() -> {
+            try {
+                connection.connect(cancellation.getSignal());
+                connection.write(new PierceFirewall(response.getToken()).toByteArray(), cancellation.getSignal());
+                connection.write(getBranchInformation(), cancellation.getSignal());
+            } catch (Throwable failure) {
+                connection.close();
+                throw new CompletionException(unwrap(failure));
+            } finally {
+                pendingInboundIndirectConnections.remove(response.getUsername(), cancellation);
+                cancellation.close();
+            }
+            connection.addDisconnectedListener(childDisconnectedListener);
+            children.put(response.getUsername(), connection.getIpEndpoint());
+            diagnostic.debug("Child connection to " + connection.getUsername() + " ("
+                    + connection.getIpEndpoint()
+                    + ") established. (type: " + connection.getType()
+                    + ", id: " + connection.getId() + ")");
+            diagnostic.info(
+                    "Added child connection to " + connection.getUsername() + " (" + connection.getIpEndpoint() + ")");
+            raiseChildAdded(connection);
+            raiseStateChanged();
+            updateStatusEventuallyAsync();
+            return connection;
+        });
     }
 
     private CompletableFuture<ParentCandidate> getParentCandidateConnectionAsync(
@@ -887,10 +879,9 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                     (directWon ? indirectCancellation : directCancellation).cancel();
                     CompletableFuture<BranchInformation> initialization =
                             waitForParentCandidateConnectionInitializationAsync(connection, cancellationSignal);
-                    CompletableFuture<Void> negotiation;
-                    try {
+                    CompletableFuture<Void> negotiation = NetworkExecutor.runAsync(() -> {
                         if (directWon) {
-                            negotiation = connection.writeAsync(
+                            connection.write(
                                     new PeerInit(
                                                     client.getUsername(),
                                                     Constants.ConnectionType.DISTRIBUTED,
@@ -899,11 +890,8 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                                     token(cancellationSignal));
                         } else {
                             connection.startReadingContinuously();
-                            negotiation = CompletableFuture.completedFuture(null);
                         }
-                    } catch (Throwable failure) {
-                        negotiation = CompletableFuture.failedFuture(failure);
-                    }
+                    });
                     diagnostic.debug((directWon ? "Direct" : "Indirect")
                             + " parent candidate connection to " + username + " ("
                             + ipEndpoint + ") initialized.  Waiting for branch "
@@ -954,8 +942,10 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
                 username, ipEndpoint, client.getOptions().getDistributedConnectionOptions());
         connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT));
         connection.addDisconnectedListener(parentCandidateDisconnectedListener);
-        return connection.connectAsync(cancellationSignal).handle((ignored, failure) -> {
-            if (failure != null) {
+        return NetworkExecutor.supplyAsync(() -> {
+            try {
+                connection.connect(cancellationSignal);
+            } catch (Throwable failure) {
                 diagnostic.debug("Failed to establish a direct parent candidate "
                         + "connection to " + username + " ("
                         + ipEndpoint + "): "
@@ -977,10 +967,11 @@ public final class DefaultDistributedConnectionManager implements DistributedCon
         diagnostic.debug(
                 "Soliciting indirect parent candidate connection to " + username + " with token " + solicitationToken);
         pendingSolicitations.putIfAbsent(solicitationToken, username);
-        return client.getServerConnection()
-                .writeAsync(
-                        new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.DISTRIBUTED),
-                        cancellationSignal)
+        return NetworkExecutor.runAsync(() -> client.getServerConnection()
+                        .write(
+                                new ConnectToPeerRequest(
+                                        solicitationToken, username, Constants.ConnectionType.DISTRIBUTED),
+                                cancellationSignal))
                 .thenCompose(ignored -> client.getWaiter()
                         .waitAsync(
                                 new WaitKey(

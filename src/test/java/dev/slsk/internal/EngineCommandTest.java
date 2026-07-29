@@ -14,6 +14,7 @@ import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.internal.common.Blocking;
+import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.messaging.messages.AcknowledgePrivateMessageCommand;
 import dev.slsk.internal.messaging.messages.AcknowledgePrivilegeNotificationCommand;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
@@ -286,7 +287,7 @@ class EngineCommandTest {
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("writeAsync")
+            if (method.getName().equals("write")
                     && arguments.length == 2
                     && arguments[0] instanceof OutgoingMessage message) {
                 messages.add(message);
@@ -294,7 +295,8 @@ class EngineCommandTest {
                 if (synchronousFailure != null) {
                     throw synchronousFailure;
                 }
-                return result;
+                Outcomes.raise(result);
+                return null;
             }
             return defaultValue(method.getReturnType());
         }

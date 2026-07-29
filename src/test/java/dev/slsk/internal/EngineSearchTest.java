@@ -18,6 +18,7 @@ import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Blocking;
+import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.messaging.messages.RoomSearchRequest;
 import dev.slsk.internal.messaging.messages.UserSearchRequest;
 import dev.slsk.internal.messaging.messages.WishlistSearchRequest;
@@ -499,11 +500,10 @@ class EngineSearchTest {
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("writeAsync")
-                    && arguments.length == 2
-                    && arguments[0] instanceof byte[] bytes) {
+            if (method.getName().equals("write") && arguments.length == 2 && arguments[0] instanceof byte[] bytes) {
                 messages.add(bytes);
-                return result;
+                Outcomes.raise(result);
+                return null;
             }
             return defaultValue(method.getReturnType());
         }

@@ -16,6 +16,7 @@ import dev.slsk.internal.SearchResponse;
 import dev.slsk.internal.TransferDirection;
 import dev.slsk.internal.UserInfo;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;
@@ -46,9 +47,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executor;
 
 /** Handles incoming messages from peer connections. */
 public final class DefaultPeerMessageHandler implements PeerMessageHandler {
@@ -60,6 +61,16 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     private final CopyOnWriteArrayList<PeerMessageHandlerEventListener<DownloadFailedEvent>> downloadFailedListeners =
             new CopyOnWriteArrayList<>();
 
+    /**
+     * Where an answer to a peer runs.
+     *
+     * <p>Never the read loop. A share catalog and an upload policy are the
+     * consumer's code and a socket write is the peer's latency, and neither
+     * belongs in front of the next protocol message. Injectable so a test can
+     * run answers on its own thread and assert them without waiting.
+     */
+    private final Executor responses;
+
     /** Creates a handler with its default diagnostic factory. */
     public DefaultPeerMessageHandler(PeerMessageHandlerClient client) {
         this(client, null);
@@ -67,7 +78,13 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
 
     /** Creates a handler. */
     public DefaultPeerMessageHandler(PeerMessageHandlerClient client, DiagnosticSink diagnosticFactory) {
+        this(client, diagnosticFactory, NetworkExecutor.executor());
+    }
+
+    /** Creates a handler that answers peers on the supplied executor. */
+    DefaultPeerMessageHandler(PeerMessageHandlerClient client, DiagnosticSink diagnosticFactory, Executor responses) {
         this.client = Objects.requireNonNull(client, "client");
+        this.responses = Objects.requireNonNull(responses, "responses");
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
@@ -108,21 +125,29 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         handleMessageRead(sender, eventData.getMessage());
     }
 
+    /**
+     * Decodes a peer message and dispatches it.
+     *
+     * <p>Runs on the connection's read loop, and everything it does directly is
+     * a decode or a registry write. Anything that answers the peer — which means
+     * anything that asks a consumer's catalog or policy, or writes to the
+     * socket — goes to {@link #answer} instead, because a share lookup and a
+     * socket write in front of the next protocol message is how one peer stalls
+     * every message behind it.
+     *
+     * @param connection the connection the message arrived on
+     * @param message the raw message
+     */
     @Override
-    public void handleMessageRead(MessageConnection sender, byte[] message) {
-        handleMessageReadAsync(sender, message);
-    }
-
-    CompletableFuture<Void> handleMessageReadAsync(MessageConnection connection, byte[] message) {
+    public void handleMessageRead(MessageConnection connection, byte[] message) {
         MessageCode.Peer code = new MessageReader<>(message, MessageCode.Peer.class).readCode();
         diagnostic.debug("Peer message received: " + code + " from "
                 + connection.getUsername() + " ("
                 + connection.getIpEndpoint() + ") (id: "
                 + connection.getId() + ")");
 
-        CompletableFuture<Void> operation;
         try {
-            operation = switch (code) {
+            switch (code) {
                 case SEARCH_RESPONSE -> handleSearchResponse(message);
                 case BROWSE_RESPONSE -> handleBrowseResponse(connection, message);
                 case INFO_REQUEST -> handleInfoRequest(connection);
@@ -138,13 +163,11 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                                             connection.getUsername(),
                                             response.getToken()),
                                     response.getDirectories());
-                    yield completed();
                 }
                 case INFO_RESPONSE -> {
                     UserInfo info = UserInfoResponseFactory.fromByteArray(message);
                     client.getWaiter()
                             .complete(new WaitKey(MessageCode.Peer.INFO_RESPONSE, connection.getUsername()), info);
-                    yield completed();
                 }
                 case TRANSFER_RESPONSE -> {
                     TransferResponse response = TransferResponse.fromByteArray(message);
@@ -155,14 +178,10 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                                             connection.getUsername(),
                                             response.getToken()),
                                     response);
-                    yield completed();
                 }
                 case QUEUE_DOWNLOAD -> handleQueueDownload(connection, message);
                 case TRANSFER_REQUEST -> handleTransferRequest(connection, message);
-                case UPLOAD_DENIED -> {
-                    handleUploadDenied(connection, message);
-                    yield completed();
-                }
+                case UPLOAD_DENIED -> handleUploadDenied(connection, message);
                 case PLACE_IN_QUEUE_RESPONSE -> {
                     PlaceInQueueResponse response = PlaceInQueueResponse.fromByteArray(message);
                     client.getWaiter()
@@ -172,39 +191,48 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                                             connection.getUsername(),
                                             response.getFilename()),
                                     response);
-                    yield completed();
                 }
                 case PLACE_IN_QUEUE_REQUEST -> {
                     PlaceInQueueRequest request = PlaceInQueueRequest.fromByteArray(message);
-                    yield trySendPlaceInQueueAsync(connection, request.getFilename());
+                    answer(code, connection, () -> trySendPlaceInQueue(connection, request.getFilename()));
                 }
-                case UPLOAD_FAILED -> {
-                    handleUploadFailed(connection, message);
-                    yield completed();
-                }
-                default -> {
+                case UPLOAD_FAILED -> handleUploadFailed(connection, message);
+                default ->
                     diagnostic.debug("Unhandled peer message: " + code + " from "
                             + connection.getUsername() + " ("
                             + connection.getIpEndpoint() + "); "
                             + message.length + " bytes");
-                    yield completed();
-                }
-            };
-        } catch (Throwable failure) {
-            operation = CompletableFuture.failedFuture(failure);
-        }
-        return operation.handle((ignored, failure) -> {
-            if (failure != null) {
-                Throwable cause = unwrap(failure);
-                diagnostic.warning(
-                        "Error handling peer message: " + code + " from "
-                                + connection.getUsername() + " ("
-                                + connection.getIpEndpoint() + "); "
-                                + message(cause),
-                        cause);
             }
-            return null;
+        } catch (Throwable failure) {
+            report(code, connection, failure);
+        }
+    }
+
+    /**
+     * Runs a peer's answer off the read loop, reporting whatever escapes it.
+     *
+     * @param code the message being answered, for the diagnostic
+     * @param connection the peer being answered
+     * @param work the answer
+     */
+    private void answer(MessageCode.Peer code, MessageConnection connection, Runnable work) {
+        responses.execute(() -> {
+            try {
+                work.run();
+            } catch (Throwable failure) {
+                report(code, connection, failure);
+            }
         });
+    }
+
+    private void report(MessageCode.Peer code, MessageConnection connection, Throwable failure) {
+        Throwable cause = unwrap(failure);
+        diagnostic.warning(
+                "Error handling peer message: " + code + " from "
+                        + connection.getUsername() + " ("
+                        + connection.getIpEndpoint() + "); "
+                        + message(cause),
+                cause);
     }
 
     @Override
@@ -237,16 +265,15 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 + connection.getId() + ")");
     }
 
-    private CompletableFuture<Void> handleSearchResponse(byte[] message) {
+    private void handleSearchResponse(byte[] message) {
         SearchResponse response = SearchResponseFactory.fromByteArray(message);
         SearchInternal search = client.getSearches().get(response.getToken());
         if (search != null) {
             search.tryAddResponse(response);
         }
-        return completed();
     }
 
-    private CompletableFuture<Void> handleBrowseResponse(MessageConnection connection, byte[] message) {
+    private void handleBrowseResponse(MessageConnection connection, byte[] message) {
         WaitKey key = new WaitKey(MessageCode.Peer.BROWSE_RESPONSE, connection.getUsername());
         try {
             client.getWaiter().complete(key, BrowseResponseFactory.fromByteArray(message));
@@ -255,10 +282,9 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                     .fail(key, new MessageReadException("The peer returned an invalid browse response", failure));
             throw failure;
         }
-        return completed();
     }
 
-    private CompletableFuture<Void> handleInfoRequest(MessageConnection connection) {
+    private void handleInfoRequest(MessageConnection connection) {
         // Read rather than resolved: the profile is a value this account set,
         // not a question to ask on every request.
         dev.slsk.UserProfile profile = client.getProfile();
@@ -268,109 +294,104 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 profile.queueLength(),
                 profile.hasFreeUploadSlot(),
                 profile.picture().orElse(null));
-        return connection
-                .writeAsync(info.toByteArray())
-                .thenRun(() -> diagnostic.info("User info sent to " + connection.getUsername()));
+        answer(MessageCode.Peer.INFO_REQUEST, connection, () -> {
+            connection.write(info.toByteArray());
+            diagnostic.info("User info sent to " + connection.getUsername());
+        });
     }
 
-    private CompletableFuture<Void> handleSearchRequest(MessageConnection connection, byte[] message) {
+    private void handleSearchRequest(MessageConnection connection, byte[] message) {
         PeerSearchRequest request = PeerSearchRequest.fromByteArray(message);
-        CompletableFuture<SearchResponse> resolved = Catalogs.ask(() -> Catalogs.searchResponse(
-                client.getLoggedInUsername(),
-                request.getToken(),
-                client.getShareCatalog()
-                        .search(
-                                dev.slsk.Username.of(connection.getUsername()),
-                                request.getQuery(),
-                                client.getOptions().getMaximumConcurrentSearches()),
-                true,
-                0,
-                0));
-        return resolved.thenCompose(response -> {
-                    if (response instanceof RawSearchResponse raw) {
-                        return connection
-                                .writeAsync(raw.getLength(), raw.getStream())
-                                .thenRun(() -> closeQuietly(raw.getStream()));
-                    }
-                    if (response != null && response.getFileCount() + response.getLockedFileCount() > 0) {
-                        return connection.writeAsync(response.toByteArray());
-                    }
-                    return completed();
-                })
-                .exceptionally(failure -> {
-                    Throwable cause = unwrap(failure);
-                    diagnostic.warning(
-                            "Error resolving search response for query '"
-                                    + request.getQuery() + "' requested by "
-                                    + connection.getUsername() + " with token "
-                                    + request.getToken() + ": " + message(cause),
-                            cause);
-                    return null;
-                });
+        answer(MessageCode.Peer.SEARCH_REQUEST, connection, () -> {
+            SearchResponse response;
+            try {
+                response = Catalogs.searchResponse(
+                        client.getLoggedInUsername(),
+                        request.getToken(),
+                        client.getShareCatalog()
+                                .search(
+                                        dev.slsk.Username.of(connection.getUsername()),
+                                        request.getQuery(),
+                                        client.getOptions().getMaximumConcurrentSearches()),
+                        true,
+                        0,
+                        0);
+            } catch (Throwable failure) {
+                Throwable cause = unwrap(failure);
+                diagnostic.warning(
+                        "Error resolving search response for query '"
+                                + request.getQuery() + "' requested by "
+                                + connection.getUsername() + " with token "
+                                + request.getToken() + ": " + message(cause),
+                        cause);
+                return;
+            }
+            if (response instanceof RawSearchResponse raw) {
+                connection.write(raw.getLength(), raw.getStream());
+                closeQuietly(raw.getStream());
+            } else if (response != null && response.getFileCount() + response.getLockedFileCount() > 0) {
+                connection.write(response.toByteArray());
+            }
+        });
     }
 
-    private CompletableFuture<Void> handleBrowseRequest(MessageConnection connection) {
-        CompletableFuture<BrowseResponse> resolved = Catalogs.ask(
-                () -> Catalogs.browse(client.getShareCatalog().browse(dev.slsk.Username.of(connection.getUsername()))));
-        return resolved.handle((response, failure) -> {
-                    if (failure == null) {
-                        return response;
-                    }
-                    Throwable cause = unwrap(failure);
-                    // A catalog that throws is a bug in the application, not a
-                    // reason to leave a peer hanging on a read that never
-                    // completes. Answer with nothing, the same as a share we
-                    // decline to show them.
-                    diagnostic.warning("The share catalog failed to answer a browse: " + message(cause), cause);
-                    return new BrowseResponse();
-                })
-                .thenCompose(response -> {
-                    if (response instanceof RawBrowseResponse raw) {
-                        return connection
-                                .writeAsync(raw.getLength(), raw.getStream())
-                                .thenRun(() -> closeQuietly(raw.getStream()));
-                    }
-                    return connection.writeAsync(response.toByteArray());
-                })
-                .thenRun(() -> diagnostic.info("Share contents sent to " + connection.getUsername()));
+    private void handleBrowseRequest(MessageConnection connection) {
+        answer(MessageCode.Peer.BROWSE_REQUEST, connection, () -> {
+            BrowseResponse response;
+            try {
+                response = Catalogs.browse(
+                        client.getShareCatalog().browse(dev.slsk.Username.of(connection.getUsername())));
+            } catch (Throwable failure) {
+                Throwable cause = unwrap(failure);
+                // A catalog that throws is a bug in the application, not a
+                // reason to leave a peer hanging on a read that never
+                // completes. Answer with nothing, the same as a share we
+                // decline to show them.
+                diagnostic.warning("The share catalog failed to answer a browse: " + message(cause), cause);
+                response = new BrowseResponse();
+            }
+            if (response instanceof RawBrowseResponse raw) {
+                connection.write(raw.getLength(), raw.getStream());
+                closeQuietly(raw.getStream());
+            } else {
+                connection.write(response.toByteArray());
+            }
+            diagnostic.info("Share contents sent to " + connection.getUsername());
+        });
     }
 
-    private CompletableFuture<Void> handleFolderContentsRequest(MessageConnection connection, byte[] message) {
+    private void handleFolderContentsRequest(MessageConnection connection, byte[] message) {
         FolderContentsRequest request = FolderContentsRequest.fromByteArray(message);
-        CompletableFuture<? extends Iterable<Directory>> resolved =
-                Catalogs.ask(() -> Catalogs.directories(client.getShareCatalog()
-                        .directory(dev.slsk.Username.of(connection.getUsername()), request.getDirectoryName())));
-        return resolved.handle((directories, failure) -> {
-                    if (failure != null) {
-                        Throwable cause = unwrap(failure);
-                        diagnostic.warning(
-                                "The share catalog failed to answer a folder request: " + message(cause), cause);
-                        return null;
-                    }
-                    return directories;
-                })
-                .thenCompose(directories -> {
-                    if (directories == null) {
-                        return completed();
-                    }
-                    FolderContentsResponse response =
-                            new FolderContentsResponse(request.getToken(), request.getDirectoryName(), directories);
-                    return connection
-                            .writeAsync(response)
-                            .thenRun(() -> diagnostic.info("Folder contents for " + request.getDirectoryName()
-                                    + " sent to " + connection.getUsername()));
-                });
+        answer(MessageCode.Peer.FOLDER_CONTENTS_REQUEST, connection, () -> {
+            Iterable<Directory> directories;
+            try {
+                directories = Catalogs.directories(client.getShareCatalog()
+                        .directory(dev.slsk.Username.of(connection.getUsername()), request.getDirectoryName()));
+            } catch (Throwable failure) {
+                Throwable cause = unwrap(failure);
+                diagnostic.warning("The share catalog failed to answer a folder request: " + message(cause), cause);
+                return;
+            }
+            connection.write(new FolderContentsResponse(request.getToken(), request.getDirectoryName(), directories));
+            diagnostic.info(
+                    "Folder contents for " + request.getDirectoryName() + " sent to " + connection.getUsername());
+        });
     }
 
-    private CompletableFuture<Void> handleQueueDownload(MessageConnection connection, byte[] message) {
+    private void handleQueueDownload(MessageConnection connection, byte[] message) {
         QueueDownloadRequest request = QueueDownloadRequest.fromByteArray(message);
-        return tryEnqueueDownloadAsync(connection.getUsername(), connection.getIpEndpoint(), request.getFilename())
-                .thenCompose(result -> result.rejected()
-                        ? connection.writeAsync(new UploadDenied(request.getFilename(), result.message()))
-                        : trySendPlaceInQueueAsync(connection, request.getFilename()));
+        answer(MessageCode.Peer.QUEUE_DOWNLOAD, connection, () -> {
+            EnqueueResult result =
+                    tryEnqueueDownload(connection.getUsername(), connection.getIpEndpoint(), request.getFilename());
+            if (result.rejected()) {
+                connection.write(new UploadDenied(request.getFilename(), result.message()));
+            } else {
+                trySendPlaceInQueue(connection, request.getFilename());
+            }
+        });
     }
 
-    private CompletableFuture<Void> handleTransferRequest(MessageConnection connection, byte[] message) {
+    private void handleTransferRequest(MessageConnection connection, byte[] message) {
         TransferRequest request = TransferRequest.fromByteArray(message);
         if (request.getDirection() == TransferDirection.UPLOAD) {
             boolean tracked = !client.getDownloadDictionary().isEmpty()
@@ -385,7 +406,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                                         connection.getUsername(),
                                         request.getFilename()),
                                 request);
-                return completed();
+                return;
             }
             // Not live in the engine, which is not the same as not wanted: the
             // queue holds downloads that have not been given a slot yet, and
@@ -399,7 +420,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 // Deliberately no reply. The download writes the acceptance
                 // once it has the peer connection, exactly as it would have
                 // done had it been waiting on this message all along.
-                return completed();
+                return;
             }
 
             String reason =
@@ -407,21 +428,24 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
             diagnostic.debug("Rejecting unknown upload from " + connection.getUsername()
                     + " for " + request.getFilename() + " with token "
                     + request.getToken() + " (" + reason + ")");
-            return connection.writeAsync(new TransferResponse(request.getToken(), reason));
+            answer(
+                    MessageCode.Peer.TRANSFER_REQUEST,
+                    connection,
+                    () -> connection.write(new TransferResponse(request.getToken(), reason)));
+            return;
         }
 
-        return tryEnqueueDownloadAsync(connection.getUsername(), connection.getIpEndpoint(), request.getFilename())
-                .thenCompose(result -> {
-                    if (result.rejected()) {
-                        return connection
-                                .writeAsync(new TransferResponse(request.getToken(), result.message()))
-                                .thenCompose(ignored -> connection.writeAsync(
-                                        new UploadDenied(request.getFilename(), result.message())));
-                    }
-                    return connection
-                            .writeAsync(new TransferResponse(request.getToken(), "Queued"))
-                            .thenCompose(ignored -> trySendPlaceInQueueAsync(connection, request.getFilename()));
-                });
+        answer(MessageCode.Peer.TRANSFER_REQUEST, connection, () -> {
+            EnqueueResult result =
+                    tryEnqueueDownload(connection.getUsername(), connection.getIpEndpoint(), request.getFilename());
+            if (result.rejected()) {
+                connection.write(new TransferResponse(request.getToken(), result.message()));
+                connection.write(new UploadDenied(request.getFilename(), result.message()));
+            } else {
+                connection.write(new TransferResponse(request.getToken(), "Queued"));
+                trySendPlaceInQueue(connection, request.getFilename());
+            }
+        });
     }
 
     private void handleUploadDenied(MessageConnection connection, byte[] message) {
@@ -453,22 +477,20 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
      * Asks the upload policy what to do about a peer's request.
      *
      * <p>Four callbacks used to answer parts of this and none of them could see
-     * the others. One decision replaces them, taken off the read loop because a
-     * policy is a consumer's code.
+     * the others. One decision replaces them. Runs where its caller runs, and
+     * every caller is already off the read loop, because a policy is a
+     * consumer's code.
      */
-    private CompletableFuture<EnqueueResult> tryEnqueueDownloadAsync(
-            String username, java.net.InetSocketAddress endpoint, String filename) {
-        return dev.slsk.internal.Catalogs.ask(() -> {
-            dev.slsk.spi.UploadPolicy.Decision decision =
-                    client.getUploadAdmission().decide(dev.slsk.Username.of(username), filename);
-            if (decision instanceof dev.slsk.spi.UploadPolicy.Decision.Deny denied) {
-                return new EnqueueResult(true, denied.message());
-            }
-            if (decision instanceof dev.slsk.spi.UploadPolicy.Decision.Allow) {
-                client.serveUpload(dev.slsk.Username.of(username), filename);
-            }
-            return new EnqueueResult(false, "");
-        });
+    private EnqueueResult tryEnqueueDownload(String username, java.net.InetSocketAddress endpoint, String filename) {
+        dev.slsk.spi.UploadPolicy.Decision decision =
+                client.getUploadAdmission().decide(dev.slsk.Username.of(username), filename);
+        if (decision instanceof dev.slsk.spi.UploadPolicy.Decision.Deny denied) {
+            return new EnqueueResult(true, denied.message());
+        }
+        if (decision instanceof dev.slsk.spi.UploadPolicy.Decision.Allow) {
+            client.serveUpload(dev.slsk.Username.of(username), filename);
+        }
+        return new EnqueueResult(false, "");
     }
 
     /**
@@ -478,17 +500,15 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
      * resolve: a peer that is not waiting gets no answer, which is what a peer
      * asking about a file we are not holding for them should get.
      */
-    private CompletableFuture<Void> trySendPlaceInQueueAsync(MessageConnection connection, String filename) {
+    private void trySendPlaceInQueue(MessageConnection connection, String filename) {
         Integer place = client.getUploadAdmission().place(dev.slsk.Username.of(connection.getUsername()), filename);
-        return place == null ? completed() : connection.writeAsync(new PlaceInQueueResponse(filename, place));
+        if (place != null) {
+            connection.write(new PlaceInQueueResponse(filename, place));
+        }
     }
 
     private void raiseDiagnostic(DiagnosticEvent eventData) {
         diagnosticListeners.forEach(listener -> listener.handle(this, eventData));
-    }
-
-    private static CompletableFuture<Void> completed() {
-        return CompletableFuture.completedFuture(null);
     }
 
     private static void closeQuietly(java.io.InputStream stream) {

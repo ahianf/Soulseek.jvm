@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.util.concurrent.CompletableFuture;
 
 /** Provides client connections for TCP network services. */
 public interface TcpClient extends AutoCloseable {
@@ -25,11 +24,11 @@ public interface TcpClient extends AutoCloseable {
     /** Returns the client remote endpoint. */
     InetSocketAddress getRemoteEndpoint();
 
-    /** Connects the client to a remote endpoint. */
-    CompletableFuture<Void> connectAsync(InetAddress address, int port);
+    /** Connects the client to a remote endpoint, blocking until it lands. */
+    void connect(InetAddress address, int port);
 
-    /** Connects to a destination through a SOCKS5 proxy. */
-    CompletableFuture<ProxyEndpoint> connectThroughProxyAsync(
+    /** Connects to a destination through a SOCKS5 proxy, blocking throughout. */
+    ProxyEndpoint connectThroughProxy(
             InetAddress proxyAddress,
             int proxyPort,
             InetAddress destinationAddress,

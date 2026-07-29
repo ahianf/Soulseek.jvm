@@ -69,19 +69,15 @@ public final class DefaultListenerHandler implements ListenerHandler {
 
         CompletableFuture<Void> operation;
         try {
-            operation = connection
-                    .readAsync(4)
-                    .thenCompose(lengthBytes -> {
-                        int length = ByteBuffer.wrap(lengthBytes)
-                                .order(ByteOrder.LITTLE_ENDIAN)
-                                .getInt();
-                        return connection.readAsync(length).thenApply(body -> {
-                            byte[] message = Arrays.copyOf(lengthBytes, lengthBytes.length + body.length);
-                            System.arraycopy(body, 0, message, lengthBytes.length, body.length);
-                            return message;
-                        });
-                    })
-                    .thenCompose(message -> routeInitialization(connection, message));
+            // Read on this thread: the listener hands each accepted connection
+            // its own, and its whole job is this handshake.
+            byte[] lengthBytes = connection.read(4);
+            int length =
+                    ByteBuffer.wrap(lengthBytes).order(ByteOrder.LITTLE_ENDIAN).getInt();
+            byte[] body = connection.read(length);
+            byte[] message = Arrays.copyOf(lengthBytes, lengthBytes.length + body.length);
+            System.arraycopy(body, 0, message, lengthBytes.length, body.length);
+            operation = routeInitialization(connection, message);
         } catch (Throwable failure) {
             operation = CompletableFuture.failedFuture(failure);
         }

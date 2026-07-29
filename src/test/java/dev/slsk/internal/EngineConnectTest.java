@@ -22,6 +22,7 @@ import dev.slsk.exceptions.LoginRejectedException;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.internal.EngineEvents.Kind;
+import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.messaging.MessageCode;
@@ -360,7 +361,7 @@ class EngineConnectTest {
         }
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("connectAsync")) {
+            if (method.getName().equals("connect")) {
                 connectCount++;
                 connectToken = (CancellationSignal) arguments[0];
                 if (synchronousConnectFailure != null) {
@@ -369,23 +370,27 @@ class EngineConnectTest {
                 if (fireConnected && factory.connected != null) {
                     factory.connected.handle(proxy, null);
                 }
-                return connectResult;
+                // join() keeps the configured outcome's shape: a cancellation
+                // raw, everything else in a CompletionException, which is what
+                // the blocking transport raises now.
+                Outcomes.raise(connectResult);
+                return null;
             }
-            if (method.getName().equals("writeAsync")
-                    && arguments.length == 2
-                    && arguments[0] instanceof byte[] bytes) {
+            if (method.getName().equals("write") && arguments.length == 2 && arguments[0] instanceof byte[] bytes) {
                 sequence.add("raw");
                 rawMessages.add(bytes);
                 tokens.add((CancellationSignal) arguments[1]);
-                return rawResult;
+                Outcomes.raise(rawResult);
+                return null;
             }
-            if (method.getName().equals("writeAsync")
+            if (method.getName().equals("write")
                     && arguments.length == 2
                     && arguments[0] instanceof OutgoingMessage message) {
                 sequence.add("message");
                 outgoingMessages.add(message);
                 tokens.add((CancellationSignal) arguments[1]);
-                return messageResult;
+                Outcomes.raise(messageResult);
+                return null;
             }
             if (method.getName().equals("disconnect")) {
                 disconnectCount++;

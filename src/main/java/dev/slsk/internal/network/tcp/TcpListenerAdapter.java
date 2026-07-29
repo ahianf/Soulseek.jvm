@@ -4,7 +4,6 @@
 
 package dev.slsk.internal.network.tcp;
 
-import dev.slsk.internal.common.NetworkExecutor;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
@@ -12,7 +11,6 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Pass-through implementation of {@link TcpListener} over a server socket.
@@ -36,7 +34,7 @@ final class TcpListenerAdapter implements TcpListener {
     }
 
     @Override
-    public CompletableFuture<Socket> acceptTcpClientAsync() {
+    public Socket acceptTcpClient() {
         ensureStarted();
         Socket accepted;
         synchronized (this) {
@@ -44,19 +42,16 @@ final class TcpListenerAdapter implements TcpListener {
             pendingSocket = null;
         }
         if (accepted != null) {
-            return CompletableFuture.completedFuture(accepted);
+            return accepted;
         }
-        return NetworkExecutor.supplyAsync(() -> {
-            try {
-                return serverSocket.accept();
-            } catch (IOException exception) {
-                // The same UncheckedIOException every other method here throws.
-                // Building a CompletionException by hand only meant the caller
-                // saw a stack trace pointing at this lambda rather than at the
-                // socket, and the future wraps whatever escapes anyway.
-                throw new UncheckedIOException(exception);
-            }
-        });
+        try {
+            return serverSocket.accept();
+        } catch (IOException exception) {
+            // The same UncheckedIOException every other method here throws.
+            // Building a CompletionException by hand only meant the caller
+            // saw a stack trace pointing at a lambda rather than at the socket.
+            throw new UncheckedIOException(exception);
+        }
     }
 
     @Override

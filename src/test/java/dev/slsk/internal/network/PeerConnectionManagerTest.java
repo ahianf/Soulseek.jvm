@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;
@@ -939,18 +940,24 @@ class PeerConnectionManagerTest {
                 case "isServerConnection" -> username == null || username.isEmpty();
                 case "isReadingContinuously" -> startReadingCount > 0;
                 case "getUsername" -> username == null ? "" : username;
-                case "connectAsync" -> {
+                // The transport blocks now, so a configured outcome arrives as
+                // a return or a throw rather than as a settled future. join()
+                // is how the future's own failure shape is preserved: a
+                // cancellation raw, everything else in a CompletionException.
+                case "connect" -> {
                     connectCount++;
-                    yield connectFuture;
+                    Outcomes.raise(connectFuture);
+                    yield null;
                 }
-                case "readAsync" -> readFuture;
-                case "writeAsync" -> {
+                case "read" -> Outcomes.raise(readFuture);
+                case "write" -> {
                     if (arguments[0] instanceof byte[] bytes) {
                         byteWrites.add(Arrays.copyOf(bytes, bytes.length));
                     } else if (arguments[0] instanceof OutgoingMessage value) {
                         outgoingWrites.add(value);
                     }
-                    yield writeFuture;
+                    Outcomes.raise(writeFuture);
+                    yield null;
                 }
                 case "handoffTcpClient" -> {
                     handoffCount++;
