@@ -65,7 +65,7 @@ final class DefaultDiagnostics implements Diagnostics {
                         || client.getPeerConnectionManager().getMessageConnections() == null
                 ? 0
                 : client.getPeerConnectionManager().getMessageConnections().size();
-        this.activeSearches = () -> client.getSearchRegistry().size();
+        this.activeSearches = () -> client.getSearches().size();
         this.events = Objects.requireNonNull(events, "events");
         this.meshEvents = Objects.requireNonNull(meshEvents, "meshEvents");
         wire(client);

@@ -79,7 +79,6 @@ import java.io.ByteArrayOutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -191,8 +190,8 @@ final class SoulseekEngine
     /** The server connection and everything said over it; see ServerLink. */
     private final ServerLink server;
 
-    /** Caller-facing search lifecycle, split out; see SearchCoordinator. */
-    private final SearchCoordinator searchCoordinator;
+    /** Searches and the registry of the ones in flight; see SearchDomain. */
+    private final SearchDomain searchDomain;
 
     /** Transfer orchestration, split out; see TransferEngine. */
     private final TransferEngine transfers;
@@ -205,7 +204,6 @@ final class SoulseekEngine
     volatile SoulseekClientState state = SoulseekClientState.DISCONNECTED;
     private volatile Map<Integer, TransferInternal> downloads = new ConcurrentHashMap<>();
     private volatile Map<Integer, TransferInternal> uploads = new ConcurrentHashMap<>();
-    private volatile Map<Integer, SearchInternal> searches = new ConcurrentHashMap<>();
     private final Map<String, Semaphore> uploadSemaphores = new ConcurrentHashMap<>();
 
     /** Creates a client with default options. */
@@ -276,7 +274,7 @@ final class SoulseekEngine
         this.server.connection(serverConnection);
         this.rooms = new RoomRegistry(this, server);
         this.users = new UserDirectory(this, server);
-        this.searchCoordinator = new SearchCoordinator(this, server);
+        this.searchDomain = new SearchDomain(this, server);
         this.transfers = new TransferEngine(this, server);
         this.tokenFactory = tokenFactory == null ? new TokenFactory(this.options.getStartingToken()) : tokenFactory;
         this.searchSemaphore = new Semaphore(this.options.getMaximumConcurrentSearches());
@@ -784,11 +782,7 @@ final class SoulseekEngine
         }
         distributedConnectionManager.removeAndDisposeAll();
         distributedConnectionManager.resetStatus();
-        for (SearchInternal search : new ArrayList<>(searches.values())) {
-            search.cancel();
-            search.close();
-        }
-        searches.clear();
+        searchDomain.cancelAll();
         username = null;
         changeState(SoulseekClientState.DISCONNECTED, reason, exception);
     }
@@ -821,7 +815,7 @@ final class SoulseekEngine
 
     @Override
     public final Map<Integer, SearchInternal> getSearches() {
-        return searches;
+        return searchDomain.registry();
     }
 
     @Override
@@ -937,7 +931,7 @@ final class SoulseekEngine
     }
 
     void setSearchesForTest(Map<Integer, SearchInternal> value) {
-        searches = value;
+        searchDomain.registry(value);
     }
 
     void setClientListenerFactoryForTest(ClientListenerFactory value) {
@@ -1428,11 +1422,6 @@ final class SoulseekEngine
     }
 
     @Override
-    public java.util.Map<Integer, SearchInternal> getSearchRegistry() {
-        return searches;
-    }
-
-    @Override
     public TokenFactory getTokenFactory() {
         return tokenFactory;
     }
@@ -1519,8 +1508,8 @@ final class SoulseekEngine
         return server;
     }
 
-    SearchCoordinator searchCoordinator() {
-        return searchCoordinator;
+    SearchDomain searches() {
+        return searchDomain;
     }
 
     TransferEngine transfers() {

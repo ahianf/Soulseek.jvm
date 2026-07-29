@@ -49,7 +49,9 @@ class EngineApiTest {
      * <p>It shrinks as each domain takes its own. The server write path, the
      * correlated command and request, the login check and the default signal
      * left together for {@code ServerLink}, which owns the server connection;
-     * nothing reaches the server through the engine any more.
+     * nothing reaches the server through the engine any more. The search
+     * registry left for {@code SearchDomain}, and with it the second name the
+     * engine had for the same map.
      */
     private static final Set<String> SEAM = Set.of(
             "acknowledgePrivateMessageOperation",
@@ -68,7 +70,6 @@ class EngineApiTest {
             "getPeerMessageHandler",
             "getProfile",
             "getScheduler",
-            "getSearchRegistry",
             "getSearchResponder",
             "getSearches",
             "getServerConnection",
@@ -146,7 +147,7 @@ class EngineApiTest {
 
         // The five collaborators are how a facet reaches the network now. They
         // are package-private, so a facet can hold one and nothing else can.
-        for (String accessor : Set.of("rooms", "users", "server", "searchCoordinator", "transfers")) {
+        for (String accessor : Set.of("rooms", "users", "server", "searches", "transfers")) {
             assertThrows(
                     NoSuchMethodException.class,
                     () -> SoulseekEngine.class.getMethod(accessor),

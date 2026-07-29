@@ -28,14 +28,18 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 /**
- * Search lifecycle: issuing a query, routing responses back to the caller and
- * settling the search when it completes, times out or is cancelled.
+ * Searches: issuing a query, the registry of the ones in flight, routing
+ * responses back to the caller, and settling each one when it completes, times
+ * out or is cancelled.
  *
- * <p>The search registry itself stays on the client, because incoming
+ * <p>The registry used to live on the engine, on the grounds that incoming
  * distributed and peer messages are dispatched against it from the message
- * handlers. This owns the caller-facing half.
+ * handlers. That is a reason to give the handlers a way in, not a reason to
+ * keep a search's state somewhere other than searches: everything that decides
+ * what a search is doing is here, so the map of what is running belongs here
+ * too.
  */
-final class SearchCoordinator {
+final class SearchDomain {
 
     private final EngineContext context;
     private final ServerLink server;
@@ -43,11 +47,50 @@ final class SearchCoordinator {
     /** Caps concurrent searches; the limit is a search concern, so it lives here. */
     private final java.util.concurrent.Semaphore searchSemaphore;
 
-    SearchCoordinator(EngineContext context, ServerLink server) {
+    /**
+     * The searches in flight, by the token the network answers on.
+     *
+     * <p>Volatile and replaceable because a test substitutes it wholesale.
+     */
+    private volatile java.util.Map<Integer, SearchInternal> searches = new java.util.concurrent.ConcurrentHashMap<>();
+
+    SearchDomain(EngineContext context, ServerLink server) {
         this.context = java.util.Objects.requireNonNull(context, "context");
         this.server = java.util.Objects.requireNonNull(server, "server");
         this.searchSemaphore =
                 new java.util.concurrent.Semaphore(context.getClientOptions().getMaximumConcurrentSearches());
+    }
+
+    /**
+     * Returns the searches in flight, by token.
+     *
+     * @return the live registry
+     */
+    java.util.Map<Integer, SearchInternal> registry() {
+        return searches;
+    }
+
+    /**
+     * Replaces the registry. For tests that need to observe one they own.
+     *
+     * @param value the registry
+     */
+    void registry(java.util.Map<Integer, SearchInternal> value) {
+        searches = value;
+    }
+
+    /**
+     * Cancels every search in flight and forgets them.
+     *
+     * <p>What a disconnect does to searches: none of them can be answered any
+     * more, and each has callers waiting on a terminal state.
+     */
+    void cancelAll() {
+        for (SearchInternal search : new java.util.ArrayList<>(searches.values())) {
+            search.cancel();
+            search.close();
+        }
+        searches.clear();
     }
 
     /**
@@ -258,7 +301,7 @@ final class SearchCoordinator {
         server.requireLoggedIn("perform a search");
 
         int token = initialToken == null ? context.getTokenFactory().nextToken() : initialToken;
-        if (context.getSearchRegistry().containsKey(token)) {
+        if (searches.containsKey(token)) {
             throw new DuplicateTokenException("An active search with token " + token + " is already in progress");
         }
 
@@ -314,7 +357,7 @@ final class SearchCoordinator {
         };
 
         try {
-            context.getSearchRegistry().putIfAbsent(search.getToken(), search);
+            searches.putIfAbsent(search.getToken(), search);
             updateState.accept(SearchState.REQUESTED);
             context.getDiagnostic()
                     .debug("Attempting to acquire search semaphore for search '"
@@ -379,7 +422,7 @@ final class SearchCoordinator {
                             + Failures.message(cause),
                     cause);
         } finally {
-            context.getSearchRegistry().remove(search.getToken(), search);
+            searches.remove(search.getToken(), search);
             search.close();
         }
     }

@@ -46,26 +46,26 @@ class EngineSearchTest {
         assertThrows(
                 NullPointerException.class,
                 () -> fixture.client
-                        .searchCoordinator()
+                        .searches()
                         .search(SearchRequest.of((SearchQuery) null).build()));
         for (String invalid :
                 new String[] {"", " ", "\t", "-excluded", "\u00A0", "\u2003", "\u202F", "\u3000", " \u2003\t"}) {
             assertThrows(
                     IllegalArgumentException.class,
                     () -> fixture.client
-                            .searchCoordinator()
+                            .searches()
                             .search(SearchRequest.of(SearchQuery.fromText(invalid))
                                     .build()));
         }
         assertThrows(
                 IllegalArgumentException.class,
                 () -> fixture.client
-                        .searchCoordinator()
+                        .searches()
                         .search(SearchRequest.of(SearchQuery.fromText("a")).build()));
         assertThrows(
                 NullPointerException.class,
                 () -> fixture.client
-                        .searchCoordinator()
+                        .searches()
                         .search(SearchRequest.of(SearchQuery.fromText("valid")).build(), (Consumer<SearchResponse>)
                                 null));
 
@@ -73,7 +73,7 @@ class EngineSearchTest {
         assertThrows(
                 IllegalStateException.class,
                 () -> fixture.client
-                        .searchCoordinator()
+                        .searches()
                         .search(SearchRequest.of(SearchQuery.fromText("valid")).build()));
 
         fixture.client.setStateForTest(loggedIn());
@@ -82,7 +82,7 @@ class EngineSearchTest {
         assertThrows(
                 DuplicateTokenException.class,
                 () -> fixture.client
-                        .searchCoordinator()
+                        .searches()
                         .search(SearchRequest.of(SearchQuery.fromText("valid"))
                                 .token(42)
                                 .build()));
@@ -97,7 +97,7 @@ class EngineSearchTest {
         SearchOptions options = options(40, 250, false);
 
         SearchResult result = fixture.client
-                .searchCoordinator()
+                .searches()
                 .search(SearchRequest.of(SearchQuery.fromText("a"))
                         .token(10)
                         .options(options)
@@ -118,7 +118,7 @@ class EngineSearchTest {
                 options(40, 250, true, change -> states.add(change.search().getState()), null);
 
         SearchResult result = fixture.client
-                .searchCoordinator()
+                .searches()
                 .search(SearchRequest.of(SearchQuery.fromText("foo a -bar"))
                         .token(11)
                         .options(options)
@@ -172,7 +172,7 @@ class EngineSearchTest {
         SearchOptions options = options(2_000, 1, true, null, received -> optionResponses.incrementAndGet());
 
         CompletableFuture<SearchResult> task = inBackground(() -> fixture.client
-                .searchCoordinator()
+                .searches()
                 .search(SearchRequest.of(SearchQuery.fromText("query"))
                         .token(30)
                         .options(options)
@@ -209,7 +209,7 @@ class EngineSearchTest {
         SearchOptions options = options(2_000, 1, true);
 
         CompletableFuture<Search> task = inBackground(() -> fixture.client
-                .searchCoordinator()
+                .searches()
                 .search(
                         SearchRequest.of(SearchQuery.fromText("query"))
                                 .scope(SearchScope.getNetwork())
@@ -236,7 +236,7 @@ class EngineSearchTest {
         Fixture fixture = new Fixture();
         CancellationController source = new CancellationController();
         CompletableFuture<SearchResult> task = inBackground(() -> fixture.client
-                .searchCoordinator()
+                .searches()
                 .search(SearchRequest.of(SearchQuery.fromText("query"))
                         .options(options(2_000, 250, true))
                         .cancellation(source.getSignal())
@@ -257,7 +257,7 @@ class EngineSearchTest {
         CancellationController source = new CancellationController();
         source.cancel();
         CompletableFuture<SearchResult> cancelled = inBackground(() -> fixture.client
-                .searchCoordinator()
+                .searches()
                 .search(SearchRequest.of(SearchQuery.fromText("cancelled"))
                         .token(40)
                         .options(options(2_000, 250, true))
@@ -268,7 +268,7 @@ class EngineSearchTest {
         TimeoutException timeout = new TimeoutException("write");
         fixture.server.result = CompletableFuture.failedFuture(timeout);
         CompletableFuture<SearchResult> timedOut = inBackground(() -> fixture.client
-                .searchCoordinator()
+                .searches()
                 .search(SearchRequest.of(SearchQuery.fromText("timeout"))
                         .token(41)
                         .options(options(2_000, 250, true))
@@ -281,7 +281,7 @@ class EngineSearchTest {
         IllegalStateException error = new IllegalStateException("boom");
         fixture.server.result = CompletableFuture.failedFuture(error);
         CompletableFuture<SearchResult> failed = inBackground(() -> fixture.client
-                .searchCoordinator()
+                .searches()
                 .search(SearchRequest.of(SearchQuery.fromText("error"))
                         .token(42)
                         .options(options(2_000, 250, true))
@@ -305,7 +305,7 @@ class EngineSearchTest {
         // concurrency semaphore are whichever two get scheduled first — and the
         // test would be asserting on a race.
         CompletableFuture<SearchResult> first = inBackground(() -> fixture.client
-                .searchCoordinator()
+                .searches()
                 .search(SearchRequest.of(SearchQuery.fromText("one"))
                         .token(51)
                         .options(options)
@@ -313,7 +313,7 @@ class EngineSearchTest {
                         .build()));
         waitUntil(() -> fixture.server.messages.size() == 1);
         CompletableFuture<SearchResult> second = inBackground(() -> fixture.client
-                .searchCoordinator()
+                .searches()
                 .search(SearchRequest.of(SearchQuery.fromText("two"))
                         .token(52)
                         .options(options)
@@ -321,7 +321,7 @@ class EngineSearchTest {
                         .build()));
         waitUntil(() -> fixture.server.messages.size() == 2);
         CompletableFuture<SearchResult> third = inBackground(() -> fixture.client
-                .searchCoordinator()
+                .searches()
                 .search(SearchRequest.of(SearchQuery.fromText("three"))
                         .token(53)
                         .options(options)
@@ -350,7 +350,7 @@ class EngineSearchTest {
     private static void assertScopeMessage(SearchScope scope, byte[] expected) {
         Fixture fixture = new Fixture();
         SearchResult result = fixture.client
-                .searchCoordinator()
+                .searches()
                 .search(SearchRequest.of(SearchQuery.fromText("query"))
                         .scope(scope)
                         .token(20)

@@ -46,16 +46,6 @@ interface EngineContext {
      */
     String getLoggedInUsername();
 
-    /**
-     * Returns the live search registry.
-     *
-     * <p>Stays on the client because incoming distributed and peer messages are
-     * dispatched against it from the message handlers, which the client owns.
-     *
-     * @return searches by token
-     */
-    java.util.Map<Integer, dev.slsk.internal.search.SearchInternal> getSearchRegistry();
-
     /** Returns the token allocator. */
     dev.slsk.internal.common.TokenFactory getTokenFactory();
 

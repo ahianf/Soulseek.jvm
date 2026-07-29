@@ -73,7 +73,7 @@ final class DefaultSearch implements Search {
     static final int RETAINED_FINISHED_SEARCHES = 100;
 
     private final SoulseekEngine client;
-    private final SearchCoordinator coordinator;
+    private final SearchDomain domain;
     private final EventBus<SearchEvent> events;
     private final Map<SearchId, State> searches = new ConcurrentHashMap<>();
 
@@ -89,7 +89,7 @@ final class DefaultSearch implements Search {
 
     DefaultSearch(SoulseekEngine client, EventBus<SearchEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
-        this.coordinator = client.searchCoordinator();
+        this.domain = client.searches();
         this.events = Objects.requireNonNull(events, "events");
         wire();
     }
@@ -103,7 +103,7 @@ final class DefaultSearch implements Search {
         private final List<SearchResponse> responses = new ArrayList<>();
 
         /**
-         * Cancels the coordinator operation this search is running as.
+         * Cancels the search-domain operation this search is running as.
          *
          * <p>Held rather than derived so that {@code stop} reaches the running
          * operation. A caller's own signal is chained onto this one rather than
@@ -298,7 +298,7 @@ final class DefaultSearch implements Search {
         CancellationSignal signal = state.controller.getSignal();
         SearchStatus status;
         try {
-            coordinator.search(
+            domain.search(
                     dev.slsk.internal.SearchQuery.fromText(query.terms()),
                     source -> accept(state, source, query.filters()),
                     scope(query.scope()),
