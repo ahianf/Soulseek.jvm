@@ -41,8 +41,9 @@ import org.junit.jupiter.api.Test;
  * source, so a type reachable only through a generic parameter or a nested
  * record component is caught along with the obvious ones.
  *
- * <p>Internal {@code CompletableFuture} use is explicitly permitted and is the
- * next goal's subject. Nothing here asserts against it.
+ * <p>Nothing here asserts about the internals. That there is no
+ * {@code CompletableFuture} left in them is {@code InternalShapeTest}'s claim,
+ * and it covers all of {@code src/main/java} rather than only what is exported.
  */
 class ExportedSurfaceTest {
 
