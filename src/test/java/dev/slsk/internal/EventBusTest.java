@@ -343,6 +343,74 @@ class EventBusTest {
         bus.close();
     }
 
+    /**
+     * After close nothing consumes the queue, so a publisher blocked on a full
+     * one used to be wedged forever — the closed check happened once, before
+     * the wait. Dropping is what close already documents for everything still
+     * queued; the publisher must get its thread back.
+     */
+    @Test
+    @DisplayName("close releases a publisher blocked on a full queue")
+    void closeReleasesABlockedPublisher() throws Exception {
+        EventBus<Signal> bus = bus();
+        CountDownLatch wedged = new CountDownLatch(1);
+        CountDownLatch never = new CountDownLatch(1);
+        bus.subscribe(signal -> {
+            wedged.countDown();
+            await(never);
+        });
+
+        AtomicBoolean returned = new AtomicBoolean();
+        Thread publisher = Thread.ofVirtual().start(() -> {
+            // More than the queue holds, with the delivery thread wedged on
+            // the first: this publisher ends up blocked waiting for room.
+            for (int i = 0; i < 1_100; i++) {
+                bus.publish(new Signal.Added(i));
+            }
+            returned.set(true);
+        });
+        await(wedged);
+        assertFalse(publisher.join(java.time.Duration.ofMillis(250)), "the publisher is waiting for room");
+
+        bus.close();
+
+        assertTrue(publisher.join(java.time.Duration.ofSeconds(5)), "close left the publisher wedged");
+        assertTrue(returned.get());
+    }
+
+    /**
+     * A listener that publishes back into its own bus runs on the queue's only
+     * consumer. If the queue is full at that moment, blocking would deadlock
+     * the bus permanently and wedge every publisher behind it; the reentrant
+     * publish is delivered inline instead, and nothing is dropped.
+     */
+    @Test
+    @DisplayName("a listener flooding its own bus cannot deadlock the delivery thread")
+    void aReentrantPublisherCannotDeadlockTheBus() throws Exception {
+        EventBus<Signal> bus = bus();
+        int flood = 1_100;
+        AtomicInteger delivered = new AtomicInteger();
+        CountDownLatch done = new CountDownLatch(flood);
+        bus.subscribe(signal -> {
+            if (signal instanceof Signal.Removed) {
+                // The trigger: flood the bus from its own delivery thread,
+                // past the queue's capacity.
+                for (int i = 0; i < flood; i++) {
+                    bus.publish(new Signal.Added(i));
+                }
+            } else {
+                delivered.incrementAndGet();
+                done.countDown();
+            }
+        });
+
+        bus.publish(new Signal.Removed(0));
+
+        assertTrue(done.await(10, TimeUnit.SECONDS), "the bus deadlocked on its own queue");
+        assertEquals(flood, delivered.get(), "nothing was dropped");
+        bus.close();
+    }
+
     @Test
     @DisplayName("close stops the delivery thread")
     void closeStopsTheDeliveryThread() {

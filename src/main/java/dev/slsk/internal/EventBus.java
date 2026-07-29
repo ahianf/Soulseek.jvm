@@ -273,18 +273,36 @@ public final class EventBus<T> implements EventStream<T>, AutoCloseable {
      *
      * <p>Uninterruptibly: an interrupt belongs to whatever the publisher does
      * next, and a read loop that is interrupted mid-publish must still not lose
-     * the event it was carrying.
+     * the event it was carrying. The wait re-checks {@link #closed}, because
+     * after close nothing consumes the queue — a publisher that kept blocking
+     * on a full one would be wedged forever, and dropping is exactly what
+     * {@link #close} already documents for everything still queued.
+     *
+     * <p>A publish from the delivery thread itself — a listener or a
+     * continuation calling back into a facet — must never block on this queue:
+     * it is the queue's only consumer, so a full queue would deadlock the bus
+     * permanently and wedge every publisher behind it, read loops included.
+     * When that publish cannot be queued it is delivered inline. Ordering
+     * degrades for that one event, only on a bus already at capacity; the
+     * alternative is not degraded ordering but no delivery ever again.
      */
     private void enqueue(Delivery<T> delivery) {
         if (closed.get()) {
             return;
         }
+        if (Thread.currentThread() == deliveryThread) {
+            if (!pending.offer(delivery)) {
+                deliver(delivery);
+            }
+            return;
+        }
         boolean interrupted = false;
         try {
-            while (true) {
+            while (!closed.get()) {
                 try {
-                    pending.put(delivery);
-                    return;
+                    if (pending.offer(delivery, 100, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                        return;
+                    }
                 } catch (InterruptedException exception) {
                     interrupted = true;
                 }
@@ -305,19 +323,24 @@ public final class EventBus<T> implements EventStream<T>, AutoCloseable {
             } catch (InterruptedException interrupted) {
                 return;
             }
-            int delivered = dispatch(delivery.event(), delivery.targets());
-            IntConsumer continuation = delivery.continuation();
-            if (continuation == null) {
-                continue;
-            }
-            try {
-                continuation.accept(delivered);
-            } catch (RuntimeException | Error exception) {
-                diagnostics.warning(
-                        "The continuation for a " + name + " event threw "
-                                + exception.getClass().getName() + "; it was contained",
-                        exception);
-            }
+            deliver(delivery);
+        }
+    }
+
+    /** Delivers one event and runs its continuation, containing both. */
+    private void deliver(Delivery<T> delivery) {
+        int delivered = dispatch(delivery.event(), delivery.targets());
+        IntConsumer continuation = delivery.continuation();
+        if (continuation == null) {
+            return;
+        }
+        try {
+            continuation.accept(delivered);
+        } catch (RuntimeException | Error exception) {
+            diagnostics.warning(
+                    "The continuation for a " + name + " event threw "
+                            + exception.getClass().getName() + "; it was contained",
+                    exception);
         }
     }
 
