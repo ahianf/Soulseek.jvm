@@ -17,8 +17,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.ConnectionException;
+import dev.slsk.internal.ServerLink;
+import dev.slsk.internal.ServerLinks;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Outcomes;
+import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
@@ -56,9 +59,10 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 
-class PeerConnectionManagerTest {
+class PeerNetworkTest {
     private static final InetSocketAddress DIRECT_ENDPOINT = endpoint(41001);
     private static final InetSocketAddress INDIRECT_ENDPOINT = endpoint(41002);
     private static final String LOCAL_USER = "local";
@@ -67,10 +71,13 @@ class PeerConnectionManagerTest {
 
     @Test
     void constructionDiagnosticsAndClosePreserveSourceLifecycle() {
-        assertThrows(NullPointerException.class, () -> new DefaultPeerConnectionManager(null));
+        Fixture nulls = new Fixture();
+        assertThrows(
+                NullPointerException.class,
+                () -> new PeerNetwork(null, nulls.server, nulls.waiter, nulls.tokens, nulls.peerMessages));
 
         Fixture fixture = new Fixture();
-        DefaultPeerConnectionManager manager = fixture.manager();
+        PeerNetwork manager = fixture.manager();
         AtomicInteger events = new AtomicInteger();
         DiagnosticEventListener listener = (sender, args) -> events.incrementAndGet();
         manager.addDiagnosticGeneratedListener(listener);
@@ -83,7 +90,8 @@ class PeerConnectionManagerTest {
         assertDoesNotThrow(manager::close);
         assertDoesNotThrow(manager::close);
 
-        DefaultPeerConnectionManager defaultDiagnostic = new DefaultPeerConnectionManager(fixture.client);
+        PeerNetwork defaultDiagnostic =
+                new PeerNetwork(fixture.options, fixture.server, fixture.waiter, fixture.tokens, fixture.peerMessages);
         defaultDiagnostic.addDiagnosticGeneratedListener(listener);
         // The default factory is covered through a debug-producing failure.
         defaultDiagnostic.getCachedMessageConnection("missing");
@@ -269,7 +277,7 @@ class PeerConnectionManagerTest {
         assertEquals(1, indirect.byteWrites.size());
         assertArrayEquals(littleEndian(TOKEN), indirect.byteWrites.getFirst());
         ConnectToPeerRequest request =
-                assertInstanceOf(ConnectToPeerRequest.class, fixture.server.outgoingWrites.getFirst());
+                assertInstanceOf(ConnectToPeerRequest.class, fixture.serverConnection.outgoingWrites.getFirst());
         assertEquals(Constants.ConnectionType.TRANSFER, request.getType());
         assertTrue(fixture.manager().getPendingSolicitations().isEmpty());
     }
@@ -369,7 +377,7 @@ class PeerConnectionManagerTest {
         assertTrue(fixture.manager().getPendingSolicitations().isEmpty());
         assertEquals(
                 Constants.ConnectionType.PEER,
-                assertInstanceOf(ConnectToPeerRequest.class, fixture.server.outgoingWrites.getFirst())
+                assertInstanceOf(ConnectToPeerRequest.class, fixture.serverConnection.outgoingWrites.getFirst())
                         .getType());
     }
 
@@ -621,59 +629,21 @@ class PeerConnectionManagerTest {
     private static final class Fixture {
         private final RecordingDiagnostic diagnostic = new RecordingDiagnostic();
         private final FakeWaiter waiter = new FakeWaiter();
-        private final ConnectionProbe server = ConnectionProbe.message("", endpoint(2242));
+        private final ConnectionProbe serverConnection = ConnectionProbe.message("", endpoint(2242));
         private final FakeFactory factory = new FakeFactory();
-        private final FakeClient client = new FakeClient(waiter, server.messageConnection());
-        private final DefaultPeerConnectionManager manager =
-                new DefaultPeerConnectionManager(client, factory, diagnostic);
-
-        private DefaultPeerConnectionManager manager() {
-            return manager;
-        }
-    }
-
-    private static final class FakeClient implements PeerConnectionManagerClient {
-        private final FakeWaiter waiter;
-        private final MessageConnection server;
-        private final AtomicInteger token = new AtomicInteger(TOKEN);
-        private final PeerMessageHandler handler = (PeerMessageHandler) Proxy.newProxyInstance(
+        private final Supplier<SoulseekClientOptions> options = SoulseekClientOptions::new;
+        private final ServerLink server =
+                ServerLinks.loggedIn(waiter, diagnostic, serverConnection.messageConnection(), LOCAL_USER);
+        private final TokenFactory tokens = new TokenFactory(TOKEN);
+        private final PeerMessageHandler peerMessages = (PeerMessageHandler) Proxy.newProxyInstance(
                 PeerMessageHandler.class.getClassLoader(),
                 new Class<?>[] {PeerMessageHandler.class},
                 (proxy, method, arguments) -> defaultValue(method.getReturnType()));
+        private final PeerNetwork manager =
+                new PeerNetwork(options, server, waiter, tokens, peerMessages, factory, diagnostic);
 
-        private FakeClient(FakeWaiter waiter, MessageConnection server) {
-            this.waiter = waiter;
-            this.server = server;
-        }
-
-        @Override
-        public SoulseekClientOptions getOptions() {
-            return new SoulseekClientOptions();
-        }
-
-        @Override
-        public String getUsername() {
-            return LOCAL_USER;
-        }
-
-        @Override
-        public int getNextToken() {
-            return token.getAndIncrement();
-        }
-
-        @Override
-        public Waiter getWaiter() {
-            return waiter;
-        }
-
-        @Override
-        public MessageConnection getServerConnection() {
-            return server;
-        }
-
-        @Override
-        public PeerMessageHandler getPeerMessageHandler() {
-            return handler;
+        private PeerNetwork manager() {
+            return manager;
         }
     }
 

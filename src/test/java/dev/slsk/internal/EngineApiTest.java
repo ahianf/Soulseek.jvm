@@ -67,7 +67,6 @@ class EngineApiTest {
             "getListener",
             "getLoggedInUsername",
             "getPeerConnectionManager",
-            "getPeerMessageHandler",
             "getProfile",
             "getScheduler",
             "getSearchResponder",

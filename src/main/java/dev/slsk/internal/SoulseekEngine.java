@@ -52,14 +52,13 @@ import dev.slsk.internal.network.ConnectionFactory;
 import dev.slsk.internal.network.DefaultConnectionFactory;
 import dev.slsk.internal.network.DefaultDistributedConnectionManager;
 import dev.slsk.internal.network.DefaultListenerHandler;
-import dev.slsk.internal.network.DefaultPeerConnectionManager;
 import dev.slsk.internal.network.DistributedConnectionManager;
 import dev.slsk.internal.network.DistributedConnectionManagerClient;
 import dev.slsk.internal.network.ListenerHandler;
 import dev.slsk.internal.network.ListenerHandlerClient;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.PeerConnectionManager;
-import dev.slsk.internal.network.PeerConnectionManagerClient;
+import dev.slsk.internal.network.PeerNetwork;
 import dev.slsk.internal.network.tcp.Listener;
 import dev.slsk.internal.network.tcp.SocketListener;
 import dev.slsk.internal.options.BrowseOptions;
@@ -110,7 +109,6 @@ final class SoulseekEngine
                 DistributedConnectionManagerClient,
                 DistributedMessageHandlerClient,
                 ListenerHandlerClient,
-                PeerConnectionManagerClient,
                 PeerMessageHandlerClient,
                 SearchResponderClient,
                 ServerMessageHandlerClient {
@@ -293,8 +291,9 @@ final class SoulseekEngine
         this.distributedMessageHandler = distributedMessageHandler == null
                 ? new DefaultDistributedMessageHandler(this)
                 : distributedMessageHandler;
-        this.peerConnectionManager =
-                peerConnectionManager == null ? new DefaultPeerConnectionManager(this) : peerConnectionManager;
+        this.peerConnectionManager = peerConnectionManager == null
+                ? new PeerNetwork(this::getOptions, server, this.waiter, this.tokenFactory, this.peerMessageHandler)
+                : peerConnectionManager;
         this.distributedConnectionManager = distributedConnectionManager == null
                 ? new DefaultDistributedConnectionManager(this, null, null, scheduler)
                 : distributedConnectionManager;
@@ -844,11 +843,6 @@ final class SoulseekEngine
     @Override
     public final MessageConnection getServerConnection() {
         return server.connection();
-    }
-
-    @Override
-    public final PeerMessageHandler getPeerMessageHandler() {
-        return peerMessageHandler;
     }
 
     @Override
