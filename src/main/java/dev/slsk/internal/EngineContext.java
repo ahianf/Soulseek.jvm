@@ -4,7 +4,6 @@
 package dev.slsk.internal;
 
 import dev.slsk.CancellationSignal;
-import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
@@ -35,56 +34,6 @@ interface EngineContext {
     DiagnosticSink getDiagnostic();
 
     /**
-     * Throws unless the client is connected and logged in.
-     *
-     * @param operation what the caller is trying to do, for the message
-     */
-    void requireLoggedIn(String operation);
-
-    /**
-     * Substitutes the client's default signal when the caller supplied none.
-     *
-     * @param cancellationSignal the caller's signal, possibly {@code null}
-     * @return a signal, never {@code null}
-     */
-    CancellationSignal defaultToken(CancellationSignal cancellationSignal);
-
-    /**
-     * Sends a command and waits for the server's acknowledgement.
-     *
-     * <p>The dominant shape of a server operation: register a correlated wait,
-     * write, translate the failure. Shared here so each component does not
-     * reimplement it.
-     *
-     * @param message the command to send
-     * @param waitKey correlates the acknowledgement
-     * @param cancellationSignal the cancellation signal
-     * @param failurePrefix prefixes any wrapped failure
-     */
-    void executeCorrelatedCommand(
-            OutgoingMessage message, WaitKey waitKey, CancellationSignal cancellationSignal, String failurePrefix);
-
-    /**
-     * Sends a request and waits for a typed response.
-     *
-     * @param message the request to send
-     * @param waitKey correlates the response
-     * @param resultType the expected response type
-     * @param cancellationSignal the cancellation signal
-     * @param failurePrefix prefixes any wrapped failure
-     * @param preservedFailures failure types to pass through untranslated
-     * @param <T> the response type
-     * @return the response
-     */
-    <T> T executeCorrelatedRequest(
-            OutgoingMessage message,
-            WaitKey waitKey,
-            Class<T> resultType,
-            CancellationSignal cancellationSignal,
-            String failurePrefix,
-            Class<? extends Throwable>... preservedFailures);
-
-    /**
      * Returns this client's own logged-in username, or {@code null}.
      *
      * <p>Needed because several failure messages name the logged-in user rather
@@ -112,14 +61,6 @@ interface EngineContext {
 
     /** Returns the client's shared timer. */
     dev.slsk.internal.common.Scheduler getScheduler();
-
-    /**
-     * Writes pre-encoded bytes to the server connection.
-     *
-     * @param message the encoded message
-     * @param cancellationSignal the cancellation signal
-     */
-    void writeBytesToServer(byte[] message, CancellationSignal cancellationSignal);
 
     /**
      * Raises an engine event.
@@ -194,12 +135,4 @@ interface EngineContext {
             dev.slsk.internal.network.MessageConnection connection,
             OutgoingMessage message,
             CancellationSignal cancellationSignal);
-
-    /**
-     * Writes a message to the server connection.
-     *
-     * @param message the message to send
-     * @param cancellationSignal the cancellation signal
-     */
-    void writeToServer(OutgoingMessage message, CancellationSignal cancellationSignal);
 }

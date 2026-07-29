@@ -53,6 +53,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 final class UserDirectory {
 
     private final EngineContext context;
+    private final ServerLink server;
 
     /**
      * Serialises endpoint lookups per user, so concurrent callers asking about
@@ -64,8 +65,9 @@ final class UserDirectory {
 
     private final java.util.concurrent.Semaphore userEndpointSemaphoreSyncRoot = new java.util.concurrent.Semaphore(1);
 
-    UserDirectory(EngineContext context) {
+    UserDirectory(EngineContext context, ServerLink server) {
         this.context = Objects.requireNonNull(context, "context");
+        this.server = Objects.requireNonNull(server, "server");
     }
 
     UserInfo getUserInfo(String requestedUsername) {
@@ -74,8 +76,8 @@ final class UserDirectory {
 
     UserInfo getUserInfo(String requestedUsername, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(requestedUsername, "username");
-        context.requireLoggedIn("fetch user information");
-        CancellationSignal token = context.defaultToken(cancellationSignal);
+        server.requireLoggedIn("fetch user information");
+        CancellationSignal token = ServerLink.token(cancellationSignal);
         try {
             Wait<UserInfo> infoWait = context.getWaiter()
                     .register(
@@ -102,8 +104,8 @@ final class UserDirectory {
 
     Boolean getUserPrivileged(String requestedUsername, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(requestedUsername, "username");
-        context.requireLoggedIn("check user privileges");
-        return context.executeCorrelatedRequest(
+        server.requireLoggedIn("check user privileges");
+        return server.request(
                 new UserPrivilegesRequest(requestedUsername),
                 new WaitKey(MessageCode.Server.USER_PRIVILEGES, requestedUsername),
                 Boolean.class,
@@ -118,8 +120,8 @@ final class UserDirectory {
 
     UserStatistics getUserStatistics(String requestedUsername, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(requestedUsername, "username");
-        context.requireLoggedIn("fetch user statistics");
-        return context.executeCorrelatedRequest(
+        server.requireLoggedIn("fetch user statistics");
+        return server.request(
                 new UserStatisticsRequest(requestedUsername),
                 new WaitKey(MessageCode.Server.GET_USER_STATS, requestedUsername),
                 UserStatistics.class,
@@ -133,8 +135,8 @@ final class UserDirectory {
 
     UserStatus getUserStatus(String requestedUsername, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(requestedUsername, "username");
-        context.requireLoggedIn("fetch user status");
-        return context.executeCorrelatedRequest(
+        server.requireLoggedIn("fetch user status");
+        return server.request(
                 new UserStatusRequest(requestedUsername),
                 new WaitKey(MessageCode.Server.GET_STATUS, requestedUsername),
                 UserStatus.class,
@@ -149,8 +151,8 @@ final class UserDirectory {
 
     UserData watchUser(String requestedUsername, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(requestedUsername, "username");
-        context.requireLoggedIn("add users");
-        WatchUserResponse response = context.executeCorrelatedRequest(
+        server.requireLoggedIn("add users");
+        WatchUserResponse response = server.request(
                 new WatchUserRequest(requestedUsername),
                 new WaitKey(MessageCode.Server.WATCH_USER, requestedUsername),
                 WatchUserResponse.class,
@@ -169,9 +171,9 @@ final class UserDirectory {
 
     void unwatchUser(String requestedUsername, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(requestedUsername, "username");
-        context.requireLoggedIn("add users");
+        server.requireLoggedIn("add users");
         try {
-            context.writeToServer(new UnwatchUserCommand(requestedUsername), context.defaultToken(cancellationSignal));
+            server.write(new UnwatchUserCommand(requestedUsername), ServerLink.token(cancellationSignal));
         } catch (Throwable failure) {
             throw Failures.raise(failure, "Failed to unwatch user " + requestedUsername + ": ");
         }
@@ -186,10 +188,9 @@ final class UserDirectory {
         if (days <= 0) {
             throw new IllegalArgumentException("The number of days granted must be greater than zero");
         }
-        context.requireLoggedIn("grant user privileges");
+        server.requireLoggedIn("grant user privileges");
         try {
-            context.writeToServer(
-                    new GivePrivilegesCommand(requestedUsername, days), context.defaultToken(cancellationSignal));
+            server.write(new GivePrivilegesCommand(requestedUsername, days), ServerLink.token(cancellationSignal));
         } catch (Throwable failure) {
             throw Failures.raise(
                     failure, "Failed to grant " + days + " days of privileges to " + requestedUsername + ": ");
@@ -211,9 +212,9 @@ final class UserDirectory {
     BrowseResponse browse(
             String requestedUsername, BrowseOptions browseOptions, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(requestedUsername, "username");
-        context.requireLoggedIn("browse");
+        server.requireLoggedIn("browse");
         BrowseOptions operationOptions = browseOptions == null ? new BrowseOptions() : browseOptions;
-        CancellationSignal token = context.defaultToken(cancellationSignal);
+        CancellationSignal token = ServerLink.token(cancellationSignal);
         WaitKey browseWaitKey = new WaitKey(MessageCode.Peer.BROWSE_RESPONSE, requestedUsername);
         try {
             Wait<BrowseResponse> browseWait =
@@ -285,8 +286,8 @@ final class UserDirectory {
 
     void connectToUser(String requestedUsername, boolean invalidateCache, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(requestedUsername, "username");
-        context.requireLoggedIn("connect to other users");
-        CancellationSignal token = context.defaultToken(cancellationSignal);
+        server.requireLoggedIn("connect to other users");
+        CancellationSignal token = ServerLink.token(cancellationSignal);
         try {
             InetSocketAddress endpoint = getUserEndpoint(requestedUsername, token);
             if (invalidateCache
@@ -306,8 +307,8 @@ final class UserDirectory {
 
     InetSocketAddress getUserEndpoint(String requestedUsername, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(requestedUsername, "username");
-        context.requireLoggedIn("fetch user endpoint");
-        CancellationSignal token = context.defaultToken(cancellationSignal);
+        server.requireLoggedIn("fetch user endpoint");
+        CancellationSignal token = ServerLink.token(cancellationSignal);
         UserEndpointCache cache = context.getClientOptions().getUserEndpointCache();
         if (cache == null) {
             return retrieveUserEndpoint(requestedUsername, token, null);
@@ -357,7 +358,7 @@ final class UserDirectory {
                             UserAddressResponse.class,
                             null,
                             cancellationSignal);
-            context.writeToServer(new UserAddressRequest(requestedUsername), cancellationSignal);
+            server.write(new UserAddressRequest(requestedUsername), cancellationSignal);
             UserAddressResponse response = wait.await();
             if (response.getIpAddress().isAnyLocalAddress()) {
                 throw new UserOfflineException("User " + requestedUsername + " appears to be offline");
@@ -399,9 +400,9 @@ final class UserDirectory {
             CancellationSignal cancellationSignal) {
         CommonUtils.requireText(requestedUsername, "username");
         CommonUtils.requireText(directoryName, "directoryName");
-        context.requireLoggedIn("fetch directory contents");
+        server.requireLoggedIn("fetch directory contents");
         int tokenValue = operationToken == null ? context.getTokenFactory().nextToken() : operationToken;
-        CancellationSignal token = context.defaultToken(cancellationSignal);
+        CancellationSignal token = ServerLink.token(cancellationSignal);
         try {
             @SuppressWarnings("unchecked")
             Wait<List<Directory>> contentsWait = (Wait<List<Directory>>) (Wait<?>) context.getWaiter()

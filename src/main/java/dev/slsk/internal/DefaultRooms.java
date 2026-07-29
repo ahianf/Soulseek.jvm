@@ -58,7 +58,7 @@ final class DefaultRooms implements Rooms {
 
     private final SoulseekEngine client;
     private final RoomRegistry registry;
-    private final ServerSession server;
+    private final ServerLink server;
     private final EventBus<RoomEvent> events;
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
     private final PrivateRooms privateRooms;

@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicReference;
 final class DefaultMe implements Me {
 
     private final SoulseekEngine client;
-    private final ServerSession server;
+    private final ServerLink server;
     private final UserDirectory users;
     private final EventBus<MeEvent> events;
     private final DiagnosticSink diagnostics;

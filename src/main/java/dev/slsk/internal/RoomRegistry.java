@@ -38,9 +38,11 @@ import java.util.concurrent.TimeoutException;
 final class RoomRegistry {
 
     private final EngineContext context;
+    private final ServerLink server;
 
-    RoomRegistry(EngineContext context) {
+    RoomRegistry(EngineContext context, ServerLink server) {
         this.context = Objects.requireNonNull(context, "context");
+        this.server = Objects.requireNonNull(server, "server");
     }
 
     RoomData joinRoom(String roomName) {
@@ -57,14 +59,14 @@ final class RoomRegistry {
 
     RoomData joinRoom(String roomName, boolean isPrivate, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
-        context.requireLoggedIn("join a chat room");
-        CancellationSignal token = context.defaultToken(cancellationSignal);
+        server.requireLoggedIn("join a chat room");
+        CancellationSignal token = ServerLink.token(cancellationSignal);
         try {
             // Registered before the write, because the server can answer
             // before the write call returns.
             Wait<RoomData> wait = context.getWaiter()
                     .register(new WaitKey(MessageCode.Server.JOIN_ROOM, roomName), RoomData.class, null, token);
-            context.writeToServer(new JoinRoomRequest(roomName, isPrivate), token);
+            server.write(new JoinRoomRequest(roomName, isPrivate), token);
             try {
                 return wait.await();
             } catch (Throwable failure) {
@@ -91,8 +93,8 @@ final class RoomRegistry {
     }
 
     RoomList getRoomList(CancellationSignal cancellationSignal) {
-        context.requireLoggedIn("fetch the list of chat rooms");
-        return context.executeCorrelatedRequest(
+        server.requireLoggedIn("fetch the list of chat rooms");
+        return server.request(
                 new RoomListRequest(),
                 new WaitKey(MessageCode.Server.ROOM_LIST),
                 RoomList.class,
@@ -107,8 +109,8 @@ final class RoomRegistry {
     void addPrivateRoomMember(String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
         CommonUtils.requireText(requestedUsername, "username");
-        context.requireLoggedIn("add members to private rooms");
-        context.executeCorrelatedCommand(
+        server.requireLoggedIn("add members to private rooms");
+        server.command(
                 new PrivateRoomAddUser(roomName, requestedUsername),
                 new WaitKey(MessageCode.Server.PRIVATE_ROOM_ADD_USER, roomName, requestedUsername),
                 cancellationSignal,
@@ -122,8 +124,8 @@ final class RoomRegistry {
     void addPrivateRoomModerator(String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
         CommonUtils.requireText(requestedUsername, "username");
-        context.requireLoggedIn("add moderators to private rooms");
-        context.executeCorrelatedCommand(
+        server.requireLoggedIn("add moderators to private rooms");
+        server.command(
                 new PrivateRoomAddOperator(roomName, requestedUsername),
                 new WaitKey(MessageCode.Server.PRIVATE_ROOM_ADD_OPERATOR, roomName, requestedUsername),
                 cancellationSignal,
@@ -136,8 +138,8 @@ final class RoomRegistry {
 
     void dropPrivateRoomMembership(String roomName, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
-        context.requireLoggedIn("drop private room membership");
-        context.executeCorrelatedCommand(
+        server.requireLoggedIn("drop private room membership");
+        server.command(
                 new PrivateRoomDropMembershipCommand(roomName),
                 new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVED, roomName),
                 cancellationSignal,
@@ -150,8 +152,8 @@ final class RoomRegistry {
 
     void dropPrivateRoomOwnership(String roomName, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
-        context.requireLoggedIn("drop private room ownership");
-        context.executeCorrelatedCommand(
+        server.requireLoggedIn("drop private room ownership");
+        server.command(
                 new PrivateRoomDropOwnershipCommand(roomName),
                 new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVED, roomName),
                 cancellationSignal,
@@ -164,12 +166,12 @@ final class RoomRegistry {
 
     void leaveRoom(String roomName, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
-        context.requireLoggedIn("leave a chat room");
-        CancellationSignal token = context.defaultToken(cancellationSignal);
+        server.requireLoggedIn("leave a chat room");
+        CancellationSignal token = ServerLink.token(cancellationSignal);
         try {
             Wait<Void> wait =
                     context.getWaiter().register(new WaitKey(MessageCode.Server.LEAVE_ROOM, roomName), null, token);
-            context.writeToServer(new LeaveRoomRequest(roomName), token);
+            server.write(new LeaveRoomRequest(roomName), token);
             try {
                 wait.await();
             } catch (Throwable failure) {
@@ -194,8 +196,8 @@ final class RoomRegistry {
     void removePrivateRoomMember(String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
         CommonUtils.requireText(requestedUsername, "username");
-        context.requireLoggedIn("remove users from private rooms");
-        context.executeCorrelatedCommand(
+        server.requireLoggedIn("remove users from private rooms");
+        server.command(
                 new PrivateRoomRemoveUser(roomName, requestedUsername),
                 new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVE_USER, roomName, requestedUsername),
                 cancellationSignal,
@@ -209,8 +211,8 @@ final class RoomRegistry {
     void removePrivateRoomModerator(String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
         CommonUtils.requireText(requestedUsername, "username");
-        context.requireLoggedIn("remove moderators from private rooms");
-        context.executeCorrelatedCommand(
+        server.requireLoggedIn("remove moderators from private rooms");
+        server.command(
                 new PrivateRoomRemoveOperator(roomName, requestedUsername),
                 new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVE_OPERATOR, roomName, requestedUsername),
                 cancellationSignal,
@@ -224,9 +226,9 @@ final class RoomRegistry {
     void sendRoomMessage(String roomName, String message, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
         CommonUtils.requireNonEmpty(message, "message");
-        context.requireLoggedIn("send a chat room message");
+        server.requireLoggedIn("send a chat room message");
         try {
-            context.writeToServer(new RoomMessageCommand(roomName, message), context.defaultToken(cancellationSignal));
+            server.write(new RoomMessageCommand(roomName, message), ServerLink.token(cancellationSignal));
         } catch (Throwable failure) {
             throw Failures.raise(failure, "Failed to send message to room " + roomName + ": ");
         }
@@ -239,10 +241,9 @@ final class RoomRegistry {
     void setRoomTicker(String roomName, String message, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(roomName, "roomName");
         CommonUtils.requireNonEmpty(message, "message");
-        context.requireLoggedIn("set chat room tickers");
+        server.requireLoggedIn("set chat room tickers");
         try {
-            context.writeToServer(
-                    new SetRoomTickerCommand(roomName, message), context.defaultToken(cancellationSignal));
+            server.write(new SetRoomTickerCommand(roomName, message), ServerLink.token(cancellationSignal));
         } catch (Throwable failure) {
             throw Failures.raise(failure, "Failed to set chat room ticker in room " + roomName + ": ");
         }

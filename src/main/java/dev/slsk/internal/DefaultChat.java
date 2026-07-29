@@ -33,7 +33,7 @@ import java.util.Objects;
  */
 final class DefaultChat implements Chat {
 
-    private final ServerSession server;
+    private final ServerLink server;
     private final EventBus<ChatEvent> events;
     private final DiagnosticSink diagnostics;
 

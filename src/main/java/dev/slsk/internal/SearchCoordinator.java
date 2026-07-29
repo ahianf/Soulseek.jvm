@@ -38,12 +38,14 @@ import java.util.function.Consumer;
 final class SearchCoordinator {
 
     private final EngineContext context;
+    private final ServerLink server;
 
     /** Caps concurrent searches; the limit is a search concern, so it lives here. */
     private final java.util.concurrent.Semaphore searchSemaphore;
 
-    SearchCoordinator(EngineContext context) {
+    SearchCoordinator(EngineContext context, ServerLink server) {
         this.context = java.util.Objects.requireNonNull(context, "context");
+        this.server = java.util.Objects.requireNonNull(server, "server");
         this.searchSemaphore =
                 new java.util.concurrent.Semaphore(context.getClientOptions().getMaximumConcurrentSearches());
     }
@@ -158,7 +160,7 @@ final class SearchCoordinator {
             CancellationSignal cancellationSignal) {
         SearchInvocation invocation = validateSearch(query, scope, token, searchOptions);
         List<SearchResponse> responses = Collections.synchronizedList(new ArrayList<>());
-        Search search = searchToCallback(invocation, responses::add, context.defaultToken(cancellationSignal));
+        Search search = searchToCallback(invocation, responses::add, ServerLink.token(cancellationSignal));
         synchronized (responses) {
             return new SearchResult(search, responses);
         }
@@ -247,13 +249,13 @@ final class SearchCoordinator {
         SearchQuery validatedQuery = validateSearchQuery(query);
         Objects.requireNonNull(responseHandler, "responseHandler");
         SearchInvocation invocation = validateSearch(validatedQuery, scope, token, searchOptions);
-        return searchToCallback(invocation, responseHandler, context.defaultToken(cancellationSignal));
+        return searchToCallback(invocation, responseHandler, ServerLink.token(cancellationSignal));
     }
 
     SearchInvocation validateSearch(
             SearchQuery initialQuery, SearchScope initialScope, Integer initialToken, SearchOptions initialOptions) {
         SearchQuery query = validateSearchQuery(initialQuery);
-        context.requireLoggedIn("perform a search");
+        server.requireLoggedIn("perform a search");
 
         int token = initialToken == null ? context.getTokenFactory().nextToken() : initialToken;
         if (context.getSearchRegistry().containsKey(token)) {
@@ -339,7 +341,7 @@ final class SearchCoordinator {
                     }
                     context.raiseEvent(Kind.SEARCH_RESPONSE_RECEIVED, eventData);
                 });
-                context.writeBytesToServer(message, cancellationSignal);
+                server.writeBytes(message, cancellationSignal);
                 updateState.accept(SearchState.IN_PROGRESS);
                 search.waitForCompletion(cancellationSignal);
                 updateState.accept(SearchState.COMPLETED.or(search.getState()));

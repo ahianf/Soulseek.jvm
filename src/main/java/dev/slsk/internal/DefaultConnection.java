@@ -41,7 +41,7 @@ import java.util.function.Consumer;
 final class DefaultConnection implements Connection {
 
     private final SoulseekEngine client;
-    private final ServerSession server;
+    private final ServerLink server;
     private final Credentials credentials;
     private final EventBus<ConnectionEvent> events;
 

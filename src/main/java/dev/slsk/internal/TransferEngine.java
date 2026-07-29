@@ -50,6 +50,7 @@ import java.util.function.Supplier;
 final class TransferEngine {
 
     final EngineContext context;
+    final ServerLink server;
 
     /** Global transfer concurrency limits; a transfer concern, so owned here. */
     final java.util.concurrent.Semaphore globalDownloadSemaphore;
@@ -65,8 +66,9 @@ final class TransferEngine {
     /** Duplicate-transfer keys; owned here, since this is what detects duplicates. */
     final java.util.Map<String, Boolean> uniqueKeys = new java.util.concurrent.ConcurrentHashMap<>();
 
-    TransferEngine(EngineContext context) {
+    TransferEngine(EngineContext context, ServerLink server) {
         this.context = java.util.Objects.requireNonNull(context, "context");
+        this.server = java.util.Objects.requireNonNull(server, "server");
         this.globalDownloadSemaphore =
                 new java.util.concurrent.Semaphore(context.getClientOptions().getMaximumConcurrentDownloads());
         this.globalUploadSemaphore =
@@ -288,7 +290,7 @@ final class TransferEngine {
         CommonUtils.requireText(remoteFilename, "remoteFilename");
         CommonUtils.requireText(localFilename, "localFilename");
         validateDownloadRange(size, startOffset);
-        context.requireLoggedIn("download files");
+        server.requireLoggedIn("download files");
         int transferToken = token == null ? context.getTokenFactory().nextToken() : token;
         validateDownloadUniqueness(requestedUsername, remoteFilename, transferToken);
         TransferOptions options =
@@ -307,7 +309,7 @@ final class TransferEngine {
                 startOffset,
                 transferToken,
                 options,
-                context.defaultToken(cancellationSignal));
+                ServerLink.token(cancellationSignal));
     }
     /** Downloads data to a stream created by a factory. */
     CompletableFuture<Transfer> download(
@@ -421,7 +423,7 @@ final class TransferEngine {
         CommonUtils.requireText(remoteFilename, "remoteFilename");
         validateDownloadRange(size, startOffset);
         Objects.requireNonNull(outputStreamFactory, "outputStreamFactory");
-        context.requireLoggedIn("download files");
+        server.requireLoggedIn("download files");
         int transferToken = token == null ? context.getTokenFactory().nextToken() : token;
         validateDownloadUniqueness(requestedUsername, remoteFilename, transferToken);
         return downloadToStreamAsync(
@@ -433,7 +435,7 @@ final class TransferEngine {
                 transferToken,
                 transferOptions == null ? new TransferOptions() : transferOptions,
                 offer,
-                context.defaultToken(cancellationSignal));
+                ServerLink.token(cancellationSignal));
     }
     /** Uploads a local file to a peer. */
     CompletableFuture<Transfer> upload(String requestedUsername, String remoteFilename, String localFilename) {
@@ -483,7 +485,7 @@ final class TransferEngine {
             throw new UncheckedIOException(
                     new FileNotFoundException("The local file does not exist: " + localFilename));
         }
-        context.requireLoggedIn("upload files");
+        server.requireLoggedIn("upload files");
         try (InputStream ignored = context.getIoAdapter().getInputStream(localFilename)) {
             // Probe readability before allocating a transfer token.
         } catch (IOException failure) {
@@ -517,7 +519,7 @@ final class TransferEngine {
                 },
                 transferToken,
                 fileOptions,
-                context.defaultToken(cancellationSignal));
+                ServerLink.token(cancellationSignal));
     }
     /** Uploads data supplied by an asynchronous stream factory. */
     CompletableFuture<Transfer> upload(
@@ -592,7 +594,7 @@ final class TransferEngine {
             throw new IllegalArgumentException("size must be greater than or equal to zero");
         }
         Objects.requireNonNull(inputStreamFactory, "inputStreamFactory");
-        context.requireLoggedIn("upload files");
+        server.requireLoggedIn("upload files");
         int transferToken = token == null ? context.getTokenFactory().nextToken() : token;
         validateUploadUniqueness(requestedUsername, remoteFilename, transferToken);
         return uploadFromStreamAsync(
@@ -602,7 +604,7 @@ final class TransferEngine {
                 inputStreamFactory,
                 transferToken,
                 transferOptions == null ? new TransferOptions() : transferOptions,
-                context.defaultToken(cancellationSignal));
+                ServerLink.token(cancellationSignal));
     }
     /** Enqueues a local-file download. */
     CompletableFuture<CompletableFuture<Transfer>> enqueueDownload(
@@ -900,7 +902,7 @@ final class TransferEngine {
     Integer getDownloadPlaceInQueue(String requestedUsername, String filename, CancellationSignal cancellationSignal) {
         CommonUtils.requireText(requestedUsername, "username");
         CommonUtils.requireText(filename, "filename");
-        context.requireLoggedIn("check download queue position");
+        server.requireLoggedIn("check download queue position");
         boolean active = context.getDownloadRegistry().values().stream()
                 .anyMatch(download -> Objects.equals(download.getUsername(), requestedUsername)
                         && Objects.equals(download.getFilename(), filename));
@@ -908,7 +910,7 @@ final class TransferEngine {
             throw new TransferNotFoundException(
                     "A download of " + filename + " from user " + requestedUsername + " is not active");
         }
-        CancellationSignal token = context.defaultToken(cancellationSignal);
+        CancellationSignal token = ServerLink.token(cancellationSignal);
         try {
             Wait<PlaceInQueueResponse> responseWait = context.getWaiter()
                     .register(

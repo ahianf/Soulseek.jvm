@@ -188,8 +188,8 @@ final class SoulseekEngine
     /** User info, presence and browsing, split out; see UserDirectory. */
     private final UserDirectory users;
 
-    /** Stateless server commands, split out; see ServerSession. */
-    private final ServerSession server;
+    /** The server connection and everything said over it; see ServerLink. */
+    private final ServerLink server;
 
     /** Caller-facing search lifecycle, split out; see SearchCoordinator. */
     private final SearchCoordinator searchCoordinator;
@@ -197,7 +197,6 @@ final class SoulseekEngine
     /** Transfer orchestration, split out; see TransferEngine. */
     private final TransferEngine transfers;
 
-    volatile MessageConnection serverConnection;
     volatile Listener listener;
     volatile String address;
     volatile InetSocketAddress ipEndpoint;
@@ -261,17 +260,24 @@ final class SoulseekEngine
         }
         this.minorVersion = minorVersion;
         this.options = options == null ? new SoulseekClientOptions() : options;
-        this.serverConnection = serverConnection;
         this.listener = listener;
         // Constructed before every component that schedules, since they all
         // share it.
         this.scheduler = new Scheduler("soulseek-client-timer");
-        this.rooms = new RoomRegistry(this);
-        this.users = new UserDirectory(this);
-        this.server = new ServerSession(this);
-        this.searchCoordinator = new SearchCoordinator(this);
-        this.transfers = new TransferEngine(this);
         this.waiter = waiter == null ? new DefaultWaiter(this.options.getMessageTimeout(), scheduler) : waiter;
+        // Before every component that writes to the server, because they are
+        // built with it rather than reaching back through the engine for it.
+        diagnostic = diagnosticFactory == null
+                ? new FilteringDiagnosticSink(
+                        this.options.getMinimumDiagnosticLevel(),
+                        eventData -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData))
+                : diagnosticFactory;
+        this.server = new ServerLink(this.waiter, diagnostic, () -> state);
+        this.server.connection(serverConnection);
+        this.rooms = new RoomRegistry(this, server);
+        this.users = new UserDirectory(this, server);
+        this.searchCoordinator = new SearchCoordinator(this, server);
+        this.transfers = new TransferEngine(this, server);
         this.tokenFactory = tokenFactory == null ? new TokenFactory(this.options.getStartingToken()) : tokenFactory;
         this.searchSemaphore = new Semaphore(this.options.getMaximumConcurrentSearches());
         this.globalDownloadSemaphore = new Semaphore(this.options.getMaximumConcurrentDownloads());
@@ -284,12 +290,6 @@ final class SoulseekEngine
                 ? new TokenBucket((this.options.getMaximumDownloadSpeed() * 1024L) / 10, 100, scheduler)
                 : downloadTokenBucket;
         this.connectionFactory = connectionFactory == null ? new DefaultConnectionFactory() : connectionFactory;
-
-        diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(
-                        this.options.getMinimumDiagnosticLevel(),
-                        eventData -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData))
-                : diagnosticFactory;
 
         this.listenerHandler = listenerHandler == null ? new DefaultListenerHandler(this) : listenerHandler;
         this.searchResponder = searchResponder == null ? new DefaultSearchResponder(this) : searchResponder;
@@ -708,7 +708,7 @@ final class SoulseekEngine
                 new InetSocketAddress(serverAddress, requestedPort),
                 requestedUsername,
                 password,
-                defaultToken(cancellationSignal));
+                ServerLink.token(cancellationSignal));
     }
 
     /**
@@ -753,7 +753,7 @@ final class SoulseekEngine
                 }
             }
         }
-        return reconfigureOptionsInternal(patch, defaultToken(cancellationSignal));
+        return reconfigureOptionsInternal(patch, ServerLink.token(cancellationSignal));
     }
 
     /** Disconnects with the default reason. */
@@ -778,8 +778,9 @@ final class SoulseekEngine
         if (listener != null) {
             listener.stop();
         }
-        if (serverConnection != null) {
-            serverConnection.disconnect(reason, exception);
+        MessageConnection connection = server.connection();
+        if (connection != null) {
+            connection.disconnect(reason, exception);
         }
         distributedConnectionManager.removeAndDisposeAll();
         distributedConnectionManager.resetStatus();
@@ -806,8 +807,9 @@ final class SoulseekEngine
         waiter.close();
         uploadTokenBucket.close();
         downloadTokenBucket.close();
-        if (serverConnection != null) {
-            serverConnection.close();
+        MessageConnection connection = server.connection();
+        if (connection != null) {
+            connection.close();
         }
         scheduler.close();
     }
@@ -849,7 +851,7 @@ final class SoulseekEngine
 
     @Override
     public final MessageConnection getServerConnection() {
-        return serverConnection;
+        return server.connection();
     }
 
     @Override
@@ -915,7 +917,7 @@ final class SoulseekEngine
     }
 
     void setServerConnectionForTest(MessageConnection value) {
-        serverConnection = value;
+        server.connection(value);
     }
 
     void setListenerForTest(Listener value) {
@@ -1092,14 +1094,6 @@ final class SoulseekEngine
         }
     }
 
-    @Override
-    public void requireLoggedIn(String operation) {
-        if (!state.contains(SoulseekClientState.CONNECTED) || !state.contains(SoulseekClientState.LOGGED_IN)) {
-            throw new IllegalStateException("The server connection must be connected and logged in to " + operation
-                    + " (currently: " + state + ")");
-        }
-    }
-
     private void connectInternal(
             String requestedAddress,
             InetSocketAddress requestedEndpoint,
@@ -1158,7 +1152,7 @@ final class SoulseekEngine
                 listener.start();
             }
 
-            serverConnection = connectionFactory.getServerConnection(
+            MessageConnection connection = connectionFactory.getServerConnection(
                     requestedEndpoint,
                     (sender, eventData) ->
                             changeState(SoulseekClientState.CONNECTED, "Connected to " + ipEndpoint, null),
@@ -1167,7 +1161,8 @@ final class SoulseekEngine
                     serverMessageHandler::handleMessageWritten,
                     options.getServerConnectionOptions());
 
-            serverConnection.connect(cancellationSignal);
+            server.connection(connection);
+            connection.connect(cancellationSignal);
             address = requestedAddress;
             ipEndpoint = requestedEndpoint;
             changeState(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGING_IN), "Logging in", null);
@@ -1187,7 +1182,7 @@ final class SoulseekEngine
         loginMessages.writeBytes(new LoginRequest(minorVersion, requestedUsername, password).toByteArray());
         loginMessages.writeBytes(new SetListenPortCommand(options.getListenPort()).toByteArray());
 
-        invokeServerByteWrite(loginMessages.toByteArray(), cancellationSignal);
+        server.writeBytes(loginMessages.toByteArray(), cancellationSignal);
         LoginResponse response = loginWait.await();
         if (!response.isSucceeded()) {
             throw new LoginRejectedException("The server rejected login attempt: " + response.getMessage());
@@ -1200,8 +1195,8 @@ final class SoulseekEngine
     }
 
     void sendConfigurationMessages(CancellationSignal cancellationSignal) {
-        invokeServerWrite(new SetListenPortCommand(options.getListenPort()), cancellationSignal);
-        invokeServerWrite(new PrivateRoomToggle(options.isAcceptPrivateRoomInvitations()), cancellationSignal);
+        server.write(new SetListenPortCommand(options.getListenPort()), cancellationSignal);
+        server.write(new PrivateRoomToggle(options.isAcceptPrivateRoomInvitations()), cancellationSignal);
         distributedConnectionManager.updateStatusAsync(cancellationSignal);
     }
 
@@ -1453,11 +1448,6 @@ final class SoulseekEngine
     }
 
     @Override
-    public void writeBytesToServer(byte[] message, CancellationSignal cancellationSignal) {
-        invokeServerByteWrite(message, cancellationSignal);
-    }
-
-    @Override
     public java.util.Map<Integer, TransferInternal> getDownloadRegistry() {
         return downloads;
     }
@@ -1482,77 +1472,9 @@ final class SoulseekEngine
         return diagnostic;
     }
 
-    @Override
-    public void writeToServer(OutgoingMessage message, CancellationSignal cancellationSignal) {
-        invokeServerWrite(message, cancellationSignal);
-    }
-
-    @Override
-    public void executeCorrelatedCommand(
-            OutgoingMessage message, WaitKey waitKey, CancellationSignal cancellationSignal, String failurePrefix) {
-        executeCorrelatedServerCommand(message, waitKey, cancellationSignal, failurePrefix);
-    }
-
-    @Override
-    @SafeVarargs
-    public final <T> T executeCorrelatedRequest(
-            OutgoingMessage message,
-            WaitKey waitKey,
-            Class<T> resultType,
-            CancellationSignal cancellationSignal,
-            String failurePrefix,
-            Class<? extends Throwable>... preservedFailures) {
-        return executeCorrelatedServerRequest(
-                message, waitKey, resultType, cancellationSignal, failurePrefix, preservedFailures);
-    }
-
-    private void invokeServerByteWrite(byte[] message, CancellationSignal cancellationSignal) {
-        serverConnection.write(message, defaultToken(cancellationSignal));
-    }
-
-    private void executeCorrelatedServerCommand(
-            OutgoingMessage message, WaitKey waitKey, CancellationSignal cancellationSignal, String failurePrefix) {
-        CancellationSignal token = defaultToken(cancellationSignal);
-        try {
-            Wait<Void> wait = waiter.register(waitKey, null, token);
-            invokeServerWrite(message, token);
-            wait.await();
-        } catch (Throwable failure) {
-            throw Failures.raise(failure, failurePrefix);
-        }
-    }
-
-    private <T> T executeCorrelatedServerRequest(
-            OutgoingMessage message,
-            WaitKey waitKey,
-            Class<T> resultType,
-            CancellationSignal cancellationSignal,
-            String failurePrefix,
-            Class<? extends Throwable>... preservedFailures) {
-        CancellationSignal token = defaultToken(cancellationSignal);
-        try {
-            // Registered, then written, then awaited. The server can answer
-            // before the write returns, so this order is the correlation.
-            Wait<T> wait = waiter.register(waitKey, resultType, null, token);
-            invokeServerWrite(message, token);
-            return wait.await();
-        } catch (Throwable failure) {
-            throw Failures.raise(failure, failurePrefix, preservedFailures);
-        }
-    }
-
-    private void invokeServerWrite(OutgoingMessage message, CancellationSignal cancellationSignal) {
-        invokeMessageWrite(serverConnection, message, cancellationSignal);
-    }
-
     private static void invokeMessageWrite(
             MessageConnection connection, OutgoingMessage message, CancellationSignal cancellationSignal) {
         connection.write(message, cancellationSignal == null ? CancellationSignal.none() : cancellationSignal);
-    }
-
-    @Override
-    public CancellationSignal defaultToken(CancellationSignal token) {
-        return token == null ? CancellationSignal.none() : token;
     }
 
     @FunctionalInterface
@@ -1593,7 +1515,7 @@ final class SoulseekEngine
         return users;
     }
 
-    ServerSession server() {
+    ServerLink server() {
         return server;
     }
 

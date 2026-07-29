@@ -43,13 +43,17 @@ import org.junit.jupiter.api.Test;
  */
 class EngineApiTest {
 
-    /** {@code EngineContext} plus the accessors the handlers reach the engine by. */
+    /**
+     * {@code EngineContext} plus the accessors the handlers reach the engine by.
+     *
+     * <p>It shrinks as each domain takes its own. The server write path, the
+     * correlated command and request, the login check and the default signal
+     * left together for {@code ServerLink}, which owns the server connection;
+     * nothing reaches the server through the engine any more.
+     */
     private static final Set<String> SEAM = Set.of(
             "acknowledgePrivateMessageOperation",
             "acknowledgePrivilegeNotificationOperation",
-            "defaultToken",
-            "executeCorrelatedCommand",
-            "executeCorrelatedRequest",
             "getClientOptions",
             "getDiagnostic",
             "getDistributedConnectionManager",
@@ -83,12 +87,9 @@ class EngineApiTest {
             "raiseEvent",
             "reportBrowseProgress",
             "offerDownload",
-            "requireLoggedIn",
             "resolveUserEndpoint",
             "serveUpload",
-            "writeBytesToServer",
-            "writeToPeer",
-            "writeToServer");
+            "writeToPeer");
 
     /** The connection lifecycle and the state that belongs to it. */
     private static final Set<String> ENGINE = Set.of(
