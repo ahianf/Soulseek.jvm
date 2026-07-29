@@ -4,11 +4,8 @@
 package dev.slsk.internal;
 
 import dev.slsk.SearchFile;
-import dev.slsk.internal.common.NetworkExecutor;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Supplier;
 
 /**
  * Between a {@link dev.slsk.spi.ShareCatalog} and the wire.
@@ -19,24 +16,14 @@ import java.util.function.Supplier;
  * extensions. Nothing here decides anything; the interesting question was which
  * types the SPI should speak, and it is answered in {@code ShareCatalog}.
  *
- * <p>{@link #ask} is the other half: the catalog is blocking and the callers are
- * read loops. Running it on a virtual thread is what lets an SPI be blocking
- * without a slow catalog stalling every peer at once.
+ * <p>There was an {@code ask} here that ran a blocking catalog call on a virtual
+ * thread, because its callers were read loops. The dispatch moved out to those
+ * callers, where it covers the connect and the write the catalog answer is for
+ * as well as the catalog itself.
  */
 public final class Catalogs {
 
     private Catalogs() {}
-
-    /**
-     * Runs a blocking catalog call off the read loop.
-     *
-     * @param question what to ask the catalog
-     * @param <T> the answer type
-     * @return the answer
-     */
-    public static <T> CompletableFuture<T> ask(Supplier<T> question) {
-        return NetworkExecutor.supplyAsync(question);
-    }
 
     /**
      * Converts a public file to the wire's shape.

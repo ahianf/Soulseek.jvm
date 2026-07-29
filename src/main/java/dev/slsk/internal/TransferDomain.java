@@ -61,8 +61,7 @@ import java.util.function.Supplier;
  * the caller's own virtual thread until the transfer reaches a terminal state.
  *
  * <p>It replaces {@code TransferEngine}, which held the same rules but ran them
- * through {@code NetworkExecutor.supplyAsync} into a future the caller
- * immediately joined, and which reached everything it needed through the engine
+ * through a future the caller immediately joined, and which reached everything it needed through the engine
  * that owned everything. What is different is ownership: the two registries,
  * both concurrency limits, the per-user upload semaphores, the duplicate keys
  * and the running uploads' cancellation live here, in one place, rather than in
@@ -342,48 +341,51 @@ final class TransferDomain implements PeerServices {
      */
     @Override
     public void serve(Username user, String path) {
-        NetworkExecutor.runAsync(() -> {
-            java.util.Optional<ResolvedFile> resolved;
-            try {
-                resolved = catalog().resolve(user, path);
-            } catch (RuntimeException failure) {
-                diagnostic.warning("The share catalog failed to resolve " + path, failure);
-                return;
-            }
-            if (resolved.isEmpty()) {
-                // Allowed by policy but not by the catalog. One answer for every
-                // rejection, so the reply cannot become a filesystem oracle.
-                admission.forget(user, path);
-                return;
-            }
-            ResolvedFile file = resolved.get();
-            int token = tokens.nextToken();
-            TransferId id = TransferId.of("UPLOAD:" + token);
-            CancellationController cancellation = new CancellationController();
-            uploadCancellations.put(id, cancellation);
-            // Already on a virtual thread of its own, so the upload is simply
-            // waited for.
-            try {
-                TransferOutcome outcome = upload(UploadRequest.fromStream(user.value(), path, file.size(), offset -> {
-                            try {
-                                return java.nio.channels.Channels.newInputStream(file.open(offset));
-                            } catch (IOException failure) {
-                                throw new UncheckedIOException(failure);
-                            }
-                        })
-                        .token(token)
-                        .cancellation(cancellation.getSignal())
-                        .build());
-                if (outcome instanceof TransferOutcome.Succeeded succeeded) {
-                    admission.served(user, succeeded.bytes());
-                }
-            } catch (RuntimeException failure) {
-                diagnostic.warning("Failed to serve an upload of " + path + " to " + user, failure);
-            } finally {
-                uploadCancellations.remove(id);
-                admission.forget(user, path);
-            }
-        });
+        NetworkExecutor.dispatch(
+                () -> {
+                    java.util.Optional<ResolvedFile> resolved;
+                    try {
+                        resolved = catalog().resolve(user, path);
+                    } catch (RuntimeException failure) {
+                        diagnostic.warning("The share catalog failed to resolve " + path, failure);
+                        return;
+                    }
+                    if (resolved.isEmpty()) {
+                        // Allowed by policy but not by the catalog. One answer for every
+                        // rejection, so the reply cannot become a filesystem oracle.
+                        admission.forget(user, path);
+                        return;
+                    }
+                    ResolvedFile file = resolved.get();
+                    int token = tokens.nextToken();
+                    TransferId id = TransferId.of("UPLOAD:" + token);
+                    CancellationController cancellation = new CancellationController();
+                    uploadCancellations.put(id, cancellation);
+                    // Already on a virtual thread of its own, so the upload is simply
+                    // waited for.
+                    try {
+                        TransferOutcome outcome =
+                                upload(UploadRequest.fromStream(user.value(), path, file.size(), offset -> {
+                                            try {
+                                                return java.nio.channels.Channels.newInputStream(file.open(offset));
+                                            } catch (IOException failure) {
+                                                throw new UncheckedIOException(failure);
+                                            }
+                                        })
+                                        .token(token)
+                                        .cancellation(cancellation.getSignal())
+                                        .build());
+                        if (outcome instanceof TransferOutcome.Succeeded succeeded) {
+                            admission.served(user, succeeded.bytes());
+                        }
+                    } catch (RuntimeException failure) {
+                        diagnostic.warning("Failed to serve an upload of " + path + " to " + user, failure);
+                    } finally {
+                        uploadCancellations.remove(id);
+                        admission.forget(user, path);
+                    }
+                },
+                failure -> diagnostic.warning("Failed to serve " + path + " to " + user, failure));
     }
 
     /**

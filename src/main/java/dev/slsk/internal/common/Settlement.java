@@ -1,22 +1,29 @@
 // SPDX-FileCopyrightText: 2026 Ahian Fernandez
 // SPDX-License-Identifier: GPL-3.0-only
 
-package dev.slsk.internal.transfer;
+package dev.slsk.internal.common;
 
 import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
- * How a transfer ended, whichever of the racing parties got there first.
+ * A one-shot cell: settled once, awaited by many, and read as a failure or not.
  *
- * <p>A transfer in flight can end in three unrelated ways at the same time.
+ * <p>Written for the transfer path, and named for it until a search wanted the
+ * same thing. A transfer in flight can end in three unrelated ways at the same
+ * time.
  * The bytes finish moving; the transfer connection drops under them; the peer
  * sends {@code UploadFailed} or {@code UploadDenied} on an entirely different
  * connection. Each is reported by a different thread — the transfer's own, the
  * connection's disconnect callback, and a peer read loop — and the first to
  * arrive is the answer. That is genuine concurrency, and it is the reason the
  * transfer path is one of the few places a second thread earns its keep.
+ *
+ * <p>A search's completion is the second use and a different shape of the same
+ * need: one terminal state, every waiter, and a caller that can abandon its own
+ * wait without ending the search. That is one of these per waiter, settled
+ * together — see {@code SearchInternal.waitForCompletion}.
  *
  * <p>It was three {@link java.util.concurrent.CompletableFuture}s and a
  * {@code CompletableFuture.anyOf} over them. What the futures provided was a
@@ -29,7 +36,7 @@ import java.util.concurrent.TimeUnit;
  * the transfer path needs to know, but a caller that must undo work on losing
  * can.
  */
-public final class TransferSettlement {
+public final class Settlement {
 
     private final Object lock = new Object();
     private final CountDownLatch settled = new CountDownLatch(1);

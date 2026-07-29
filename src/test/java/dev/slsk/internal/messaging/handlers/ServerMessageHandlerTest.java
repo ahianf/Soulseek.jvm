@@ -27,6 +27,7 @@ import dev.slsk.internal.UserPresence;
 import dev.slsk.internal.UserStatistics;
 import dev.slsk.internal.UserStatus;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.Eventually;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
@@ -69,11 +70,13 @@ import java.lang.reflect.Proxy;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -105,23 +108,17 @@ class ServerMessageHandlerTest {
     @Test
     void diagnosticsCoverReadUnhandledFailureAndWrite() {
         Fixture fixture = new Fixture(options(false, false));
-        fixture.handler
-                .handleMessageReadAsync(
-                        null,
-                        new MessageBuilder()
-                                .writeCode(MessageCode.Server.ASK_PUBLIC_CHAT)
-                                .build())
-                .join();
+        fixture.handler.handleMessageRead(
+                null,
+                new MessageBuilder()
+                        .writeCode(MessageCode.Server.ASK_PUBLIC_CHAT)
+                        .build());
         assertTrue(fixture.diagnostic.contains("Server message received: ASK_PUBLIC_CHAT"));
         assertTrue(fixture.diagnostic.contains("Unhandled server message"));
 
-        fixture.handler
-                .handleMessageReadAsync(
-                        null,
-                        new MessageBuilder()
-                                .writeCode(MessageCode.Server.ROOM_LIST)
-                                .build())
-                .join();
+        fixture.handler.handleMessageRead(
+                null,
+                new MessageBuilder().writeCode(MessageCode.Server.ROOM_LIST).build());
         assertTrue(fixture.diagnostic.containsWarning("Error handling server message"));
 
         fixture.handler.handleMessageWritten(null, new MessageEvent(searchRequest(USERNAME, TOKEN, "query")));
@@ -139,13 +136,11 @@ class ServerMessageHandlerTest {
                 fixture.client::distributedMessages,
                 () -> fixture.client.responder);
         defaultDiagnostic.addDiagnosticGeneratedListener((sender, eventData) -> generated.incrementAndGet());
-        defaultDiagnostic
-                .handleMessageReadAsync(
-                        null,
-                        new MessageBuilder()
-                                .writeCode(MessageCode.Server.DISTRIBUTED_RESET)
-                                .build())
-                .join();
+        defaultDiagnostic.handleMessageRead(
+                null,
+                new MessageBuilder()
+                        .writeCode(MessageCode.Server.DISTRIBUTED_RESET)
+                        .build());
         assertEquals(1, generated.get());
     }
 
@@ -354,10 +349,16 @@ class ServerMessageHandlerTest {
                 .build());
 
         assertEquals(12, privateMessage.get().getId());
-        assertEquals(List.of(12), fixture.client.acknowledged(AcknowledgePrivateMessageCommand.class));
+        // Both acknowledgements write back to the server, so both go to a
+        // thread of their own rather than answering on the server's read loop.
+        assertTrue(Eventually.holds(() -> fixture.client
+                .acknowledged(AcknowledgePrivateMessageCommand.class)
+                .equals(List.of(12))));
         assertNull(privileges.get(0).getId());
         assertEquals(13, privileges.get(1).getId());
-        assertEquals(List.of(13), fixture.client.acknowledged(AcknowledgePrivilegeNotificationCommand.class));
+        assertTrue(Eventually.holds(() -> fixture.client
+                .acknowledged(AcknowledgePrivilegeNotificationCommand.class)
+                .equals(List.of(13))));
 
         Fixture disabled = new Fixture(options(false, false));
         disabled.handle(new MessageBuilder()
@@ -446,6 +447,7 @@ class ServerMessageHandlerTest {
         fixture.handler.<Void>addListener(
                 ServerMessageEvent.DISTRIBUTED_NETWORK_RESET, (sender, value) -> resets.incrementAndGet());
         fixture.handle(netInfo());
+        assertTrue(Eventually.holds(() -> !fixture.distributed.parents.isEmpty()));
         fixture.handle(new MessageBuilder()
                 .writeCode(MessageCode.Server.DISTRIBUTED_RESET)
                 .build());
@@ -457,7 +459,8 @@ class ServerMessageHandlerTest {
 
         fixture.distributed.addParent = new RuntimeException("parent failure");
         fixture.handle(netInfo());
-        assertTrue(fixture.diagnostic.contains("Error handling NetInfo message: parent failure"));
+        assertTrue(
+                Eventually.holds(() -> fixture.diagnostic.contains("Error handling NetInfo message: parent failure")));
     }
 
     @Test
@@ -488,7 +491,8 @@ class ServerMessageHandlerTest {
         fixture.handle(connectToPeer(USERNAME, Constants.ConnectionType.PEER, TOKEN));
         fixture.handle(connectToPeer(USERNAME, Constants.ConnectionType.DISTRIBUTED, TOKEN + 1));
 
-        assertEquals(1, fixture.peer.messageRequests.size());
+        assertTrue(Eventually.holds(() -> fixture.peer.messageRequests.size() == 1));
+        assertTrue(Eventually.holds(() -> fixture.distributed.childRequests.size() == 1));
         assertEquals(USERNAME, fixture.peer.messageRequests.getFirst().getUsername());
         assertEquals(1, fixture.distributed.childRequests.size());
         assertEquals(TOKEN + 1, fixture.distributed.childRequests.getFirst().getToken());
@@ -505,13 +509,13 @@ class ServerMessageHandlerTest {
 
         fixture.handle(connectToPeer(USERNAME, Constants.ConnectionType.TRANSFER, TOKEN));
 
-        assertSame(
-                connection.proxy,
-                fixture.waiter.completed.get(new WaitKey(Constants.WaitKey.INDIRECT_TRANSFER, USERNAME, "file", 91)));
+        WaitKey correlated = new WaitKey(Constants.WaitKey.INDIRECT_TRANSFER, USERNAME, "file", 91);
+        assertTrue(Eventually.holds(() -> fixture.waiter.completed.containsKey(correlated)));
+        assertSame(connection.proxy, fixture.waiter.completed.get(correlated));
 
         fixture.peer.transferResult = new TransferConnectionResult(connection.proxy, 92);
         fixture.handle(connectToPeer(USERNAME, Constants.ConnectionType.TRANSFER, TOKEN + 1));
-        assertEquals("Unknown transfer", connection.disconnectMessage);
+        assertTrue(Eventually.holds(() -> "Unknown transfer".equals(connection.disconnectMessage)));
 
         Fixture unexpected = new Fixture(options(false, false));
         unexpected.handle(connectToPeer(USERNAME, Constants.ConnectionType.TRANSFER, TOKEN));
@@ -524,7 +528,9 @@ class ServerMessageHandlerTest {
     void fileSearchRespondsToRemoteAndOnlyDeliberateSelfSearch() {
         Fixture fixture = new Fixture(options(false, false));
         fixture.handle(searchRequest(USERNAME, TOKEN, "remote"));
-        assertEquals(1, fixture.responder.requests.size());
+        // Answering asks the share catalog and connects to the searcher, so it
+        // goes to a thread of its own rather than the server's read loop.
+        assertTrue(Eventually.holds(() -> fixture.responder.requests.size() == 1));
 
         fixture.handle(searchRequest(LOCAL_USER, TOKEN, "self"));
         assertEquals(1, fixture.responder.requests.size());
@@ -544,7 +550,7 @@ class ServerMessageHandlerTest {
         SearchInternal deliberate = new SearchInternal(SearchQuery.fromText("self"), SearchScope.user("LOCAL"), TOKEN);
         fixture.client.searches.put(TOKEN, deliberate);
         fixture.handle(searchRequest(LOCAL_USER, TOKEN, "self"));
-        assertEquals(2, fixture.responder.requests.size());
+        assertTrue(Eventually.holds(() -> fixture.responder.requests.size() == 2));
         deliberate.close();
     }
 
@@ -764,7 +770,7 @@ class ServerMessageHandlerTest {
         }
 
         private void handle(byte[] message) {
-            handler.handleMessageReadAsync(null, message).join();
+            handler.handleMessageRead(null, message);
         }
     }
 
@@ -784,7 +790,7 @@ class ServerMessageHandlerTest {
         private final SearchResponder responder;
         private final Map<Integer, SearchInternal> searches = new HashMap<>();
         private final Map<Integer, TransferInternal> downloads = new HashMap<>();
-        private final List<OutgoingMessage> writes = new ArrayList<>();
+        private final List<OutgoingMessage> writes = new CopyOnWriteArrayList<>();
         private final ServerLink server;
         private byte[] embedded;
 
@@ -846,8 +852,11 @@ class ServerMessageHandlerTest {
     }
 
     private static final class RecordingWaiter implements Waiter {
-        private final Map<WaitKey, Object> completed = new HashMap<>();
-        private final Map<WaitKey, Throwable> failures = new HashMap<>();
+        // Synchronized rather than concurrent: a wait completed with no value
+        // is recorded as a null, which a ConcurrentHashMap will not hold, and
+        // the handler's dispatched threads write here while this one reads.
+        private final Map<WaitKey, Object> completed = Collections.synchronizedMap(new HashMap<>());
+        private final Map<WaitKey, Throwable> failures = Collections.synchronizedMap(new HashMap<>());
 
         @Override
         public int getDefaultTimeout() {
@@ -895,7 +904,7 @@ class ServerMessageHandlerTest {
     }
 
     private static final class PeerManagerProbe {
-        private final List<ConnectToPeerResponse> messageRequests = new ArrayList<>();
+        private final List<ConnectToPeerResponse> messageRequests = new CopyOnWriteArrayList<>();
         private TransferConnectionResult transferResult;
         private final PeerConnectionManager proxy = (PeerConnectionManager) Proxy.newProxyInstance(
                 PeerConnectionManager.class.getClassLoader(),
@@ -918,8 +927,8 @@ class ServerMessageHandlerTest {
     }
 
     private static final class DistributedManagerProbe {
-        private final List<ConnectToPeerResponse> childRequests = new ArrayList<>();
-        private final List<PeerEndpoint> parents = new ArrayList<>();
+        private final List<ConnectToPeerResponse> childRequests = new CopyOnWriteArrayList<>();
+        private final List<PeerEndpoint> parents = new CopyOnWriteArrayList<>();
         private RuntimeException addParent;
         private int removed;
         private int resets;
@@ -962,7 +971,7 @@ class ServerMessageHandlerTest {
 
     private static final class SearchResponderProbe {
         private final List<Integer> discards = new ArrayList<>();
-        private final List<SearchCall> requests = new ArrayList<>();
+        private final List<SearchCall> requests = new CopyOnWriteArrayList<>();
         private final SearchResponder proxy = (SearchResponder) Proxy.newProxyInstance(
                 SearchResponder.class.getClassLoader(), new Class<?>[] {SearchResponder.class}, this::invoke);
 
@@ -972,7 +981,7 @@ class ServerMessageHandlerTest {
                     discards.add((Integer) arguments[0]);
                     yield true;
                 }
-                case "tryRespondAsync" -> {
+                case "tryRespond" -> {
                     if (arguments.length == 3) {
                         requests.add(
                                 new SearchCall((String) arguments[0], (Integer) arguments[1], (String) arguments[2]));
@@ -1005,8 +1014,10 @@ class ServerMessageHandlerTest {
     }
 
     private static final class RecordingDiagnostic implements DiagnosticSink {
-        private final List<String> messages = new ArrayList<>();
-        private final List<String> warnings = new ArrayList<>();
+        // Copy-on-write: a handler's dispatched work reports its own failures
+        // now, from a thread of its own, while the test thread is reading.
+        private final List<String> messages = new CopyOnWriteArrayList<>();
+        private final List<String> warnings = new CopyOnWriteArrayList<>();
 
         private boolean contains(String value) {
             return messages.stream().anyMatch(message -> message.toLowerCase().contains(value.toLowerCase()));

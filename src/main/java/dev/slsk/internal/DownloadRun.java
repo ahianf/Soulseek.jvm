@@ -19,6 +19,7 @@ import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Permits;
+import dev.slsk.internal.common.Settlement;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.messaging.MessageCode;
@@ -33,7 +34,6 @@ import dev.slsk.internal.options.TransferOptions;
 import dev.slsk.internal.options.TransferProgressUpdate;
 import dev.slsk.internal.options.TransferStateChange;
 import dev.slsk.internal.transfer.TransferInternal;
-import dev.slsk.internal.transfer.TransferSettlement;
 import dev.slsk.internal.transfer.TransferStreams;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -263,7 +263,7 @@ final class DownloadRun {
         // what "before" means here: the wait has to be in place while the write
         // happens, and neither can wait for the other.
         AtomicReference<Connection> incoming = new AtomicReference<>();
-        TransferSettlement established = new TransferSettlement();
+        Settlement established = new Settlement();
         NetworkExecutor.executor().execute(() -> {
             try {
                 incoming.set(domain.peers()
@@ -371,7 +371,7 @@ final class DownloadRun {
             // failed on an entirely different connection; racing is work
             // blocking code cannot do. All three settle the one cell, so the
             // first to arrive is the answer and the rest are no-ops.
-            TransferSettlement settlement = download.settlement();
+            Settlement settlement = download.settlement();
             NetworkExecutor.executor().execute(() -> {
                 try {
                     connection.read(

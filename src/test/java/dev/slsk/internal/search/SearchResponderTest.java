@@ -115,7 +115,7 @@ class SearchResponderTest {
         AtomicReference<SearchRequestEvent> request = new AtomicReference<>();
         fixture.responder.addRequestReceivedListener((sender, args) -> request.set(args));
 
-        assertFalse(fixture.responder.tryRespondAsync("alice", 4, "query").join());
+        assertFalse(fixture.responder.tryRespond("alice", 4, "query"));
         assertEquals("alice", request.get().getUsername());
         assertEquals(4, request.get().getToken());
         assertEquals("query", request.get().getQuery());
@@ -124,11 +124,11 @@ class SearchResponderTest {
     @Test
     void aCatalogThatFailsOrMatchesNothingAnswersNothing() {
         Fixture throwing = catalogFixture(null, null);
-        assertFalse(throwing.responder.tryRespondAsync("alice", 1, "q").join());
+        assertFalse(throwing.responder.tryRespond("alice", 1, "q"));
         assertEquals("resolver", throwing.diagnostic.lastThrowable.getMessage());
 
         Fixture empty = catalogFixture(List.of(), null);
-        assertFalse(empty.responder.tryRespondAsync("alice", 1, "q").join());
+        assertFalse(empty.responder.tryRespond("alice", 1, "q"));
     }
 
     @Test
@@ -139,7 +139,7 @@ class SearchResponderTest {
         AtomicReference<SearchRequestResponseEvent> delivered = new AtomicReference<>();
         fixture.responder.addResponseDeliveredListener((sender, args) -> delivered.set(args));
 
-        assertTrue(fixture.responder.tryRespondAsync("alice", 3, "query").join());
+        assertTrue(fixture.responder.tryRespond("alice", 3, "query"));
 
         assertEquals("alice", fixture.manager.lastUsername);
         assertEquals(77, fixture.manager.lastSolicitationToken);
@@ -158,7 +158,7 @@ class SearchResponderTest {
         RuntimeException connect = new RuntimeException("connect");
         fixture.manager.connectionFailure = connect;
 
-        assertFalse(fixture.responder.tryRespondAsync("alice", 3, "query").join());
+        assertFalse(fixture.responder.tryRespond("alice", 3, "query"));
         assertEquals(77, cache.lastAddedToken);
         assertEquals("alice", cache.added.username());
         assertArrayEquals(
@@ -166,7 +166,7 @@ class SearchResponderTest {
 
         RuntimeException cacheFailure = new RuntimeException("cache");
         cache.throwOnAdd = cacheFailure;
-        assertFalse(fixture.responder.tryRespondAsync("alice", 3, "query").join());
+        assertFalse(fixture.responder.tryRespond("alice", 3, "query"));
         assertSame(cacheFailure, fixture.diagnostic.lastWarningThrowable);
     }
 
@@ -174,27 +174,27 @@ class SearchResponderTest {
     void endpointAndWriteFailuresReturnFalseWithoutCachingWriteFailure() {
         Fixture endpoint = catalogFixture(MATCHES, new TestCache());
         endpoint.client.endpointFailure = new RuntimeException("endpoint");
-        assertFalse(endpoint.responder.tryRespondAsync("alice", 3, "query").join());
+        assertFalse(endpoint.responder.tryRespond("alice", 3, "query"));
         assertEquals(0, endpoint.client.cache.addCount);
 
         Fixture write = catalogFixture(MATCHES, new TestCache());
         write.manager.connection = messageConnection(
                 new AtomicReference<>(), CompletableFuture.failedFuture(new RuntimeException("write")));
-        assertFalse(write.responder.tryRespondAsync("alice", 3, "query").join());
+        assertFalse(write.responder.tryRespond("alice", 3, "query"));
         assertEquals(0, write.client.cache.addCount);
     }
 
     @Test
     void cachedResponseHandlesMissingCacheEntryAndCacheFailure() {
-        assertFalse(fixture(null).responder.tryRespondAsync(1).join());
+        assertFalse(fixture(null).responder.tryRespond(1));
 
         TestCache cache = new TestCache();
         Fixture missing = fixture(cache);
-        assertFalse(missing.responder.tryRespondAsync(2).join());
+        assertFalse(missing.responder.tryRespond(2));
 
         RuntimeException failure = new RuntimeException("cache");
         cache.throwOnRemove = failure;
-        assertFalse(missing.responder.tryRespondAsync(3).join());
+        assertFalse(missing.responder.tryRespond(3));
         assertSame(failure, missing.diagnostic.lastThrowable);
     }
 
@@ -208,7 +208,7 @@ class SearchResponderTest {
         AtomicInteger delivered = new AtomicInteger();
         fixture.responder.addResponseDeliveredListener((sender, args) -> delivered.incrementAndGet());
 
-        assertTrue(fixture.responder.tryRespondAsync(44).join());
+        assertTrue(fixture.responder.tryRespond(44));
         assertArrayEquals(RESPONSE.toByteArray(), written.get());
         assertEquals(1, delivered.get());
         assertTrue(fixture.diagnostic.debug.stream().anyMatch(text -> text.contains("Sent cached response 44")));
@@ -225,7 +225,7 @@ class SearchResponderTest {
         AtomicReference<SearchRequestResponseEvent> failed = new AtomicReference<>();
         fixture.responder.addResponseDeliveryFailedListener((sender, args) -> failed.set(args));
 
-        assertFalse(fixture.responder.tryRespondAsync(44).join());
+        assertFalse(fixture.responder.tryRespond(44));
         assertSame(RESPONSE, failed.get().getSearchResponse());
         assertSame(failure, fixture.diagnostic.lastThrowable);
     }

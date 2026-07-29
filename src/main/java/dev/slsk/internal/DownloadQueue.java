@@ -337,7 +337,7 @@ final class DownloadQueue {
         onStateChanged.accept(promoted, new TransferState.Queued(0));
         save(promoted);
         Entry starting = promoted;
-        NetworkExecutor.runAsync(() -> attempt(starting));
+        NetworkExecutor.executor().execute(() -> attempt(starting));
         return Optional.of(promoted.id());
     }
 
@@ -641,7 +641,7 @@ final class DownloadQueue {
             entry.attempt++;
             onStateChanged.accept(entry, new TransferState.Queued(0));
             save(entry);
-            NetworkExecutor.runAsync(() -> attempt(entry));
+            NetworkExecutor.executor().execute(() -> attempt(entry));
         }
     }
 

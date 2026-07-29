@@ -25,7 +25,6 @@ import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
@@ -91,66 +90,57 @@ public final class DefaultListenerHandler implements ListenerHandler {
 
     @Override
     public void handleConnection(Listener sender, Connection connection) {
-        handleConnectionAsync(connection);
-    }
-
-    CompletableFuture<Void> handleConnectionAsync(Connection connection) {
         diagnostic.debug("Accepted incoming connection from "
                 + connection.getIpEndpoint().getAddress().getHostAddress()
                 + " on " + listener.get().getIpAddress()
                 + ":" + listener.get().getPort()
                 + " (id: " + connection.getId() + ")");
 
-        CompletableFuture<Void> operation;
         try {
-            // Read on this thread: the listener hands each accepted connection
-            // its own, and its whole job is this handshake.
+            // Everything here runs on this thread: the listener hands each
+            // accepted connection one of its own, and its whole job is this
+            // handshake and whatever the handshake turns out to be for.
             byte[] lengthBytes = connection.read(4);
             int length =
                     ByteBuffer.wrap(lengthBytes).order(ByteOrder.LITTLE_ENDIAN).getInt();
             byte[] body = connection.read(length);
             byte[] message = Arrays.copyOf(lengthBytes, lengthBytes.length + body.length);
             System.arraycopy(body, 0, message, lengthBytes.length, body.length);
-            operation = routeInitialization(connection, message);
+            routeInitialization(connection, message);
         } catch (Throwable failure) {
-            operation = CompletableFuture.failedFuture(failure);
+            Throwable cause = unwrap(failure);
+            diagnostic.debug("Failed to initialize direct connection from "
+                    + connection.getIpEndpoint().getAddress().getHostAddress()
+                    + ":" + connection.getIpEndpoint().getPort()
+                    + ": " + message(cause));
+            connection.disconnect(null, asException(cause));
+            connection.close();
         }
-
-        return operation.handle((ignored, failure) -> {
-            if (failure != null) {
-                Throwable cause = unwrap(failure);
-                diagnostic.debug("Failed to initialize direct connection from "
-                        + connection.getIpEndpoint().getAddress().getHostAddress()
-                        + ":" + connection.getIpEndpoint().getPort()
-                        + ": " + message(cause));
-                connection.disconnect(null, asException(cause));
-                connection.close();
-            }
-            return null;
-        });
     }
 
     DiagnosticSink getDiagnostic() {
         return diagnostic;
     }
 
-    private CompletableFuture<Void> routeInitialization(Connection connection, byte[] message) {
+    private void routeInitialization(Connection connection, byte[] message) {
         Optional<PeerInit> peerInit = PeerInit.tryFromByteArray(message);
         if (peerInit.isPresent()) {
-            return handlePeerInit(connection, peerInit.get());
+            handlePeerInit(connection, peerInit.get());
+            return;
         }
 
         Optional<PierceFirewall> pierce = PierceFirewall.tryFromByteArray(message);
         if (pierce.isPresent()) {
-            return handlePierceFirewall(connection, pierce.get());
+            handlePierceFirewall(connection, pierce.get());
+            return;
         }
 
-        return CompletableFuture.failedFuture(new ConnectionException("Unrecognized initialization message: "
+        throw new ConnectionException("Unrecognized initialization message: "
                 + toHex(message) + " (" + message.length
-                + " bytes, id: " + connection.getId() + ")"));
+                + " bytes, id: " + connection.getId() + ")");
     }
 
-    private CompletableFuture<Void> handlePeerInit(Connection connection, PeerInit peerInit) {
+    private void handlePeerInit(Connection connection, PeerInit peerInit) {
         diagnostic.debug("PeerInit for connection type " + peerInit.getConnectionType()
                 + " received from " + peerInit.getUsername() + " ("
                 + connection.getIpEndpoint().getAddress().getHostAddress()
@@ -159,37 +149,32 @@ public final class DefaultListenerHandler implements ListenerHandler {
 
         if (Constants.ConnectionType.PEER.equals(peerInit.getConnectionType())) {
             peers.get().addOrUpdateMessageConnection(peerInit.getUsername(), connection);
-            return CompletableFuture.completedFuture(null);
+            return;
         }
         if (Constants.ConnectionType.TRANSFER.equals(peerInit.getConnectionType())) {
-            return CompletableFuture.completedFuture(
-                            peers.get().getTransferConnection(peerInit.getUsername(), peerInit.getToken(), connection))
-                    .thenAccept(result -> {
-                        WaitKey waitKey = new WaitKey(
-                                Constants.WaitKey.DIRECT_TRANSFER, peerInit.getUsername(), result.remoteToken());
-                        if (waiter.hasWait(waitKey)) {
-                            waiter.complete(waitKey, result.connection());
-                        } else {
-                            diagnostic.debug("Unexpected transfer connection for token "
-                                    + peerInit.getToken() + " from "
-                                    + peerInit.getUsername() + " ("
-                                    + connection.getIpEndpoint().getAddress().getHostAddress()
-                                    + ":" + listener.get().getPort()
-                                    + ") (id: " + connection.getId() + ")");
-                            result.connection().disconnect("Transfer connection rejected: unknown token");
-                        }
-                    });
+            TransferConnectionResult result =
+                    peers.get().getTransferConnection(peerInit.getUsername(), peerInit.getToken(), connection);
+            WaitKey waitKey =
+                    new WaitKey(Constants.WaitKey.DIRECT_TRANSFER, peerInit.getUsername(), result.remoteToken());
+            if (waiter.hasWait(waitKey)) {
+                waiter.complete(waitKey, result.connection());
+            } else {
+                diagnostic.debug("Unexpected transfer connection for token "
+                        + peerInit.getToken() + " from "
+                        + peerInit.getUsername() + " ("
+                        + connection.getIpEndpoint().getAddress().getHostAddress()
+                        + ":" + listener.get().getPort()
+                        + ") (id: " + connection.getId() + ")");
+                result.connection().disconnect("Transfer connection rejected: unknown token");
+            }
+            return;
         }
         if (Constants.ConnectionType.DISTRIBUTED.equals(peerInit.getConnectionType())) {
-            // On this thread: the listener gave the accepted connection a thread
-            // of its own and this handshake is all it has to do.
             distributed.get().addOrUpdateChildConnection(peerInit.getUsername(), connection);
-            return CompletableFuture.completedFuture(null);
         }
-        return CompletableFuture.completedFuture(null);
     }
 
-    private CompletableFuture<Void> handlePierceFirewall(Connection connection, PierceFirewall pierce) {
+    private void handlePierceFirewall(Connection connection, PierceFirewall pierce) {
         int token = pierce.getToken();
         String username = peers.get().getPendingSolicitations().get(token);
         if (username != null) {
@@ -199,7 +184,7 @@ public final class DefaultListenerHandler implements ListenerHandler {
                     + ":" + listener.get().getPort()
                     + ") (id: " + connection.getId() + ")");
             waiter.complete(new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, token), connection);
-            return CompletableFuture.completedFuture(null);
+            return;
         }
 
         username = distributed.get().getPendingSolicitations().get(token);
@@ -211,7 +196,7 @@ public final class DefaultListenerHandler implements ListenerHandler {
                     + ") (id: " + connection.getId() + ")");
             waiter.complete(
                     new WaitKey(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION, username, token), connection);
-            return CompletableFuture.completedFuture(null);
+            return;
         }
 
         if (options.get().getSearchResponseCache() != null) {
@@ -225,16 +210,16 @@ public final class DefaultListenerHandler implements ListenerHandler {
                         + ":" + listener.get().getPort()
                         + ") (id: " + connection.getId() + ")");
                 peers.get().addOrUpdateMessageConnection(record.username(), connection);
-                return searchResponses.get().tryRespondAsync(token).thenApply(ignored -> null);
+                searchResponses.get().tryRespond(token);
+                return;
             }
         }
 
-        return CompletableFuture.failedFuture(
-                new ConnectionException("Unknown PierceFirewall attempt with token " + token
-                        + " from "
-                        + connection.getIpEndpoint().getAddress().getHostAddress()
-                        + ":" + connection.getIpEndpoint().getPort()
-                        + " (id: " + connection.getId() + ")"));
+        throw new ConnectionException("Unknown PierceFirewall attempt with token " + token
+                + " from "
+                + connection.getIpEndpoint().getAddress().getHostAddress()
+                + ":" + connection.getIpEndpoint().getPort()
+                + " (id: " + connection.getId() + ")");
     }
 
     private void raiseDiagnostic(DiagnosticEvent args) {

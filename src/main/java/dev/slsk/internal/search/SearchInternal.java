@@ -14,11 +14,13 @@ import dev.slsk.internal.SearchState;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Scheduler;
+import dev.slsk.internal.common.Settlement;
 import dev.slsk.internal.options.SearchOptions;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -30,7 +32,20 @@ import java.util.stream.StreamSupport;
 
 /** The mutable internal state of a single file search. */
 public final class SearchInternal implements AutoCloseable {
-    private final CompletableFuture<Void> completion = new CompletableFuture<>();
+    /**
+     * The waits in progress, and the terminal outcome they will all be given.
+     *
+     * <p>One {@link Settlement} per waiter rather than one shared cell, because
+     * a caller can abandon its own wait — the {@code CancellationSignal} passed
+     * to {@link #waitForCompletion} cancels the waiting, not the search — and
+     * the rest of the waiters must stay in it. {@code terminal} is what a waiter
+     * arriving after the search has already ended settles on immediately, and
+     * what makes registering and reading the state under the same lock enough
+     * to close the gap between them.
+     */
+    private final Set<Settlement> waiters = ConcurrentHashMap.newKeySet();
+
+    private volatile Boolean terminal;
     private final AtomicBoolean disposed = new AtomicBoolean();
     private final AtomicInteger fileCount = new AtomicInteger();
     private final AtomicInteger lockedFileCount = new AtomicInteger();
@@ -142,7 +157,7 @@ public final class SearchInternal implements AutoCloseable {
         try {
             stopTimeout();
             state = SearchState.COMPLETED.or(SearchState.CANCELLED);
-            completion.cancel(false);
+            settleWaiters(false);
         } finally {
             stateLock.writeLock().unlock();
         }
@@ -155,7 +170,7 @@ public final class SearchInternal implements AutoCloseable {
         try {
             stopTimeout();
             state = SearchState.COMPLETED.or(terminalState);
-            completion.complete(null);
+            settleWaiters(true);
         } finally {
             stateLock.writeLock().unlock();
         }
@@ -256,30 +271,40 @@ public final class SearchInternal implements AutoCloseable {
      * Waits until this search completes or the caller gives up.
      *
      * <p>Cancelling abandons this caller's wait, not the search: another caller
-     * may still be in it. {@code completion} stays a future because that is the
-     * one thing it does that a blocking cell cannot — hand one terminal state
-     * to every waiter at once. Phase 3's search domain owns it next.
+     * may still be in it, and the search itself carries on.
+     *
+     * <p>This was the one future left in the search state, because handing one
+     * terminal outcome to every waiter at once is what a future does and a
+     * single blocking cell does not. A cell per waiter does, and it is the
+     * abandonment that makes it the honest shape: what each caller owns is its
+     * own wait.
      *
      * @param cancellationSignal abandons this wait when signalled
      */
     public void waitForCompletion(CancellationSignal cancellationSignal) {
         Objects.requireNonNull(cancellationSignal, "cancellationSignal");
-        CompletableFuture<Void> wait = new CompletableFuture<>();
-        CancellationSubscription registration = cancellationSignal.register(
-                () -> wait.completeExceptionally(new CancellationException("Operation cancelled")));
-        completion.whenComplete((ignored, failure) -> {
-            if (failure == null) {
-                wait.complete(null);
-            } else {
-                wait.completeExceptionally(failure);
-            }
-        });
+        Settlement wait = new Settlement();
+        // Registered and the terminal state read under the same lock the
+        // terminal transition takes, so a search that ends between the two is
+        // not waited on forever.
+        stateLock.writeLock().lock();
         try {
-            wait.join();
-        } catch (Throwable failure) {
-            throw Failures.propagate(Failures.unwrap(failure));
+            waiters.add(wait);
+            settle(wait, terminal);
+        } finally {
+            stateLock.writeLock().unlock();
+        }
+
+        CancellationSubscription registration =
+                cancellationSignal.register(() -> wait.fail(new CancellationException("Operation cancelled")));
+        try {
+            Throwable failure = wait.await();
+            if (failure != null) {
+                throw Failures.propagate(failure);
+            }
         } finally {
             registration.close();
+            waiters.remove(wait);
         }
     }
 
@@ -301,6 +326,26 @@ public final class SearchInternal implements AutoCloseable {
             if (ownsScheduler) {
                 timerExecutor.close();
             }
+        }
+    }
+
+    /** Hands the terminal outcome to every waiter, and to every later one. */
+    private void settleWaiters(boolean completed) {
+        if (terminal != null) {
+            return;
+        }
+        terminal = completed;
+        waiters.forEach(wait -> settle(wait, completed));
+    }
+
+    private static void settle(Settlement wait, Boolean completed) {
+        if (completed == null) {
+            return;
+        }
+        if (completed) {
+            wait.succeed();
+        } else {
+            wait.fail(new CancellationException("Operation cancelled"));
         }
     }
 

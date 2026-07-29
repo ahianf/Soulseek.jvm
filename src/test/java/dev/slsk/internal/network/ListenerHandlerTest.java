@@ -62,13 +62,13 @@ class ListenerHandlerTest {
     void readFailureAndUnrecognizedMessageDisconnectAndClose() throws Exception {
         try (Fixture fixture = fixture(null)) {
             ConnectionProbe readFailure = ConnectionProbe.failure(new RuntimeException("read"));
-            fixture.handler.handleConnectionAsync(readFailure.proxy).join();
+            fixture.handler.handleConnection(null, readFailure.proxy);
             assertNotNull(readFailure.disconnectedException);
             assertTrue(readFailure.closed);
             assertTrue(fixture.diagnostic.debug.stream().anyMatch(text -> text.contains("Failed to initialize")));
 
             ConnectionProbe unknown = ConnectionProbe.message(new byte[] {1});
-            fixture.handler.handleConnectionAsync(unknown.proxy).join();
+            fixture.handler.handleConnection(null, unknown.proxy);
             assertTrue(unknown.disconnectedException.getMessage().contains("Unrecognized initialization message"));
             assertTrue(unknown.closed);
         }
@@ -79,13 +79,13 @@ class ListenerHandlerTest {
         try (Fixture fixture = fixture(null)) {
             ConnectionProbe peer =
                     ConnectionProbe.message(new PeerInit("alice", Constants.ConnectionType.PEER, 1).toByteArray());
-            fixture.handler.handleConnectionAsync(peer.proxy).join();
+            fixture.handler.handleConnection(null, peer.proxy);
             assertEquals("alice", fixture.peer.addedUsername);
             assertSame(peer.proxy, fixture.peer.addedConnection);
 
             ConnectionProbe distributed =
                     ConnectionProbe.message(new PeerInit("bob", Constants.ConnectionType.DISTRIBUTED, 2).toByteArray());
-            fixture.handler.handleConnectionAsync(distributed.proxy).join();
+            fixture.handler.handleConnection(null, distributed.proxy);
             assertEquals("bob", fixture.distributed.addedUsername);
             assertSame(distributed.proxy, fixture.distributed.addedConnection);
         }
@@ -101,7 +101,7 @@ class ListenerHandlerTest {
             ConnectionProbe incoming =
                     ConnectionProbe.message(new PeerInit("alice", Constants.ConnectionType.TRANSFER, 7).toByteArray());
 
-            fixture.handler.handleConnectionAsync(incoming.proxy).join();
+            fixture.handler.handleConnection(null, incoming.proxy);
 
             assertSame(transferConnection, wait.await());
             assertEquals(7, fixture.peer.transferToken);
@@ -117,7 +117,7 @@ class ListenerHandlerTest {
             ConnectionProbe incoming =
                     ConnectionProbe.message(new PeerInit("alice", Constants.ConnectionType.TRANSFER, 7).toByteArray());
 
-            fixture.handler.handleConnectionAsync(incoming.proxy).join();
+            fixture.handler.handleConnection(null, incoming.proxy);
 
             assertEquals("Transfer connection rejected: unknown token", transfer.disconnectMessage);
         }
@@ -130,7 +130,7 @@ class ListenerHandlerTest {
             WaitKey peerKey = new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, "alice", 8);
             Wait<Connection> peerWait = fixture.waiter.register(peerKey, Connection.class, -1, null);
             ConnectionProbe peer = ConnectionProbe.message(new PierceFirewall(8).toByteArray());
-            fixture.handler.handleConnectionAsync(peer.proxy).join();
+            fixture.handler.handleConnection(null, peer.proxy);
             assertSame(peer.proxy, peerWait.await());
 
             fixture.peer.pending = Map.of();
@@ -138,7 +138,7 @@ class ListenerHandlerTest {
             WaitKey distributedKey = new WaitKey(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION, "bob", 9);
             Wait<Connection> distributedWait = fixture.waiter.register(distributedKey, Connection.class, -1, null);
             ConnectionProbe distributed = ConnectionProbe.message(new PierceFirewall(9).toByteArray());
-            fixture.handler.handleConnectionAsync(distributed.proxy).join();
+            fixture.handler.handleConnection(null, distributed.proxy);
             assertSame(distributed.proxy, distributedWait.await());
         }
     }
@@ -150,7 +150,7 @@ class ListenerHandlerTest {
         try (Fixture fixture = fixture(cache)) {
             ConnectionProbe connection = ConnectionProbe.message(new PierceFirewall(11).toByteArray());
 
-            fixture.handler.handleConnectionAsync(connection.proxy).join();
+            fixture.handler.handleConnection(null, connection.proxy);
 
             assertEquals("alice", fixture.peer.addedUsername);
             assertSame(connection.proxy, fixture.peer.addedConnection);
@@ -164,7 +164,7 @@ class ListenerHandlerTest {
         try (Fixture fixture = fixture(null)) {
             ConnectionProbe connection = ConnectionProbe.message(new PierceFirewall(12).toByteArray());
 
-            fixture.handler.handleConnectionAsync(connection.proxy).join();
+            fixture.handler.handleConnection(null, connection.proxy);
 
             assertTrue(connection
                     .disconnectedException
@@ -179,7 +179,7 @@ class ListenerHandlerTest {
         try (Fixture fixture = fixture(null)) {
             ConnectionProbe connection = ConnectionProbe.message(new PeerInit("alice", "X", 1).toByteArray());
 
-            fixture.handler.handleConnectionAsync(connection.proxy).join();
+            fixture.handler.handleConnection(null, connection.proxy);
 
             assertNull(connection.disconnectedException);
             assertFalse(connection.closed);
@@ -415,7 +415,7 @@ class ListenerHandlerTest {
         private int responseToken;
         private final SearchResponder proxy = (SearchResponder) Proxy.newProxyInstance(
                 getClass().getClassLoader(), new Class<?>[] {SearchResponder.class}, (ignored, method, arguments) -> {
-                    if (method.getName().equals("tryRespondAsync") && arguments.length == 1) {
+                    if (method.getName().equals("tryRespond") && arguments.length == 1) {
                         responseToken = (Integer) arguments[0];
                         return CompletableFuture.completedFuture(true);
                     }

@@ -4,11 +4,10 @@
 
 package dev.slsk.internal.common;
 
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
-import java.util.function.Supplier;
+import java.util.function.Consumer;
 
 /**
  * Shared virtual-thread executor for blocking network I/O.
@@ -46,24 +45,26 @@ public final class NetworkExecutor {
     }
 
     /**
-     * Runs a blocking supplier on the shared virtual-thread executor.
+     * Runs a blocking task off the calling thread and reports what it throws.
      *
-     * @param supplier the supplier to run
-     * @param <T> the result type
-     * @return a future completed with the supplier's result
-     */
-    public static <T> CompletableFuture<T> supplyAsync(Supplier<T> supplier) {
-        return CompletableFuture.supplyAsync(supplier, EXECUTOR);
-    }
-
-    /**
-     * Runs a blocking task on the shared virtual-thread executor.
+     * <p>The failure handler is not optional, and that is the point of this
+     * existing. What this replaced was {@code CompletableFuture.runAsync} into a
+     * future the caller discarded: the dispatch was right — a read loop must not
+     * wait for a write, a connect or a share catalog — but the future was the
+     * only thing carrying the failure back, and discarding it dropped the
+     * failure with it. Whoever dispatches now says where the failure goes.
      *
-     * @param runnable the task to run
-     * @return a future completed when the task finishes
+     * @param task the task to run
+     * @param onFailure what to do with anything it throws
      */
-    public static CompletableFuture<Void> runAsync(Runnable runnable) {
-        return CompletableFuture.runAsync(runnable, EXECUTOR);
+    public static void dispatch(Runnable task, Consumer<Throwable> onFailure) {
+        EXECUTOR.execute(() -> {
+            try {
+                task.run();
+            } catch (Throwable failure) {
+                onFailure.accept(failure);
+            }
+        });
     }
 
     private static ThreadFactory virtualThreadFactory() {

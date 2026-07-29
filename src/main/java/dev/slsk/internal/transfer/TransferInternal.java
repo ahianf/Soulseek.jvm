@@ -8,6 +8,7 @@ import dev.slsk.internal.Transfer;
 import dev.slsk.internal.TransferDirection;
 import dev.slsk.internal.TransferState;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.Settlement;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.options.TransferOptions;
@@ -34,7 +35,7 @@ public final class TransferInternal {
     private final TransferOptions options;
     private final int progressUpdateLimit;
     private Integer remoteToken;
-    private final TransferSettlement settlement = new TransferSettlement();
+    private final Settlement settlement = new Settlement();
     private Long size;
     private boolean speedInitialized;
     private long startOffset;
@@ -164,11 +165,11 @@ public final class TransferInternal {
      * <p>Settled by whichever of the three racing parties gets there first: the
      * transfer's own thread when the bytes stop moving, the connection's
      * disconnect callback, or a peer read loop delivering {@code UploadFailed}
-     * or {@code UploadDenied}. See {@link TransferSettlement}.
+     * or {@code UploadDenied}. See {@link Settlement}.
      *
      * @return the settlement, never {@code null}
      */
-    public TransferSettlement settlement() {
+    public Settlement settlement() {
         return settlement;
     }
 

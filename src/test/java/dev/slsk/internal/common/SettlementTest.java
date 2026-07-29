@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Ahian Fernandez
 // SPDX-License-Identifier: GPL-3.0-only
 
-package dev.slsk.internal.transfer;
+package dev.slsk.internal.common;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -24,12 +24,12 @@ import org.junit.jupiter.api.Test;
  * provide in the transfer path, and it is the only thing about it that was
  * load-bearing.
  */
-class TransferSettlementTest {
+class SettlementTest {
 
     @Test
     @DisplayName("a new settlement is unsettled and has no failure")
     void startsUnsettled() {
-        TransferSettlement settlement = new TransferSettlement();
+        Settlement settlement = new Settlement();
 
         assertFalse(settlement.isSettled());
         assertNull(settlement.failure());
@@ -39,7 +39,7 @@ class TransferSettlementTest {
     @DisplayName("the first to settle wins and everybody after it is a no-op")
     void firstSettlementWins() {
         IllegalStateException first = new IllegalStateException("first");
-        TransferSettlement settlement = new TransferSettlement();
+        Settlement settlement = new Settlement();
 
         assertTrue(settlement.fail(first));
         assertFalse(settlement.fail(new IllegalStateException("second")));
@@ -51,7 +51,7 @@ class TransferSettlementTest {
     @Test
     @DisplayName("a settlement that succeeded reports no failure")
     void successHasNoFailure() {
-        TransferSettlement settlement = new TransferSettlement();
+        Settlement settlement = new Settlement();
 
         assertTrue(settlement.succeed());
         assertTrue(settlement.isSettled());
@@ -61,7 +61,7 @@ class TransferSettlementTest {
     @Test
     @DisplayName("a waiter is released by whichever party settles first")
     void aWaiterIsReleasedByTheWinner() throws InterruptedException {
-        TransferSettlement settlement = new TransferSettlement();
+        Settlement settlement = new Settlement();
         IllegalStateException dropped = new IllegalStateException("the connection dropped");
         AtomicReference<Throwable> observed = new AtomicReference<>();
         CountDownLatch waiting = new CountDownLatch(1);
@@ -83,7 +83,7 @@ class TransferSettlementTest {
     @Test
     @DisplayName("exactly one of many concurrent settlements is the winner")
     void exactlyOneConcurrentSettlementWins() throws InterruptedException {
-        TransferSettlement settlement = new TransferSettlement();
+        Settlement settlement = new Settlement();
         CountDownLatch start = new CountDownLatch(1);
         List<Throwable> arms = List.of(
                 new IllegalStateException("read"),
@@ -117,7 +117,7 @@ class TransferSettlementTest {
     @Test
     @DisplayName("a timed wait gives up on a settlement that never comes")
     void aTimedWaitGivesUp() {
-        TransferSettlement settlement = new TransferSettlement();
+        Settlement settlement = new Settlement();
 
         assertFalse(settlement.await(1));
         assertFalse(settlement.isSettled());
@@ -126,7 +126,7 @@ class TransferSettlementTest {
     @Test
     @DisplayName("a timed wait returns as soon as it is settled")
     void aTimedWaitSeesASettlement() {
-        TransferSettlement settlement = new TransferSettlement();
+        Settlement settlement = new Settlement();
         settlement.succeed();
 
         assertTrue(settlement.await(60_000));

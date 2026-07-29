@@ -23,7 +23,6 @@ import dev.slsk.internal.network.PeerConnectionManager;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import java.net.InetSocketAddress;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
@@ -165,42 +164,37 @@ public final class DefaultSearchResponder implements SearchResponder {
     }
 
     @Override
-    public CompletableFuture<Boolean> tryRespondAsync(String username, int token, String query) {
+    public boolean tryRespond(String username, int token, String query) {
+        raiseRequestReceived(new SearchRequestEvent(username, token, query));
+
+        SearchResponse response;
         try {
-            raiseRequestReceived(new SearchRequestEvent(username, token, query));
+            // On this thread. It used to be dispatched and composed onto, so
+            // that a blocking SPI could not stall the read loop that called
+            // this; the dispatch is the caller's now, and it covers the
+            // connect and the write as well as the catalog.
+            response = Catalogs.searchResponse(
+                    loggedInUsername.get(),
+                    token,
+                    catalog.get().search(dev.slsk.Username.of(username), query, MAXIMUM_MATCHES),
+                    true,
+                    0,
+                    0);
         } catch (Throwable failure) {
-            return CompletableFuture.failedFuture(failure);
+            warnResolution(username, token, query, unwrap(failure));
+            return false;
         }
-
-        CompletableFuture<SearchResponse> resolution = Catalogs.ask(() -> Catalogs.searchResponse(
-                loggedInUsername.get(),
-                token,
-                catalog.get().search(dev.slsk.Username.of(username), query, MAXIMUM_MATCHES),
-                true,
-                0,
-                0));
-
-        return resolution
-                .handle((response, failure) -> {
-                    if (failure != null) {
-                        warnResolution(username, token, query, unwrap(failure));
-                        return null;
-                    }
-                    return response;
-                })
-                .thenCompose(response -> {
-                    if (response == null || response.getFileCount() + response.getLockedFileCount() <= 0) {
-                        return CompletableFuture.completedFuture(false);
-                    }
-                    return deliverResolvedResponse(username, token, query, response);
-                });
+        if (response.getFileCount() + response.getLockedFileCount() <= 0) {
+            return false;
+        }
+        return deliverResolvedResponse(username, token, query, response);
     }
 
     @Override
-    public CompletableFuture<Boolean> tryRespondAsync(int responseToken) {
+    public boolean tryRespond(int responseToken) {
         SearchResponseCache cache = options.get().getSearchResponseCache();
         if (cache == null) {
-            return CompletableFuture.completedFuture(false);
+            return false;
         }
 
         CacheLookupResult<SearchResponseCacheRecord> lookup;
@@ -209,109 +203,74 @@ public final class DefaultSearchResponder implements SearchResponder {
         } catch (Throwable failure) {
             diagnostic.warning(
                     "Error retrieving cached search response " + responseToken + ": " + message(failure), failure);
-            return CompletableFuture.completedFuture(false);
+            return false;
         }
         if (!lookup.found()) {
-            return CompletableFuture.completedFuture(false);
+            return false;
         }
 
         SearchResponseCacheRecord record = lookup.value();
-        CompletableFuture<MessageConnection> connectionFuture;
         try {
-            connectionFuture =
-                    CompletableFuture.completedFuture(peers.get().getCachedMessageConnection(record.username()));
+            MessageConnection connection = peers.get().getCachedMessageConnection(record.username());
+            connection.write(record.searchResponse().toByteArray());
+            diagnostic.debug("Sent cached response " + responseToken
+                    + " containing "
+                    + totalFiles(record.searchResponse())
+                    + " files to " + record.username()
+                    + " for query '" + record.query()
+                    + "' with token " + record.token());
+            raiseResponseDelivered(record);
+            return true;
         } catch (Throwable failure) {
-            connectionFuture = CompletableFuture.failedFuture(failure);
+            Throwable cause = unwrap(failure);
+            diagnostic.debug(
+                    "Failed to send cached search response " + responseToken
+                            + " to " + record.username() + " for query '"
+                            + record.query() + "' with token " + record.token()
+                            + ": " + message(cause),
+                    cause);
+            raiseResponseFailed(record);
+            return false;
         }
-
-        return connectionFuture
-                .<Boolean>thenApply(connection -> {
-                    connection.write(record.searchResponse().toByteArray());
-                    diagnostic.debug("Sent cached response " + responseToken
-                            + " containing "
-                            + totalFiles(record.searchResponse())
-                            + " files to " + record.username()
-                            + " for query '" + record.query()
-                            + "' with token " + record.token());
-                    raiseResponseDelivered(record);
-                    return true;
-                })
-                .handle((delivered, failure) -> {
-                    if (failure == null) {
-                        return delivered;
-                    }
-                    Throwable cause = unwrap(failure);
-                    diagnostic.debug(
-                            "Failed to send cached search response " + responseToken
-                                    + " to " + record.username() + " for query '"
-                                    + record.query() + "' with token " + record.token()
-                                    + ": " + message(cause),
-                            cause);
-                    raiseResponseFailed(record);
-                    return false;
-                });
     }
 
     DiagnosticSink getDiagnostic() {
         return diagnostic;
     }
 
-    private CompletableFuture<Boolean> deliverResolvedResponse(
-            String username, int token, String query, SearchResponse response) {
+    private boolean deliverResolvedResponse(String username, int token, String query, SearchResponse response) {
         diagnostic.debug("Resolved " + response.getFileCount() + " files for query '" + query + "' with token " + token
                 + " from " + username);
 
-        CompletableFuture<InetSocketAddress> endpointFuture;
         try {
-            endpointFuture = CompletableFuture.completedFuture(endpoints.resolve(username, CancellationSignal.none()));
+            InetSocketAddress endpoint = endpoints.resolve(username, CancellationSignal.none());
+            int responseToken = tokens.nextToken();
+            MessageConnection connection;
+            try {
+                connection = peers.get()
+                        .getOrAddMessageConnection(username, endpoint, responseToken, CancellationSignal.none());
+            } catch (Throwable failure) {
+                // Only a connection failure caches the response for later. A
+                // write that fails on an established connection is a delivery
+                // we already attempted, not one still owed.
+                cacheUndelivered(responseToken, username, token, query, response);
+                throw failure;
+            }
+            writeResponse(connection, response);
+            diagnostic.debug("Sent response containing " + totalFiles(response)
+                    + " files to " + username + " for query '" + query
+                    + "' with token " + token);
+            raiseResponseDelivered(new SearchResponseCacheRecord(username, token, query, response));
+            return true;
         } catch (Throwable failure) {
-            endpointFuture = CompletableFuture.failedFuture(failure);
+            Throwable cause = unwrap(failure);
+            diagnostic.debug(
+                    "Failed to send search response to " + username
+                            + " for query '" + query + "' with token " + token
+                            + ": " + message(cause),
+                    cause);
+            return false;
         }
-
-        return endpointFuture
-                .thenCompose(endpoint -> {
-                    int responseToken = tokens.nextToken();
-                    CompletableFuture<MessageConnection> connectionFuture;
-                    try {
-                        connectionFuture = CompletableFuture.completedFuture(peers.get()
-                                .getOrAddMessageConnection(
-                                        username, endpoint, responseToken, CancellationSignal.none()));
-                    } catch (Throwable failure) {
-                        connectionFuture = CompletableFuture.failedFuture(failure);
-                    }
-
-                    // Only a connection failure caches the response for later.
-                    // A write that fails on an established connection is a
-                    // delivery we already attempted, not one still owed.
-                    return connectionFuture
-                            .handle((connection, failure) -> {
-                                if (failure != null) {
-                                    cacheUndelivered(responseToken, username, token, query, response);
-                                    throw new CompletionException(unwrap(failure));
-                                }
-                                return connection;
-                            })
-                            .thenAccept(connection -> writeResponse(connection, response));
-                })
-                .thenApply(ignored -> {
-                    diagnostic.debug("Sent response containing " + totalFiles(response)
-                            + " files to " + username + " for query '" + query
-                            + "' with token " + token);
-                    raiseResponseDelivered(new SearchResponseCacheRecord(username, token, query, response));
-                    return true;
-                })
-                .handle((delivered, failure) -> {
-                    if (failure == null) {
-                        return delivered;
-                    }
-                    Throwable cause = unwrap(failure);
-                    diagnostic.debug(
-                            "Failed to send search response to " + username
-                                    + " for query '" + query + "' with token " + token
-                                    + ": " + message(cause),
-                            cause);
-                    return false;
-                });
     }
 
     private void writeResponse(MessageConnection connection, SearchResponse response) {

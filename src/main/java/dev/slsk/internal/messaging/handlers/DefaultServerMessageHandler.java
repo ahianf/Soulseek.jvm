@@ -90,7 +90,6 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
@@ -191,117 +190,92 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
 
     @Override
     public void handleMessageRead(MessageConnection sender, byte[] message) {
-        handleMessageReadAsync(sender, message);
-    }
-
-    CompletableFuture<Void> handleMessageReadAsync(MessageConnection sender, byte[] message) {
         MessageCode.Server code = new MessageReader<>(message, MessageCode.Server.class).readCode();
         if (code != MessageCode.Server.EMBEDDED_MESSAGE) {
             diagnostic.debug("Server message received: " + code);
         }
 
-        CompletableFuture<Void> operation;
         try {
-            operation = switch (code) {
+            switch (code) {
                 case PARENT_MIN_SPEED -> {
                     raise(ServerMessageEvent.SERVER_INFO_RECEIVED, new ServerInfo(integer(message)));
-                    yield completed();
                 }
                 case PARENT_SPEED_RATIO -> {
                     raise(ServerMessageEvent.SERVER_INFO_RECEIVED, new ServerInfo(null, integer(message)));
-                    yield completed();
                 }
                 case WISHLIST_INTERVAL -> {
                     raise(ServerMessageEvent.SERVER_INFO_RECEIVED, new ServerInfo(null, null, integer(message)));
-                    yield completed();
                 }
                 case CHECK_PRIVILEGES -> {
                     waiter.complete(new WaitKey(code), integer(message));
-                    yield completed();
                 }
                 case PRIVATE_ROOM_ADDED -> {
                     raise(ServerMessageEvent.PRIVATE_ROOM_MEMBERSHIP_ADDED, string(message));
-                    yield completed();
                 }
                 case PRIVATE_ROOM_REMOVED -> {
                     String room = string(message);
                     waiter.complete(new WaitKey(code, room));
                     raise(ServerMessageEvent.PRIVATE_ROOM_MEMBERSHIP_REMOVED, room);
-                    yield completed();
                 }
                 case PRIVATE_ROOM_OPERATOR_ADDED -> {
                     raise(ServerMessageEvent.PRIVATE_ROOM_MODERATION_ADDED, string(message));
-                    yield completed();
                 }
                 case PRIVATE_ROOM_OPERATOR_REMOVED -> {
                     String room = string(message);
                     waiter.complete(new WaitKey(code, room));
                     raise(ServerMessageEvent.PRIVATE_ROOM_MODERATION_REMOVED, room);
-                    yield completed();
                 }
                 case NEW_PASSWORD -> {
                     waiter.complete(
                             new WaitKey(code),
                             NewPassword.fromByteArray(message).getPassword());
-                    yield completed();
                 }
                 case PRIVATE_ROOM_TOGGLE -> {
                     waiter.complete(
                             new WaitKey(code),
                             PrivateRoomToggle.fromByteArray(message).isAcceptInvitations());
-                    yield completed();
                 }
                 case EXCLUDED_SEARCH_PHRASES -> {
                     raise(
                             ServerMessageEvent.EXCLUDED_SEARCH_PHRASES_RECEIVED,
                             ExcludedSearchPhrasesNotification.fromByteArray(message));
-                    yield completed();
                 }
                 case GLOBAL_ADMIN_MESSAGE -> {
                     raise(ServerMessageEvent.GLOBAL_MESSAGE_RECEIVED, GlobalMessageNotification.fromByteArray(message));
-                    yield completed();
                 }
                 case PING -> {
                     waiter.complete(new WaitKey(code));
-                    yield completed();
                 }
                 case LOGIN -> {
                     waiter.complete(new WaitKey(code), LoginResponse.fromByteArray(message));
-                    yield completed();
                 }
                 case ROOM_LIST -> {
                     RoomList rooms = RoomListResponseFactory.fromByteArray(message);
                     waiter.complete(new WaitKey(code), rooms);
                     raise(ServerMessageEvent.ROOM_LIST_RECEIVED, rooms);
-                    yield completed();
                 }
                 case PRIVATE_ROOM_OWNED -> {
                     RoomInfo room = PrivateRoomOwnedListNotification.fromByteArray(message);
                     raise(ServerMessageEvent.PRIVATE_ROOM_MODERATED_USER_LIST_RECEIVED, room);
-                    yield completed();
                 }
                 case PRIVATE_ROOM_USERS -> {
                     RoomInfo room = PrivateRoomUserListNotification.fromByteArray(message);
                     raise(ServerMessageEvent.PRIVATE_ROOM_USER_LIST_RECEIVED, room);
-                    yield completed();
                 }
                 case PRIVILEGED_USERS -> {
                     raise(
                             ServerMessageEvent.PRIVILEGED_USER_LIST_RECEIVED,
                             PrivilegedUserListNotification.fromByteArray(message));
-                    yield completed();
                 }
                 case ADD_PRIVILEGED_USER -> {
                     raise(
                             ServerMessageEvent.PRIVILEGE_NOTIFICATION_RECEIVED,
                             new PrivilegeNotificationReceivedEvent(PrivilegedUserNotification.fromByteArray(message)));
-                    yield completed();
                 }
                 case NOTIFY_PRIVILEGES -> handlePrivilegeNotification(message);
                 case USER_PRIVILEGES -> {
                     UserPrivilegeResponse response = UserPrivilegeResponse.fromByteArray(message);
                     waiter.complete(new WaitKey(code, response.getUsername()), response.isPrivileged());
-                    yield completed();
                 }
                 case NET_INFO -> handleNetInfo(message);
                 case DISTRIBUTED_RESET -> {
@@ -309,11 +283,9 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                     raise(ServerMessageEvent.DISTRIBUTED_NETWORK_RESET, null);
                     distributed.get().removeAndDisposeAll();
                     distributed.get().resetStatus();
-                    yield completed();
                 }
                 case CANNOT_CONNECT -> {
                     handleCannotConnect(message);
-                    yield completed();
                 }
                 case CANNOT_JOIN_ROOM -> {
                     CannotJoinRoomNotification rejected = CannotJoinRoomNotification.fromByteArray(message);
@@ -321,132 +293,104 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                             new WaitKey(MessageCode.Server.JOIN_ROOM, rejected.getRoomName()),
                             new RoomJoinForbiddenException(
                                     "The server rejected the request to join room " + rejected.getRoomName()));
-                    yield completed();
                 }
                 case CONNECT_TO_PEER -> handleConnectToPeer(message);
                 case WATCH_USER -> {
                     WatchUserResponse response = WatchUserResponse.fromByteArray(message);
                     waiter.complete(new WaitKey(code, response.getUsername()), response);
-                    yield completed();
                 }
                 case GET_STATUS -> {
                     UserStatus status = UserStatusResponseFactory.fromByteArray(message);
                     waiter.complete(new WaitKey(code, status.getUsername()), status);
                     raise(ServerMessageEvent.USER_STATUS_CHANGED, status);
-                    yield completed();
                 }
                 case GET_USER_STATS -> {
                     UserStatistics statistics = UserStatisticsResponseFactory.fromByteArray(message);
                     waiter.complete(new WaitKey(code, statistics.getUsername()), statistics);
                     raise(ServerMessageEvent.USER_STATISTICS_CHANGED, statistics);
-                    yield completed();
                 }
                 case PRIVATE_MESSAGE -> handlePrivateMessage(message);
                 case GET_PEER_ADDRESS -> {
                     UserAddressResponse response = UserAddressResponse.fromByteArray(message);
                     waiter.complete(new WaitKey(code, response.getUsername()), response);
-                    yield completed();
                 }
                 case JOIN_ROOM -> {
                     RoomData response = JoinRoomResponse.fromByteArray(message);
                     waiter.complete(new WaitKey(code, response.getName()), response);
-                    yield completed();
                 }
                 case LEAVE_ROOM -> {
                     LeaveRoomResponse response = LeaveRoomResponse.fromByteArray(message);
                     waiter.complete(new WaitKey(code, response.getRoomName()));
                     raise(ServerMessageEvent.ROOM_LEFT, new RoomLeftEvent(response.getRoomName(), server.username()));
-                    yield completed();
                 }
                 case SAY_IN_CHAT_ROOM -> {
                     raise(
                             ServerMessageEvent.ROOM_MESSAGE_RECEIVED,
                             new RoomMessageReceivedEvent(RoomMessageNotification.fromByteArray(message)));
-                    yield completed();
                 }
                 case PUBLIC_CHAT -> {
                     raise(
                             ServerMessageEvent.PUBLIC_CHAT_MESSAGE_RECEIVED,
                             new PublicChatMessageReceivedEvent(PublicChatMessageNotification.fromByteArray(message)));
-                    yield completed();
                 }
                 case USER_JOINED_ROOM -> {
                     raise(
                             ServerMessageEvent.ROOM_JOINED,
                             new RoomJoinedEvent(UserJoinedRoomNotification.fromByteArray(message)));
-                    yield completed();
                 }
                 case USER_LEFT_ROOM -> {
                     raise(
                             ServerMessageEvent.ROOM_LEFT,
                             new RoomLeftEvent(UserLeftRoomNotification.fromByteArray(message)));
-                    yield completed();
                 }
                 case ROOM_TICKERS -> {
                     raise(
                             ServerMessageEvent.ROOM_TICKER_LIST_RECEIVED,
                             new RoomTickerListReceivedEvent(RoomTickerListNotification.fromByteArray(message)));
-                    yield completed();
                 }
                 case ROOM_TICKER_ADD -> {
                     RoomTickerAddedNotification added = RoomTickerAddedNotification.fromByteArray(message);
                     raise(
                             ServerMessageEvent.ROOM_TICKER_ADDED,
                             new RoomTickerAddedEvent(added.getRoomName(), added.getTicker()));
-                    yield completed();
                 }
                 case ROOM_TICKER_REMOVE -> {
                     RoomTickerRemovedNotification removed = RoomTickerRemovedNotification.fromByteArray(message);
                     raise(
                             ServerMessageEvent.ROOM_TICKER_REMOVED,
                             new RoomTickerRemovedEvent(removed.getRoomName(), removed.getUsername()));
-                    yield completed();
                 }
                 case PRIVATE_ROOM_ADD_USER -> {
                     PrivateRoomAddUser response = PrivateRoomAddUser.fromByteArray(message);
                     waiter.complete(new WaitKey(code, response.getRoomName(), response.getUsername()));
-                    yield completed();
                 }
                 case PRIVATE_ROOM_REMOVE_USER -> {
                     PrivateRoomRemoveUser response = PrivateRoomRemoveUser.fromByteArray(message);
                     waiter.complete(new WaitKey(code, response.getRoomName(), response.getUsername()));
-                    yield completed();
                 }
                 case PRIVATE_ROOM_ADD_OPERATOR -> {
                     PrivateRoomAddOperator response = PrivateRoomAddOperator.fromByteArray(message);
                     waiter.complete(new WaitKey(code, response.getRoomName(), response.getUsername()));
-                    yield completed();
                 }
                 case PRIVATE_ROOM_REMOVE_OPERATOR -> {
                     PrivateRoomRemoveOperator response = PrivateRoomRemoveOperator.fromByteArray(message);
                     waiter.complete(new WaitKey(code, response.getRoomName(), response.getUsername()));
-                    yield completed();
                 }
                 case KICKED_FROM_SERVER -> {
                     raise(ServerMessageEvent.KICKED_FROM_SERVER, null);
-                    yield completed();
                 }
                 case FILE_SEARCH -> handleSearchRequest(message);
                 case EMBEDDED_MESSAGE -> {
                     distributedMessages.get().handleEmbeddedMessage(message);
-                    yield completed();
                 }
                 default -> {
                     diagnostic.debug("Unhandled server message: " + code + "; " + message.length + " bytes");
-                    yield completed();
                 }
-            };
-        } catch (Throwable failure) {
-            operation = CompletableFuture.failedFuture(failure);
-        }
-
-        return operation.handle((ignored, failure) -> {
-            if (failure != null) {
-                Throwable cause = unwrap(failure);
-                diagnostic.warning("Error handling server message: " + code + "; " + failureMessage(cause), cause);
             }
-            return null;
-        });
+        } catch (Throwable failure) {
+            Throwable cause = unwrap(failure);
+            diagnostic.warning("Error handling server message: " + code + "; " + failureMessage(cause), cause);
+        }
     }
 
     @Override
@@ -455,51 +399,43 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         diagnostic.debug("Server message sent: " + code);
     }
 
-    private CompletableFuture<Void> handlePrivilegeNotification(byte[] message) {
+    private void handlePrivilegeNotification(byte[] message) {
         PrivilegeNotification notification = PrivilegeNotification.fromByteArray(message);
         raise(
                 ServerMessageEvent.PRIVILEGE_NOTIFICATION_RECEIVED,
                 new PrivilegeNotificationReceivedEvent(notification.getUsername(), notification.getId()));
         if (!options.get().isAutoAcknowledgePrivilegeNotifications()) {
-            return completed();
+            return;
         }
         // Off the server read loop: acknowledging writes back to the server.
-        return NetworkExecutor.runAsync(
-                () -> server.acknowledgePrivilegeNotification(notification.getId(), CancellationSignal.none()));
+        NetworkExecutor.dispatch(
+                () -> server.acknowledgePrivilegeNotification(notification.getId(), CancellationSignal.none()),
+                failure -> warnServerMessage(MessageCode.Server.NOTIFY_PRIVILEGES, failure));
     }
 
-    private CompletableFuture<Void> handlePrivateMessage(byte[] message) {
+    private void handlePrivateMessage(byte[] message) {
         PrivateMessageNotification notification = PrivateMessageNotification.fromByteArray(message);
         raise(ServerMessageEvent.PRIVATE_MESSAGE_RECEIVED, new PrivateMessageReceivedEvent(notification));
         if (!options.get().isAutoAcknowledgePrivateMessages()) {
-            return completed();
+            return;
         }
         // Off the server read loop: acknowledging writes back to the server.
-        return NetworkExecutor.runAsync(
-                () -> server.acknowledgePrivateMessage(notification.getId(), CancellationSignal.none()));
+        NetworkExecutor.dispatch(
+                () -> server.acknowledgePrivateMessage(notification.getId(), CancellationSignal.none()),
+                failure -> warnServerMessage(MessageCode.Server.PRIVATE_MESSAGE, failure));
     }
 
-    private CompletableFuture<Void> handleNetInfo(byte[] message) {
+    private void handleNetInfo(byte[] message) {
         NetInfoNotification notification = NetInfoNotification.fromByteArray(message);
         List<PeerEndpoint> parents = notification.getParents().stream()
                 .map(parent ->
                         new PeerEndpoint(parent.username(), new InetSocketAddress(parent.ipAddress(), parent.port())))
                 .toList();
-        CompletableFuture<Void> add;
-        try {
-            // Off the server read loop: this negotiates with every candidate
-            // before it returns, and the server has more to say meanwhile.
-            add = NetworkExecutor.runAsync(() -> distributed.get().addParentConnection(parents));
-        } catch (Throwable failure) {
-            add = CompletableFuture.failedFuture(failure);
-        }
-        return add.handle((ignored, failure) -> {
-            if (failure != null) {
-                Throwable cause = unwrap(failure);
-                diagnostic.debug("Error handling NetInfo message: " + failureMessage(cause));
-            }
-            return null;
-        });
+        // Off the server read loop: this negotiates with every candidate before
+        // it returns, and the server has more to say meanwhile.
+        NetworkExecutor.dispatch(
+                () -> distributed.get().addParentConnection(parents),
+                failure -> diagnostic.debug("Error handling NetInfo message: " + failureMessage(unwrap(failure))));
     }
 
     private void handleCannotConnect(byte[] message) {
@@ -516,11 +452,10 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         }
     }
 
-    private CompletableFuture<Void> handleConnectToPeer(byte[] message) {
+    private void handleConnectToPeer(byte[] message) {
         ConnectToPeerResponse response = ConnectToPeerResponse.fromByteArray(message);
-        CompletableFuture<Void> operation;
         try {
-            operation = switch (response.getType()) {
+            switch (response.getType()) {
                 case Constants.ConnectionType.TRANSFER -> handleTransferConnection(response);
                 case Constants.ConnectionType.PEER -> {
                     diagnostic.debug("Received message ConnectToPeer request from "
@@ -529,35 +464,28 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                     // Off the server read loop: establishing this connects to
                     // a peer and writes to it, and the server has more to say
                     // meanwhile.
-                    yield NetworkExecutor.runAsync(() -> peers.get().getOrAddMessageConnection(response));
+                    NetworkExecutor.dispatch(
+                            () -> peers.get().getOrAddMessageConnection(response),
+                            failure -> debugConnectToPeer(response, failure));
                 }
                 case Constants.ConnectionType.DISTRIBUTED -> {
                     diagnostic.debug("Received distributed ConnectToPeer request from "
                             + response.getUsername() + " ("
                             + response.getIpEndpoint() + ")");
                     // Off the server read loop, as above.
-                    yield NetworkExecutor.runAsync(() -> distributed.get().getOrAddChildConnection(response));
+                    NetworkExecutor.dispatch(
+                            () -> distributed.get().getOrAddChildConnection(response),
+                            failure -> debugConnectToPeer(response, failure));
                 }
                 default ->
-                    CompletableFuture.failedFuture(new MessageException(
-                            "Unknown Connect To Peer connection type '" + response.getType() + "'"));
-            };
-        } catch (Throwable failure) {
-            operation = CompletableFuture.failedFuture(failure);
-        }
-        return operation.handle((ignored, failure) -> {
-            if (failure != null) {
-                Throwable cause = unwrap(failure);
-                diagnostic.debug("Error handling ConnectToPeer response from "
-                        + response.getUsername() + " ("
-                        + response.getIpEndpoint() + "): "
-                        + failureMessage(cause));
+                    throw new MessageException("Unknown Connect To Peer connection type '" + response.getType() + "'");
             }
-            return null;
-        });
+        } catch (Throwable failure) {
+            debugConnectToPeer(response, failure);
+        }
     }
 
-    private CompletableFuture<Void> handleTransferConnection(ConnectToPeerResponse response) {
+    private void handleTransferConnection(ConnectToPeerResponse response) {
         diagnostic.debug("Received transfer ConnectToPeer request from "
                 + response.getUsername() + " ("
                 + response.getIpEndpoint() + ") for remote token "
@@ -566,13 +494,14 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 && downloads.get().values().stream()
                         .anyMatch(transfer -> Objects.equals(transfer.getUsername(), response.getUsername()));
         if (!expected) {
-            return CompletableFuture.failedFuture(new SoulseekClientException("Unexpected transfer request from "
+            throw new SoulseekClientException("Unexpected transfer request from "
                     + response.getUsername() + " ("
-                    + response.getIpEndpoint() + "); Ignored"));
+                    + response.getIpEndpoint() + "); Ignored");
         }
         // Off the server read loop, as above.
-        return NetworkExecutor.runAsync(
-                () -> correlateTransferConnection(response, peers.get().getTransferConnection(response)));
+        NetworkExecutor.dispatch(
+                () -> correlateTransferConnection(response, peers.get().getTransferConnection(response)),
+                failure -> debugConnectToPeer(response, failure));
     }
 
     private void correlateTransferConnection(ConnectToPeerResponse response, TransferConnectionResult result) {
@@ -606,19 +535,20 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 connection);
     }
 
-    private CompletableFuture<Void> handleSearchRequest(byte[] message) {
+    private void handleSearchRequest(byte[] message) {
         ServerSearchRequest request = ServerSearchRequest.fromByteArray(message);
         if (Objects.equals(request.getUsername(), server.username())) {
             boolean deliberate = searches.get().values().stream()
                     .anyMatch(search -> deliberatelySearchesSelf(search, request.getToken()));
             if (!deliberate) {
-                return completed();
+                return;
             }
         }
-        return searchResponses
-                .get()
-                .tryRespondAsync(request.getUsername(), request.getToken(), request.getQuery())
-                .thenApply(ignored -> null);
+        // Off the server read loop: answering asks the share catalog, connects
+        // to the searcher and writes to them.
+        NetworkExecutor.dispatch(
+                () -> searchResponses.get().tryRespond(request.getUsername(), request.getToken(), request.getQuery()),
+                failure -> warnServerMessage(MessageCode.Server.FILE_SEARCH, failure));
     }
 
     private boolean deliberatelySearchesSelf(SearchInternal search, int token) {
@@ -653,8 +583,16 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         return StringResponse.fromByteArray(message, MessageCode.Server.class);
     }
 
-    private static CompletableFuture<Void> completed() {
-        return CompletableFuture.completedFuture(null);
+    private void warnServerMessage(MessageCode.Server code, Throwable failure) {
+        Throwable cause = unwrap(failure);
+        diagnostic.warning("Error handling server message: " + code + "; " + failureMessage(cause), cause);
+    }
+
+    private void debugConnectToPeer(ConnectToPeerResponse response, Throwable failure) {
+        diagnostic.debug("Error handling ConnectToPeer response from "
+                + response.getUsername() + " ("
+                + response.getIpEndpoint() + "): "
+                + failureMessage(unwrap(failure)));
     }
 
     private static Throwable unwrap(Throwable failure) {

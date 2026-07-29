@@ -14,6 +14,7 @@ import dev.slsk.CancellationSignal;
 import dev.slsk.internal.ServerLink;
 import dev.slsk.internal.ServerLinks;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.Eventually;
 import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.Wait;
@@ -54,7 +55,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
 class DistributedMessageHandlerTest {
@@ -83,20 +83,14 @@ class DistributedMessageHandlerTest {
         ConnectionProbe parent = new ConnectionProbe(USERNAME, ENDPOINT);
         fixture.manager.parent = new PeerEndpoint(USERNAME, ENDPOINT);
 
-        fixture.handler
-                .handleMessageReadAsync(parent.proxy, new DistributedBranchLevel(3).toByteArray())
-                .join();
-        fixture.handler
-                .handleMessageReadAsync(parent.proxy, new DistributedBranchRoot("root").toByteArray())
-                .join();
+        fixture.handler.handleMessageRead(parent.proxy, new DistributedBranchLevel(3).toByteArray());
+        fixture.handler.handleMessageRead(parent.proxy, new DistributedBranchRoot("root").toByteArray());
 
         assertEquals(3, fixture.manager.branchLevel);
         assertEquals("root", fixture.manager.branchRoot);
 
         ConnectionProbe other = new ConnectionProbe("other", endpoint(43002));
-        fixture.handler
-                .handleMessageReadAsync(other.proxy, new DistributedBranchLevel(9).toByteArray())
-                .join();
+        fixture.handler.handleMessageRead(other.proxy, new DistributedBranchLevel(9).toByteArray());
         assertEquals(3, fixture.manager.branchLevel);
     }
 
@@ -109,12 +103,8 @@ class DistributedMessageHandlerTest {
         Wait<DistributedPingResponse> ping = fixture.waiter.register(
                 new WaitKey(MessageCode.Distributed.PING, USERNAME), DistributedPingResponse.class, null, null);
 
-        fixture.handler
-                .handleMessageReadAsync(connection.proxy, new DistributedChildDepth(7).toByteArray())
-                .join();
-        fixture.handler
-                .handleMessageReadAsync(connection.proxy, new DistributedPingResponse(TOKEN).toByteArray())
-                .join();
+        fixture.handler.handleMessageRead(connection.proxy, new DistributedChildDepth(7).toByteArray());
+        fixture.handler.handleMessageRead(connection.proxy, new DistributedPingResponse(TOKEN).toByteArray());
 
         assertEquals(7, depth.await());
         assertEquals(TOKEN, ping.await().getToken());
@@ -126,12 +116,12 @@ class DistributedMessageHandlerTest {
         ConnectionProbe connection = new ConnectionProbe("parent", ENDPOINT);
         byte[] search = new DistributedSearchRequest(USERNAME, TOKEN, "query").toByteArray();
 
-        fixture.handler.handleMessageReadAsync(connection.proxy, search).join();
-        fixture.handler.handleMessageReadAsync(connection.proxy, search).join();
+        fixture.handler.handleMessageRead(connection.proxy, search);
+        fixture.handler.handleMessageRead(connection.proxy, search);
 
         awaitBroadcasts(fixture, 1);
+        awaitResponses(fixture, 1);
         assertArrayEquals(search, fixture.manager.broadcasts.getFirst());
-        assertEquals(1, fixture.responder.calls.size());
         assertEquals(new SearchCall(USERNAME, TOKEN, "query"), fixture.responder.calls.getFirst());
     }
 
@@ -140,14 +130,14 @@ class DistributedMessageHandlerTest {
         Fixture fixture = new Fixture(false);
         ConnectionProbe connection = new ConnectionProbe("parent", ENDPOINT);
         byte[] other = new DistributedSearchRequest(USERNAME, TOKEN, "query").toByteArray();
-        fixture.handler.handleMessageReadAsync(connection.proxy, other).join();
-        fixture.handler.handleMessageReadAsync(connection.proxy, other).join();
-        assertEquals(2, fixture.responder.calls.size());
+        fixture.handler.handleMessageRead(connection.proxy, other);
+        fixture.handler.handleMessageRead(connection.proxy, other);
+        awaitResponses(fixture, 2);
 
         byte[] own = new DistributedSearchRequest(LOCAL_USER, TOKEN + 1, "own").toByteArray();
-        fixture.handler.handleMessageReadAsync(connection.proxy, own).join();
-        assertEquals(2, fixture.responder.calls.size());
+        fixture.handler.handleMessageRead(connection.proxy, own);
         awaitBroadcasts(fixture, 3);
+        assertEquals(2, fixture.responder.calls.size());
     }
 
     @Test
@@ -157,9 +147,10 @@ class DistributedMessageHandlerTest {
         byte[] embedded = embeddedSearch(USERNAME, TOKEN, "query");
         byte[] expected = EmbeddedMessage.fromByteArray(embedded).getDistributedMessage();
 
-        fixture.handler.handleMessageReadAsync(connection.proxy, embedded).join();
+        fixture.handler.handleMessageRead(connection.proxy, embedded);
 
         awaitBroadcasts(fixture, 1);
+        awaitResponses(fixture, 1);
         assertArrayEquals(expected, fixture.manager.broadcasts.getFirst());
         assertEquals(new SearchCall(USERNAME, TOKEN, "query"), fixture.responder.calls.getFirst());
     }
@@ -170,10 +161,11 @@ class DistributedMessageHandlerTest {
         byte[] embedded = embeddedSearch(USERNAME, TOKEN, "query");
         byte[] expected = EmbeddedMessage.fromByteArray(embedded).getDistributedMessage();
 
-        fixture.handler.handleEmbeddedMessageAsync(embedded).join();
+        fixture.handler.handleEmbeddedMessage(embedded);
 
         assertEquals(1, fixture.manager.promotions);
         awaitBroadcasts(fixture, 1);
+        awaitResponses(fixture, 1);
         assertArrayEquals(expected, fixture.manager.broadcasts.getFirst());
         assertEquals(new SearchCall(USERNAME, TOKEN, "query"), fixture.responder.calls.getFirst());
     }
@@ -183,11 +175,12 @@ class DistributedMessageHandlerTest {
         Fixture fixture = new Fixture(true);
         ConnectionProbe child = new ConnectionProbe(USERNAME, ENDPOINT);
 
-        fixture.handler
-                .handleChildMessageReadAsync(child.proxy, new DistributedPingRequest().toByteArray())
-                .join();
+        fixture.handler.handleChildMessageRead(child.proxy, new DistributedPingRequest().toByteArray());
 
-        assertEquals(1, child.outgoing.size());
+        // The ping answer goes to a thread of its own, as the dispatched write
+        // it replaces did: answering in front of the next search request delays
+        // every child behind this one.
+        assertTrue(Eventually.holds(() -> child.outgoing.size() == 1));
         DistributedPingResponse response = assertInstanceOf(DistributedPingResponse.class, child.outgoing.getFirst());
         assertEquals(TOKEN, response.getToken());
     }
@@ -197,21 +190,18 @@ class DistributedMessageHandlerTest {
         Fixture fixture = new Fixture(true);
         ConnectionProbe child = new ConnectionProbe(USERNAME, ENDPOINT);
         child.writeFuture = CompletableFuture.failedFuture(new RuntimeException("write"));
-        fixture.handler
-                .handleChildMessageReadAsync(child.proxy, new DistributedPingRequest().toByteArray())
-                .join();
-        assertTrue(fixture.diagnostic.containsWarning("Error handling distributed child message"));
+        fixture.handler.handleChildMessageRead(child.proxy, new DistributedPingRequest().toByteArray());
+        // The dispatched write reports its own failure now; the future that
+        // used to carry it back to this handler is gone.
+        assertTrue(
+                Eventually.holds(() -> fixture.diagnostic.containsWarning("Error handling distributed child message")));
 
-        fixture.handler
-                .handleMessageReadAsync(
-                        child.proxy,
-                        new MessageBuilder()
-                                .writeCode(MessageCode.Distributed.UNKNOWN)
-                                .build())
-                .join();
+        fixture.handler.handleMessageRead(
+                child.proxy,
+                new MessageBuilder().writeCode(MessageCode.Distributed.UNKNOWN).build());
         assertTrue(fixture.diagnostic.contains("Unhandled distributed message"));
 
-        fixture.handler.handleEmbeddedMessageAsync(new byte[] {1}).join();
+        fixture.handler.handleEmbeddedMessage(new byte[] {1});
         assertTrue(fixture.diagnostic.containsWarning("Error handling embedded message"));
     }
 
@@ -266,11 +256,14 @@ class DistributedMessageHandlerTest {
      * records it after the call that provoked it has returned.
      */
     private static void awaitBroadcasts(Fixture fixture, int count) {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        while (fixture.manager.broadcasts.size() < count && System.nanoTime() < deadline) {
-            Thread.onSpinWait();
-        }
+        assertTrue(Eventually.holds(() -> fixture.manager.broadcasts.size() >= count));
         assertEquals(count, fixture.manager.broadcasts.size());
+    }
+
+    /** Waits for the dispatched search responses, for the same reason. */
+    private static void awaitResponses(Fixture fixture, int count) {
+        assertTrue(Eventually.holds(() -> fixture.responder.calls.size() >= count));
+        assertEquals(count, fixture.responder.calls.size());
     }
 
     private static final class Fixture {
@@ -335,13 +328,13 @@ class DistributedMessageHandlerTest {
     private static final class ResponderProbe implements InvocationHandler {
         private final SearchResponder proxy = (SearchResponder) Proxy.newProxyInstance(
                 SearchResponder.class.getClassLoader(), new Class<?>[] {SearchResponder.class}, this);
-        private final List<SearchCall> calls = new ArrayList<>();
+        private final List<SearchCall> calls = new CopyOnWriteArrayList<>();
 
         @Override
         public Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("tryRespondAsync") && arguments.length == 3) {
+            if (method.getName().equals("tryRespond") && arguments.length == 3) {
                 calls.add(new SearchCall((String) arguments[0], (Integer) arguments[1], (String) arguments[2]));
-                return CompletableFuture.completedFuture(true);
+                return true;
             }
             return defaultValue(method.getReturnType());
         }
@@ -462,8 +455,10 @@ class DistributedMessageHandlerTest {
     }
 
     private static final class RecordingDiagnostic implements DiagnosticSink {
-        private final List<String> messages = new ArrayList<>();
-        private final List<String> warnings = new ArrayList<>();
+        // Copy-on-write: a handler's dispatched work reports its own failures
+        // now, from a thread of its own, while the test thread is reading.
+        private final List<String> messages = new CopyOnWriteArrayList<>();
+        private final List<String> warnings = new CopyOnWriteArrayList<>();
 
         private boolean contains(String value) {
             return messages.stream().anyMatch(message -> message.toLowerCase().contains(value.toLowerCase()));

@@ -30,7 +30,6 @@ import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.search.SearchResponder;
 import java.util.Base64;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
@@ -99,11 +98,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     }
 
     @Override
-    public void handleChildMessageRead(MessageConnection sender, byte[] message) {
-        handleChildMessageReadAsync(sender, message);
-    }
-
-    CompletableFuture<Void> handleChildMessageReadAsync(MessageConnection connection, byte[] message) {
+    public void handleChildMessageRead(MessageConnection connection, byte[] message) {
         MessageCode.Distributed code = new MessageReader<>(message, MessageCode.Distributed.class).readCode();
         if (code != MessageCode.Distributed.PING) {
             diagnostic.debug("Distributed child message received: " + code + " from "
@@ -112,38 +107,27 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                     + connection.getId() + ")");
         }
 
-        CompletableFuture<Void> operation;
         try {
-            operation = switch (code) {
-                case CHILD_DEPTH -> CompletableFuture.completedFuture(null);
+            switch (code) {
+                case CHILD_DEPTH -> {
+                    // Source ignores a child's depth.
+                }
                 // Off the child's read loop, as the dispatched write it
                 // replaces was: a ping answered in front of the next search
                 // request delays every child behind this one.
                 case PING ->
-                    NetworkExecutor.runAsync(() -> connection.write(new DistributedPingResponse(tokens.nextToken())));
-                default -> {
+                    NetworkExecutor.dispatch(
+                            () -> connection.write(new DistributedPingResponse(tokens.nextToken())),
+                            failure -> warnChild(code, connection, failure));
+                default ->
                     diagnostic.debug("Unhandled distributed child message: " + code
                             + " from " + connection.getUsername() + " ("
                             + connection.getIpEndpoint() + "); "
                             + message.length + " bytes");
-                    yield CompletableFuture.completedFuture(null);
-                }
-            };
-        } catch (Throwable failure) {
-            operation = CompletableFuture.failedFuture(failure);
-        }
-        return operation.handle((ignored, failure) -> {
-            if (failure != null) {
-                Throwable cause = unwrap(failure);
-                diagnostic.warning(
-                        "Error handling distributed child message: " + code
-                                + " from " + connection.getUsername() + " ("
-                                + connection.getIpEndpoint() + "); "
-                                + message(cause),
-                        cause);
             }
-            return null;
-        });
+        } catch (Throwable failure) {
+            warnChild(code, connection, failure);
+        }
     }
 
     @Override
@@ -164,11 +148,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     }
 
     @Override
-    public void handleMessageRead(MessageConnection sender, byte[] message) {
-        handleMessageReadAsync(sender, message);
-    }
-
-    CompletableFuture<Void> handleMessageReadAsync(MessageConnection connection, byte[] message) {
+    public void handleMessageRead(MessageConnection connection, byte[] message) {
         MessageCode.Distributed code = new MessageReader<>(message, MessageCode.Distributed.class).readCode();
         if (code != MessageCode.Distributed.SEARCH_REQUEST
                 && code != MessageCode.Distributed.EMBEDDED_MESSAGE
@@ -180,64 +160,51 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
         } else if (options.get().isDeduplicateSearchRequests()) {
             String current = Base64.getEncoder().encodeToString(message);
             if (Objects.equals(deduplicationHash, current)) {
-                return CompletableFuture.completedFuture(null);
+                return;
             }
             deduplicationHash = current;
         }
 
-        CompletableFuture<Void> operation;
         try {
-            operation = switch (code) {
+            switch (code) {
                 case EMBEDDED_MESSAGE -> handleParentEmbeddedMessage(connection, message);
                 case SEARCH_REQUEST -> handleSearchRequest(message);
                 case PING -> {
                     DistributedPingResponse ping = DistributedPingResponse.fromByteArray(message);
                     waiter.complete(new WaitKey(MessageCode.Distributed.PING, connection.getUsername()), ping);
-                    yield CompletableFuture.completedFuture(null);
                 }
                 case BRANCH_LEVEL -> {
                     DistributedBranchLevel branchLevel = DistributedBranchLevel.fromByteArray(message);
                     if (isParent(connection)) {
                         mesh.get().setParentBranchLevel(branchLevel.getLevel());
                     }
-                    yield CompletableFuture.completedFuture(null);
                 }
                 case BRANCH_ROOT -> {
                     DistributedBranchRoot branchRoot = DistributedBranchRoot.fromByteArray(message);
                     if (isParent(connection)) {
                         mesh.get().setParentBranchRoot(branchRoot.getUsername());
                     }
-                    yield CompletableFuture.completedFuture(null);
                 }
                 case CHILD_DEPTH -> {
                     DistributedChildDepth depth = DistributedChildDepth.fromByteArray(message);
                     waiter.complete(
                             new WaitKey(Constants.WaitKey.CHILD_DEPTH_MESSAGE, connection.getKey()), depth.getDepth());
-                    yield CompletableFuture.completedFuture(null);
                 }
-                default -> {
+                default ->
                     diagnostic.debug("Unhandled distributed message: " + code + " from "
                             + connection.getUsername() + " ("
                             + connection.getIpEndpoint() + "); "
                             + message.length + " bytes");
-                    yield CompletableFuture.completedFuture(null);
-                }
-            };
-        } catch (Throwable failure) {
-            operation = CompletableFuture.failedFuture(failure);
-        }
-        return operation.handle((ignored, failure) -> {
-            if (failure != null) {
-                Throwable cause = unwrap(failure);
-                diagnostic.warning(
-                        "Error handling distributed message: " + code + " from "
-                                + connection.getUsername() + " ("
-                                + connection.getIpEndpoint() + "); "
-                                + message(cause),
-                        cause);
             }
-            return null;
-        });
+        } catch (Throwable failure) {
+            Throwable cause = unwrap(failure);
+            diagnostic.warning(
+                    "Error handling distributed message: " + code + " from "
+                            + connection.getUsername() + " ("
+                            + connection.getIpEndpoint() + "); "
+                            + message(cause),
+                    cause);
+        }
     }
 
     @Override
@@ -249,41 +216,25 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
 
     @Override
     public void handleEmbeddedMessage(byte[] message) {
-        handleEmbeddedMessageAsync(message);
-    }
-
-    CompletableFuture<Void> handleEmbeddedMessageAsync(byte[] message) {
-        AtomicCode code = new AtomicCode();
-        CompletableFuture<Void> operation;
+        MessageCode.Distributed code = MessageCode.Distributed.UNKNOWN;
         try {
             EmbeddedMessage embedded = EmbeddedMessage.fromByteArray(message);
-            code.value = embedded.getDistributedCode();
+            code = embedded.getDistributedCode();
             byte[] distributed = embedded.getDistributedMessage();
-            if (code.value == MessageCode.Distributed.SEARCH_REQUEST) {
-                mesh.get().promoteToBranchRoot();
-                DistributedSearchRequest search = DistributedSearchRequest.fromByteArray(distributed);
-                NetworkExecutor.runAsync(() -> mesh.get().broadcastMessage(distributed));
-                operation = searchResponses
-                        .get()
-                        .tryRespondAsync(search.getUsername(), search.getToken(), search.getQuery())
-                        .thenApply(ignored -> null);
-            } else {
-                diagnostic.debug("Unhandled embedded message: " + code.value + "; " + message.length + " bytes");
-                operation = CompletableFuture.completedFuture(null);
+            if (code != MessageCode.Distributed.SEARCH_REQUEST) {
+                diagnostic.debug("Unhandled embedded message: " + code + "; " + message.length + " bytes");
+                return;
             }
+            mesh.get().promoteToBranchRoot();
+            DistributedSearchRequest search = DistributedSearchRequest.fromByteArray(distributed);
+            broadcastAndRespond(distributed, search);
         } catch (Throwable failure) {
-            operation = CompletableFuture.failedFuture(failure);
+            Throwable cause = unwrap(failure);
+            diagnostic.warning("Error handling embedded message: " + code + "; " + message(cause), cause);
         }
-        return operation.handle((ignored, failure) -> {
-            if (failure != null) {
-                Throwable cause = unwrap(failure);
-                diagnostic.warning("Error handling embedded message: " + code.value + "; " + message(cause), cause);
-            }
-            return null;
-        });
     }
 
-    private CompletableFuture<Void> handleParentEmbeddedMessage(MessageConnection connection, byte[] message) {
+    private void handleParentEmbeddedMessage(MessageConnection connection, byte[] message) {
         EmbeddedMessage embedded = EmbeddedMessage.fromByteArray(message);
         if (embedded.getDistributedCode() != MessageCode.Distributed.SEARCH_REQUEST) {
             diagnostic.debug("Unhandled embedded message: "
@@ -291,30 +242,51 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                     + connection.getUsername() + " ("
                     + connection.getIpEndpoint() + "); "
                     + message.length + " bytes");
-            return CompletableFuture.completedFuture(null);
+            return;
         }
-        DistributedSearchRequest search = DistributedSearchRequest.fromByteArray(embedded.getDistributedMessage());
-        byte[] forward = embedded.getDistributedMessage();
-        NetworkExecutor.runAsync(() -> mesh.get().broadcastMessage(forward));
-        if (Objects.equals(search.getUsername(), server.username())) {
-            return CompletableFuture.completedFuture(null);
-        }
-        return searchResponses
-                .get()
-                .tryRespondAsync(search.getUsername(), search.getToken(), search.getQuery())
-                .thenApply(ignored -> null);
+        byte[] distributed = embedded.getDistributedMessage();
+        broadcastAndRespond(distributed, DistributedSearchRequest.fromByteArray(distributed));
     }
 
-    private CompletableFuture<Void> handleSearchRequest(byte[] message) {
-        DistributedSearchRequest search = DistributedSearchRequest.fromByteArray(message);
-        NetworkExecutor.runAsync(() -> mesh.get().broadcastMessage(message));
+    private void handleSearchRequest(byte[] message) {
+        broadcastAndRespond(message, DistributedSearchRequest.fromByteArray(message));
+    }
+
+    /**
+     * Forwards a search down the branch and answers it.
+     *
+     * <p>Both go to threads of their own. This runs on the parent's read loop,
+     * and neither fanning a search out to every child nor asking the share
+     * catalog and connecting to the searcher is something the next search
+     * request should wait behind. Each dispatch reports its own failure — the
+     * discarded future that used to carry it back is gone.
+     */
+    private void broadcastAndRespond(byte[] distributed, DistributedSearchRequest search) {
+        NetworkExecutor.dispatch(
+                () -> mesh.get().broadcastMessage(distributed),
+                failure -> diagnostic.warning(
+                        "Error broadcasting search request from " + search.getUsername() + " with token "
+                                + search.getToken() + ": " + message(unwrap(failure)),
+                        unwrap(failure)));
         if (Objects.equals(search.getUsername(), server.username())) {
-            return CompletableFuture.completedFuture(null);
+            return;
         }
-        return searchResponses
-                .get()
-                .tryRespondAsync(search.getUsername(), search.getToken(), search.getQuery())
-                .thenApply(ignored -> null);
+        NetworkExecutor.dispatch(
+                () -> searchResponses.get().tryRespond(search.getUsername(), search.getToken(), search.getQuery()),
+                failure -> diagnostic.warning(
+                        "Error responding to search request from " + search.getUsername() + " with token "
+                                + search.getToken() + ": " + message(unwrap(failure)),
+                        unwrap(failure)));
+    }
+
+    private void warnChild(MessageCode.Distributed code, MessageConnection connection, Throwable failure) {
+        Throwable cause = unwrap(failure);
+        diagnostic.warning(
+                "Error handling distributed child message: " + code
+                        + " from " + connection.getUsername() + " ("
+                        + connection.getIpEndpoint() + "); "
+                        + message(cause),
+                cause);
     }
 
     private boolean isParent(MessageConnection connection) {
@@ -337,9 +309,5 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
 
     private static String message(Throwable failure) {
         return failure.getMessage() == null ? "" : failure.getMessage();
-    }
-
-    private static final class AtomicCode {
-        private MessageCode.Distributed value = MessageCode.Distributed.UNKNOWN;
     }
 }

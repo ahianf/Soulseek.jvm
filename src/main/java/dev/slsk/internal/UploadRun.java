@@ -18,6 +18,7 @@ import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Permits;
+import dev.slsk.internal.common.Settlement;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.messaging.MessageCode;
@@ -35,7 +36,6 @@ import dev.slsk.internal.options.TransferOptions;
 import dev.slsk.internal.options.TransferProgressUpdate;
 import dev.slsk.internal.options.TransferStateChange;
 import dev.slsk.internal.transfer.TransferInternal;
-import dev.slsk.internal.transfer.TransferSettlement;
 import dev.slsk.internal.transfer.TransferStreams;
 import java.io.IOException;
 import java.io.InputStream;
@@ -272,7 +272,7 @@ final class UploadRun {
 
     private void writeAndAwaitDisconnectRace() {
         long remaining = upload.getSize() - upload.getStartOffset();
-        TransferSettlement settlement = upload.settlement();
+        Settlement settlement = upload.settlement();
         if (remaining == 0) {
             // Nothing to send, so nothing to race: the peer is re-requesting a
             // file it already has all of.
@@ -336,7 +336,7 @@ final class UploadRun {
                 // On a thread of its own so the budget can lapse while the read
                 // is still parked: a peer that says nothing is the ordinary case
                 // here, and giving up on it is the point.
-                TransferSettlement read = new TransferSettlement();
+                Settlement read = new Settlement();
                 NetworkExecutor.executor().execute(() -> {
                     try {
                         connection.read(1, cancellationSignal);
