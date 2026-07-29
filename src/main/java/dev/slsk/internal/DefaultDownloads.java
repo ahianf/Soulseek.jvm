@@ -17,6 +17,7 @@ import dev.slsk.TransferState;
 import dev.slsk.Username;
 import dev.slsk.events.DownloadEvent;
 import dev.slsk.exceptions.TransferNotFoundException;
+import dev.slsk.internal.common.Usernames;
 import dev.slsk.internal.messaging.handlers.PeerServices;
 import dev.slsk.internal.messaging.messages.TransferRequest;
 import dev.slsk.internal.options.TransferOptions;
@@ -75,7 +76,12 @@ final class DefaultDownloads implements Downloads {
      * @return what became of the offer
      */
     PeerServices.OfferDisposition offered(String username, String filename, TransferRequest offer) {
-        Username user = Username.of(username);
+        Username user = Usernames.fromWire(username);
+        if (user == null) {
+            // Peer-supplied; nothing we queued can be keyed by an
+            // unrepresentable name, so the offer cannot be one of ours.
+            return PeerServices.OfferDisposition.UNKNOWN;
+        }
         PeerFile file = new PeerFile(user, filename);
         offers.put(file, offer);
         if (queue.promote(user, filename).isPresent()) {

@@ -12,6 +12,7 @@ import dev.slsk.UserProfile;
 import dev.slsk.Username;
 import dev.slsk.events.MeEvent;
 import dev.slsk.internal.EngineEvents.Kind;
+import dev.slsk.internal.common.Usernames;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.PrivilegeNotificationReceivedEvent;
 import java.time.Instant;
@@ -62,13 +63,18 @@ final class DefaultMe implements Me {
                 .on(
                         Kind.LOGGED_IN,
                         (Void ignored) -> events.publish(new MeEvent.LoggedIn(ServerInfo.empty(), Instant.now())));
+        // The live server includes a blank entry in this list; mapped through
+        // Username.of it threw on every login and the whole list was lost.
         client.events()
                 .on(
                         Kind.PRIVILEGED_USER_LIST_RECEIVED,
                         (java.util.List<String> users) -> events.publish(new MeEvent.PrivilegedUserListReceived(
                                 users == null
                                         ? List.of()
-                                        : users.stream().map(Username::of).toList(),
+                                        : users.stream()
+                                                .map(Usernames::fromWire)
+                                                .filter(Objects::nonNull)
+                                                .toList(),
                                 Instant.now())));
         client.events().on(Kind.PRIVILEGE_NOTIFICATION_RECEIVED, this::onPrivilegeNotification);
     }
@@ -84,8 +90,8 @@ final class DefaultMe implements Me {
         if (event == null) {
             return;
         }
-        events.publish(new MeEvent.PrivilegeNotificationReceived(
-                event.getUsername() == null ? null : Username.of(event.getUsername()), Instant.now()));
+        events.publish(
+                new MeEvent.PrivilegeNotificationReceived(Usernames.fromWire(event.getUsername()), Instant.now()));
         if (event.isRequiresAcknowlegement() && event.getId() != null) {
             try {
                 server.acknowledgePrivilegeNotification(event.getId());

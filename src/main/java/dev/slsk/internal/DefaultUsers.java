@@ -20,6 +20,7 @@ import dev.slsk.Users;
 import dev.slsk.Watch;
 import dev.slsk.events.UserEvent;
 import dev.slsk.internal.EngineEvents.Kind;
+import dev.slsk.internal.common.Usernames;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.options.BrowseOptions;
 import dev.slsk.internal.options.BrowseProgressCallback;
@@ -96,10 +97,10 @@ final class DefaultUsers implements Users {
     }
 
     private void onStatistics(dev.slsk.internal.UserStatistics source) {
-        if (source == null || source.getUsername() == null) {
+        Username user = source == null ? null : Usernames.fromWire(source.getUsername());
+        if (user == null) {
             return;
         }
-        Username user = Username.of(source.getUsername());
         events.publish(new UserEvent.StatisticsChanged(user, statistics(source), Instant.now()));
     }
 

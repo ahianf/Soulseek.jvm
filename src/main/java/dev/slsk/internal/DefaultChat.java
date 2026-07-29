@@ -9,6 +9,7 @@ import dev.slsk.EventStream;
 import dev.slsk.Username;
 import dev.slsk.events.ChatEvent;
 import dev.slsk.internal.EngineEvents.Kind;
+import dev.slsk.internal.common.Usernames;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.PrivateMessageReceivedEvent;
 import java.time.Instant;
@@ -48,17 +49,22 @@ final class DefaultChat implements Chat {
         if (event == null) {
             return;
         }
+        Username sender = Usernames.fromWire(event.getUsername());
+        if (sender == null) {
+            // Unrepresentable sender. Throwing here used to leave the message
+            // both undelivered and unacknowledged, so the server redelivered it
+            // at every login forever; skipping keeps the redelivery but names it.
+            diagnostics.warning("Private message " + event.getId()
+                    + " carries a sender no username can represent and was not delivered");
+            return;
+        }
         // The acknowledgement is a continuation rather than the next statement,
         // and the rule it encodes is unchanged. What changes is where it runs:
         // on the bus's delivery thread, so a listener and a full server round
         // trip no longer sit between the read loop and the next message.
         events.publish(
                 new ChatEvent.MessageReceived(
-                        Username.of(event.getUsername()),
-                        event.getMessage(),
-                        event.isReplayed(),
-                        event.getTimestamp(),
-                        Instant.now()),
+                        sender, event.getMessage(), event.isReplayed(), event.getTimestamp(), Instant.now()),
                 delivered -> acknowledge(event, delivered));
     }
 

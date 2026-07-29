@@ -24,6 +24,7 @@ import dev.slsk.Username;
 import dev.slsk.events.SearchEvent;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.NetworkExecutor;
+import dev.slsk.internal.common.Usernames;
 import dev.slsk.internal.events.SearchRequestEvent;
 import dev.slsk.internal.events.SearchRequestResponseEvent;
 import java.time.Duration;
@@ -142,22 +143,25 @@ final class DefaultSearch implements Search {
 
     private void wire() {
         client.events().on(Kind.SEARCH_REQUEST_RECEIVED, (SearchRequestEvent event) -> {
-            if (event != null) {
-                events.publish(new SearchEvent.RequestReceived(
-                        Username.of(event.getUsername()), event.getQuery(), event.getToken(), Instant.now()));
+            Username requester = event == null ? null : Usernames.fromWire(event.getUsername());
+            if (requester != null) {
+                events.publish(
+                        new SearchEvent.RequestReceived(requester, event.getQuery(), event.getToken(), Instant.now()));
             }
         });
         client.events().on(Kind.SEARCH_RESPONSE_DELIVERED, (SearchRequestResponseEvent event) -> {
-            if (event != null && event.getSearchResponse() != null) {
+            Username requester = event == null ? null : Usernames.fromWire(event.getUsername());
+            if (requester != null && event.getSearchResponse() != null) {
                 dev.slsk.internal.SearchResponse delivered = event.getSearchResponse();
                 events.publish(new SearchEvent.ResponseDelivered(
-                        Username.of(event.getUsername()), event.getToken(), delivered.getFileCount(), Instant.now()));
+                        requester, event.getToken(), delivered.getFileCount(), Instant.now()));
             }
         });
         client.events().on(Kind.SEARCH_RESPONSE_DELIVERY_FAILED, (SearchRequestResponseEvent event) -> {
-            if (event != null) {
+            Username requester = event == null ? null : Usernames.fromWire(event.getUsername());
+            if (requester != null) {
                 events.publish(new SearchEvent.ResponseDeliveryFailed(
-                        Username.of(event.getUsername()),
+                        requester,
                         event.getToken(),
                         new IllegalStateException("could not deliver a search response to " + event.getUsername()),
                         Instant.now()));
@@ -362,7 +366,9 @@ final class DefaultSearch implements Search {
 
     /** Records a response and publishes it, keeping the snapshot and stream in step. */
     private void accept(State state, dev.slsk.internal.SearchResponse source, SearchFilters filters) {
-        if (source == null || source.getUsername() == null) {
+        // The username is peer-supplied; a value no username can represent
+        // drops the response rather than throwing out of the read dispatch.
+        if (source == null || Usernames.fromWire(source.getUsername()) == null) {
             return;
         }
         SearchResponse response = response(source, filters);
