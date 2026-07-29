@@ -20,6 +20,7 @@ import dev.slsk.internal.SearchResponse;
 import dev.slsk.internal.SearchResponseCache;
 import dev.slsk.internal.SearchResponseCacheRecord;
 import dev.slsk.internal.common.Outcomes;
+import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;
 import dev.slsk.internal.diagnostics.DiagnosticLevel;
@@ -57,18 +58,27 @@ class SearchResponderTest {
             new SearchResponse("local", 7, true, 1, 0, List.of(new File(1, "file", 2, "ext")));
 
     @Test
-    void constructorValidatesClientAndUsesSuppliedDiagnostic() {
-        assertThrows(NullPointerException.class, () -> new DefaultSearchResponder(null));
+    void constructorValidatesPortsAndUsesSuppliedDiagnostic() {
+        Fixture nulls = fixture(null);
+        assertThrows(
+                NullPointerException.class,
+                () -> new DefaultSearchResponder(
+                        null,
+                        () -> nulls.manager,
+                        new TokenFactory(77),
+                        nulls.client::endpoint,
+                        nulls.client::getShareCatalog,
+                        () -> "me"));
         Fixture fixture = fixture(null);
         RecordingDiagnostic diagnostic = new RecordingDiagnostic();
-        DefaultSearchResponder responder = new DefaultSearchResponder(fixture.client, diagnostic);
+        DefaultSearchResponder responder = responder(fixture.client, diagnostic);
         assertSame(diagnostic, responder.getDiagnostic());
     }
 
     @Test
     void defaultDiagnosticRaisesTypedEventsAndAllowsNoListeners() {
         Fixture fixture = fixture(null);
-        DefaultSearchResponder responder = new DefaultSearchResponder(fixture.client);
+        DefaultSearchResponder responder = responder(fixture.client, null);
         AtomicReference<DiagnosticEvent> event = new AtomicReference<>();
         DiagnosticEventListener listener = (sender, args) -> event.set(args);
         responder.addDiagnosticGeneratedListener(listener);
@@ -226,7 +236,7 @@ class SearchResponderTest {
         TestPeerManager manager = new TestPeerManager();
         TestClient client = new TestClient(options, manager, actualCache);
         RecordingDiagnostic diagnostic = new RecordingDiagnostic();
-        return new Fixture(new DefaultSearchResponder(client, diagnostic), client, manager, diagnostic);
+        return new Fixture(responder(client, diagnostic), client, manager, diagnostic);
     }
 
     /**
@@ -341,18 +351,13 @@ class SearchResponderTest {
             TestPeerManager manager,
             RecordingDiagnostic diagnostic) {}
 
-    private static final class TestClient implements SearchResponderClient {
+    /** The values the responder is built from, kept together for the tests. */
+    private static final class TestClient {
 
         private volatile ShareCatalog catalog = ShareCatalog.empty();
 
-        @Override
-        public ShareCatalog getShareCatalog() {
+        private ShareCatalog getShareCatalog() {
             return catalog;
-        }
-
-        @Override
-        public String getLoggedInUsername() {
-            return "me";
         }
 
         private final SoulseekClientOptions options;
@@ -366,28 +371,24 @@ class SearchResponderTest {
             this.cache = cache;
         }
 
-        @Override
-        public SoulseekClientOptions getOptions() {
-            return options;
-        }
-
-        @Override
-        public PeerConnectionManager getPeerConnectionManager() {
-            return manager;
-        }
-
-        @Override
-        public int getNextToken() {
-            return 77;
-        }
-
-        @Override
-        public InetSocketAddress getUserEndpointOperation(String username, CancellationSignal cancellationSignal) {
+        private InetSocketAddress endpoint(String username, CancellationSignal cancellationSignal) {
             if (endpointFailure != null) {
                 throw endpointFailure;
             }
             return new InetSocketAddress("127.0.0.1", 1234);
         }
+    }
+
+    /** Builds a responder over a test client's values. */
+    private static DefaultSearchResponder responder(TestClient client, RecordingDiagnostic diagnostic) {
+        return new DefaultSearchResponder(
+                () -> client.options,
+                () -> client.manager,
+                new TokenFactory(77),
+                client::endpoint,
+                client::getShareCatalog,
+                () -> "me",
+                diagnostic);
     }
 
     private static final class TestCache implements SearchResponseCache {

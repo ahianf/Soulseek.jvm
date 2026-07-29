@@ -11,6 +11,7 @@ import dev.slsk.internal.RawSearchResponse;
 import dev.slsk.internal.SearchResponse;
 import dev.slsk.internal.SearchResponseCache;
 import dev.slsk.internal.SearchResponseCacheRecord;
+import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
@@ -18,11 +19,14 @@ import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.events.SearchRequestEvent;
 import dev.slsk.internal.events.SearchRequestResponseEvent;
 import dev.slsk.internal.network.MessageConnection;
+import dev.slsk.internal.network.PeerConnectionManager;
+import dev.slsk.internal.options.SoulseekClientOptions;
 import java.net.InetSocketAddress;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Supplier;
 
 /** Responds to incoming search requests. */
 public final class DefaultSearchResponder implements SearchResponder {
@@ -37,7 +41,25 @@ public final class DefaultSearchResponder implements SearchResponder {
      */
     private static final int MAXIMUM_MATCHES = 250;
 
-    private final SearchResponderClient client;
+    /** Where a peer is, so a response can be delivered to them. */
+    @FunctionalInterface
+    public interface Endpoints {
+        /**
+         * Resolves a peer's endpoint.
+         *
+         * @param username the peer
+         * @param cancellationSignal the cancellation signal
+         * @return the endpoint
+         */
+        java.net.InetSocketAddress resolve(String username, CancellationSignal cancellationSignal);
+    }
+
+    private final Supplier<SoulseekClientOptions> options;
+    private final Supplier<PeerConnectionManager> peers;
+    private final TokenFactory tokens;
+    private final Endpoints endpoints;
+    private final Supplier<dev.slsk.spi.ShareCatalog> catalog;
+    private final Supplier<String> loggedInUsername;
     private final DiagnosticSink diagnostic;
     private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<SearchResponderEventListener<SearchRequestEvent>> requestListeners =
@@ -48,15 +70,33 @@ public final class DefaultSearchResponder implements SearchResponder {
             responseFailedListeners = new CopyOnWriteArrayList<>();
 
     /** Creates a responder with its default diagnostic factory. */
-    public DefaultSearchResponder(SearchResponderClient client) {
-        this(client, null);
+    public DefaultSearchResponder(
+            Supplier<SoulseekClientOptions> options,
+            Supplier<PeerConnectionManager> peers,
+            TokenFactory tokens,
+            Endpoints endpoints,
+            Supplier<dev.slsk.spi.ShareCatalog> catalog,
+            Supplier<String> loggedInUsername) {
+        this(options, peers, tokens, endpoints, catalog, loggedInUsername, null);
     }
 
     /** Creates a responder. */
-    public DefaultSearchResponder(SearchResponderClient client, DiagnosticSink diagnosticFactory) {
-        this.client = Objects.requireNonNull(client, "client");
+    public DefaultSearchResponder(
+            Supplier<SoulseekClientOptions> options,
+            Supplier<PeerConnectionManager> peers,
+            TokenFactory tokens,
+            Endpoints endpoints,
+            Supplier<dev.slsk.spi.ShareCatalog> catalog,
+            Supplier<String> loggedInUsername,
+            DiagnosticSink diagnosticFactory) {
+        this.options = Objects.requireNonNull(options, "options");
+        this.peers = Objects.requireNonNull(peers, "peers");
+        this.tokens = Objects.requireNonNull(tokens, "tokens");
+        this.endpoints = Objects.requireNonNull(endpoints, "endpoints");
+        this.catalog = Objects.requireNonNull(catalog, "catalog");
+        this.loggedInUsername = Objects.requireNonNull(loggedInUsername, "loggedInUsername");
         diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(options.get().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
     }
 
@@ -103,7 +143,7 @@ public final class DefaultSearchResponder implements SearchResponder {
 
     @Override
     public boolean tryDiscard(int responseToken) {
-        SearchResponseCache cache = client.getOptions().getSearchResponseCache();
+        SearchResponseCache cache = options.get().getSearchResponseCache();
         if (cache == null) {
             return false;
         }
@@ -133,9 +173,9 @@ public final class DefaultSearchResponder implements SearchResponder {
         }
 
         CompletableFuture<SearchResponse> resolution = Catalogs.ask(() -> Catalogs.searchResponse(
-                client.getLoggedInUsername(),
+                loggedInUsername.get(),
                 token,
-                client.getShareCatalog().search(dev.slsk.Username.of(username), query, MAXIMUM_MATCHES),
+                catalog.get().search(dev.slsk.Username.of(username), query, MAXIMUM_MATCHES),
                 true,
                 0,
                 0));
@@ -158,7 +198,7 @@ public final class DefaultSearchResponder implements SearchResponder {
 
     @Override
     public CompletableFuture<Boolean> tryRespondAsync(int responseToken) {
-        SearchResponseCache cache = client.getOptions().getSearchResponseCache();
+        SearchResponseCache cache = options.get().getSearchResponseCache();
         if (cache == null) {
             return CompletableFuture.completedFuture(false);
         }
@@ -178,8 +218,8 @@ public final class DefaultSearchResponder implements SearchResponder {
         SearchResponseCacheRecord record = lookup.value();
         CompletableFuture<MessageConnection> connectionFuture;
         try {
-            connectionFuture = CompletableFuture.completedFuture(
-                    client.getPeerConnectionManager().getCachedMessageConnection(record.username()));
+            connectionFuture =
+                    CompletableFuture.completedFuture(peers.get().getCachedMessageConnection(record.username()));
         } catch (Throwable failure) {
             connectionFuture = CompletableFuture.failedFuture(failure);
         }
@@ -223,18 +263,17 @@ public final class DefaultSearchResponder implements SearchResponder {
 
         CompletableFuture<InetSocketAddress> endpointFuture;
         try {
-            endpointFuture = CompletableFuture.completedFuture(
-                    client.getUserEndpointOperation(username, CancellationSignal.none()));
+            endpointFuture = CompletableFuture.completedFuture(endpoints.resolve(username, CancellationSignal.none()));
         } catch (Throwable failure) {
             endpointFuture = CompletableFuture.failedFuture(failure);
         }
 
         return endpointFuture
                 .thenCompose(endpoint -> {
-                    int responseToken = client.getNextToken();
+                    int responseToken = tokens.nextToken();
                     CompletableFuture<MessageConnection> connectionFuture;
                     try {
-                        connectionFuture = CompletableFuture.completedFuture(client.getPeerConnectionManager()
+                        connectionFuture = CompletableFuture.completedFuture(peers.get()
                                 .getOrAddMessageConnection(
                                         username, endpoint, responseToken, CancellationSignal.none()));
                     } catch (Throwable failure) {
@@ -290,7 +329,7 @@ public final class DefaultSearchResponder implements SearchResponder {
 
     private void cacheUndelivered(
             int responseToken, String username, int token, String query, SearchResponse response) {
-        SearchResponseCache cache = client.getOptions().getSearchResponseCache();
+        SearchResponseCache cache = options.get().getSearchResponseCache();
         if (cache == null) {
             return;
         }

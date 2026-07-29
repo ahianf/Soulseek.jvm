@@ -9,6 +9,7 @@ import dev.slsk.internal.CacheLookupResult;
 import dev.slsk.internal.SearchResponseCacheRecord;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.WaitKey;
+import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
@@ -17,6 +18,8 @@ import dev.slsk.internal.messaging.messages.PeerInit;
 import dev.slsk.internal.messaging.messages.PierceFirewall;
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.Listener;
+import dev.slsk.internal.options.SoulseekClientOptions;
+import dev.slsk.internal.search.SearchResponder;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
@@ -25,23 +28,54 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Supplier;
 
-/** Handles incoming connections established by the TCP listener. */
+/**
+ * Handles incoming connections established by the TCP listener.
+ *
+ * <p>Everything here is supplied rather than fetched: the listener is replaced
+ * when the client is reconfigured, and the two connection managers and the
+ * responder are built after this is, because they are what an accepted
+ * connection is handed to.
+ */
 public final class DefaultListenerHandler implements ListenerHandler {
-    private final ListenerHandlerClient client;
+    private final Supplier<SoulseekClientOptions> options;
+    private final Supplier<Listener> listener;
+    private final Supplier<PeerConnectionManager> peers;
+    private final Supplier<DistributedConnectionManager> distributed;
+    private final Waiter waiter;
+    private final Supplier<SearchResponder> searchResponses;
     private final DiagnosticSink diagnostic;
     private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
 
     /** Creates a handler with its default diagnostic factory. */
-    public DefaultListenerHandler(ListenerHandlerClient client) {
-        this(client, null);
+    public DefaultListenerHandler(
+            Supplier<SoulseekClientOptions> options,
+            Supplier<Listener> listener,
+            Supplier<PeerConnectionManager> peers,
+            Supplier<DistributedConnectionManager> distributed,
+            Waiter waiter,
+            Supplier<SearchResponder> searchResponses) {
+        this(options, listener, peers, distributed, waiter, searchResponses, null);
     }
 
     /** Creates a handler. */
-    public DefaultListenerHandler(ListenerHandlerClient client, DiagnosticSink diagnosticFactory) {
-        this.client = Objects.requireNonNull(client, "client");
+    public DefaultListenerHandler(
+            Supplier<SoulseekClientOptions> options,
+            Supplier<Listener> listener,
+            Supplier<PeerConnectionManager> peers,
+            Supplier<DistributedConnectionManager> distributed,
+            Waiter waiter,
+            Supplier<SearchResponder> searchResponses,
+            DiagnosticSink diagnosticFactory) {
+        this.options = Objects.requireNonNull(options, "options");
+        this.listener = Objects.requireNonNull(listener, "listener");
+        this.peers = Objects.requireNonNull(peers, "peers");
+        this.distributed = Objects.requireNonNull(distributed, "distributed");
+        this.waiter = Objects.requireNonNull(waiter, "waiter");
+        this.searchResponses = Objects.requireNonNull(searchResponses, "searchResponses");
         diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(client.getOptions().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(options.get().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
     }
 
@@ -63,8 +97,8 @@ public final class DefaultListenerHandler implements ListenerHandler {
     CompletableFuture<Void> handleConnectionAsync(Connection connection) {
         diagnostic.debug("Accepted incoming connection from "
                 + connection.getIpEndpoint().getAddress().getHostAddress()
-                + " on " + client.getListener().getIpAddress()
-                + ":" + client.getListener().getPort()
+                + " on " + listener.get().getIpAddress()
+                + ":" + listener.get().getPort()
                 + " (id: " + connection.getId() + ")");
 
         CompletableFuture<Void> operation;
@@ -120,82 +154,75 @@ public final class DefaultListenerHandler implements ListenerHandler {
         diagnostic.debug("PeerInit for connection type " + peerInit.getConnectionType()
                 + " received from " + peerInit.getUsername() + " ("
                 + connection.getIpEndpoint().getAddress().getHostAddress()
-                + ":" + client.getListener().getPort()
+                + ":" + listener.get().getPort()
                 + ") (id: " + connection.getId() + ")");
 
         if (Constants.ConnectionType.PEER.equals(peerInit.getConnectionType())) {
-            client.getPeerConnectionManager().addOrUpdateMessageConnection(peerInit.getUsername(), connection);
+            peers.get().addOrUpdateMessageConnection(peerInit.getUsername(), connection);
             return CompletableFuture.completedFuture(null);
         }
         if (Constants.ConnectionType.TRANSFER.equals(peerInit.getConnectionType())) {
-            return CompletableFuture.completedFuture(client.getPeerConnectionManager()
-                            .getTransferConnection(peerInit.getUsername(), peerInit.getToken(), connection))
+            return CompletableFuture.completedFuture(
+                            peers.get().getTransferConnection(peerInit.getUsername(), peerInit.getToken(), connection))
                     .thenAccept(result -> {
                         WaitKey waitKey = new WaitKey(
                                 Constants.WaitKey.DIRECT_TRANSFER, peerInit.getUsername(), result.remoteToken());
-                        if (client.getWaiter().hasWait(waitKey)) {
-                            client.getWaiter().complete(waitKey, result.connection());
+                        if (waiter.hasWait(waitKey)) {
+                            waiter.complete(waitKey, result.connection());
                         } else {
                             diagnostic.debug("Unexpected transfer connection for token "
                                     + peerInit.getToken() + " from "
                                     + peerInit.getUsername() + " ("
                                     + connection.getIpEndpoint().getAddress().getHostAddress()
-                                    + ":" + client.getListener().getPort()
+                                    + ":" + listener.get().getPort()
                                     + ") (id: " + connection.getId() + ")");
                             result.connection().disconnect("Transfer connection rejected: unknown token");
                         }
                     });
         }
         if (Constants.ConnectionType.DISTRIBUTED.equals(peerInit.getConnectionType())) {
-            return client.getDistributedConnectionManager()
-                    .addOrUpdateChildConnectionAsync(peerInit.getUsername(), connection);
+            return distributed.get().addOrUpdateChildConnectionAsync(peerInit.getUsername(), connection);
         }
         return CompletableFuture.completedFuture(null);
     }
 
     private CompletableFuture<Void> handlePierceFirewall(Connection connection, PierceFirewall pierce) {
         int token = pierce.getToken();
-        String username =
-                client.getPeerConnectionManager().getPendingSolicitations().get(token);
+        String username = peers.get().getPendingSolicitations().get(token);
         if (username != null) {
             diagnostic.debug("Peer PierceFirewall with token " + token
                     + " received from " + username + " ("
                     + connection.getIpEndpoint().getAddress().getHostAddress()
-                    + ":" + client.getListener().getPort()
+                    + ":" + listener.get().getPort()
                     + ") (id: " + connection.getId() + ")");
-            client.getWaiter()
-                    .complete(new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, token), connection);
+            waiter.complete(new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, token), connection);
             return CompletableFuture.completedFuture(null);
         }
 
-        username = client.getDistributedConnectionManager()
-                .getPendingSolicitations()
-                .get(token);
+        username = distributed.get().getPendingSolicitations().get(token);
         if (username != null) {
             diagnostic.debug("Distributed PierceFirewall with token " + token
                     + " received from " + username + " ("
                     + connection.getIpEndpoint().getAddress().getHostAddress()
-                    + ":" + client.getListener().getPort()
+                    + ":" + listener.get().getPort()
                     + ") (id: " + connection.getId() + ")");
-            client.getWaiter()
-                    .complete(
-                            new WaitKey(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION, username, token),
-                            connection);
+            waiter.complete(
+                    new WaitKey(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION, username, token), connection);
             return CompletableFuture.completedFuture(null);
         }
 
-        if (client.getOptions().getSearchResponseCache() != null) {
+        if (options.get().getSearchResponseCache() != null) {
             CacheLookupResult<SearchResponseCacheRecord> lookup =
-                    client.getOptions().getSearchResponseCache().lookup(token);
+                    options.get().getSearchResponseCache().lookup(token);
             if (lookup.found()) {
                 SearchResponseCacheRecord record = lookup.value();
                 diagnostic.debug("PierceFirewall matching pending search response "
                         + "received from " + record.username() + " ("
                         + connection.getIpEndpoint().getAddress().getHostAddress()
-                        + ":" + client.getListener().getPort()
+                        + ":" + listener.get().getPort()
                         + ") (id: " + connection.getId() + ")");
-                client.getPeerConnectionManager().addOrUpdateMessageConnection(record.username(), connection);
-                return client.getSearchResponder().tryRespondAsync(token).thenApply(ignored -> null);
+                peers.get().addOrUpdateMessageConnection(record.username(), connection);
+                return searchResponses.get().tryRespondAsync(token).thenApply(ignored -> null);
             }
         }
 

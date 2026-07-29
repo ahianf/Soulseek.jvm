@@ -125,13 +125,13 @@ class EngineReconfigureTest {
         fixture.client.reconfigureOptions(disable);
 
         assertEquals(1, fixture.initialListener.stopCount);
-        assertNull(fixture.client.getListener());
+        assertNull(fixture.client.listener);
         assertFalse(fixture.client.getOptions().isEnableListener());
 
         Fixture nullFixture = new Fixture(new SoulseekClientOptions(true));
         nullFixture.client.setListenerForTest(null);
         nullFixture.client.reconfigureOptions(disable);
-        assertNull(nullFixture.client.getListener());
+        assertNull(nullFixture.client.listener);
         fixture.close();
         nullFixture.close();
     }
@@ -152,7 +152,7 @@ class EngineReconfigureTest {
         assertEquals(1, preflight.startCount);
         assertEquals(1, preflight.stopCount);
         assertEquals(1, fixture.initialListener.stopCount);
-        assertSame(replacement.proxy, fixture.client.getListener());
+        assertSame(replacement.proxy, fixture.client.listener);
         assertTrue(replacement.listening);
         assertEquals(50_002, replacement.port);
         assertEquals(LOOPBACK, replacement.ipAddress);
@@ -172,7 +172,7 @@ class EngineReconfigureTest {
 
         fixture.client.reconfigureOptions(patch);
 
-        assertNull(fixture.client.getListener());
+        assertNull(fixture.client.listener);
         assertSame(incoming, fixture.client.getOptions().getIncomingConnectionOptions());
         assertEquals(0, fixture.listenerFactory.created.size());
         fixture.close();

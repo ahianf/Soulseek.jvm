@@ -54,7 +54,6 @@ import dev.slsk.internal.network.DefaultListenerHandler;
 import dev.slsk.internal.network.DistributedConnectionManager;
 import dev.slsk.internal.network.DistributedNetwork;
 import dev.slsk.internal.network.ListenerHandler;
-import dev.slsk.internal.network.ListenerHandlerClient;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.PeerConnectionManager;
 import dev.slsk.internal.network.PeerNetwork;
@@ -68,7 +67,6 @@ import dev.slsk.internal.options.SoulseekClientOptionsPatch;
 import dev.slsk.internal.search.DefaultSearchResponder;
 import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.search.SearchResponder;
-import dev.slsk.internal.search.SearchResponderClient;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.spi.ShareCatalog;
 import dev.slsk.spi.UploadPolicy;
@@ -106,9 +104,7 @@ final class SoulseekEngine
                 EngineContext,
                 UploadAdmission.Host,
                 DistributedMessageHandlerClient,
-                ListenerHandlerClient,
                 PeerMessageHandlerClient,
-                SearchResponderClient,
                 ServerMessageHandlerClient {
 
     private static final int MAJOR_VERSION = 170;
@@ -283,8 +279,24 @@ final class SoulseekEngine
                 : downloadTokenBucket;
         this.connectionFactory = connectionFactory == null ? new DefaultConnectionFactory() : connectionFactory;
 
-        this.listenerHandler = listenerHandler == null ? new DefaultListenerHandler(this) : listenerHandler;
-        this.searchResponder = searchResponder == null ? new DefaultSearchResponder(this) : searchResponder;
+        this.listenerHandler = listenerHandler == null
+                ? new DefaultListenerHandler(
+                        this::getOptions,
+                        () -> this.listener,
+                        this::getPeerConnectionManager,
+                        this::getDistributedConnectionManager,
+                        this.waiter,
+                        this::getSearchResponder)
+                : listenerHandler;
+        this.searchResponder = searchResponder == null
+                ? new DefaultSearchResponder(
+                        this::getOptions,
+                        this::getPeerConnectionManager,
+                        this.tokenFactory,
+                        users::getUserEndpoint,
+                        this::getShareCatalog,
+                        server::username)
+                : searchResponder;
         this.peerMessageHandler = peerMessageHandler == null ? new DefaultPeerMessageHandler(this) : peerMessageHandler;
         this.distributedMessageHandler = distributedMessageHandler == null
                 ? new DefaultDistributedMessageHandler(this)
@@ -298,7 +310,7 @@ final class SoulseekEngine
                         server,
                         this.waiter,
                         this.tokenFactory,
-                        () -> this.distributedMessageHandler,
+                        this::getDistributedMessageHandler,
                         null,
                         null,
                         scheduler)
@@ -849,11 +861,6 @@ final class SoulseekEngine
         return server.connection();
     }
 
-    @Override
-    public final Listener getListener() {
-        return listener;
-    }
-
     final ServerMessageHandler getServerMessageHandler() {
         return serverMessageHandler;
     }
@@ -1364,11 +1371,6 @@ final class SoulseekEngine
     /** The periodic endpoint-semaphore sweep; exposed for tests. */
     void cleanupUserEndpointSemaphores() {
         users.cleanupUserEndpointSemaphores();
-    }
-
-    @Override
-    public java.net.InetSocketAddress getUserEndpointOperation(String username, CancellationSignal cancellationSignal) {
-        return users.getUserEndpoint(username, cancellationSignal);
     }
 
     @Override

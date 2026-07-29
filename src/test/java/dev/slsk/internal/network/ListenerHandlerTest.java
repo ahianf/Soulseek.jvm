@@ -20,7 +20,6 @@ import dev.slsk.internal.common.DefaultWaiter;
 import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
-import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
 import dev.slsk.internal.diagnostics.DiagnosticLevel;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
@@ -47,9 +46,11 @@ import org.junit.jupiter.api.Test;
 class ListenerHandlerTest {
     @Test
     void constructorValidatesClientAndDefaultDiagnosticRaisesEvents() throws Exception {
-        assertThrows(NullPointerException.class, () -> new DefaultListenerHandler(null));
+        try (Fixture nulls = fixture(null)) {
+            assertThrows(NullPointerException.class, () -> handler(nulls, null));
+        }
         try (Fixture fixture = fixture(null)) {
-            DefaultListenerHandler handler = new DefaultListenerHandler(fixture.client);
+            DefaultListenerHandler handler = handler(fixture, fixture.options);
             AtomicReference<DiagnosticEvent> event = new AtomicReference<>();
             handler.addDiagnosticGeneratedListener((sender, args) -> event.set(args));
             handler.getDiagnostic().info("test");
@@ -194,10 +195,26 @@ class ListenerHandlerTest {
         DefaultWaiter waiter = new DefaultWaiter();
         SoulseekClientOptions options = options(cache);
         TestListener listener = new TestListener();
-        TestClient client = new TestClient(options, listener, peer.proxy, distributed.proxy, waiter, search.proxy);
         RecordingDiagnostic diagnostic = new RecordingDiagnostic();
-        return new Fixture(
-                client, peer, distributed, search, waiter, diagnostic, new DefaultListenerHandler(client, diagnostic));
+        Fixture fixture = new Fixture(options, listener, peer, distributed, search, waiter, diagnostic, null);
+        return fixture.with(handler(fixture, options, diagnostic));
+    }
+
+    /** Builds a handler over a fixture's probes. */
+    private static DefaultListenerHandler handler(Fixture fixture, SoulseekClientOptions options) {
+        return handler(fixture, options, null);
+    }
+
+    private static DefaultListenerHandler handler(
+            Fixture fixture, SoulseekClientOptions options, RecordingDiagnostic diagnostic) {
+        return new DefaultListenerHandler(
+                options == null ? null : () -> options,
+                fixture::listener,
+                () -> fixture.peer().proxy,
+                () -> fixture.distributed().proxy,
+                fixture.waiter(),
+                () -> fixture.searchResponder().proxy,
+                diagnostic);
     }
 
     private static SoulseekClientOptions options(SearchResponseCache cache) {
@@ -231,7 +248,8 @@ class ListenerHandlerTest {
     }
 
     private record Fixture(
-            TestClient client,
+            SoulseekClientOptions options,
+            Listener listener,
             PeerProbe peer,
             DistributedProbe distributed,
             SearchResponderProbe searchResponder,
@@ -239,48 +257,14 @@ class ListenerHandlerTest {
             RecordingDiagnostic diagnostic,
             DefaultListenerHandler handler)
             implements AutoCloseable {
+
+        private Fixture with(DefaultListenerHandler value) {
+            return new Fixture(options, listener, peer, distributed, searchResponder, waiter, diagnostic, value);
+        }
+
         @Override
         public void close() {
             waiter.close();
-        }
-    }
-
-    private record TestClient(
-            SoulseekClientOptions options,
-            Listener listener,
-            PeerConnectionManager peerConnectionManager,
-            DistributedConnectionManager distributedConnectionManager,
-            DefaultWaiter waiter,
-            SearchResponder searchResponder)
-            implements ListenerHandlerClient {
-        @Override
-        public SoulseekClientOptions getOptions() {
-            return options;
-        }
-
-        @Override
-        public Listener getListener() {
-            return listener;
-        }
-
-        @Override
-        public PeerConnectionManager getPeerConnectionManager() {
-            return peerConnectionManager;
-        }
-
-        @Override
-        public DistributedConnectionManager getDistributedConnectionManager() {
-            return distributedConnectionManager;
-        }
-
-        @Override
-        public Waiter getWaiter() {
-            return waiter;
-        }
-
-        @Override
-        public SearchResponder getSearchResponder() {
-            return searchResponder;
         }
     }
 
