@@ -100,9 +100,17 @@ class DownloadQueueTest {
                     .computeIfAbsent(entry.user(), user -> new AtomicInteger())
                     .accumulateAndGet(mine.incrementAndGet(), Math::max);
             try {
+                // Register the gate first, then re-read `open`. The other order
+                // loses a run outright: this thread reads open == false,
+                // releaseAll() sets it and counts down every gate it can see,
+                // and only then does this thread create its gate — one nothing
+                // will ever open, so the run sits here for the full fifteen
+                // seconds and the download never reaches a terminal state.
+                // Registering first means releaseAll() either sees the gate and
+                // opens it, or set `open` before this re-reads it.
+                CountDownLatch gate = gates.computeIfAbsent(entry.id(), id -> new CountDownLatch(1));
                 if (!open) {
-                    gates.computeIfAbsent(entry.id(), id -> new CountDownLatch(1))
-                            .await(15, TimeUnit.SECONDS);
+                    gate.await(15, TimeUnit.SECONDS);
                 }
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();

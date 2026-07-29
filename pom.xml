@@ -9,7 +9,7 @@
 
   <groupId>dev.slsk</groupId>
   <artifactId>slsk-jvm</artifactId>
-  <version>0.22.1</version>
+  <version>0.22.2</version>
   <name>Soulseek.jvm</name>
   <description>A Java library for the Soulseek network.</description>
   <url>https://github.com/ahianf/Soulseek.jvm</url>
@@ -462,6 +462,22 @@
             <groupId>org.codehaus.mojo</groupId>
             <artifactId>exec-maven-plugin</artifactId>
             <version>${exec.plugin.version}</version>
+            <!--
+              Bound, not just configured. Without an execution the profile
+              compiled the benchmarks and never ran them, so the documented
+              `mvn verify -Pbench` reported BUILD SUCCESS having measured
+              nothing at all, and the numbers only appeared for someone who
+              knew to type `exec:exec` themselves.
+            -->
+            <executions>
+              <execution>
+                <id>run-benchmarks</id>
+                <phase>integration-test</phase>
+                <goals>
+                  <goal>exec</goal>
+                </goals>
+              </execution>
+            </executions>
             <configuration>
               <!--
                 Must be the JVM Maven itself is running on. A bare "java"
