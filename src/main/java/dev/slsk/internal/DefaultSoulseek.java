@@ -172,6 +172,7 @@ public final class DefaultSoulseek implements Soulseek {
             // The queue first: a transfer cancelled by a closing socket looks
             // like a peer failure and would be retried on the way down.
             downloads.close();
+            search.close();
             client.close();
         }
     }

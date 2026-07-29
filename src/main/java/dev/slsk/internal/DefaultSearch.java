@@ -4,7 +4,9 @@
 package dev.slsk.internal;
 
 import dev.slsk.Attachment;
+import dev.slsk.CancellationController;
 import dev.slsk.CancellationSignal;
+import dev.slsk.CancellationSubscription;
 import dev.slsk.EventStream;
 import dev.slsk.FileAttributeType;
 import dev.slsk.FileAttributes;
@@ -22,17 +24,22 @@ import dev.slsk.Username;
 import dev.slsk.events.SearchEvent;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Blocking;
+import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.events.SearchRequestEvent;
 import dev.slsk.internal.events.SearchRequestResponseEvent;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -48,13 +55,37 @@ import java.util.function.Consumer;
  * rejected file never counts toward the response limit. Filtering afterwards
  * would work but would spend the limit on files the consumer was always going to
  * discard.
+ *
+ * <p>Every search gets its own {@link CancellationController}, and the state
+ * keeps it. That is what makes {@link #stop} mean something: without it a search
+ * begun by {@link #start} could be marked cancelled but not actually stopped, and
+ * a caller's own signal could not be told apart from the facet's.
  */
 final class DefaultSearch implements Search {
+
+    /**
+     * How many finished searches are kept.
+     *
+     * <p>A snapshot holds every response it received, so an unbounded registry
+     * is a session-length leak: a client left running for a day retains the full
+     * result list of every search it ever ran. Finished searches are dropped
+     * oldest-first past this many; running ones are never dropped.
+     */
+    static final int RETAINED_FINISHED_SEARCHES = 100;
 
     private final SoulseekEngine client;
     private final SearchCoordinator coordinator;
     private final EventBus<SearchEvent> events;
     private final Map<SearchId, State> searches = new ConcurrentHashMap<>();
+
+    /**
+     * Finished searches, oldest first, for the retention bound.
+     *
+     * <p>Touched only from inside the bus gate, which is where a search reaches
+     * a terminal status, so it needs no lock of its own.
+     */
+    private final Deque<SearchId> finished = new ArrayDeque<>();
+
     private final AtomicLong revisions = new AtomicLong();
 
     DefaultSearch(SoulseekEngine client, EventBus<SearchEvent> events) {
@@ -68,15 +99,28 @@ final class DefaultSearch implements Search {
     private static final class State {
         private final SearchId id;
         private final SearchQuery query;
+        private final int token;
         private final Instant startedAt = Instant.now();
         private final List<SearchResponse> responses = new ArrayList<>();
+
+        /**
+         * Cancels the coordinator operation this search is running as.
+         *
+         * <p>Held rather than derived so that {@code stop} reaches the running
+         * operation. A caller's own signal is chained onto this one rather than
+         * passed down, so there is exactly one thing to cancel however the
+         * search was begun.
+         */
+        private final CancellationController controller = new CancellationController();
+
         private volatile SearchStatus status = SearchStatus.IN_PROGRESS;
         private volatile Instant endedAt;
         private volatile long revision;
 
-        State(SearchId id, SearchQuery query) {
+        State(SearchId id, SearchQuery query, int token) {
             this.id = id;
             this.query = query;
+            this.token = token;
         }
 
         SearchSnapshot snapshot() {
@@ -84,6 +128,16 @@ final class DefaultSearch implements Search {
                 return new SearchSnapshot(
                         id, query, status, startedAt, Optional.ofNullable(endedAt), List.copyOf(responses), revision);
             }
+        }
+
+        SearchResult result() {
+            SearchSnapshot snapshot = snapshot();
+            return new SearchResult(
+                    id,
+                    query,
+                    snapshot.status(),
+                    snapshot.responses(),
+                    Duration.between(snapshot.startedAt(), snapshot.endedAt().orElseGet(Instant::now)));
         }
     }
 
@@ -174,61 +228,137 @@ final class DefaultSearch implements Search {
     @Override
     public SearchId start(SearchQuery query) {
         Objects.requireNonNull(query, "query");
-        return run(query, CancellationSignal.none()).id();
+        State state = begin(query);
+        // Returns the id, not the result: the search runs on a virtual thread of
+        // its own and its responses reach the caller as events. `execute` never
+        // throws, so nothing here can reach the thread's uncaught handler.
+        NetworkExecutor.executor().execute(() -> execute(state));
+        return state.id;
     }
 
     @Override
     public SearchResult await(SearchId id, CancellationSignal signal) {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(signal, "signal");
-        State state = searches.get(id);
-        if (state == null) {
-            throw new IllegalArgumentException("unknown search: " + id);
+        State state = state(id);
+
+        if (!state.status.isTerminal()) {
+            CountDownLatch done = new CountDownLatch(1);
+            try (dev.slsk.Subscription subscription = events.subscribe(SearchEvent.StatusChanged.class, event -> {
+                        if (event.id().equals(id) && event.to().isTerminal()) {
+                            done.countDown();
+                        }
+                    });
+                    // The signal stops the search rather than only the wait, as
+                    // the facet documents; stopping it produces the terminal
+                    // event this is waiting for, so the latch needs no separate
+                    // release.
+                    CancellationSubscription cancelled = signal.register(() -> stop(id))) {
+                // Re-read after subscribing: it may have finished between the
+                // two, and a wait that misses its own event never returns.
+                if (!state.status.isTerminal()) {
+                    waitFor(done);
+                }
+            }
         }
-        SearchSnapshot snapshot = state.snapshot();
-        return new SearchResult(
-                id,
-                snapshot.query(),
-                snapshot.status(),
-                snapshot.responses(),
-                Duration.between(snapshot.startedAt(), snapshot.endedAt().orElseGet(Instant::now)));
+        return state.result();
     }
 
     @Override
     public SearchResult run(SearchQuery query, CancellationSignal signal) {
         Objects.requireNonNull(query, "query");
         Objects.requireNonNull(signal, "signal");
+        State state = begin(query);
+        // Chained rather than passed down, so `stop(id)` and the caller's own
+        // signal cancel the same thing.
+        try (CancellationSubscription linked = signal.register(state.controller::cancel)) {
+            return execute(state);
+        }
+    }
 
+    /** Registers a search and announces it, before anything is sent. */
+    private State begin(SearchQuery query) {
         int token = client.getNextToken();
         SearchId id = SearchId.ofToken(token);
-        State state = new State(id, query);
+        State state = new State(id, query, token);
         searches.put(id, state);
-
         events.publish(
                 new SearchEvent.StatusChanged(id, SearchStatus.IN_PROGRESS, SearchStatus.IN_PROGRESS, Instant.now()));
+        return state;
+    }
 
-        Instant began = Instant.now();
+    /**
+     * Runs a registered search to its terminal status.
+     *
+     * <p>Total by construction: it is the body of a virtual thread in {@link
+     * #start}, and a search that fails is a search that ended, not an error to
+     * propagate.
+     */
+    private SearchResult execute(State state) {
+        SearchQuery query = state.query;
+        CancellationSignal signal = state.controller.getSignal();
         SearchStatus status;
         try {
             Blocking.await(coordinator.search(
                     dev.slsk.internal.SearchQuery.fromText(query.terms()),
                     source -> accept(state, source, query.filters()),
                     scope(query.scope()),
-                    token,
+                    state.token,
                     options(query),
                     signal));
             status = SearchStatus.COMPLETED;
         } catch (RuntimeException exception) {
             status = signal.isCancellationRequested() ? SearchStatus.CANCELLED : SearchStatus.TIMED_OUT;
         }
+        finish(state, status);
+        return state.result();
+    }
 
-        SearchStatus previous = state.status;
-        state.status = status;
-        state.endedAt = Instant.now();
-        events.publish(new SearchEvent.StatusChanged(id, previous, status, Instant.now()));
+    /**
+     * Moves a search to its terminal status, once.
+     *
+     * <p>{@code stop} and the running operation both arrive here — stopping a
+     * search makes its operation fail — so the transition is guarded and the
+     * loser publishes nothing. Retirement happens in the same step, under the
+     * bus gate, so an {@code attach} never sees a snapshot that disagrees with
+     * the event that follows it.
+     */
+    private void finish(State state, SearchStatus status) {
+        events.mutateAndPublish(() -> {
+            if (state.status.isTerminal()) {
+                return null;
+            }
+            SearchStatus previous = state.status;
+            state.status = status;
+            state.endedAt = Instant.now();
+            retire(state.id);
+            return new SearchEvent.StatusChanged(state.id, previous, status, Instant.now());
+        });
+    }
 
-        SearchSnapshot snapshot = state.snapshot();
-        return new SearchResult(id, query, status, snapshot.responses(), Duration.between(began, state.endedAt));
+    /** Drops the oldest finished searches past the retention bound. */
+    private void retire(SearchId id) {
+        finished.addLast(id);
+        while (finished.size() > RETAINED_FINISHED_SEARCHES) {
+            searches.remove(finished.removeFirst());
+        }
+    }
+
+    private State state(SearchId id) {
+        State state = searches.get(id);
+        if (state == null) {
+            throw new IllegalArgumentException("unknown search: " + id);
+        }
+        return state;
+    }
+
+    private static void waitFor(CountDownLatch latch) {
+        try {
+            latch.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new java.util.concurrent.CancellationException("the wait was interrupted");
+        }
     }
 
     /** Records a response and publishes it, keeping the snapshot and stream in step. */
@@ -257,22 +387,17 @@ final class DefaultSearch implements Search {
         if (state == null || state.status.isTerminal()) {
             return;
         }
-        events.mutateAndPublish(() -> {
-            SearchStatus previous = state.status;
-            state.status = SearchStatus.CANCELLED;
-            state.endedAt = Instant.now();
-            return new SearchEvent.StatusChanged(id, previous, SearchStatus.CANCELLED, Instant.now());
-        });
+        // Cancel the operation before flipping the status. The other order
+        // published CANCELLED while the search carried on running, which is
+        // the state a consumer trusts least.
+        state.controller.cancel();
+        finish(state, SearchStatus.CANCELLED);
     }
 
     @Override
     public SearchSnapshot get(SearchId id) {
         Objects.requireNonNull(id, "id");
-        State state = searches.get(id);
-        if (state == null) {
-            throw new IllegalArgumentException("unknown search: " + id);
-        }
-        return state.snapshot();
+        return state(id).snapshot();
     }
 
     @Override
@@ -291,5 +416,19 @@ final class DefaultSearch implements Search {
     @Override
     public Attachment<List<SearchSnapshot>> attach(Consumer<SearchEvent> listener) {
         return events.attach(this::active, listener);
+    }
+
+    /**
+     * Stops everything still running. Called when the client closes.
+     *
+     * <p>{@link #start} is the first thing here that owns a thread, so it is
+     * also the first thing that could outlive the client that owns it.
+     */
+    void close() {
+        for (State state : searches.values()) {
+            if (!state.status.isTerminal()) {
+                stop(state.id);
+            }
+        }
     }
 }

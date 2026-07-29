@@ -22,6 +22,13 @@ import java.util.function.Consumer;
  * <p>Nothing here groups, deduplicates, ranks or sorts. Those are presentation
  * decisions that every application makes differently, and a library that picked
  * one would be wrong for the others and awkward to override.
+ *
+ * <p><strong>Finished searches are kept, but not forever.</strong> A snapshot
+ * holds every response its search received, so the hundred most recently
+ * finished are retained and older ones are dropped; {@link #get} and {@link
+ * #await} then no longer know them. Running searches are never dropped. An
+ * application that wants a longer history keeps the {@link SearchResult} it was
+ * handed, which is immutable and complete.
  */
 public interface Search {
 
