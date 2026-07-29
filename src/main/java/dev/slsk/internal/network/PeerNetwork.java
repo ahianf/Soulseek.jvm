@@ -168,7 +168,12 @@ public final class PeerNetwork implements PeerConnectionManager {
         ConnectionCell superseded = messageConnections.put(username, cell);
 
         try {
-            cell.settle(establishIncomingMessageConnection(username, incomingConnection, superseded));
+            guardOpen(username, cell);
+            MessageConnection established =
+                    establishIncomingMessageConnection(username, incomingConnection, superseded);
+            cell.settle(established);
+            guardOpen(username, cell);
+            evictIfDeadOnArrival(username, cell, established);
         } catch (Throwable failure) {
             Throwable cause = unwrap(failure);
             cell.fail(cause);
@@ -284,6 +289,7 @@ public final class PeerNetwork implements PeerConnectionManager {
         ConnectionCell entry = cached == null ? claim : cached;
 
         try {
+            guardOpen(username, entry);
             if (cached != null) {
                 MessageConnection connection = entry.await();
                 diagnostic.debug("Retrieved cached message connection to "
@@ -295,6 +301,8 @@ public final class PeerNetwork implements PeerConnectionManager {
             }
             MessageConnection connection = establishInboundIndirectMessageConnection(connectToPeerResponse);
             entry.settle(connection);
+            guardOpen(username, entry);
+            evictIfDeadOnArrival(username, entry, connection);
             return connection;
         } catch (Throwable failure) {
             Throwable cause = unwrap(failure);
@@ -343,6 +351,7 @@ public final class PeerNetwork implements PeerConnectionManager {
         ConnectionCell entry = cached == null ? claim : cached;
 
         try {
+            guardOpen(username, entry);
             if (cached != null) {
                 MessageConnection connection = entry.await();
                 diagnostic.debug("Retrieved cached message connection to " + username
@@ -354,6 +363,8 @@ public final class PeerNetwork implements PeerConnectionManager {
             MessageConnection connection =
                     establishRacingMessageConnection(username, ipEndpoint, solicitationToken, cancellationSignal);
             entry.settle(connection);
+            guardOpen(username, entry);
+            evictIfDeadOnArrival(username, entry, connection);
             return connection;
         } catch (Throwable failure) {
             Throwable cause = unwrap(failure);
@@ -837,6 +848,43 @@ public final class PeerNetwork implements PeerConnectionManager {
         connection.addMessageReadListener(peerMessages::handleMessageRead);
         connection.addMessageReceivedListener(peerMessages::handleMessageReceived);
         connection.addMessageWrittenListener(peerMessages::handleMessageWritten);
+    }
+
+    /**
+     * Refuses a cache insertion once the network is closed, undoing the claim
+     * it made.
+     *
+     * <p>{@code removeAndDisposeAll} iterates the map weakly, so a cell put in
+     * racing the sweep — or after it — was never disposed and never removed: a
+     * shutdown-time place-in-queue poll or upload-failure notification could
+     * repopulate the cache of a closed network, which is how a live run's last
+     * cache census read 1 rather than 0.
+     */
+    private void guardOpen(String username, ConnectionCell entry) {
+        if (disposed.get()) {
+            messageConnections.remove(username, entry);
+            entry.closeWhenSettled();
+            throw new CompletionException(new ConnectionException("The peer network is closed"));
+        }
+    }
+
+    /**
+     * Evicts a connection that died before its cell settled.
+     *
+     * <p>The disconnected listener is attached before the cell settles, and it
+     * evicts only when {@code peek()} answers with this connection — which an
+     * unsettled cell cannot. A peer that drops in that window would otherwise
+     * leave a closed connection cached forever, its disconnect event already
+     * spent, handed to every later caller until an inbound reconnect replaces
+     * it.
+     */
+    private void evictIfDeadOnArrival(String username, ConnectionCell entry, MessageConnection connection) {
+        if (connection.getState() != dev.slsk.internal.network.tcp.ConnectionState.CONNECTED
+                && messageConnections.remove(username, entry)) {
+            diagnostic.debug("Removed message connection record for " + username
+                    + "; the connection dropped before its cache entry settled (id: "
+                    + connection.getId() + ")");
+        }
     }
 
     private void messageConnectionDisconnected(Connection sender, ConnectionDisconnectedEvent eventData) {

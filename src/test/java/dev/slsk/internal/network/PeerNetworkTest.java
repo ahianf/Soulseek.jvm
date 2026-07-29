@@ -60,6 +60,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class PeerNetworkTest {
@@ -561,6 +562,30 @@ class PeerNetworkTest {
         fixture.manager().removeAndDisposeAll();
         assertTrue(fixture.manager().getMessageConnections().isEmpty());
         assertEquals(1, third.closeCount);
+    }
+
+    /**
+     * removeAndDisposeAll iterates the map weakly, so an insertion racing the
+     * sweep — or arriving after close() — used to create a cell nothing would
+     * ever dispose. A shutdown-time place-in-queue poll or upload-failure
+     * notification could repopulate the cache of a closed network, which is
+     * how a live run's last cache census read 1 rather than 0.
+     */
+    @Test
+    @DisplayName("a closed network refuses new cache entries instead of leaking them")
+    void aClosedNetworkRefusesNewCacheEntries() {
+        Fixture fixture = new Fixture();
+        fixture.manager().close();
+
+        ConnectionProbe late = ConnectionProbe.message(USERNAME, DIRECT_ENDPOINT);
+        fixture.factory.messageHandoff = late;
+        assertThrows(
+                Exception.class,
+                () -> fixture.manager()
+                        .addOrUpdateMessageConnection(
+                                USERNAME,
+                                ConnectionProbe.connection(DIRECT_ENDPOINT).connection()));
+        assertTrue(fixture.manager().getMessageConnections().isEmpty(), "the closed network's cache must stay empty");
     }
 
     /**
