@@ -3,7 +3,6 @@
 
 package dev.slsk.internal;
 
-import static dev.slsk.internal.TransferEngine.await;
 import static dev.slsk.internal.TransferEngine.determineOutputPosition;
 import static dev.slsk.internal.TransferEngine.filenameOnly;
 import static dev.slsk.internal.TransferEngine.isQueuedResponse;
@@ -39,6 +38,7 @@ import dev.slsk.internal.options.TransferOptions;
 import dev.slsk.internal.options.TransferProgressUpdate;
 import dev.slsk.internal.options.TransferStateChange;
 import dev.slsk.internal.transfer.TransferInternal;
+import dev.slsk.internal.transfer.TransferSettlement;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -46,10 +46,10 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 /**
@@ -83,7 +83,6 @@ final class DownloadOperation {
     private final CancellationSignal cancellationSignal;
     private final String uniqueKey;
     private final AtomicBoolean globalPermit = new AtomicBoolean();
-    private final CompletableFuture<Void> disconnected = new CompletableFuture<>();
     private final WaitKey transferStartRequestedWaitKey;
     private TransferState lastState = TransferState.NONE;
     private InetSocketAddress endpoint;
@@ -278,26 +277,42 @@ final class DownloadOperation {
                         + download.getUsername() + " (id: " + refreshed.getId()
                         + ", state: " + refreshed.getState() + ")");
         // Started before the acceptance is written, because the peer opens the
-        // transfer connection the moment it reads it.
-        CompletableFuture<Connection> connectionTask = NetworkExecutor.supplyAsync(() -> engine.context
-                .getPeerConnectionManager()
-                .awaitTransferConnection(
-                        download.getUsername(), download.getFilename(), download.getRemoteToken(), cancellationSignal));
+        // transfer connection the moment it reads it. A thread of its own is
+        // what "before" means here: the wait has to be in place while the write
+        // happens, and neither can wait for the other.
+        AtomicReference<Connection> incoming = new AtomicReference<>();
+        TransferSettlement established = new TransferSettlement();
+        NetworkExecutor.executor().execute(() -> {
+            try {
+                incoming.set(engine.context
+                        .getPeerConnectionManager()
+                        .awaitTransferConnection(
+                                download.getUsername(),
+                                download.getFilename(),
+                                download.getRemoteToken(),
+                                cancellationSignal));
+                established.succeed();
+            } catch (Throwable failure) {
+                established.fail(failure);
+            }
+        });
         refreshed.write(
                 new TransferResponse(download.getRemoteToken(), download.getSize() == null ? 0 : download.getSize()),
                 CommonUtils.token(cancellationSignal));
-        try {
-            connection = await(connectionTask);
+
+        Throwable failure = established.await();
+        if (failure == null) {
+            connection = incoming.get();
             engine.context
                     .getDiagnostic()
                     .debug("Fetched transfer connection for download of "
                             + filenameOnly(download.getFilename()) + " from "
                             + download.getUsername() + " (id: " + connection.getId()
                             + ", state: " + connection.getState() + ")");
-        } catch (Throwable failure) {
+        } else {
             Throwable cause = Failures.unwrap(failure);
             if (!(cause instanceof ConnectionException)) {
-                throw failure;
+                throw Failures.propagate(failure);
             }
             // The remote client never initiated the transfer connection, so initiate one from
             // this end. The remote client in this scenario is most likely Nicotine+.
@@ -336,10 +351,10 @@ final class DownloadOperation {
         disconnectedListener = (sender, eventData) -> {
             Throwable failure = eventData.getException();
             if (failure instanceof CancellationException || failure instanceof TimeoutException) {
-                disconnected.completeExceptionally(failure);
+                download.settlement().fail(failure);
             } else {
-                disconnected.completeExceptionally(
-                        new ConnectionException("Transfer failed: " + eventData.getMessage(), failure));
+                download.settlement()
+                        .fail(new ConnectionException("Transfer failed: " + eventData.getMessage(), failure));
             }
         };
         connection.addDataReadListener(dataReadListener);
@@ -382,40 +397,49 @@ final class DownloadOperation {
             updateProgress(download.getStartOffset());
 
             // A thread of its own because the read is raced against the
-            // connection dropping and against the peer completing the transfer
-            // out from under it; racing is work blocking code cannot do.
-            CompletableFuture<Void> read = NetworkExecutor.runAsync(() -> connection.read(
-                    download.getSize() - download.getStartOffset(),
-                    trackingStream,
-                    // The bucket is the whole of the metering now. A pluggable
-                    // per-transfer governor sat in front of it and every
-                    // implementation granted everything, which is what the
-                    // bucket already does when the rate is unlimited.
-                    (requestedBytes, governorToken) ->
-                            engine.context.getDownloadTokenBucket().get(requestedBytes, governorToken),
-                    (attemptedBytes, grantedBytes, transferredBytes) -> {
-                        if (transferOptions.getReporter() != null) {
-                            transferOptions
-                                    .getReporter()
-                                    .report(download.toTransfer(), attemptedBytes, grantedBytes, transferredBytes);
-                        }
-                        engine.context.getDownloadTokenBucket().returnTokens(grantedBytes - transferredBytes);
-                    },
-                    linkedToken));
+            // connection dropping and against the peer reporting the transfer
+            // failed on an entirely different connection; racing is work
+            // blocking code cannot do. All three settle the one cell, so the
+            // first to arrive is the answer and the rest are no-ops.
+            TransferSettlement settlement = download.settlement();
+            NetworkExecutor.executor().execute(() -> {
+                try {
+                    connection.read(
+                            download.getSize() - download.getStartOffset(),
+                            trackingStream,
+                            // The bucket is the whole of the metering now. A
+                            // pluggable per-transfer governor sat in front of
+                            // it and every implementation granted everything,
+                            // which is what the bucket already does when the
+                            // rate is unlimited.
+                            (requestedBytes, governorToken) ->
+                                    engine.context.getDownloadTokenBucket().get(requestedBytes, governorToken),
+                            (attemptedBytes, grantedBytes, transferredBytes) -> {
+                                if (transferOptions.getReporter() != null) {
+                                    transferOptions
+                                            .getReporter()
+                                            .report(
+                                                    download.toTransfer(),
+                                                    attemptedBytes,
+                                                    grantedBytes,
+                                                    transferredBytes);
+                                }
+                                engine.context.getDownloadTokenBucket().returnTokens(grantedBytes - transferredBytes);
+                            },
+                            linkedToken);
+                    settlement.succeed();
+                } catch (Throwable failure) {
+                    settlement.fail(failure);
+                }
+            });
 
-            CompletableFuture<Integer> readRace = read.handle((ignored, failure) -> 0);
-            CompletableFuture<Integer> disconnectRace = disconnected.handle((ignored, failure) -> 1);
-            CompletableFuture<Integer> remoteRace =
-                    download.getRemoteTaskCompletionSource().handle((ignored, failure) -> 2);
-            int winner = await(CompletableFuture.anyOf(readRace, disconnectRace, remoteRace)
-                    .thenApply(value -> (Integer) value));
+            Throwable failure = settlement.await();
+            // Whoever lost is still working; stopping it is what the linked
+            // controller is for.
             linkedController.cancel();
-            if (winner == 2) {
-                await(download.getRemoteTaskCompletionSource());
-            } else if (winner == 1) {
-                await(disconnected);
+            if (failure != null) {
+                throw Failures.propagate(failure);
             }
-            await(read);
         }
     }
 

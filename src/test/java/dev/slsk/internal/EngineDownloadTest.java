@@ -526,8 +526,8 @@ class EngineDownloadTest {
             fixture.transfer.readHook = () -> fixture.client
                     .getDownloadRegistry()
                     .get(22)
-                    .getRemoteTaskCompletionSource()
-                    .completeExceptionally(new TransferReportedFailedException("remote failed"));
+                    .settlement()
+                    .fail(new TransferReportedFailedException("remote failed"));
             fixture.transfer.blockRead = true;
             List<Transfer> terminal = new ArrayList<>();
             fixture.client
@@ -558,11 +558,8 @@ class EngineDownloadTest {
         try (Fixture fixture = new Fixture()) {
             fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(31, 1));
             TransferRejectedException rejection = new TransferRejectedException("download denied");
-            fixture.transfer.readHook = () -> fixture.client
-                    .getDownloadRegistry()
-                    .get(31)
-                    .getRemoteTaskCompletionSource()
-                    .completeExceptionally(rejection);
+            fixture.transfer.readHook = () ->
+                    fixture.client.getDownloadRegistry().get(31).settlement().fail(rejection);
             fixture.transfer.blockRead = true;
             List<Transfer> terminal = new ArrayList<>();
             fixture.client

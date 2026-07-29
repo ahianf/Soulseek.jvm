@@ -201,8 +201,8 @@ class EngineTest {
                         (dev.slsk.internal.events.DownloadFailedEvent eventData) -> failed.set(eventData));
 
         fixture.peer.raiseDenied(new DownloadDeniedEvent("user", "file", "rejected"));
-        assertInstanceOf(TransferRejectedException.class, failure(first.getRemoteTaskCompletionSource()::join));
-        assertInstanceOf(TransferRejectedException.class, failure(second.getRemoteTaskCompletionSource()::join));
+        assertInstanceOf(TransferRejectedException.class, first.settlement().failure());
+        assertInstanceOf(TransferRejectedException.class, second.settlement().failure());
         assertEquals("rejected", denied.get().getMessage());
 
         first = new TransferInternal(TransferDirection.DOWNLOAD, "user", "file", 3);
@@ -211,8 +211,10 @@ class EngineTest {
                 3, first,
                 4, second)));
         fixture.peer.raiseFailed(new DownloadFailedEvent("user", "file"));
-        assertInstanceOf(TransferReportedFailedException.class, failure(first.getRemoteTaskCompletionSource()::join));
-        assertInstanceOf(TransferReportedFailedException.class, failure(second.getRemoteTaskCompletionSource()::join));
+        assertInstanceOf(
+                TransferReportedFailedException.class, first.settlement().failure());
+        assertInstanceOf(
+                TransferReportedFailedException.class, second.settlement().failure());
         assertEquals("file", failed.get().getFilename());
         fixture.close();
     }

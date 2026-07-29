@@ -1025,8 +1025,7 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
                             && Objects.equals(download.getFilename(), eventData.getFilename()))
                     .toList();
             for (TransferInternal download : matching) {
-                download.getRemoteTaskCompletionSource()
-                        .completeExceptionally(new TransferRejectedException(eventData.getMessage()));
+                download.settlement().fail(new TransferRejectedException(eventData.getMessage()));
                 diagnostic.debug("Download of " + download.getFilename() + " from "
                         + download.getUsername()
                         + " rejected by remote client (token: "
@@ -1046,9 +1045,8 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
                             && Objects.equals(download.getFilename(), eventData.getFilename()))
                     .toList();
             for (TransferInternal download : matching) {
-                download.getRemoteTaskCompletionSource()
-                        .completeExceptionally(
-                                new TransferReportedFailedException("Download reported as failed by remote client"));
+                download.settlement()
+                        .fail(new TransferReportedFailedException("Download reported as failed by remote client"));
                 diagnostic.debug("Download of " + download.getFilename() + " from "
                         + download.getUsername()
                         + " reported as failed by remote client (token: "

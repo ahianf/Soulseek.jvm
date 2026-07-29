@@ -16,7 +16,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 
 /** The mutable internal state of a single file transfer. */
 public final class TransferInternal {
@@ -35,7 +34,7 @@ public final class TransferInternal {
     private final TransferOptions options;
     private final int progressUpdateLimit;
     private Integer remoteToken;
-    private final CompletableFuture<Boolean> remoteTaskCompletionSource = new CompletableFuture<>();
+    private final TransferSettlement settlement = new TransferSettlement();
     private Long size;
     private boolean speedInitialized;
     private long startOffset;
@@ -159,9 +158,18 @@ public final class TransferInternal {
         remoteToken = value;
     }
 
-    /** Returns the remote-disposition completion future. */
-    public CompletableFuture<Boolean> getRemoteTaskCompletionSource() {
-        return remoteTaskCompletionSource;
+    /**
+     * Returns how this transfer ended, or the cell that will say so.
+     *
+     * <p>Settled by whichever of the three racing parties gets there first: the
+     * transfer's own thread when the bytes stop moving, the connection's
+     * disconnect callback, or a peer read loop delivering {@code UploadFailed}
+     * or {@code UploadDenied}. See {@link TransferSettlement}.
+     *
+     * @return the settlement, never {@code null}
+     */
+    public TransferSettlement settlement() {
+        return settlement;
     }
 
     /** Returns the nullable transfer size. */

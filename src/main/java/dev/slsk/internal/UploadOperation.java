@@ -3,7 +3,6 @@
 
 package dev.slsk.internal;
 
-import static dev.slsk.internal.TransferEngine.await;
 import static dev.slsk.internal.TransferEngine.determinePosition;
 import static dev.slsk.internal.TransferEngine.filenameOnly;
 import static dev.slsk.internal.TransferEngine.seekInputStream;
@@ -41,6 +40,7 @@ import dev.slsk.internal.options.TransferOptions;
 import dev.slsk.internal.options.TransferProgressUpdate;
 import dev.slsk.internal.options.TransferStateChange;
 import dev.slsk.internal.transfer.TransferInternal;
+import dev.slsk.internal.transfer.TransferSettlement;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
@@ -48,7 +48,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -76,7 +75,6 @@ final class UploadOperation {
     private final AtomicBoolean perUserPermit = new AtomicBoolean();
     private final AtomicBoolean slot = new AtomicBoolean();
     private final AtomicBoolean globalPermit = new AtomicBoolean();
-    private final CompletableFuture<Void> disconnected = new CompletableFuture<>();
     private TransferState lastState = TransferState.NONE;
     private Semaphore perUserSemaphore;
     private InetSocketAddress endpoint;
@@ -258,10 +256,10 @@ final class UploadOperation {
         disconnectedListener = (sender, eventData) -> {
             Throwable failure = eventData.getException();
             if (failure instanceof CancellationException || failure instanceof TimeoutException) {
-                disconnected.completeExceptionally(failure);
+                upload.settlement().fail(failure);
             } else {
-                disconnected.completeExceptionally(
-                        new ConnectionException("Transfer failed: " + eventData.getMessage(), failure));
+                upload.settlement()
+                        .fail(new ConnectionException("Transfer failed: " + eventData.getMessage(), failure));
             }
         };
         connection.addDataWrittenListener(dataWrittenListener);
@@ -310,32 +308,56 @@ final class UploadOperation {
 
     private void writeAndAwaitDisconnectRace() {
         long remaining = upload.getSize() - upload.getStartOffset();
-        // A thread of its own because the write is raced against the connection
-        // dropping; racing is work blocking code cannot do.
-        CompletableFuture<Void> write = remaining == 0
-                ? CompletableFuture.completedFuture(null)
-                : NetworkExecutor.runAsync(() -> connection.write(
-                        remaining,
-                        trackingStream,
-                        (requestedBytes, governorToken) ->
-                                engine.context.getUploadTokenBucket().get(requestedBytes, cancellationSignal),
-                        (attemptedBytes, grantedBytes, transferredBytes) -> {
-                            if (transferOptions.getReporter() != null) {
-                                transferOptions
-                                        .getReporter()
-                                        .report(upload.toTransfer(), attemptedBytes, grantedBytes, transferredBytes);
-                            }
-                            engine.context.getUploadTokenBucket().returnTokens(grantedBytes - transferredBytes);
-                        },
-                        cancellationSignal));
-        CompletableFuture<Object> first = CompletableFuture.anyOf(write, disconnected);
-        await(first);
-        if (disconnected.isCompletedExceptionally() && !write.isDone()) {
-            await(disconnected);
+        TransferSettlement settlement = upload.settlement();
+        if (remaining == 0) {
+            // Nothing to send, so nothing to race: the peer is re-requesting a
+            // file it already has all of.
+            settlement.succeed();
+        } else {
+            // A thread of its own because the write is raced against the
+            // connection dropping; racing is work blocking code cannot do. Both
+            // settle the one cell, so the first to arrive is the answer.
+            NetworkExecutor.executor().execute(() -> {
+                try {
+                    connection.write(
+                            remaining,
+                            trackingStream,
+                            (requestedBytes, governorToken) ->
+                                    engine.context.getUploadTokenBucket().get(requestedBytes, cancellationSignal),
+                            (attemptedBytes, grantedBytes, transferredBytes) -> {
+                                if (transferOptions.getReporter() != null) {
+                                    transferOptions
+                                            .getReporter()
+                                            .report(
+                                                    upload.toTransfer(),
+                                                    attemptedBytes,
+                                                    grantedBytes,
+                                                    transferredBytes);
+                                }
+                                engine.context.getUploadTokenBucket().returnTokens(grantedBytes - transferredBytes);
+                            },
+                            cancellationSignal);
+                    settlement.succeed();
+                } catch (Throwable failure) {
+                    settlement.fail(failure);
+                }
+            });
         }
-        await(write);
+
+        Throwable failure = settlement.await();
+        if (failure != null) {
+            throw Failures.propagate(failure);
+        }
     }
 
+    /**
+     * Waits for the receiving end to hang up, and hangs up first if it will not.
+     *
+     * <p>Ideally the receiver disconnects, because that is how we know it got
+     * everything. Reading encourages it to — Soulseek NS and Qt oblige promptly,
+     * Nicotine+ takes its time — so this reads until the peer goes away or the
+     * linger budget lapses.
+     */
     private void linger() {
         long deadline =
                 System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(Math.max(0, transferOptions.getMaximumLingerTime()));
@@ -347,24 +369,31 @@ final class UploadOperation {
                     return;
                 }
                 long remainingMillis = Math.max(1, TimeUnit.NANOSECONDS.toMillis(remainingNanos));
-                try {
-                    // Dispatched so the linger budget can lapse while the read
-                    // is still parked: a peer that says nothing is the ordinary
-                    // case here, and giving up on it is the point.
-                    await(NetworkExecutor.supplyAsync(() -> connection.read(1, cancellationSignal))
-                            .orTimeout(remainingMillis, TimeUnit.MILLISECONDS));
-                } catch (Throwable failure) {
-                    Throwable cause = Failures.unwrap(failure);
-                    if (cause instanceof TimeoutException) {
-                        connection.disconnect("Transfer complete, maximum " + "linger time exceeded");
-                        return;
+                // On a thread of its own so the budget can lapse while the read
+                // is still parked: a peer that says nothing is the ordinary case
+                // here, and giving up on it is the point.
+                TransferSettlement read = new TransferSettlement();
+                NetworkExecutor.executor().execute(() -> {
+                    try {
+                        connection.read(1, cancellationSignal);
+                        read.succeed();
+                    } catch (Throwable failure) {
+                        read.fail(failure);
                     }
-                    throw failure;
+                });
+                if (!read.await(remainingMillis)) {
+                    connection.disconnect("Transfer complete, maximum " + "linger time exceeded");
+                    return;
                 }
-                await(CompletableFuture.runAsync(
-                        () -> {}, CompletableFuture.delayedExecutor(100, TimeUnit.MILLISECONDS)));
+                Throwable failure = read.failure();
+                if (failure != null) {
+                    throw Failures.propagate(failure);
+                }
+                Thread.sleep(100);
             }
             cancellationSignal.throwIfCancellationRequested();
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
         } catch (Throwable failure) {
             if (!(Failures.unwrap(failure) instanceof ConnectionReadException)) {
                 throw failure;
