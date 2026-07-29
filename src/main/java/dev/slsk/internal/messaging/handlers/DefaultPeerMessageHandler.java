@@ -187,7 +187,17 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
      */
     @Override
     public void handleMessageRead(MessageConnection connection, byte[] message) {
-        MessageCode.Peer code = new MessageReader<>(message, MessageCode.Peer.class).readCode();
+        MessageCode.Peer code;
+        try {
+            code = new MessageReader<>(message, MessageCode.Peer.class).readCode();
+        } catch (IllegalArgumentException unknown) {
+            // A newer peer client's message, not a broken connection. C#
+            // parses tolerantly and ignores it in the switch default; throwing
+            // here killed this peer's read loop.
+            diagnostic.debug(
+                    "Ignored an unknown peer message from " + connection.getUsername() + ": " + unknown.getMessage());
+            return;
+        }
         diagnostic.debug("Peer message received: " + code + " from "
                 + connection.getUsername() + " ("
                 + connection.getIpEndpoint() + ") (id: "
@@ -278,9 +288,16 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
 
     @Override
     public void handleMessageReceived(MessageConnection connection, MessageReceivedEvent eventData) {
-        MessageCode.Peer code = MessageCode.Peer.fromValue(ByteBuffer.wrap(eventData.getCode())
-                .order(ByteOrder.LITTLE_ENDIAN)
-                .getInt());
+        MessageCode.Peer code;
+        try {
+            code = MessageCode.Peer.fromValue(ByteBuffer.wrap(eventData.getCode())
+                    .order(ByteOrder.LITTLE_ENDIAN)
+                    .getInt());
+        } catch (IllegalArgumentException unknown) {
+            diagnostic.debug(
+                    "Ignored an unknown peer message from " + connection.getUsername() + ": " + unknown.getMessage());
+            return;
+        }
         try {
             if (code == MessageCode.Peer.BROWSE_RESPONSE) {
                 waiter.complete(

@@ -99,7 +99,15 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
 
     @Override
     public void handleChildMessageRead(MessageConnection connection, byte[] message) {
-        MessageCode.Distributed code = new MessageReader<>(message, MessageCode.Distributed.class).readCode();
+        MessageCode.Distributed code;
+        try {
+            code = new MessageReader<>(message, MessageCode.Distributed.class).readCode();
+        } catch (IllegalArgumentException unknown) {
+            // A newer client's message, not a broken connection; C# ignores it.
+            diagnostic.debug("Ignored an unknown distributed child message from " + connection.getUsername() + ": "
+                    + unknown.getMessage());
+            return;
+        }
         if (code != MessageCode.Distributed.PING) {
             diagnostic.debug("Distributed child message received: " + code + " from "
                     + connection.getUsername() + " ("
@@ -149,7 +157,17 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
 
     @Override
     public void handleMessageRead(MessageConnection connection, byte[] message) {
-        MessageCode.Distributed code = new MessageReader<>(message, MessageCode.Distributed.class).readCode();
+        MessageCode.Distributed code;
+        try {
+            code = new MessageReader<>(message, MessageCode.Distributed.class).readCode();
+        } catch (IllegalArgumentException unknown) {
+            // A newer client's message, not a broken connection; C# ignores
+            // it, and this is the parent's read loop — every inbound search
+            // travels on it.
+            diagnostic.debug("Ignored an unknown distributed message from " + connection.getUsername() + ": "
+                    + unknown.getMessage());
+            return;
+        }
         if (code != MessageCode.Distributed.SEARCH_REQUEST
                 && code != MessageCode.Distributed.EMBEDDED_MESSAGE
                 && code != MessageCode.Distributed.PING) {

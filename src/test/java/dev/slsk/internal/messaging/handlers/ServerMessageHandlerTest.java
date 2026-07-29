@@ -745,6 +745,28 @@ class ServerMessageHandlerTest {
         return result;
     }
 
+    /**
+     * A frame whose code is outside the table is a protocol addition or a
+     * newer client, and the C# source ignores it in the switch default. It
+     * used to throw out of the prologue, before the try — and for the server
+     * connection, killing the read loop kills the whole client.
+     */
+    @Test
+    void anUnknownMessageCodeIsIgnoredNotFatal() {
+        Fixture fixture = new Fixture(options(false, false));
+
+        fixture.handle(java.nio.ByteBuffer.allocate(8)
+                .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                .putInt(4)
+                .putInt(0x7FFF_FFF0)
+                .array());
+
+        // The connection is still being served: a known message right behind
+        // the unknown one is handled normally.
+        fixture.handle(new MessageBuilder().writeCode(MessageCode.Server.PING).build());
+        assertTrue(fixture.waiter.completed.containsKey(new WaitKey(MessageCode.Server.PING)));
+    }
+
     private static final class Fixture {
         private final RecordingDiagnostic diagnostic = new RecordingDiagnostic();
         private final RecordingWaiter waiter = new RecordingWaiter();
