@@ -63,7 +63,9 @@ import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -236,24 +238,46 @@ class EngineUploadTest {
         }
     }
 
+    /**
+     * Replaces {@code enqueueReturnsAfterLocalQueueingBeforeSlotAcquisition},
+     * deleted with the {@code enqueue*} overloads under D14.
+     *
+     * <p>That test had already stopped asserting what it was named for: the
+     * pluggable slot awaiter it gated on went when the upload policy became the
+     * only slot gate, and the future it completed was read by nothing. What is
+     * left of it, and what still matters, is that an upload is in the registry
+     * for the whole of its flight and out of it afterwards — which is what an
+     * inbound peer message is dispatched against.
+     */
     @Test
-    void enqueueReturnsAfterLocalQueueingBeforeSlotAcquisition() {
+    void anUploadIsInTheRegistryForTheWholeOfItsFlight() throws InterruptedException {
         try (Fixture fixture = new Fixture()) {
-            CompletableFuture<Void> slot = new CompletableFuture<>();
-            TransferOptions options = options(20, null, null, null);
+            CountDownLatch requested = new CountDownLatch(1);
+            fixture.waiter.transferResponse = new CompletableFuture<>();
+            TransferOptions options = options(
+                    20,
+                    null,
+                    change -> {
+                        if (change.transfer().getState().contains(TransferState.REQUESTED)) {
+                            requested.countDown();
+                        }
+                    },
+                    null);
 
-            TransferHandle upload = new TransferHandle(Outcomes.await(fixture.client
+            CompletableFuture<Transfer> upload = inBackground(() -> fixture.client
                     .transfers()
-                    .enqueueUpload(
-                            UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
-                                    .token(12)
-                                    .options(options)
-                                    .build())));
+                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+                            .token(12)
+                            .options(options)
+                            .build()));
 
-            assertFalse(upload.isDone());
+            assertTrue(requested.await(5, TimeUnit.SECONDS));
             assertTrue(fixture.client.getUploadRegistry().containsKey(12));
-            slot.complete(null);
-            assertTrue(upload.await().getState().contains(TransferState.SUCCEEDED));
+            assertFalse(upload.isDone());
+
+            fixture.waiter.transferResponse.complete(new TransferResponse(12));
+            assertTrue(upload.join().getState().contains(TransferState.SUCCEEDED));
+            assertFalse(fixture.client.getUploadRegistry().containsKey(12));
         }
     }
 

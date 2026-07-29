@@ -61,6 +61,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
@@ -362,57 +363,59 @@ class EngineDownloadTest {
         }
     }
 
+    /**
+     * Replaces {@code enqueueReturnsOnRemoteQueueBeforePeerStartsTransfer},
+     * deleted with the {@code enqueue*} overloads under D14.
+     *
+     * <p>What that test observed was not enqueueing: it was that a download the
+     * peer has queued sits there until the peer says it is ready, and that the
+     * peer's own transfer request is the only thing that moves it. The
+     * two-phase return the {@code enqueue*} shape existed to express is now the
+     * caller's choice of thread, so the assertion is made from a caller who
+     * made it.
+     */
     @Test
-    void enqueueReturnsOnRemoteQueueBeforePeerStartsTransfer() {
+    void aRemotelyQueuedDownloadWaitsForThePeerToStartTheTransfer() {
         try (Fixture fixture = new Fixture()) {
             fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(16, "Queued"));
             fixture.waiter.startRequest = new CompletableFuture<>();
 
-            TransferHandle download = new TransferHandle(Outcomes.await(fixture.client
+            CompletableFuture<Transfer> download = inBackground(() -> fixture.client
                     .transfers()
-                    .enqueueDownload(DownloadRequest.toStream("alice", "file", outputFactory())
+                    .download(DownloadRequest.toStream("alice", "file", outputFactory())
                             .token(16)
                             .options(options())
-                            .build())));
+                            .build()));
 
-            assertFalse(download.isDone());
+            assertThrows(
+                    TimeoutException.class,
+                    () -> download.get(250, TimeUnit.MILLISECONDS),
+                    "a remotely queued download must not finish before the peer starts the transfer");
             fixture.transfer.data = new byte[] {1, 2};
             fixture.waiter.startRequest.complete(new TransferRequest(TransferDirection.UPLOAD, 101, "file", 2));
-            assertTrue(download.await().getState().contains(TransferState.SUCCEEDED));
+            assertTrue(download.join().getState().contains(TransferState.SUCCEEDED));
         }
     }
 
+    /**
+     * Replaces {@code enqueuePropagatesFailureBeforeRemoteQueueing}, deleted
+     * with the {@code enqueue*} overloads under D14. The surviving behaviour is
+     * that a peer's refusal reaches the caller as the instance the peer layer
+     * recorded, with nothing between them to rewrap it.
+     */
     @Test
-    void enqueueReturnsCompletedDownloadWhenPeerAcceptsImmediately() {
-        try (Fixture fixture = new Fixture()) {
-            fixture.transfer.data = new byte[] {1, 2};
-            fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(17, 2));
-
-            TransferHandle download = new TransferHandle(Outcomes.await(fixture.client
-                    .transfers()
-                    .enqueueDownload(DownloadRequest.toStream("alice", "file", outputFactory())
-                            .size(2L)
-                            .token(17)
-                            .options(options())
-                            .build())));
-
-            assertTrue(download.await().getState().contains(TransferState.SUCCEEDED));
-        }
-    }
-
-    @Test
-    void enqueuePropagatesFailureBeforeRemoteQueueing() {
+    void aRefusalBeforeRemoteQueueingReachesTheCallerUnchanged() {
         try (Fixture fixture = new Fixture()) {
             TransferRejectedException rejection = new TransferRejectedException("rejected");
             fixture.waiter.response = CompletableFuture.failedFuture(rejection);
 
-            Throwable failure = failureOf(() -> new TransferHandle(Outcomes.await(fixture.client
+            Throwable failure = failureOf(() -> fixture.client
                     .transfers()
-                    .enqueueDownload(DownloadRequest.toStream("alice", "file", outputFactory())
+                    .download(DownloadRequest.toStream("alice", "file", outputFactory())
                             .size(1L)
                             .token(17)
                             .options(options())
-                            .build()))));
+                            .build()));
 
             assertSame(rejection, failure);
         }
