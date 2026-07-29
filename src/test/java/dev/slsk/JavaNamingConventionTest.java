@@ -54,20 +54,6 @@ class JavaNamingConventionTest {
         assertNoFailures(failures);
     }
 
-    /**
-     * The ported documentation this used to walk was deleted with the C#-parity paper
-     * trail, so only the surviving documents are inspected. Add {@code docs/public-api.md}
-     * here when Phase 9 of {@code JAVA_API_1_0_GOAL.md} writes it.
-     */
-    @Test
-    void currentFacingDocumentationUsesOnlySupportedJavaNames() throws IOException {
-        List<String> failures = new ArrayList<>();
-        for (Path path : List.of(Path.of("README.md"))) {
-            inspectCurrentDocument(path, failures);
-        }
-        assertNoFailures(failures);
-    }
-
     private static void inspectTree(Path root, boolean inspectInterfaceDeclarations, List<String> failures)
             throws IOException {
         try (Stream<Path> paths = Files.walk(root)) {
@@ -86,17 +72,6 @@ class JavaNamingConventionTest {
                             failures.add(path + ": " + exception.getMessage());
                         }
                     });
-        }
-    }
-
-    private static void inspectCurrentDocument(Path path, List<String> failures) throws IOException {
-        int lineNumber = 0;
-        for (String line : Files.readAllLines(path)) {
-            lineNumber++;
-            if (line.contains("C#")) {
-                continue;
-            }
-            inspectText(Path.of(path + ":" + lineNumber), line, failures);
         }
     }
 

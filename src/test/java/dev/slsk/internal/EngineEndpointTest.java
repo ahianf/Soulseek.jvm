@@ -33,9 +33,12 @@ import java.net.InetSocketAddress;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
+@Timeout(value = 10, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
 class EngineEndpointTest {
     private static final InetSocketAddress ENDPOINT = new InetSocketAddress(InetAddress.getLoopbackAddress(), 46001);
 
@@ -111,8 +114,8 @@ class EngineEndpointTest {
         Fixture fixture = new Fixture(cache);
 
         assertEquals(ENDPOINT, fixture.client.users().getUserEndpoint("alice"));
-        assertEquals(0, fixture.connection.writes);
-        assertEquals(0, fixture.waiter.registrations);
+        assertEquals(0, fixture.connection.writes.get());
+        assertEquals(0, fixture.waiter.registrations.get());
 
         cache.value = CacheLookupResult.notFound();
         InetSocketAddress second = new InetSocketAddress(InetAddress.getLoopbackAddress(), 46002);
@@ -169,9 +172,9 @@ class EngineEndpointTest {
 
         // Both callers run on their own threads; wait for the write as well as
         // the registration before asserting on either.
-        awaitValue(() -> fixture.waiter.registrations == 2 && fixture.connection.writes == 2);
-        assertEquals(2, fixture.connection.writes);
-        assertEquals(2, fixture.waiter.registrations);
+        awaitValue(() -> fixture.waiter.registrations.get() == 2 && fixture.connection.writes.get() == 2);
+        assertEquals(2, fixture.connection.writes.get());
+        assertEquals(2, fixture.waiter.registrations.get());
 
         response.complete(new UserAddressResponse("alice", ENDPOINT));
         join(firstCaller);
@@ -189,12 +192,12 @@ class EngineEndpointTest {
         fixture.waiter.result = CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT));
 
         assertEquals(ENDPOINT, fixture.client.users().getUserEndpoint("alice"));
-        assertEquals(1, fixture.connection.writes);
+        assertEquals(1, fixture.connection.writes.get());
 
         // The second caller reads the value the first stored rather than repeating the request.
         cache.value = CacheLookupResult.found(ENDPOINT);
         assertEquals(ENDPOINT, fixture.client.users().getUserEndpoint("alice"));
-        assertEquals(1, fixture.connection.writes);
+        assertEquals(1, fixture.connection.writes.get());
 
         // The idle per-user semaphore is reclaimed, matching the source's periodic sweep.
         fixture.client.cleanupUserEndpointSemaphores();
@@ -220,7 +223,7 @@ class EngineEndpointTest {
         Thread secondCaller = Thread.ofVirtual()
                 .start(() -> second.set(fixture.client.users().getUserEndpoint("alice", CancellationSignal.none())));
 
-        awaitValue(() -> fixture.waiter.registrations == 2);
+        awaitValue(() -> fixture.waiter.registrations.get() == 2);
         firstSource.cancel();
         response.complete(new UserAddressResponse("alice", ENDPOINT));
 
@@ -234,7 +237,12 @@ class EngineEndpointTest {
     private static void awaitValue(java.util.function.BooleanSupplier condition) {
         long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
         while (!condition.getAsBoolean() && System.nanoTime() < deadline) {
-            Thread.onSpinWait();
+            try {
+                Thread.sleep(1);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("interrupted while awaiting a condition", interrupted);
+            }
         }
     }
 
@@ -350,9 +358,9 @@ class EngineEndpointTest {
     }
 
     private static final class ConnectionProbe {
-        private OutgoingMessage message;
-        private CancellationSignal token;
-        private int writes;
+        private volatile OutgoingMessage message;
+        private volatile CancellationSignal token;
+        private final AtomicInteger writes = new AtomicInteger();
         private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
@@ -360,7 +368,7 @@ class EngineEndpointTest {
             if (method.getName().equals("write")
                     && arguments.length == 2
                     && arguments[0] instanceof OutgoingMessage outgoing) {
-                writes++;
+                writes.incrementAndGet();
                 message = outgoing;
                 token = (CancellationSignal) arguments[1];
                 return null;
@@ -370,10 +378,10 @@ class EngineEndpointTest {
     }
 
     private static final class WaiterProbe {
-        private WaitKey key;
-        private Class<?> resultType;
-        private CancellationSignal token;
-        private int registrations;
+        private volatile WaitKey key;
+        private volatile Class<?> resultType;
+        private volatile CancellationSignal token;
+        private final AtomicInteger registrations = new AtomicInteger();
         private CompletableFuture<UserAddressResponse> result = new CompletableFuture<>();
         private Throwable synchronousFailure;
         private final Waiter proxy = (Waiter)
@@ -381,7 +389,7 @@ class EngineEndpointTest {
 
         private Object invoke(Object ignored, Method method, Object[] arguments) throws Throwable {
             if (method.getName().equals("register") && arguments.length == 4) {
-                registrations++;
+                registrations.incrementAndGet();
                 key = (WaitKey) arguments[0];
                 resultType = (Class<?>) arguments[1];
                 token = (CancellationSignal) arguments[3];

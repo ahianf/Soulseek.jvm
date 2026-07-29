@@ -188,6 +188,10 @@ class DefaultSearchTest {
             fixture.waitUntil(() -> !fixture.server.messages.isEmpty());
             fixture.search.stop(id);
             fixture.search.stop(id);
+            // The first terminal event arrives asynchronously on the delivery
+            // thread; wait for it deterministically before opening the window
+            // in which a duplicate would have to show up.
+            fixture.waitUntil(() -> !terminal.isEmpty());
             // The operation this stopped also finishes, and must not publish a
             // second terminal event for the same search.
             sleep(200);

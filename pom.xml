@@ -9,7 +9,7 @@
 
   <groupId>dev.slsk</groupId>
   <artifactId>slsk-jvm</artifactId>
-  <version>0.25.1</version>
+  <version>0.25.2</version>
   <name>Soulseek.jvm</name>
   <description>A Java library for the Soulseek network.</description>
   <url>https://github.com/ahianf/Soulseek.jvm</url>
@@ -78,6 +78,26 @@
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-engine</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!--
+      Test-scoped only, so the soak and JMH trees compile in the default build.
+      Neither src/soakTest nor src/jmh used to be compiled by `mvn verify`, and
+      both went stale against deleted internals twice — a phase boundary is
+      verified by -Psoak and -Pbench, so a break in them was invisible until
+      exactly the moment it mattered. The enforcer's bannedDependencies rule
+      keeps these out of the shipped artifact.
+    -->
+    <dependency>
+      <groupId>org.openjdk.jmh</groupId>
+      <artifactId>jmh-core</artifactId>
+      <version>${jmh.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.openjdk.jmh</groupId>
+      <artifactId>jmh-generator-annprocess</artifactId>
+      <version>${jmh.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -158,6 +178,57 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <version>${maven.compiler.version}</version>
+        <executions>
+          <!--
+            The soak probes read the platform MXBeans. Test sources are patched
+            into dev.slsk.soulseek, which does not (and must not) require
+            java.management, so the reads edge is added for test compilation
+            only. Surefire and failsafe run with useModulePath=false, so this
+            affects compilation alone.
+          -->
+          <execution>
+            <id>default-testCompile</id>
+            <goals>
+              <goal>testCompile</goal>
+            </goals>
+            <configuration>
+              <compilerArgs>
+                <arg>--add-modules</arg>
+                <arg>java.management,jdk.management</arg>
+                <arg>--add-reads</arg>
+                <arg>dev.slsk.soulseek=java.management,jdk.management</arg>
+              </compilerArgs>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!--
+        Compiles (never runs) the soak and JMH trees in every build. Surefire's
+        default includes match none of their class names, and JMH's annotation
+        processor does not fire without the explicit processor path the bench
+        profile declares, so the default build gains staleness detection and
+        nothing else.
+      -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <version>${build.helper.version}</version>
+        <executions>
+          <execution>
+            <id>add-soak-and-jmh-sources</id>
+            <phase>generate-test-sources</phase>
+            <goals>
+              <goal>add-test-source</goal>
+            </goals>
+            <configuration>
+              <sources>
+                <source>src/soakTest/java</source>
+                <source>src/jmh/java</source>
+              </sources>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
 
       <plugin>
@@ -298,55 +369,6 @@
       <id>soak</id>
       <build>
         <plugins>
-          <!--
-            The harness measures threads, heap and CPU through the platform
-            MXBeans. Test sources are patched into dev.slsk.soulseek, which
-            does not (and must not) require java.management, so the reads edge
-            is added for test compilation only. Failsafe already runs with
-            useModulePath=false, so this affects compilation alone.
-          -->
-          <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-compiler-plugin</artifactId>
-            <version>${maven.compiler.version}</version>
-            <executions>
-              <execution>
-                <id>default-testCompile</id>
-                <goals>
-                  <goal>testCompile</goal>
-                </goals>
-                <configuration>
-                  <compilerArgs>
-                    <arg>--add-modules</arg>
-                    <arg>java.management,jdk.management</arg>
-                    <arg>--add-reads</arg>
-                    <arg>dev.slsk.soulseek=java.management,jdk.management</arg>
-                  </compilerArgs>
-                </configuration>
-              </execution>
-            </executions>
-          </plugin>
-
-          <plugin>
-            <groupId>org.codehaus.mojo</groupId>
-            <artifactId>build-helper-maven-plugin</artifactId>
-            <version>${build.helper.version}</version>
-            <executions>
-              <execution>
-                <id>add-soak-test-source</id>
-                <phase>generate-test-sources</phase>
-                <goals>
-                  <goal>add-test-source</goal>
-                </goals>
-                <configuration>
-                  <sources>
-                    <source>src/soakTest/java</source>
-                  </sources>
-                </configuration>
-              </execution>
-            </executions>
-          </plugin>
-
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-failsafe-plugin</artifactId>
@@ -375,24 +397,10 @@
       cannot isolate. Dependencies are test-scoped; the enforcer's
       banDependencies rule keeps them out of the shipped artifact.
 
-      Run: mvn -Pbench test-compile exec:exec
+      Run: mvn verify -Pbench
     -->
     <profile>
       <id>bench</id>
-      <dependencies>
-        <dependency>
-          <groupId>org.openjdk.jmh</groupId>
-          <artifactId>jmh-core</artifactId>
-          <version>${jmh.version}</version>
-          <scope>test</scope>
-        </dependency>
-        <dependency>
-          <groupId>org.openjdk.jmh</groupId>
-          <artifactId>jmh-generator-annprocess</artifactId>
-          <version>${jmh.version}</version>
-          <scope>test</scope>
-        </dependency>
-      </dependencies>
       <build>
         <plugins>
           <plugin>
@@ -424,26 +432,6 @@
                       <version>${jmh.version}</version>
                     </path>
                   </annotationProcessorPaths>
-                </configuration>
-              </execution>
-            </executions>
-          </plugin>
-
-          <plugin>
-            <groupId>org.codehaus.mojo</groupId>
-            <artifactId>build-helper-maven-plugin</artifactId>
-            <version>${build.helper.version}</version>
-            <executions>
-              <execution>
-                <id>add-jmh-source</id>
-                <phase>generate-test-sources</phase>
-                <goals>
-                  <goal>add-test-source</goal>
-                </goals>
-                <configuration>
-                  <sources>
-                    <source>src/jmh/java</source>
-                  </sources>
                 </configuration>
               </execution>
             </executions>

@@ -586,9 +586,9 @@ class EngineServerRequestTest {
     }
 
     private static final class ConnectionProbe {
-        private dev.slsk.internal.messaging.messages.OutgoingMessage message;
-        private CancellationSignal token;
-        private int writeCount;
+        private volatile dev.slsk.internal.messaging.messages.OutgoingMessage message;
+        private volatile CancellationSignal token;
+        private volatile int writeCount;
         private CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
         private RuntimeException synchronousFailure;
         private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
@@ -612,11 +612,11 @@ class EngineServerRequestTest {
     }
 
     private static final class WaiterProbe {
-        private WaitKey key;
-        private Class<?> resultType;
-        private CancellationSignal token;
-        private int argumentCount;
-        private int registrations;
+        private volatile WaitKey key;
+        private volatile Class<?> resultType;
+        private volatile CancellationSignal token;
+        private volatile int argumentCount;
+        private volatile int registrations;
         private CompletableFuture<?> result = CompletableFuture.completedFuture(null);
         private RuntimeException synchronousFailure;
         private final Waiter proxy = (Waiter)

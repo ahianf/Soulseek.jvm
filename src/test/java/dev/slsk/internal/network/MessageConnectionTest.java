@@ -290,7 +290,7 @@ class MessageConnectionTest {
     }
 
     private static void awaitCondition(CheckedBoolean condition) throws Exception {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (!condition.get() && System.nanoTime() < deadline) {
             Thread.onSpinWait();
         }

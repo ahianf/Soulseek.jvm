@@ -101,9 +101,14 @@ class ListenerTest {
                 UncaughtHandler handler = new UncaughtHandler(uncaught)) {
             SocketListener listener = new SocketListener(
                     address, server.getLocalPort(), null, Monitors.shared(), new TcpListenerAdapter(server));
+            CountDownLatch accepted = new CountDownLatch(1);
+            listener.addAcceptedListener((source, connection) -> accepted.countDown());
             listener.start();
-            // Let the accept actually block before closing it out from under.
-            Thread.sleep(50);
+            // Prove the accept loop is live — a fixed sleep can pass with the
+            // loop never having started, which makes the assertion vacuous.
+            try (Socket probe = new Socket(address, server.getLocalPort())) {
+                assertTrue(accepted.await(5, TimeUnit.SECONDS), "the accept loop never accepted");
+            }
 
             listener.stop();
             Thread.sleep(250);
