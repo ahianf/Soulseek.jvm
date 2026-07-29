@@ -177,6 +177,9 @@ final class SoulseekEngine implements AutoCloseable {
     private volatile ServerInfo serverInfo = new ServerInfo();
     volatile SoulseekClientState state = SoulseekClientState.DISCONNECTED;
 
+    /** Serializes {@link #changeState}; see its javadoc. */
+    private final Object stateChangeLock = new Object();
+
     /** Creates a client with default options. */
     SoulseekEngine(int minorVersion) {
         this(minorVersion, null);
@@ -773,19 +776,32 @@ final class SoulseekEngine implements AutoCloseable {
         clientListenerFactory = Objects.requireNonNull(value, "value");
     }
 
+    /**
+     * One transition at a time. The callers are on different threads and
+     * different monitors — the connect thread under its semaphore, the
+     * connection factory's connected callback, disconnect under the engine
+     * monitor — and an unsynchronized read-modify-write let a server drop
+     * during login interleave two transitions: stale previousState on the
+     * events, and LOGGED_IN observable after DISCONNECTED. The raise happens
+     * under the same lock so the events leave in the order the transitions
+     * happened; delivery is queued per facet bus, so nothing slow runs here.
+     */
     void changeState(SoulseekClientState newState, String message, Exception exception) {
-        SoulseekClientState previousState = state;
-        state = newState;
-        diagnostic.debug("Client state changed from " + previousState + " to "
-                + newState
-                + (message == null ? "" : "; message: " + message));
-        events.raise(Kind.STATE_CHANGED, new SoulseekClientStateChangedEvent(previousState, state, message, exception));
-        if (state.equals(SoulseekClientState.CONNECTED)) {
-            events.raise(Kind.CONNECTED, null);
-        } else if (state.equals(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN))) {
-            events.raise(Kind.LOGGED_IN, null);
-        } else if (state.equals(SoulseekClientState.DISCONNECTED)) {
-            events.raise(Kind.DISCONNECTED, new SoulseekClientDisconnectedEvent(message, exception));
+        synchronized (stateChangeLock) {
+            SoulseekClientState previousState = state;
+            state = newState;
+            diagnostic.debug("Client state changed from " + previousState + " to "
+                    + newState
+                    + (message == null ? "" : "; message: " + message));
+            events.raise(
+                    Kind.STATE_CHANGED, new SoulseekClientStateChangedEvent(previousState, state, message, exception));
+            if (state.equals(SoulseekClientState.CONNECTED)) {
+                events.raise(Kind.CONNECTED, null);
+            } else if (state.equals(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN))) {
+                events.raise(Kind.LOGGED_IN, null);
+            } else if (state.equals(SoulseekClientState.DISCONNECTED)) {
+                events.raise(Kind.DISCONNECTED, new SoulseekClientDisconnectedEvent(message, exception));
+            }
         }
     }
 

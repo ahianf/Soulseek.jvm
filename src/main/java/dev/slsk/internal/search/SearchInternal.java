@@ -62,6 +62,16 @@ public final class SearchInternal implements AutoCloseable {
     private volatile ScheduledFuture<?> timeoutTask;
     private volatile SearchState state = SearchState.NONE;
 
+    /**
+     * Serializes {@link #resetTimeout} and {@link #stopTimeout}. Responses
+     * arrive concurrently — the reset runs under the state read lock, which
+     * many threads hold at once — and an unsynchronized stop-then-schedule can
+     * leave a scheduled task no field references. That orphan fires at its
+     * original deadline and ends a productive search as TIMED_OUT while
+     * responses are still arriving.
+     */
+    private final Object timeoutLock = new Object();
+
     /** Creates a search using default options. */
     public SearchInternal(SearchQuery query, SearchScope scope, int token) {
         this(query, scope, token, null);
@@ -357,17 +367,25 @@ public final class SearchInternal implements AutoCloseable {
     }
 
     private void resetTimeout() {
-        stopTimeout();
-        // Time out on the scheduler, but run completion (which raises the state-changed
-        // event and the caller's stateChanged callback) on a virtual thread so a blocking
-        // callback cannot stall this timer thread.
-        timeoutTask = timerExecutor.schedule(
-                () -> NetworkExecutor.executor().execute(() -> complete(SearchState.TIMED_OUT)),
-                options.getSearchTimeout(),
-                TimeUnit.MILLISECONDS);
+        synchronized (timeoutLock) {
+            cancelTimeoutTask();
+            // Time out on the scheduler, but run completion (which raises the state-changed
+            // event and the caller's stateChanged callback) on a virtual thread so a blocking
+            // callback cannot stall this timer thread.
+            timeoutTask = timerExecutor.schedule(
+                    () -> NetworkExecutor.executor().execute(() -> complete(SearchState.TIMED_OUT)),
+                    options.getSearchTimeout(),
+                    TimeUnit.MILLISECONDS);
+        }
     }
 
     private void stopTimeout() {
+        synchronized (timeoutLock) {
+            cancelTimeoutTask();
+        }
+    }
+
+    private void cancelTimeoutTask() {
         ScheduledFuture<?> task = timeoutTask;
         if (task != null) {
             task.cancel(false);
