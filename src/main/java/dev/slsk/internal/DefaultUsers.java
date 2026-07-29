@@ -69,12 +69,55 @@ final class DefaultUsers implements Users {
                 .on(
                         Kind.USER_STATISTICS_CHANGED,
                         (dev.slsk.internal.UserStatistics statistics) -> onStatistics(statistics));
+        // These two kinds had no subscriber at all, so Watch.status() returned
+        // the login-time status forever and UserEvent.StatusChanged and
+        // CannotConnect — both public promises — were never published. The
+        // status updates are the entire point of the server-side subscription.
+        client.events().on(Kind.USER_STATUS_CHANGED, (dev.slsk.internal.UserStatus status) -> onStatus(status));
+        client.events()
+                .on(
+                        Kind.USER_CANNOT_CONNECT,
+                        (dev.slsk.internal.events.UserCannotConnectEvent event) -> onCannotConnect(event));
+    }
+
+    /** Updates the watch's snapshot and publishes the transition. */
+    private void onStatus(dev.slsk.internal.UserStatus source) {
+        Username user = source == null ? null : Usernames.fromWire(source.getUsername());
+        if (user == null) {
+            return;
+        }
+        UserStatus to = status(source);
+        Registration registration = watches.get(user);
+        UserStatus from;
+        if (registration != null) {
+            from = registration.status;
+            registration.status = to;
+        } else {
+            // A status answer for a user nobody watches — a getUserStatus call
+            // resolved through the same wire message. There is no previous
+            // status to report, so the transition is published as a no-change
+            // from the same status.
+            from = to;
+        }
+        events.publish(new UserEvent.StatusChanged(user, from, to, Instant.now()));
+    }
+
+    private void onCannotConnect(dev.slsk.internal.events.UserCannotConnectEvent source) {
+        Username user = source == null ? null : Usernames.fromWire(source.getUsername());
+        if (user == null) {
+            return;
+        }
+        events.publish(new UserEvent.CannotConnect(
+                user, "the user could not be reached, directly or through the server", Instant.now()));
     }
 
     /** One watched user: the last status seen, and how many holders remain. */
     private static final class Registration {
         private int holders;
         private volatile UserStatus status;
+
+        /** Set when the last holder retires this registration; guarded by its monitor. */
+        private boolean removed;
 
         Registration(UserStatus status) {
             this.status = status;
@@ -208,19 +251,36 @@ final class DefaultUsers implements Users {
     @Override
     public Watch watch(Username user) {
         Objects.requireNonNull(user, "user");
-        Registration registration = watches.compute(user, (key, existing) -> {
-            Registration current = existing;
-            if (current == null) {
-                current = new Registration(new UserStatus(key, UserPresence.OFFLINE, false));
-                dev.slsk.internal.UserData data = directory.watchUser(key.value());
-                if (data != null) {
-                    current.status = new UserStatus(key, presence(data.getStatus()), false);
+        while (true) {
+            Registration registration = watches.computeIfAbsent(
+                    user, key -> new Registration(new UserStatus(key, UserPresence.OFFLINE, false)));
+            synchronized (registration) {
+                if (registration.removed) {
+                    // A concurrent close retired this registration between the
+                    // map read and the lock; it is no longer in the map.
+                    continue;
                 }
+                if (registration.holders == 0) {
+                    // The server round trip runs under this registration's own
+                    // monitor, never the map's bin lock. A slow watch stalls
+                    // only same-user callers — the serialization it needs
+                    // anyway — instead of every watch that hashes nearby, and
+                    // ConcurrentHashMap forbids blocking mapping functions.
+                    try {
+                        dev.slsk.internal.UserData data = directory.watchUser(user.value());
+                        if (data != null) {
+                            registration.status = new UserStatus(user, presence(data.getStatus()), false);
+                        }
+                    } catch (RuntimeException failure) {
+                        registration.removed = true;
+                        watches.remove(user, registration);
+                        throw failure;
+                    }
+                }
+                registration.holders++;
+                return new RefCountedWatch(user, registration);
             }
-            current.holders++;
-            return current;
-        });
-        return new RefCountedWatch(user, registration);
+        }
     }
 
     @Override
@@ -260,17 +320,18 @@ final class DefaultUsers implements Users {
             if (!closed.compareAndSet(false, true)) {
                 return;
             }
-            watches.computeIfPresent(user, (key, current) -> {
-                if (--current.holders > 0) {
-                    return current;
+            synchronized (registration) {
+                if (--registration.holders > 0) {
+                    return;
                 }
+                registration.removed = true;
+                watches.remove(user, registration);
                 try {
-                    directory.unwatchUser(key.value());
+                    directory.unwatchUser(user.value());
                 } catch (RuntimeException exception) {
-                    diagnostics.warning("Failed to release the watch on " + key, exception);
+                    diagnostics.warning("Failed to release the watch on " + user, exception);
                 }
-                return null;
-            });
+            }
         }
     }
 }
