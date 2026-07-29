@@ -82,7 +82,7 @@ final class DefaultUploads implements Uploads {
     @Override
     public void cancel(TransferId id) {
         Objects.requireNonNull(id, "id");
-        client.cancelUpload(id);
+        client.transfers().cancelUpload(id);
     }
 
     @Override
@@ -94,28 +94,28 @@ final class DefaultUploads implements Uploads {
 
     @Override
     public UploadPolicy policy() {
-        return client.uploadPolicy();
+        return client.transfers().uploadPolicy();
     }
 
     @Override
     public void policy(UploadPolicy policy) {
         Objects.requireNonNull(policy, "policy");
-        client.setUploadPolicy(policy);
+        client.transfers().uploadPolicy(policy);
     }
 
     @Override
     public void ban(Username user, String reason) {
-        client.admission().ban(user, reason);
+        client.transfers().admission().ban(user, reason);
     }
 
     @Override
     public void unban(Username user) {
-        client.admission().unban(user);
+        client.transfers().admission().unban(user);
     }
 
     @Override
     public Map<Username, String> banned() {
-        return client.admission().banned();
+        return client.transfers().admission().banned();
     }
 
     @Override

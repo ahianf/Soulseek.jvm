@@ -109,7 +109,7 @@ final class DefaultDownloads implements Downloads {
         this.queue.onPositionChanged((entry, place) ->
                 events.publish(new DownloadEvent.QueuePositionChanged(entry.id(), place, Instant.now())));
         this.queue.positionProbe(this::place);
-        client.downloadOffers(this::offered);
+        client.transfers().downloadOffers(this::offered);
         client.events().on(EngineEvents.Kind.TRANSFER_PROGRESS_UPDATED, this::onProgress);
         client.events().on(EngineEvents.Kind.TRANSFER_STATE_CHANGED, this::onTransferState);
     }

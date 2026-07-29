@@ -3,9 +3,9 @@
 
 package dev.slsk.internal;
 
-import static dev.slsk.internal.TransferEngine.determinePosition;
-import static dev.slsk.internal.TransferEngine.filenameOnly;
-import static dev.slsk.internal.TransferEngine.seekInputStream;
+import static dev.slsk.internal.transfer.TransferStreams.determinePosition;
+import static dev.slsk.internal.transfer.TransferStreams.filenameOnly;
+import static dev.slsk.internal.transfer.TransferStreams.seekInputStream;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.ConnectionException;
@@ -41,6 +41,7 @@ import dev.slsk.internal.options.TransferProgressUpdate;
 import dev.slsk.internal.options.TransferStateChange;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.internal.transfer.TransferSettlement;
+import dev.slsk.internal.transfer.TransferStreams;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
@@ -56,16 +57,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.LongFunction;
 
 /**
- * One upload in flight: slot acquisition, the peer handshake, the write loop
- * and the terminal state transitions.
+ * One upload, start to finish, on the thread that asked for it.
  *
- * <p>The counterpart to {@link DownloadOperation}; see there for why both are
- * top-level.
+ * <p>The counterpart to {@link DownloadRun}; see there.
  */
-final class UploadOperation {
+final class UploadRun {
 
-    /** The engine that owns the concurrency limits and duplicate keys. */
-    private final TransferEngine engine;
+    /** The domain that decided this run may happen, and owns what it needs. */
+    private final TransferDomain domain;
 
     private final TransferInternal upload;
     private final LongFunction<InputStream> inputStreamFactory;
@@ -80,18 +79,18 @@ final class UploadOperation {
     private InetSocketAddress endpoint;
     private Connection connection;
     private InputStream inputStream;
-    private TransferEngine.PositionTrackingInputStream trackingStream;
+    private TransferStreams.PositionTrackingInputStream trackingStream;
     private ConnectionEventListener<ConnectionDataEvent> dataWrittenListener;
     private ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedListener;
 
-    UploadOperation(
-            TransferEngine engine,
+    UploadRun(
+            TransferDomain domain,
             TransferInternal upload,
             LongFunction<InputStream> inputStreamFactory,
             TransferOptions transferOptions,
             CancellationSignal cancellationSignal,
             String uniqueKey) {
-        this.engine = engine;
+        this.domain = domain;
         this.upload = upload;
         this.inputStreamFactory = inputStreamFactory;
         this.transferOptions = transferOptions;
@@ -101,15 +100,7 @@ final class UploadOperation {
 
     Transfer execute() {
         try {
-            Permits.acquire(engine.uploadSemaphoreSyncRoot, cancellationSignal);
-            try {
-                perUserSemaphore = engine.uploadSemaphores.computeIfAbsent(
-                        upload.getUsername(),
-                        ignored ->
-                                new Semaphore(engine.context.getClientOptions().getMaximumConcurrentUploadsPerUser()));
-            } finally {
-                engine.uploadSemaphoreSyncRoot.release();
-            }
+            perUserSemaphore = domain.uploadSemaphoreFor(upload.getUsername(), cancellationSignal);
 
             // Announced before the wait rather than during it. The wait used to
             // be started inside the sync root and awaited after, which is the
@@ -119,11 +110,9 @@ final class UploadOperation {
 
             Permits.acquire(perUserSemaphore, cancellationSignal);
             perUserPermit.set(true);
-            engine.context
-                    .getDiagnostic()
-                    .debug("Upload semaphore for file "
-                            + filenameOnly(upload.getFilename()) + " to "
-                            + upload.getUsername() + " acquired");
+            domain.diagnostic.debug("Upload semaphore for file "
+                    + filenameOnly(upload.getFilename()) + " to "
+                    + upload.getUsername() + " acquired");
 
             try {
                 // The slot gate is the upload policy: serveUpload is only
@@ -131,11 +120,9 @@ final class UploadOperation {
                 // free. A second, pluggable gate in front of it was two places
                 // to express one rule.
                 slot.set(true);
-                engine.context
-                        .getDiagnostic()
-                        .debug("Upload slot for file "
-                                + filenameOnly(upload.getFilename()) + " to "
-                                + upload.getUsername() + " acquired");
+                domain.diagnostic.debug("Upload slot for file "
+                        + filenameOnly(upload.getFilename()) + " to "
+                        + upload.getUsername() + " acquired");
             } catch (Throwable failure) {
                 Throwable cause = Failures.unwrap(failure);
                 if (cause instanceof CancellationException) {
@@ -149,69 +136,52 @@ final class UploadOperation {
                         cause);
             }
 
-            Permits.acquire(engine.globalUploadSemaphore, cancellationSignal);
+            Permits.acquire(domain.globalUploadSemaphore(), cancellationSignal);
             globalPermit.set(true);
-            engine.context
-                    .getDiagnostic()
-                    .debug("Global upload semaphore for file "
-                            + filenameOnly(upload.getFilename()) + " to "
-                            + upload.getUsername() + " acquired");
+            domain.diagnostic.debug("Global upload semaphore for file "
+                    + filenameOnly(upload.getFilename()) + " to "
+                    + upload.getUsername() + " acquired");
 
-            endpoint = engine.context.resolveUserEndpoint(upload.getUsername(), cancellationSignal);
-            MessageConnection messageConnection = engine.context
-                    .getPeerConnectionManager()
-                    .getOrAddMessageConnection(upload.getUsername(), endpoint, cancellationSignal);
-            engine.context
-                    .getDiagnostic()
-                    .debug("Fetched peer connection for upload of "
-                            + filenameOnly(upload.getFilename()) + " to "
-                            + upload.getUsername() + " (id: " + messageConnection.getId()
-                            + ", state: " + messageConnection.getState() + ")");
+            endpoint = domain.endpoint(upload.getUsername(), cancellationSignal);
+            MessageConnection messageConnection =
+                    domain.peers().getOrAddMessageConnection(upload.getUsername(), endpoint, cancellationSignal);
+            domain.diagnostic.debug("Fetched peer connection for upload of "
+                    + filenameOnly(upload.getFilename()) + " to "
+                    + upload.getUsername() + " (id: " + messageConnection.getId()
+                    + ", state: " + messageConnection.getState() + ")");
 
-            Wait<TransferResponse> transferRequestAcknowledged = engine.context
-                    .getWaiter()
-                    .register(
-                            new WaitKey(MessageCode.Peer.TRANSFER_RESPONSE, upload.getUsername(), upload.getToken()),
-                            TransferResponse.class,
-                            engine.context
-                                    .getClientOptions()
-                                    .getPeerConnectionOptions()
-                                    .getInactivityTimeout(),
-                            cancellationSignal);
+            Wait<TransferResponse> transferRequestAcknowledged = domain.waiter.register(
+                    new WaitKey(MessageCode.Peer.TRANSFER_RESPONSE, upload.getUsername(), upload.getToken()),
+                    TransferResponse.class,
+                    domain.clientOptions().getPeerConnectionOptions().getInactivityTimeout(),
+                    cancellationSignal);
             messageConnection.write(
                     new TransferRequest(
                             TransferDirection.UPLOAD, upload.getToken(), upload.getFilename(), upload.getSize()),
                     CommonUtils.token(cancellationSignal));
-            engine.context
-                    .getDiagnostic()
-                    .debug("Wrote transfer request for upload of "
-                            + filenameOnly(upload.getFilename()) + " to "
-                            + upload.getUsername() + " (id: " + messageConnection.getId()
-                            + ", state: " + messageConnection.getState() + ")");
+            domain.diagnostic.debug("Wrote transfer request for upload of "
+                    + filenameOnly(upload.getFilename()) + " to "
+                    + upload.getUsername() + " (id: " + messageConnection.getId()
+                    + ", state: " + messageConnection.getState() + ")");
             updateState(TransferState.REQUESTED);
 
             TransferResponse acknowledgement = transferRequestAcknowledged.await();
-            engine.context
-                    .getDiagnostic()
-                    .debug("Received transfer request ACK for upload of "
-                            + filenameOnly(upload.getFilename()) + " to "
-                            + upload.getUsername() + ": allowed: " + acknowledgement.isAllowed()
-                            + ", message: " + acknowledgement.getMessage()
-                            + " (token: " + upload.getToken() + ")");
+            domain.diagnostic.debug("Received transfer request ACK for upload of "
+                    + filenameOnly(upload.getFilename()) + " to "
+                    + upload.getUsername() + ": allowed: " + acknowledgement.isAllowed()
+                    + ", message: " + acknowledgement.getMessage()
+                    + " (token: " + upload.getToken() + ")");
             if (!acknowledgement.isAllowed()) {
                 throw new TransferRejectedException("Transfer rejected: " + acknowledgement.getMessage());
             }
 
             updateState(TransferState.INITIALIZING);
-            connection = engine.context
-                    .getPeerConnectionManager()
+            connection = domain.peers()
                     .getTransferConnection(upload.getUsername(), endpoint, upload.getToken(), cancellationSignal);
-            engine.context
-                    .getDiagnostic()
-                    .debug("Fetched transfer connection for upload of "
-                            + filenameOnly(upload.getFilename()) + " to "
-                            + upload.getUsername() + " (id: " + connection.getId()
-                            + ", state: " + connection.getState() + ")");
+            domain.diagnostic.debug("Fetched transfer connection for upload of "
+                    + filenameOnly(upload.getFilename()) + " to "
+                    + upload.getUsername() + " (id: " + connection.getId()
+                    + ", state: " + connection.getState() + ")");
             upload.setConnection(connection);
             bindConnectionEvents();
 
@@ -223,14 +193,12 @@ final class UploadOperation {
                         + upload.getSize() + " bytes");
             }
 
-            engine.context
-                    .getDiagnostic()
-                    .debug("Resolving input stream for upload of " + filenameOnly(upload.getFilename()) + " to "
-                            + upload.getUsername());
+            domain.diagnostic.debug("Resolving input stream for upload of " + filenameOnly(upload.getFilename())
+                    + " to " + upload.getUsername());
             inputStream = Objects.requireNonNull(
                     inputStreamFactory.apply(upload.getStartOffset()), "inputStreamFactory result");
             positionInputStream();
-            trackingStream = new TransferEngine.PositionTrackingInputStream(
+            trackingStream = new TransferStreams.PositionTrackingInputStream(
                     inputStream, determinePosition(inputStream, upload.getStartOffset()));
 
             updateState(TransferState.IN_PROGRESS);
@@ -276,11 +244,9 @@ final class UploadOperation {
                     ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).getLong());
         } catch (Throwable failure) {
             Throwable cause = Failures.unwrap(failure);
-            engine.context
-                    .getDiagnostic()
-                    .debug("Failed to read start offset for upload of "
-                            + filenameOnly(upload.getFilename()) + " to "
-                            + upload.getUsername() + ": " + Failures.message(cause));
+            domain.diagnostic.debug("Failed to read start offset for upload of "
+                    + filenameOnly(upload.getFilename()) + " to "
+                    + upload.getUsername() + ": " + Failures.message(cause));
             if (cause instanceof CancellationException || cause instanceof TimeoutException) {
                 throw new CompletionException(cause);
             }
@@ -292,12 +258,10 @@ final class UploadOperation {
         if (upload.getStartOffset() <= 0 || !transferOptions.isSeekInputStreamAutomatically()) {
             return;
         }
-        engine.context
-                .getDiagnostic()
-                .debug("Seeking input stream for upload of "
-                        + filenameOnly(upload.getFilename()) + " to "
-                        + upload.getUsername() + " to starting offset of "
-                        + upload.getStartOffset() + " bytes");
+        domain.diagnostic.debug("Seeking input stream for upload of "
+                + filenameOnly(upload.getFilename()) + " to "
+                + upload.getUsername() + " to starting offset of "
+                + upload.getStartOffset() + " bytes");
         try {
             seekInputStream(inputStream, upload.getStartOffset());
         } catch (IOException failure) {
@@ -323,7 +287,7 @@ final class UploadOperation {
                             remaining,
                             trackingStream,
                             (requestedBytes, governorToken) ->
-                                    engine.context.getUploadTokenBucket().get(requestedBytes, cancellationSignal),
+                                    domain.uploadTokenBucket.get(requestedBytes, cancellationSignal),
                             (attemptedBytes, grantedBytes, transferredBytes) -> {
                                 if (transferOptions.getReporter() != null) {
                                     transferOptions
@@ -334,7 +298,7 @@ final class UploadOperation {
                                                     grantedBytes,
                                                     transferredBytes);
                                 }
-                                engine.context.getUploadTokenBucket().returnTokens(grantedBytes - transferredBytes);
+                                domain.uploadTokenBucket.returnTokens(grantedBytes - transferredBytes);
                             },
                             cancellationSignal);
                     settlement.succeed();
@@ -471,8 +435,8 @@ final class UploadOperation {
             }
         } finally {
             releasePermits();
-            engine.context.getUploadRegistry().remove(upload.getToken(), upload);
-            engine.uniqueKeys.remove(uniqueKey);
+            domain.uploads().remove(upload.getToken(), upload);
+            domain.releaseUniqueKey(uniqueKey);
         }
     }
 
@@ -490,10 +454,8 @@ final class UploadOperation {
 
     private void notifyUploadFailure() {
         try {
-            InetSocketAddress currentEndpoint =
-                    engine.context.resolveUserEndpoint(upload.getUsername(), CancellationSignal.none());
-            MessageConnection messageConnection = engine.context
-                    .getPeerConnectionManager()
+            InetSocketAddress currentEndpoint = domain.endpoint(upload.getUsername(), CancellationSignal.none());
+            MessageConnection messageConnection = domain.peers()
                     .getOrAddMessageConnection(upload.getUsername(), currentEndpoint, CancellationSignal.none());
             OutgoingMessage message = upload.getState().contains(TransferState.CANCELLED)
                     ? new UploadDenied(upload.getFilename(), "Cancelled")
@@ -507,18 +469,14 @@ final class UploadOperation {
     private void releasePermits() {
         if (perUserPermit.compareAndSet(true, false)) {
             perUserSemaphore.release();
-            engine.context
-                    .getDiagnostic()
-                    .debug("Upload semaphore for file "
-                            + filenameOnly(upload.getFilename()) + " to "
-                            + upload.getUsername() + " released");
+            domain.diagnostic.debug("Upload semaphore for file "
+                    + filenameOnly(upload.getFilename()) + " to "
+                    + upload.getUsername() + " released");
         }
         if (slot.compareAndSet(true, false)) {
-            engine.context
-                    .getDiagnostic()
-                    .debug("Upload slot for file "
-                            + filenameOnly(upload.getFilename()) + " to "
-                            + upload.getUsername() + " released");
+            domain.diagnostic.debug("Upload slot for file "
+                    + filenameOnly(upload.getFilename()) + " to "
+                    + upload.getUsername() + " released");
             if (transferOptions.getSlotReleased() != null) {
                 try {
                     Thread.sleep(10);
@@ -531,12 +489,10 @@ final class UploadOperation {
             }
         }
         if (globalPermit.compareAndSet(true, false)) {
-            engine.globalUploadSemaphore.release();
-            engine.context
-                    .getDiagnostic()
-                    .debug("Global upload semaphore for file "
-                            + filenameOnly(upload.getFilename()) + " to "
-                            + upload.getUsername() + " released");
+            domain.globalUploadSemaphore().release();
+            domain.diagnostic.debug("Global upload semaphore for file "
+                    + filenameOnly(upload.getFilename()) + " to "
+                    + upload.getUsername() + " released");
         }
     }
 
@@ -549,7 +505,7 @@ final class UploadOperation {
         if (transferOptions.getStateChanged() != null) {
             transferOptions.getStateChanged().onStateChanged(new TransferStateChange(previous, transfer));
         }
-        engine.context.raiseEvent(Kind.TRANSFER_STATE_CHANGED, eventData);
+        domain.events.accept(Kind.TRANSFER_STATE_CHANGED, eventData);
     }
 
     private void updateProgress(long bytesUploaded) {
@@ -559,7 +515,7 @@ final class UploadOperation {
         if (transferOptions.getProgressUpdated() != null) {
             transferOptions.getProgressUpdated().onProgressUpdated(new TransferProgressUpdate(previous, transfer));
         }
-        engine.context.raiseEvent(Kind.TRANSFER_PROGRESS_UPDATED, new TransferProgressUpdatedEvent(previous, transfer));
+        domain.events.accept(Kind.TRANSFER_PROGRESS_UPDATED, new TransferProgressUpdatedEvent(previous, transfer));
     }
 
     private long currentStreamPosition() {

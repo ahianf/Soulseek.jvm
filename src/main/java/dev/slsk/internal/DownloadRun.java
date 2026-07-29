@@ -3,10 +3,10 @@
 
 package dev.slsk.internal;
 
-import static dev.slsk.internal.TransferEngine.determineOutputPosition;
-import static dev.slsk.internal.TransferEngine.filenameOnly;
-import static dev.slsk.internal.TransferEngine.isQueuedResponse;
-import static dev.slsk.internal.TransferEngine.seekOutputStream;
+import static dev.slsk.internal.transfer.TransferStreams.determineOutputPosition;
+import static dev.slsk.internal.transfer.TransferStreams.filenameOnly;
+import static dev.slsk.internal.transfer.TransferStreams.isQueuedResponse;
+import static dev.slsk.internal.transfer.TransferStreams.seekOutputStream;
 
 import dev.slsk.CancellationController;
 import dev.slsk.CancellationSignal;
@@ -39,6 +39,7 @@ import dev.slsk.internal.options.TransferProgressUpdate;
 import dev.slsk.internal.options.TransferStateChange;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.internal.transfer.TransferSettlement;
+import dev.slsk.internal.transfer.TransferStreams;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -53,18 +54,23 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 /**
- * One download in flight: slot acquisition, the peer handshake, the read loop
- * and the terminal state transitions.
+ * One download, start to finish, on the thread that asked for it.
  *
- * <p>Was an inner class of {@link TransferEngine}. Lifted out so neither type
- * carries the other's bulk; it keeps an explicit reference to the engine for
- * the concurrency limits and duplicate keys the engine owns, and reaches the
- * client through the same engine the transfer engine holds.
+ * <p>Slot acquisition, the peer handshake, the read loop and the terminal state
+ * transitions, straight down the page. It is the <em>do</em> half of the split
+ * {@link DownloadQueue} models and {@link TransferDomain} now applies to every
+ * transfer: the domain decides that this download may run, and this runs it.
+ *
+ * <p>What it holds is its own domain, not the engine. Everything it needs — the
+ * options, the correlator, the peer connections, the rate bucket, the limit it
+ * waits on and the key it releases — belongs to transfers, and reaching two
+ * hops through a client that owns everything was the arrangement this goal
+ * exists to remove.
  */
-final class DownloadOperation {
+final class DownloadRun {
 
-    /** The engine that owns the concurrency limits and duplicate keys. */
-    private final TransferEngine engine;
+    /** The domain that decided this run may happen, and owns what it needs. */
+    private final TransferDomain domain;
 
     private final TransferInternal download;
     private final Supplier<OutputStream> outputStreamFactory;
@@ -88,12 +94,12 @@ final class DownloadOperation {
     private InetSocketAddress endpoint;
     private Connection connection;
     private OutputStream outputStream;
-    private TransferEngine.PositionTrackingOutputStream trackingStream;
+    private TransferStreams.PositionTrackingOutputStream trackingStream;
     private ConnectionEventListener<ConnectionDataEvent> dataReadListener;
     private ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedListener;
 
-    DownloadOperation(
-            TransferEngine engine,
+    DownloadRun(
+            TransferDomain domain,
             TransferInternal download,
             Supplier<OutputStream> outputStreamFactory,
             TransferOptions transferOptions,
@@ -101,7 +107,7 @@ final class DownloadOperation {
             CancellationSignal cancellationSignal,
             String uniqueKey) {
         this.offer = offer;
-        this.engine = engine;
+        this.domain = domain;
         this.download = download;
         this.outputStreamFactory = outputStreamFactory;
         this.transferOptions = transferOptions;
@@ -114,75 +120,57 @@ final class DownloadOperation {
     Transfer execute() {
         try {
             updateState(TransferState.QUEUED.or(TransferState.LOCALLY));
-            Permits.acquire(engine.globalDownloadSemaphore, cancellationSignal);
+            Permits.acquire(domain.globalDownloadSemaphore(), cancellationSignal);
             globalPermit.set(true);
-            engine.context
-                    .getDiagnostic()
-                    .debug("Global download semaphore for file "
-                            + filenameOnly(download.getFilename()) + " to "
-                            + download.getUsername() + " acquired");
+            domain.diagnostic.debug("Global download semaphore for file "
+                    + filenameOnly(download.getFilename()) + " to "
+                    + download.getUsername() + " acquired");
 
-            endpoint = engine.context.resolveUserEndpoint(download.getUsername(), cancellationSignal);
-            MessageConnection peerConnection = engine.context
-                    .getPeerConnectionManager()
-                    .getOrAddMessageConnection(download.getUsername(), endpoint, cancellationSignal);
-            engine.context
-                    .getDiagnostic()
-                    .debug("Fetched peer connection for download of "
-                            + filenameOnly(download.getFilename()) + " from "
-                            + download.getUsername() + " (id: " + peerConnection.getId()
-                            + ", state: " + peerConnection.getState() + ")");
+            endpoint = domain.endpoint(download.getUsername(), cancellationSignal);
+            MessageConnection peerConnection =
+                    domain.peers().getOrAddMessageConnection(download.getUsername(), endpoint, cancellationSignal);
+            domain.diagnostic.debug("Fetched peer connection for download of "
+                    + filenameOnly(download.getFilename()) + " from "
+                    + download.getUsername() + " (id: " + peerConnection.getId()
+                    + ", state: " + peerConnection.getState() + ")");
 
             if (offer != null) {
                 // The peer already told us it is ready, so there is nothing to
                 // ask for. Asking anyway would send a fresh request against the
                 // queue we have just reached the front of, and a peer with one
                 // free slot would answer the second request with "Queued".
-                engine.context
-                        .getDiagnostic()
-                        .debug("Download of " + filenameOnly(download.getFilename())
-                                + " from " + download.getUsername()
-                                + " is taking up an offer already made (remote token: "
-                                + offer.getToken() + ")");
+                domain.diagnostic.debug("Download of " + filenameOnly(download.getFilename())
+                        + " from " + download.getUsername()
+                        + " is taking up an offer already made (remote token: "
+                        + offer.getToken() + ")");
                 updateState(TransferState.REQUESTED);
                 beginQueuedDownload(() -> offer, peerConnection);
                 return receiveFile();
             }
 
-            Wait<TransferResponse> transferRequestAcknowledged = engine.context
-                    .getWaiter()
-                    .register(
-                            new WaitKey(
-                                    MessageCode.Peer.TRANSFER_RESPONSE, download.getUsername(), download.getToken()),
-                            TransferResponse.class,
-                            engine.context
-                                    .getClientOptions()
-                                    .getPeerConnectionOptions()
-                                    .getInactivityTimeout(),
-                            cancellationSignal);
-            Wait<TransferRequest> transferStartRequested = engine.context
-                    .getWaiter()
-                    .registerIndefinitely(transferStartRequestedWaitKey, TransferRequest.class, cancellationSignal);
+            Wait<TransferResponse> transferRequestAcknowledged = domain.waiter.register(
+                    new WaitKey(MessageCode.Peer.TRANSFER_RESPONSE, download.getUsername(), download.getToken()),
+                    TransferResponse.class,
+                    domain.clientOptions().getPeerConnectionOptions().getInactivityTimeout(),
+                    cancellationSignal);
+            Wait<TransferRequest> transferStartRequested = domain.waiter.registerIndefinitely(
+                    transferStartRequestedWaitKey, TransferRequest.class, cancellationSignal);
 
             peerConnection.write(
                     new TransferRequest(TransferDirection.DOWNLOAD, download.getToken(), download.getFilename()),
                     CommonUtils.token(cancellationSignal));
-            engine.context
-                    .getDiagnostic()
-                    .debug("Wrote transfer request for download of "
-                            + filenameOnly(download.getFilename()) + " from "
-                            + download.getUsername() + " (id: " + peerConnection.getId()
-                            + ", state: " + peerConnection.getState() + ")");
+            domain.diagnostic.debug("Wrote transfer request for download of "
+                    + filenameOnly(download.getFilename()) + " from "
+                    + download.getUsername() + " (id: " + peerConnection.getId()
+                    + ", state: " + peerConnection.getState() + ")");
             updateState(TransferState.REQUESTED);
 
             TransferResponse acknowledgement = transferRequestAcknowledged.await();
-            engine.context
-                    .getDiagnostic()
-                    .debug("Received transfer request ACK for download of "
-                            + filenameOnly(download.getFilename()) + " from "
-                            + download.getUsername() + ": allowed: " + acknowledgement.isAllowed()
-                            + ", message: " + acknowledgement.getMessage()
-                            + " (token: " + download.getToken() + ")");
+            domain.diagnostic.debug("Received transfer request ACK for download of "
+                    + filenameOnly(download.getFilename()) + " from "
+                    + download.getUsername() + ": allowed: " + acknowledgement.isAllowed()
+                    + ", message: " + acknowledgement.getMessage()
+                    + " (token: " + download.getToken() + ")");
             if (acknowledgement.isAllowed()) {
                 peerConnection = beginImmediateDownload(acknowledgement, peerConnection);
             } else if (!isQueuedResponse(acknowledgement.getMessage())) {
@@ -216,7 +204,7 @@ final class DownloadOperation {
         bindConnectionEvents();
         outputStream = Objects.requireNonNull(outputStreamFactory.get(), "outputStreamFactory result");
         positionOutputStream();
-        trackingStream = new TransferEngine.PositionTrackingOutputStream(
+        trackingStream = new TransferStreams.PositionTrackingOutputStream(
                 outputStream,
                 determineOutputPosition(
                         outputStream,
@@ -225,11 +213,9 @@ final class DownloadOperation {
 
         updateProgress(currentOutputPosition());
         updateState(TransferState.COMPLETED.or(TransferState.SUCCEEDED));
-        engine.context
-                .getDiagnostic()
-                .info("Download of " + filenameOnly(download.getFilename())
-                        + " from " + download.getUsername() + " complete ("
-                        + currentOutputPosition() + " of " + download.getSize() + " bytes).");
+        domain.diagnostic.info("Download of " + filenameOnly(download.getFilename())
+                + " from " + download.getUsername() + " complete ("
+                + currentOutputPosition() + " of " + download.getSize() + " bytes).");
         connection.disconnect("Transfer complete");
         return download.toTransfer();
     }
@@ -242,16 +228,13 @@ final class DownloadOperation {
             download.setSize(acknowledgement.getFileSize());
         }
         updateState(TransferState.INITIALIZING);
-        connection = engine.context
-                .getPeerConnectionManager()
+        connection = domain.peers()
                 .getTransferConnection(
                         download.getUsername(), endpoint, acknowledgement.getToken(), cancellationSignal);
-        engine.context
-                .getDiagnostic()
-                .debug("Fetched transfer connection for download of "
-                        + filenameOnly(download.getFilename()) + " from "
-                        + download.getUsername() + " (id: " + connection.getId()
-                        + ", state: " + connection.getState() + ")");
+        domain.diagnostic.debug("Fetched transfer connection for download of "
+                + filenameOnly(download.getFilename()) + " from "
+                + download.getUsername() + " (id: " + connection.getId()
+                + ", state: " + connection.getState() + ")");
         download.setConnection(connection);
         return peerConnection;
     }
@@ -267,15 +250,12 @@ final class DownloadOperation {
         download.setRemoteToken(request.getToken());
         updateState(TransferState.INITIALIZING);
 
-        MessageConnection refreshed = engine.context
-                .getPeerConnectionManager()
-                .getOrAddMessageConnection(download.getUsername(), endpoint, cancellationSignal);
-        engine.context
-                .getDiagnostic()
-                .debug("Fetched peer connection for download of "
-                        + filenameOnly(download.getFilename()) + " from "
-                        + download.getUsername() + " (id: " + refreshed.getId()
-                        + ", state: " + refreshed.getState() + ")");
+        MessageConnection refreshed =
+                domain.peers().getOrAddMessageConnection(download.getUsername(), endpoint, cancellationSignal);
+        domain.diagnostic.debug("Fetched peer connection for download of "
+                + filenameOnly(download.getFilename()) + " from "
+                + download.getUsername() + " (id: " + refreshed.getId()
+                + ", state: " + refreshed.getState() + ")");
         // Started before the acceptance is written, because the peer opens the
         // transfer connection the moment it reads it. A thread of its own is
         // what "before" means here: the wait has to be in place while the write
@@ -284,8 +264,7 @@ final class DownloadOperation {
         TransferSettlement established = new TransferSettlement();
         NetworkExecutor.executor().execute(() -> {
             try {
-                incoming.set(engine.context
-                        .getPeerConnectionManager()
+                incoming.set(domain.peers()
                         .awaitTransferConnection(
                                 download.getUsername(),
                                 download.getFilename(),
@@ -303,12 +282,10 @@ final class DownloadOperation {
         Throwable failure = established.await();
         if (failure == null) {
             connection = incoming.get();
-            engine.context
-                    .getDiagnostic()
-                    .debug("Fetched transfer connection for download of "
-                            + filenameOnly(download.getFilename()) + " from "
-                            + download.getUsername() + " (id: " + connection.getId()
-                            + ", state: " + connection.getState() + ")");
+            domain.diagnostic.debug("Fetched transfer connection for download of "
+                    + filenameOnly(download.getFilename()) + " from "
+                    + download.getUsername() + " (id: " + connection.getId()
+                    + ", state: " + connection.getState() + ")");
         } else {
             Throwable cause = Failures.unwrap(failure);
             if (!(cause instanceof ConnectionException)) {
@@ -316,18 +293,13 @@ final class DownloadOperation {
             }
             // The remote client never initiated the transfer connection, so initiate one from
             // this end. The remote client in this scenario is most likely Nicotine+.
-            engine.context
-                    .getDiagnostic()
-                    .warning("Attempting to initiate a second-chance transfer connection to " + download.getUsername()
-                            + " for download of " + download.getFilename());
-            connection = engine.context
-                    .getPeerConnectionManager()
+            domain.diagnostic.warning("Attempting to initiate a second-chance transfer connection to "
+                    + download.getUsername() + " for download of " + download.getFilename());
+            connection = domain.peers()
                     .getTransferConnection(
                             download.getUsername(), endpoint, download.getRemoteToken(), cancellationSignal);
-            engine.context
-                    .getDiagnostic()
-                    .warning("Successfully established a second-chance transfer connection to " + download.getUsername()
-                            + " for download of " + download.getFilename());
+            domain.diagnostic.warning("Successfully established a second-chance transfer connection to "
+                    + download.getUsername() + " for download of " + download.getFilename());
         }
         download.setConnection(connection);
         return refreshed;
@@ -365,12 +337,10 @@ final class DownloadOperation {
         if (download.getStartOffset() <= 0 || !transferOptions.isSeekOutputStreamAutomatically()) {
             return;
         }
-        engine.context
-                .getDiagnostic()
-                .debug("Seeking output stream for download of "
-                        + filenameOnly(download.getFilename()) + " from "
-                        + download.getUsername() + " to starting offset of "
-                        + download.getStartOffset() + " bytes");
+        domain.diagnostic.debug("Seeking output stream for download of "
+                + filenameOnly(download.getFilename()) + " from "
+                + download.getUsername() + " to starting offset of "
+                + download.getStartOffset() + " bytes");
         try {
             seekOutputStream(outputStream, download.getStartOffset());
         } catch (IOException failure) {
@@ -383,11 +353,9 @@ final class DownloadOperation {
         try (CancellationController linkedController = new CancellationController();
                 CancellationSubscription registration = cancellationSignal.register(linkedController::cancel)) {
             CancellationSignal linkedToken = linkedController.getSignal();
-            engine.context
-                    .getDiagnostic()
-                    .debug("Seeking download of " + filenameOnly(download.getFilename())
-                            + " from " + download.getUsername() + " to starting offset of "
-                            + download.getStartOffset() + " bytes");
+            domain.diagnostic.debug("Seeking download of " + filenameOnly(download.getFilename())
+                    + " from " + download.getUsername() + " to starting offset of "
+                    + download.getStartOffset() + " bytes");
             byte[] offset = ByteBuffer.allocate(8)
                     .order(ByteOrder.LITTLE_ENDIAN)
                     .putLong(download.getStartOffset())
@@ -413,7 +381,7 @@ final class DownloadOperation {
                             // which is what the bucket already does when the
                             // rate is unlimited.
                             (requestedBytes, governorToken) ->
-                                    engine.context.getDownloadTokenBucket().get(requestedBytes, governorToken),
+                                    domain.downloadTokenBucket.get(requestedBytes, governorToken),
                             (attemptedBytes, grantedBytes, transferredBytes) -> {
                                 if (transferOptions.getReporter() != null) {
                                     transferOptions
@@ -424,7 +392,7 @@ final class DownloadOperation {
                                                     grantedBytes,
                                                     transferredBytes);
                                 }
-                                engine.context.getDownloadTokenBucket().returnTokens(grantedBytes - transferredBytes);
+                                domain.downloadTokenBucket.returnTokens(grantedBytes - transferredBytes);
                             },
                             linkedToken);
                     settlement.succeed();
@@ -500,43 +468,37 @@ final class DownloadOperation {
     private void cleanup() {
         try {
             try {
-                engine.context.getWaiter().cancel(transferStartRequestedWaitKey);
+                domain.waiter.cancel(transferStartRequestedWaitKey);
             } catch (Throwable failure) {
-                engine.context
-                        .getDiagnostic()
-                        .warning(
-                                "Failed to cancel wait for key "
-                                        + transferStartRequestedWaitKey
-                                        + ": " + Failures.message(failure),
-                                failure);
+                domain.diagnostic.warning(
+                        "Failed to cancel wait for key "
+                                + transferStartRequestedWaitKey
+                                + ": " + Failures.message(failure),
+                        failure);
             }
             try {
                 unbindConnectionEvents();
             } catch (Throwable failure) {
-                engine.context
-                        .getDiagnostic()
-                        .warning(
-                                "Failed to remove transfer connection "
-                                        + "listeners for file "
-                                        + download.getFilename() + " from user "
-                                        + download.getUsername() + ": "
-                                        + Failures.message(failure),
-                                failure);
+                domain.diagnostic.warning(
+                        "Failed to remove transfer connection "
+                                + "listeners for file "
+                                + download.getFilename() + " from user "
+                                + download.getUsername() + ": "
+                                + Failures.message(failure),
+                        failure);
             }
             if (connection != null) {
                 try {
                     connection.close();
                 } catch (Throwable failure) {
-                    engine.context
-                            .getDiagnostic()
-                            .warning(
-                                    "Failed to dispose transfer connection "
-                                            + "for file "
-                                            + download.getFilename()
-                                            + " from user "
-                                            + download.getUsername() + ": "
-                                            + Failures.message(failure),
-                                    failure);
+                    domain.diagnostic.warning(
+                            "Failed to dispose transfer connection "
+                                    + "for file "
+                                    + download.getFilename()
+                                    + " from user "
+                                    + download.getUsername() + ": "
+                                    + Failures.message(failure),
+                            failure);
                 }
             }
             determineFinalOutputPosition();
@@ -548,37 +510,33 @@ final class DownloadOperation {
                         outputStream.close();
                     }
                 } catch (Throwable failure) {
-                    engine.context
-                            .getDiagnostic()
-                            .warning(
-                                    "Failed to finalize output stream for "
-                                            + "file "
-                                            + filenameOnly(download.getFilename())
-                                            + " from "
-                                            + download.getUsername() + ": "
-                                            + Failures.message(failure),
-                                    failure);
+                    domain.diagnostic.warning(
+                            "Failed to finalize output stream for "
+                                    + "file "
+                                    + filenameOnly(download.getFilename())
+                                    + " from "
+                                    + download.getUsername() + ": "
+                                    + Failures.message(failure),
+                            failure);
                 }
             }
         } finally {
             if (globalPermit.compareAndSet(true, false)) {
                 try {
-                    engine.globalDownloadSemaphore.release();
+                    domain.globalDownloadSemaphore().release();
                 } catch (Throwable failure) {
-                    engine.context
-                            .getDiagnostic()
-                            .warning(
-                                    "Failed to release global download "
-                                            + "semaphore for file "
-                                            + filenameOnly(download.getFilename())
-                                            + " from "
-                                            + download.getUsername() + ": "
-                                            + Failures.message(failure),
-                                    failure);
+                    domain.diagnostic.warning(
+                            "Failed to release global download "
+                                    + "semaphore for file "
+                                    + filenameOnly(download.getFilename())
+                                    + " from "
+                                    + download.getUsername() + ": "
+                                    + Failures.message(failure),
+                            failure);
                 }
             }
-            engine.context.getDownloadRegistry().remove(download.getToken(), download);
-            engine.uniqueKeys.remove(uniqueKey);
+            domain.downloads().remove(download.getToken(), download);
+            domain.releaseUniqueKey(uniqueKey);
         }
     }
 
@@ -603,7 +561,7 @@ final class DownloadOperation {
         if (transferOptions.getStateChanged() != null) {
             transferOptions.getStateChanged().onStateChanged(new TransferStateChange(previous, transfer));
         }
-        engine.context.raiseEvent(Kind.TRANSFER_STATE_CHANGED, eventData);
+        domain.events.accept(Kind.TRANSFER_STATE_CHANGED, eventData);
     }
 
     private void updateProgress(long bytesDownloaded) {
@@ -613,7 +571,7 @@ final class DownloadOperation {
         if (transferOptions.getProgressUpdated() != null) {
             transferOptions.getProgressUpdated().onProgressUpdated(new TransferProgressUpdate(previous, transfer));
         }
-        engine.context.raiseEvent(Kind.TRANSFER_PROGRESS_UPDATED, new TransferProgressUpdatedEvent(previous, transfer));
+        domain.events.accept(Kind.TRANSFER_PROGRESS_UPDATED, new TransferProgressUpdatedEvent(previous, transfer));
     }
 
     private long currentOutputPosition() {
@@ -637,15 +595,13 @@ final class DownloadOperation {
         try {
             return determineOutputPosition(outputStream, trackingStream == null ? 0 : trackingStream.getPosition());
         } catch (Throwable failure) {
-            engine.context
-                    .getDiagnostic()
-                    .warning(
-                            "Failed to determine final position of output "
-                                    + "stream for file "
-                                    + filenameOnly(download.getFilename())
-                                    + " from " + download.getUsername() + ": "
-                                    + Failures.message(failure),
-                            failure);
+            domain.diagnostic.warning(
+                    "Failed to determine final position of output "
+                            + "stream for file "
+                            + filenameOnly(download.getFilename())
+                            + " from " + download.getUsername() + ": "
+                            + Failures.message(failure),
+                    failure);
             return 0;
         }
     }

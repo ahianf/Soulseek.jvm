@@ -12,8 +12,6 @@ import dev.slsk.exceptions.ListenException;
 import dev.slsk.exceptions.LoginRejectedException;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
-import dev.slsk.exceptions.TransferRejectedException;
-import dev.slsk.exceptions.TransferReportedFailedException;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.DefaultWaiter;
@@ -39,7 +37,6 @@ import dev.slsk.internal.messaging.handlers.DefaultPeerMessageHandler;
 import dev.slsk.internal.messaging.handlers.DefaultServerMessageHandler;
 import dev.slsk.internal.messaging.handlers.DistributedMessageHandler;
 import dev.slsk.internal.messaging.handlers.PeerMessageHandler;
-import dev.slsk.internal.messaging.handlers.PeerServices;
 import dev.slsk.internal.messaging.handlers.ServerMessageEvent;
 import dev.slsk.internal.messaging.handlers.ServerMessageHandler;
 import dev.slsk.internal.messaging.messages.LoginRequest;
@@ -67,16 +64,13 @@ import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.search.SearchResponder;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.spi.ShareCatalog;
-import dev.slsk.spi.UploadPolicy;
 import java.io.ByteArrayOutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -102,7 +96,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * still read through the engine. It is package-private now that no interface
  * declares it, and it shrinks as each of them takes its own ports.
  */
-final class SoulseekEngine implements AutoCloseable, PeerServices {
+final class SoulseekEngine implements AutoCloseable {
 
     private static final int MAJOR_VERSION = 170;
     private static final String DEFAULT_ADDRESS = "server.slsknet.org";
@@ -114,9 +108,6 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
     private final TokenFactory tokenFactory;
     private final Semaphore searchSemaphore;
     final Semaphore stateSemaphore = new Semaphore(1);
-    private final Semaphore globalDownloadSemaphore;
-    private final Semaphore globalUploadSemaphore;
-    private final Semaphore uploadSemaphoreSyncRoot = new Semaphore(1);
     private final IOAdapter ioAdapter;
     final TokenBucket uploadTokenBucket;
     final TokenBucket downloadTokenBucket;
@@ -138,19 +129,6 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
     volatile ClientListenerFactory clientListenerFactory = SocketListener::new;
     private volatile ShareCatalog catalog = ShareCatalog.empty();
     private volatile UserProfile profile = UserProfile.empty();
-    private volatile UploadPolicy uploadPolicy = UploadPolicy.standard(2, 1);
-    private volatile UploadAdmission uploadAdmission;
-
-    /**
-     * How a running upload is stopped.
-     *
-     * <p>Uploads are started by us on a peer's behalf, so nothing outside holds
-     * a signal for one. Keeping the controller here is what makes
-     * {@code Uploads.cancel} able to do anything at all.
-     */
-    private final java.util.Map<dev.slsk.TransferId, dev.slsk.CancellationController> uploadCancellations =
-            new java.util.concurrent.ConcurrentHashMap<>();
-
     /**
      * Who the server said has bought privileges.
      *
@@ -181,17 +159,14 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
     /** Searches and the registry of the ones in flight; see SearchDomain. */
     private final SearchDomain searchDomain;
 
-    /** Transfer orchestration, split out; see TransferEngine. */
-    private final TransferEngine transfers;
+    /** Transfers, the two registries, the limits and what a peer may ask of us. */
+    private final TransferDomain transfers;
 
     volatile Listener listener;
     volatile String address;
     volatile InetSocketAddress ipEndpoint;
     private volatile ServerInfo serverInfo = new ServerInfo();
     volatile SoulseekClientState state = SoulseekClientState.DISCONNECTED;
-    private volatile Map<Integer, TransferInternal> downloads = new ConcurrentHashMap<>();
-    private volatile Map<Integer, TransferInternal> uploads = new ConcurrentHashMap<>();
-    private final Map<String, Semaphore> uploadSemaphores = new ConcurrentHashMap<>();
 
     /** Creates a client with default options. */
     SoulseekEngine(int minorVersion) {
@@ -262,11 +237,8 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
         this.rooms = new RoomRegistry(this.waiter, server);
         this.users = new UserDirectory(this, server);
         this.searchDomain = new SearchDomain(this, server);
-        this.transfers = new TransferEngine(this, server);
         this.tokenFactory = tokenFactory == null ? new TokenFactory(this.options.getStartingToken()) : tokenFactory;
         this.searchSemaphore = new Semaphore(this.options.getMaximumConcurrentSearches());
-        this.globalDownloadSemaphore = new Semaphore(this.options.getMaximumConcurrentDownloads());
-        this.globalUploadSemaphore = new Semaphore(this.options.getMaximumConcurrentUploads());
         this.ioAdapter = ioAdapter == null ? new IOAdapter() : ioAdapter;
         this.uploadTokenBucket = uploadTokenBucket == null
                 ? new TokenBucket((this.options.getMaximumUploadSpeed() * 1024L) / 10, 100, scheduler)
@@ -274,6 +246,24 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
         this.downloadTokenBucket = downloadTokenBucket == null
                 ? new TokenBucket((this.options.getMaximumDownloadSpeed() * 1024L) / 10, 100, scheduler)
                 : downloadTokenBucket;
+        // After the buckets and the token factory it takes, and before the peer
+        // message handler, which answers a peer through it. The connection
+        // manager is a supplier because it is built after this.
+        this.transfers = new TransferDomain(
+                this::getOptions,
+                diagnostic,
+                events::raise,
+                this.waiter,
+                this::getPeerConnectionManager,
+                users::getUserEndpoint,
+                server,
+                this.tokenFactory,
+                this.ioAdapter,
+                this.downloadTokenBucket,
+                this.uploadTokenBucket,
+                this::catalog,
+                this::profile,
+                this::isPrivileged);
         this.connectionFactory = connectionFactory == null ? new DefaultConnectionFactory() : connectionFactory;
 
         this.listenerHandler = listenerHandler == null
@@ -301,7 +291,7 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
                         searchDomain::registry,
                         this::getDownloadRegistry,
                         server::username,
-                        this)
+                        this.transfers)
                 : peerMessageHandler;
         this.distributedMessageHandler = distributedMessageHandler == null
                 ? new DefaultDistributedMessageHandler(
@@ -339,13 +329,10 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
                         this::getSearchResponder)
                 : serverMessageHandler;
 
-        uploadAdmission =
-                new UploadAdmission(this::uploadPolicy, this::getUploadRegistry, this::isPrivileged, diagnostic);
-
         bindEvents();
 
         scheduler.scheduleAtFixedRate(users::cleanupUserEndpointSemaphores, 5, 5, TimeUnit.MINUTES);
-        scheduler.scheduleAtFixedRate(this::cleanupUploadSemaphores, 15, 15, TimeUnit.MINUTES);
+        scheduler.scheduleAtFixedRate(transfers::cleanupUploadSemaphores, 15, 15, TimeUnit.MINUTES);
     }
 
     /**
@@ -374,8 +361,7 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
      * connected. A browse in flight finishes against the catalog it started
      * with, which is the only thing a snapshot-shaped read can promise.
      */
-    @Override
-    public ShareCatalog catalog() {
+    ShareCatalog catalog() {
         return catalog;
     }
 
@@ -393,53 +379,8 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
      *
      * @return the profile, never {@code null}
      */
-    @Override
-    public UserProfile profile() {
+    UserProfile profile() {
         return profile;
-    }
-
-    /**
-     * Returns who we serve and in what order.
-     *
-     * @return the upload policy, never {@code null}
-     */
-    @Override
-    public UploadPolicy uploadPolicy() {
-        return uploadPolicy;
-    }
-
-    /**
-     * Sets who we serve and in what order.
-     *
-     * @param value the policy, or {@code null} for the standard one
-     */
-    void setUploadPolicy(UploadPolicy value) {
-        uploadPolicy = value == null ? UploadPolicy.standard(2, 1) : value;
-    }
-
-    /**
-     * Returns what admits or refuses a peer's request.
-     *
-     * @return the admission
-     */
-    @Override
-    public UploadAdmission admission() {
-        return uploadAdmission;
-    }
-
-    /**
-     * Stops a running upload. A no-op for one that has already finished.
-     *
-     * @param id which upload
-     * @return whether there was one to stop
-     */
-    boolean cancelUpload(dev.slsk.TransferId id) {
-        dev.slsk.CancellationController cancellation = uploadCancellations.remove(id);
-        if (cancellation == null) {
-            return false;
-        }
-        cancellation.cancel();
-        return true;
     }
 
     /**
@@ -455,97 +396,6 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
     void setDownloadSpeedLimit(dev.slsk.Bandwidth limit) {
         downloadTokenBucket.setCapacity(
                 limit == null || limit.isUnlimited() ? Long.MAX_VALUE / 16 : Math.max(1, limit.bytesPerSecond() / 10));
-    }
-
-    /** Answers a peer's unsolicited offer of a file. */
-    @FunctionalInterface
-    interface DownloadOffers {
-        PeerServices.OfferDisposition offered(
-                String username, String filename, dev.slsk.internal.messaging.messages.TransferRequest offer);
-    }
-
-    /**
-     * Who decides what an offered file is.
-     *
-     * <p>The download queue, once the downloads facet installs itself. Until
-     * then every offer is unknown, which is the honest answer: without a queue
-     * there is nothing an offer could match beyond the live transfers the
-     * handler already checked.
-     */
-    private volatile DownloadOffers downloadOffers =
-            (username, filename, offer) -> PeerServices.OfferDisposition.UNKNOWN;
-
-    void downloadOffers(DownloadOffers value) {
-        this.downloadOffers = Objects.requireNonNull(value, "downloadOffers");
-    }
-
-    @Override
-    public PeerServices.OfferDisposition offered(
-            String username, String filename, dev.slsk.internal.messaging.messages.TransferRequest offer) {
-        return downloadOffers.offered(username, filename, offer);
-    }
-
-    /**
-     * Serves a file to a peer whose request the policy allowed.
-     *
-     * <p>Nothing did this before 1.0. The old surface accepted the request in
-     * {@code EnqueueDownloadCallback} and left the application to call {@code
-     * upload(...)} itself, which is why "uploads are requested by peers and
-     * admitted by the upload policy" has to mean the library serves them —
-     * otherwise the capability is disposed of and nothing takes it over.
-     *
-     * <p>The bytes come from {@link ShareCatalog#resolve}, so a peer can only
-     * ever receive what the catalog agrees it may have, checked against the
-     * share root rather than trusted from the request.
-     *
-     * @param user who asked
-     * @param path the file they asked for
-     */
-    @Override
-    public void serve(dev.slsk.Username user, String path) {
-        dev.slsk.internal.common.NetworkExecutor.runAsync(() -> {
-            java.util.Optional<dev.slsk.spi.ResolvedFile> resolved;
-            try {
-                resolved = catalog.resolve(user, path);
-            } catch (RuntimeException failure) {
-                diagnostic.warning("The share catalog failed to resolve " + path, failure);
-                return;
-            }
-            if (resolved.isEmpty()) {
-                // Allowed by policy but not by the catalog. One answer for every
-                // rejection, so the reply cannot become a filesystem oracle.
-                uploadAdmission.forget(user, path);
-                return;
-            }
-            dev.slsk.spi.ResolvedFile file = resolved.get();
-            int token = getNextToken();
-            dev.slsk.TransferId id = dev.slsk.TransferId.of("UPLOAD:" + token);
-            dev.slsk.CancellationController cancellation = new dev.slsk.CancellationController();
-            uploadCancellations.put(id, cancellation);
-            // Already on a virtual thread of its own, so the upload is simply
-            // waited for. The completion callback this replaces existed to
-            // carry the bookkeeping across a future boundary that is no longer
-            // here.
-            try {
-                Transfer transfer =
-                        transfers.upload(UploadRequest.fromStream(user.value(), path, file.size(), offset -> {
-                                    try {
-                                        return java.nio.channels.Channels.newInputStream(file.open(offset));
-                                    } catch (java.io.IOException failure) {
-                                        throw new java.io.UncheckedIOException(failure);
-                                    }
-                                })
-                                .token(token)
-                                .cancellation(cancellation.getSignal())
-                                .build());
-                uploadAdmission.served(user, transfer.getBytesTransferred());
-            } catch (RuntimeException failure) {
-                diagnostic.warning("Failed to serve an upload of " + path + " to " + user, failure);
-            } finally {
-                uploadCancellations.remove(id);
-                uploadAdmission.forget(user, path);
-            }
-        });
     }
 
     /**
@@ -862,21 +712,13 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
         return downloadTokenBucket;
     }
 
-    /** Duplicate-transfer keys, owned by the transfer engine. */
+    /** Duplicate-transfer keys, owned by the transfer domain. */
     final Map<String, Boolean> getUniqueKeys() {
-        return transfers.getUniqueKeys();
-    }
-
-    final Map<String, Semaphore> getUploadSemaphoresForTest() {
-        return uploadSemaphores;
+        return transfers.uniqueKeys();
     }
 
     final Map<String, Semaphore> getUserEndpointSemaphoresForTest() {
         return users.getUserEndpointSemaphores();
-    }
-
-    final Semaphore getUploadSemaphoreSyncRootForTest() {
-        return uploadSemaphoreSyncRoot;
     }
 
     void setStateForTest(SoulseekClientState value) {
@@ -896,11 +738,11 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
     }
 
     void setDownloadsForTest(Map<Integer, TransferInternal> value) {
-        downloads = value;
+        transfers.downloadsForTest(value);
     }
 
     void setUploadsForTest(Map<Integer, TransferInternal> value) {
-        uploads = value;
+        transfers.uploadsForTest(value);
     }
 
     void setSearchesForTest(Map<Integer, SearchInternal> value) {
@@ -1020,17 +862,7 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
 
     private void downloadDenied(DownloadDeniedEvent eventData) {
         try {
-            List<TransferInternal> matching = downloads.values().stream()
-                    .filter(download -> Objects.equals(download.getUsername(), eventData.getUsername())
-                            && Objects.equals(download.getFilename(), eventData.getFilename()))
-                    .toList();
-            for (TransferInternal download : matching) {
-                download.settlement().fail(new TransferRejectedException(eventData.getMessage()));
-                diagnostic.debug("Download of " + download.getFilename() + " from "
-                        + download.getUsername()
-                        + " rejected by remote client (token: "
-                        + download.getToken() + ")");
-            }
+            transfers.deniedByPeer(eventData.getUsername(), eventData.getFilename(), eventData.getMessage());
         } catch (Throwable failure) {
             diagnostic.warning("Failed to mark download(s) rejected: " + Failures.message(failure), failure);
         } finally {
@@ -1040,18 +872,7 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
 
     private void downloadFailed(DownloadFailedEvent eventData) {
         try {
-            List<TransferInternal> matching = downloads.values().stream()
-                    .filter(download -> Objects.equals(download.getUsername(), eventData.getUsername())
-                            && Objects.equals(download.getFilename(), eventData.getFilename()))
-                    .toList();
-            for (TransferInternal download : matching) {
-                download.settlement()
-                        .fail(new TransferReportedFailedException("Download reported as failed by remote client"));
-                diagnostic.debug("Download of " + download.getFilename() + " from "
-                        + download.getUsername()
-                        + " reported as failed by remote client (token: "
-                        + download.getToken() + ")");
-            }
+            transfers.failedByPeer(eventData.getUsername(), eventData.getFilename());
         } catch (Throwable failure) {
             diagnostic.warning("Failed to mark download(s) failed: " + Failures.message(failure), failure);
         } finally {
@@ -1313,27 +1134,6 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
         return new RuntimeException(failure);
     }
 
-    void cleanupUploadSemaphores() {
-        if (!uploadSemaphoreSyncRoot.tryAcquire()) {
-            return;
-        }
-        try {
-            for (Map.Entry<String, Semaphore> entry : uploadSemaphores.entrySet()) {
-                Semaphore semaphore = entry.getValue();
-                if (!semaphore.tryAcquire()) {
-                    continue;
-                }
-                if (uploadSemaphores.remove(entry.getKey(), semaphore)) {
-                    diagnostic.debug("Cleaned up upload semaphore for " + entry.getKey());
-                } else {
-                    semaphore.release();
-                }
-            }
-        } finally {
-            uploadSemaphoreSyncRoot.release();
-        }
-    }
-
     // ---- what the in-package collaborators still read here ----------------
 
     /** The periodic endpoint-semaphore sweep; exposed for tests. */
@@ -1382,11 +1182,11 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
     }
 
     java.util.Map<Integer, TransferInternal> getDownloadRegistry() {
-        return downloads;
+        return transfers.downloads();
     }
 
     java.util.Map<Integer, TransferInternal> getUploadRegistry() {
-        return uploads;
+        return transfers.uploads();
     }
 
     String getLoggedInUsername() {
@@ -1447,7 +1247,7 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
         return searchDomain;
     }
 
-    TransferEngine transfers() {
+    TransferDomain transfers() {
         return transfers;
     }
 }

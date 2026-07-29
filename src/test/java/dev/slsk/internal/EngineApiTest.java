@@ -44,21 +44,22 @@ import org.junit.jupiter.api.Test;
 class EngineApiTest {
 
     /**
-     * The one collaborator interface the engine still answers.
+     * The collaborator interfaces the engine answers.
      *
-     * <p>It was nine. Eight went the same way: the members were one-line
-     * accessors, so each component took what it used as a constructor argument
-     * and the interface was deleted — {@code EngineContext} with them, and with
-     * it every public method that existed only because an interface declared
-     * it. The engine's public surface went from forty-eight names to
-     * twenty-one in one commit without one line of behaviour moving.
+     * <p><strong>Empty, and that is the assertion.</strong> It was nine. Eight
+     * went the same way in Phase 3: the members were one-line accessors, so each
+     * component took what it used as a constructor argument and the interface was
+     * deleted — {@code EngineContext} with them, and with it every public method
+     * that existed only because an interface declared it.
      *
-     * <p>What is left is {@link dev.slsk.internal.messaging.handlers.PeerServices}:
-     * what this client offers a peer. Its six members are the upload, share and
-     * profile state, and they leave with {@code TransferEngine} in Phase 4.
+     * <p>The ninth was {@code PeerServices} — what this client offers a peer —
+     * and it went with the transfers. {@code TransferDomain} answers it now,
+     * because four of its six members are the upload policy, the admission,
+     * serving a file and what an offer turned out to be, and the other two are
+     * the catalog and the profile it reads to serve one. The engine implements
+     * {@link AutoCloseable} and nothing else.
      */
-    private static final Set<String> SEAM =
-            Set.of("admission", "catalog", "offered", "profile", "serve", "uploadPolicy");
+    private static final Set<String> SEAM = Set.of();
 
     /** The connection lifecycle and the state that belongs to it. */
     private static final Set<String> ENGINE = Set.of(

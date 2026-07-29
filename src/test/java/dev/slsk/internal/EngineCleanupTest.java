@@ -20,13 +20,15 @@ class EngineCleanupTest {
     @Test
     void exitsWhenUploadSynchronizationRootIsHeld() {
         try (Fixture fixture = new Fixture()) {
-            Semaphore syncRoot = fixture.client.getUploadSemaphoreSyncRootForTest();
+            Semaphore syncRoot = fixture.client.transfers().uploadSemaphoreSyncRootForTest();
             syncRoot.acquireUninterruptibly();
             Semaphore user = new Semaphore(1);
-            fixture.client.getUploadSemaphoresForTest().put("alice", user);
+            fixture.client.transfers().uploadSemaphoresForTest().put("alice", user);
             try {
-                fixture.client.cleanupUploadSemaphores();
-                assertSame(user, fixture.client.getUploadSemaphoresForTest().get("alice"));
+                fixture.client.transfers().cleanupUploadSemaphores();
+                assertSame(
+                        user,
+                        fixture.client.transfers().uploadSemaphoresForTest().get("alice"));
             } finally {
                 syncRoot.release();
             }
@@ -36,12 +38,38 @@ class EngineCleanupTest {
     @Test
     void removesAvailableUploadSemaphoreAndEmitsDiagnostic() {
         try (Fixture fixture = new Fixture()) {
-            fixture.client.getUploadSemaphoresForTest().put("alice", new Semaphore(1));
+            fixture.client.transfers().uploadSemaphoresForTest().put("alice", new Semaphore(1));
 
-            fixture.client.cleanupUploadSemaphores();
+            fixture.client.transfers().cleanupUploadSemaphores();
 
-            assertTrue(fixture.client.getUploadSemaphoresForTest().isEmpty());
+            assertTrue(fixture.client.transfers().uploadSemaphoresForTest().isEmpty());
             assertEquals(List.of("Cleaned up upload semaphore for alice"), fixture.diagnostic.debugMessages);
+        }
+    }
+
+    /**
+     * The sweep and the upload path have to be looking at the same map.
+     *
+     * <p>They were not. There were two per-user semaphore maps — one on the
+     * engine, which the sweep ran against, and one on the transfer engine, which
+     * every upload actually took its permit from — so the map that filled up was
+     * never swept and the map that was swept was always empty. One owner is what
+     * makes this assertable at all.
+     */
+    @Test
+    void theSweepReachesTheSemaphoresAnUploadActuallyTakes() {
+        try (Fixture fixture = new Fixture()) {
+            TransferDomain transfers = fixture.client.transfers();
+            Semaphore taken = transfers.uploadSemaphoreFor("alice", dev.slsk.CancellationSignal.none());
+            assertSame(taken, transfers.uploadSemaphoresForTest().get("alice"));
+
+            taken.acquireUninterruptibly();
+            transfers.cleanupUploadSemaphores();
+            assertSame(taken, transfers.uploadSemaphoresForTest().get("alice"), "a semaphore in use is kept");
+
+            taken.release();
+            transfers.cleanupUploadSemaphores();
+            assertTrue(transfers.uploadSemaphoresForTest().isEmpty(), "a semaphore nothing holds is swept");
         }
     }
 
@@ -49,11 +77,12 @@ class EngineCleanupTest {
     void retainsUploadSemaphoreWithoutAvailablePermit() {
         try (Fixture fixture = new Fixture()) {
             Semaphore held = new Semaphore(0);
-            fixture.client.getUploadSemaphoresForTest().put("alice", held);
+            fixture.client.transfers().uploadSemaphoresForTest().put("alice", held);
 
-            fixture.client.cleanupUploadSemaphores();
+            fixture.client.transfers().cleanupUploadSemaphores();
 
-            assertSame(held, fixture.client.getUploadSemaphoresForTest().get("alice"));
+            assertSame(
+                    held, fixture.client.transfers().uploadSemaphoresForTest().get("alice"));
             assertTrue(fixture.diagnostic.debugMessages.isEmpty());
         }
     }
