@@ -75,171 +75,63 @@ final class TransferEngine {
                 new java.util.concurrent.Semaphore(context.getClientOptions().getMaximumConcurrentUploads());
     }
 
-    /** Downloads a remote file to a local file. */
     /**
      * Downloads what the request describes.
      *
      * <p>The request object carries both shapes — to a file, or to a stream —
      * and choosing between them is a property of the request, not of the
-     * caller. The client used to make that choice in a blocking wrapper on its
-     * way here; the choice belongs with the engine that acts on it.
+     * caller. What used to sit between this and the two bodies below was
+     * fourteen overloads expressing the cross product of two destinations and
+     * five optional arguments; that is C# default parameters written out as
+     * Java source, and the request object already says all of it.
      *
      * @param request the download to perform
      * @return the completed transfer
      */
     Transfer download(DownloadRequest request) {
-        java.util.Objects.requireNonNull(request, "request");
+        Objects.requireNonNull(request, "request");
         try {
-            return await(downloadOperation(request));
+            return await(request.isToStream() ? downloadToStream(request) : downloadToFile(request));
         } catch (Throwable failure) {
             throw Failures.surface(failure);
         }
-    }
-
-    private CompletableFuture<Transfer> downloadOperation(DownloadRequest request) {
-        return request.isToStream()
-                ? download(
-                        request.getUsername(),
-                        request.getRemoteFilename(),
-                        request.getOutputStreamFactory(),
-                        request.getSize(),
-                        request.getStartOffset(),
-                        request.getToken(),
-                        request.getOptions(),
-                        request.getOffer(),
-                        request.getCancellationSignal())
-                : download(
-                        request.getUsername(),
-                        request.getRemoteFilename(),
-                        request.getLocalFilename(),
-                        request.getSize(),
-                        request.getStartOffset(),
-                        request.getToken(),
-                        request.getOptions(),
-                        request.getCancellationSignal());
     }
 
     /**
      * Uploads what the request describes.
      *
+     * <p>The counterpart to {@link #download(DownloadRequest)}; see there.
+     *
      * @param request the upload to perform
      * @return the completed transfer
      */
     Transfer upload(UploadRequest request) {
-        java.util.Objects.requireNonNull(request, "request");
+        Objects.requireNonNull(request, "request");
         try {
-            return await(uploadOperation(request));
+            return await(request.isFromStream() ? uploadFromStream(request) : uploadFromFile(request));
         } catch (Throwable failure) {
             throw Failures.surface(failure);
         }
     }
 
-    private CompletableFuture<Transfer> uploadOperation(UploadRequest request) {
-        return request.isFromStream()
-                ? upload(
-                        request.getUsername(),
-                        request.getRemoteFilename(),
-                        request.getSize(),
-                        request.getInputStreamFactory(),
-                        request.getToken(),
-                        request.getOptions(),
-                        request.getCancellationSignal())
-                : upload(
-                        request.getUsername(),
-                        request.getRemoteFilename(),
-                        request.getLocalFilename(),
-                        request.getToken(),
-                        request.getOptions(),
-                        request.getCancellationSignal());
-    }
-
-    CompletableFuture<Transfer> download(String requestedUsername, String remoteFilename, String localFilename) {
-        return download(
-                requestedUsername, remoteFilename, localFilename, null, 0, null, null, CancellationSignal.none());
-    }
-    /** Downloads a remote file with an expected size. */
-    CompletableFuture<Transfer> download(
-            String requestedUsername, String remoteFilename, String localFilename, Long size) {
-        return download(
-                requestedUsername, remoteFilename, localFilename, size, 0, null, null, CancellationSignal.none());
-    }
-    /** Downloads a remote file with cancellation. */
-    CompletableFuture<Transfer> download(
-            String requestedUsername,
-            String remoteFilename,
-            String localFilename,
-            CancellationSignal cancellationSignal) {
-        return download(requestedUsername, remoteFilename, localFilename, null, 0, null, null, cancellationSignal);
-    }
-    /** Downloads a remote file from a resume offset. */
-    CompletableFuture<Transfer> download(
-            String requestedUsername, String remoteFilename, String localFilename, Long size, long startOffset) {
-        return download(
-                requestedUsername,
-                remoteFilename,
-                localFilename,
-                size,
-                startOffset,
-                null,
-                null,
-                CancellationSignal.none());
-    }
-    /** Downloads a remote file with a specific token. */
-    CompletableFuture<Transfer> download(
-            String requestedUsername,
-            String remoteFilename,
-            String localFilename,
-            Long size,
-            long startOffset,
-            Integer token) {
-        return download(
-                requestedUsername,
-                remoteFilename,
-                localFilename,
-                size,
-                startOffset,
-                token,
-                null,
-                CancellationSignal.none());
-    }
-    /** Downloads a remote file using supplied transfer context.getClientOptions(). */
-    CompletableFuture<Transfer> download(
-            String requestedUsername,
-            String remoteFilename,
-            String localFilename,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions transferOptions) {
-        return download(
-                requestedUsername,
-                remoteFilename,
-                localFilename,
-                size,
-                startOffset,
-                token,
-                transferOptions,
-                CancellationSignal.none());
-    }
-    /** Downloads a remote file to a local file. */
-    CompletableFuture<Transfer> download(
-            String requestedUsername,
-            String remoteFilename,
-            String localFilename,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions transferOptions,
-            CancellationSignal cancellationSignal) {
+    /** Downloads to a local path, opening it as the destination stream. */
+    private CompletableFuture<Transfer> downloadToFile(DownloadRequest request) {
+        String requestedUsername = request.getUsername();
+        String remoteFilename = request.getRemoteFilename();
+        String localFilename = request.getLocalFilename();
+        long startOffset = request.getStartOffset();
         CommonUtils.requireText(requestedUsername, "username");
         CommonUtils.requireText(remoteFilename, "remoteFilename");
         CommonUtils.requireText(localFilename, "localFilename");
-        validateDownloadRange(size, startOffset);
+        validateDownloadRange(request.getSize(), startOffset);
         server.requireLoggedIn("download files");
-        int transferToken = token == null ? context.getTokenFactory().nextToken() : token;
+        int transferToken =
+                request.getToken() == null ? context.getTokenFactory().nextToken() : request.getToken();
         validateDownloadUniqueness(requestedUsername, remoteFilename, transferToken);
-        TransferOptions options =
-                (transferOptions == null ? new TransferOptions() : transferOptions).withDisposalOptions(null, true);
+        // A stream this opened is a stream this closes, whatever the request
+        // said about a stream it did not open.
+        TransferOptions options = (request.getOptions() == null ? new TransferOptions() : request.getOptions())
+                .withDisposalOptions(null, true);
         return downloadToStreamAsync(
                 requestedUsername,
                 remoteFilename,
@@ -250,179 +142,43 @@ final class TransferEngine {
                         throw new UncheckedIOException(failure);
                     }
                 },
-                size,
+                request.getSize(),
                 startOffset,
                 transferToken,
                 options,
-                CommonUtils.token(cancellationSignal));
-    }
-    /** Downloads data to a stream created by a factory. */
-    CompletableFuture<Transfer> download(
-            String requestedUsername, String remoteFilename, Supplier<OutputStream> outputStreamFactory) {
-        return download(
-                requestedUsername, remoteFilename, outputStreamFactory, null, 0, null, null, CancellationSignal.none());
-    }
-    /** Downloads stream data with an expected size. */
-    CompletableFuture<Transfer> download(
-            String requestedUsername, String remoteFilename, Supplier<OutputStream> outputStreamFactory, Long size) {
-        return download(
-                requestedUsername, remoteFilename, outputStreamFactory, size, 0, null, null, CancellationSignal.none());
-    }
-    /** Downloads stream data with cancellation. */
-    CompletableFuture<Transfer> download(
-            String requestedUsername,
-            String remoteFilename,
-            Supplier<OutputStream> outputStreamFactory,
-            CancellationSignal cancellationSignal) {
-        return download(
-                requestedUsername, remoteFilename, outputStreamFactory, null, 0, null, null, cancellationSignal);
-    }
-    /** Downloads stream data from a resume offset. */
-    CompletableFuture<Transfer> download(
-            String requestedUsername,
-            String remoteFilename,
-            Supplier<OutputStream> outputStreamFactory,
-            Long size,
-            long startOffset) {
-        return download(
-                requestedUsername,
-                remoteFilename,
-                outputStreamFactory,
-                size,
-                startOffset,
-                null,
-                null,
-                CancellationSignal.none());
-    }
-    /** Downloads stream data with a specific token. */
-    CompletableFuture<Transfer> download(
-            String requestedUsername,
-            String remoteFilename,
-            Supplier<OutputStream> outputStreamFactory,
-            Long size,
-            long startOffset,
-            Integer token) {
-        return download(
-                requestedUsername,
-                remoteFilename,
-                outputStreamFactory,
-                size,
-                startOffset,
-                token,
-                null,
-                CancellationSignal.none());
-    }
-    /** Downloads stream data using supplied transfer context.getClientOptions(). */
-    CompletableFuture<Transfer> download(
-            String requestedUsername,
-            String remoteFilename,
-            Supplier<OutputStream> outputStreamFactory,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions transferOptions) {
-        return download(
-                requestedUsername,
-                remoteFilename,
-                outputStreamFactory,
-                size,
-                startOffset,
-                token,
-                transferOptions,
-                CancellationSignal.none());
-    }
-    /** Downloads data to a stream created by a factory. */
-    CompletableFuture<Transfer> download(
-            String requestedUsername,
-            String remoteFilename,
-            Supplier<OutputStream> outputStreamFactory,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions transferOptions,
-            CancellationSignal cancellationSignal) {
-        return download(
-                requestedUsername,
-                remoteFilename,
-                outputStreamFactory,
-                size,
-                startOffset,
-                token,
-                transferOptions,
-                null,
-                cancellationSignal);
+                request.getOffer(),
+                CommonUtils.token(request.getCancellationSignal()));
     }
 
-    /** Downloads data to a stream, taking up a peer's standing offer if there is one. */
-    CompletableFuture<Transfer> download(
-            String requestedUsername,
-            String remoteFilename,
-            Supplier<OutputStream> outputStreamFactory,
-            Long size,
-            long startOffset,
-            Integer token,
-            TransferOptions transferOptions,
-            dev.slsk.internal.messaging.messages.TransferRequest offer,
-            CancellationSignal cancellationSignal) {
+    /** Downloads to a caller-supplied stream. */
+    private CompletableFuture<Transfer> downloadToStream(DownloadRequest request) {
+        String requestedUsername = request.getUsername();
+        String remoteFilename = request.getRemoteFilename();
         CommonUtils.requireText(requestedUsername, "username");
         CommonUtils.requireText(remoteFilename, "remoteFilename");
-        validateDownloadRange(size, startOffset);
-        Objects.requireNonNull(outputStreamFactory, "outputStreamFactory");
+        validateDownloadRange(request.getSize(), request.getStartOffset());
+        Objects.requireNonNull(request.getOutputStreamFactory(), "outputStreamFactory");
         server.requireLoggedIn("download files");
-        int transferToken = token == null ? context.getTokenFactory().nextToken() : token;
+        int transferToken =
+                request.getToken() == null ? context.getTokenFactory().nextToken() : request.getToken();
         validateDownloadUniqueness(requestedUsername, remoteFilename, transferToken);
         return downloadToStreamAsync(
                 requestedUsername,
                 remoteFilename,
-                outputStreamFactory,
-                size,
-                startOffset,
+                request.getOutputStreamFactory(),
+                request.getSize(),
+                request.getStartOffset(),
                 transferToken,
-                transferOptions == null ? new TransferOptions() : transferOptions,
-                offer,
-                CommonUtils.token(cancellationSignal));
+                request.getOptions() == null ? new TransferOptions() : request.getOptions(),
+                request.getOffer(),
+                CommonUtils.token(request.getCancellationSignal()));
     }
-    /** Uploads a local file to a peer. */
-    CompletableFuture<Transfer> upload(String requestedUsername, String remoteFilename, String localFilename) {
-        return upload(requestedUsername, remoteFilename, localFilename, null, null, CancellationSignal.none());
-    }
-    /** Uploads a local file to a peer with a specific token. */
-    CompletableFuture<Transfer> upload(
-            String requestedUsername, String remoteFilename, String localFilename, Integer token) {
-        return upload(requestedUsername, remoteFilename, localFilename, token, null, CancellationSignal.none());
-    }
-    /** Uploads a local file with cancellation. */
-    CompletableFuture<Transfer> upload(
-            String requestedUsername,
-            String remoteFilename,
-            String localFilename,
-            CancellationSignal cancellationSignal) {
-        return upload(requestedUsername, remoteFilename, localFilename, null, null, cancellationSignal);
-    }
-    /** Uploads a local file using the supplied context.getClientOptions(). */
-    CompletableFuture<Transfer> upload(
-            String requestedUsername, String remoteFilename, String localFilename, TransferOptions transferOptions) {
-        return upload(
-                requestedUsername, remoteFilename, localFilename, null, transferOptions, CancellationSignal.none());
-    }
-    /** Uploads a local file to a peer using the supplied context.getClientOptions(). */
-    CompletableFuture<Transfer> upload(
-            String requestedUsername,
-            String remoteFilename,
-            String localFilename,
-            Integer token,
-            TransferOptions transferOptions) {
-        return upload(
-                requestedUsername, remoteFilename, localFilename, token, transferOptions, CancellationSignal.none());
-    }
-    /** Uploads a local file to a peer. */
-    CompletableFuture<Transfer> upload(
-            String requestedUsername,
-            String remoteFilename,
-            String localFilename,
-            Integer token,
-            TransferOptions transferOptions,
-            CancellationSignal cancellationSignal) {
+
+    /** Uploads a local path, opening it as the source stream. */
+    private CompletableFuture<Transfer> uploadFromFile(UploadRequest request) {
+        String requestedUsername = request.getUsername();
+        String remoteFilename = request.getRemoteFilename();
+        String localFilename = request.getLocalFilename();
         CommonUtils.requireText(requestedUsername, "username");
         CommonUtils.requireText(remoteFilename, "remoteFilename");
         CommonUtils.requireText(localFilename, "localFilename");
@@ -440,11 +196,11 @@ final class TransferEngine {
                     failure);
         }
 
-        int transferToken = token == null ? context.getTokenFactory().nextToken() : token;
+        int transferToken =
+                request.getToken() == null ? context.getTokenFactory().nextToken() : request.getToken();
         validateUploadUniqueness(requestedUsername, remoteFilename, transferToken);
-        TransferOptions options = transferOptions == null ? new TransferOptions() : transferOptions;
-        TransferOptions fileOptions =
-                (options == null ? new TransferOptions() : options).withDisposalOptions(true, null);
+        TransferOptions fileOptions = (request.getOptions() == null ? new TransferOptions() : request.getOptions())
+                .withDisposalOptions(true, null);
         long size;
         try {
             size = context.getIoAdapter().getFileInfo(localFilename).size();
@@ -464,92 +220,31 @@ final class TransferEngine {
                 },
                 transferToken,
                 fileOptions,
-                CommonUtils.token(cancellationSignal));
+                CommonUtils.token(request.getCancellationSignal()));
     }
-    /** Uploads data supplied by an asynchronous stream factory. */
-    CompletableFuture<Transfer> upload(
-            String requestedUsername, String remoteFilename, long size, LongFunction<InputStream> inputStreamFactory) {
-        return upload(
-                requestedUsername, remoteFilename, size, inputStreamFactory, null, null, CancellationSignal.none());
-    }
-    /** Uploads stream data with a specific transfer token. */
-    CompletableFuture<Transfer> upload(
-            String requestedUsername,
-            String remoteFilename,
-            long size,
-            LongFunction<InputStream> inputStreamFactory,
-            Integer token) {
-        return upload(
-                requestedUsername, remoteFilename, size, inputStreamFactory, token, null, CancellationSignal.none());
-    }
-    /** Uploads stream data with cancellation. */
-    CompletableFuture<Transfer> upload(
-            String requestedUsername,
-            String remoteFilename,
-            long size,
-            LongFunction<InputStream> inputStreamFactory,
-            CancellationSignal cancellationSignal) {
-        return upload(requestedUsername, remoteFilename, size, inputStreamFactory, null, null, cancellationSignal);
-    }
-    /** Uploads stream data using the supplied context.getClientOptions(). */
-    CompletableFuture<Transfer> upload(
-            String requestedUsername,
-            String remoteFilename,
-            long size,
-            LongFunction<InputStream> inputStreamFactory,
-            TransferOptions transferOptions) {
-        return upload(
-                requestedUsername,
-                remoteFilename,
-                size,
-                inputStreamFactory,
-                null,
-                transferOptions,
-                CancellationSignal.none());
-    }
-    /** Uploads stream data using the supplied transfer context.getClientOptions(). */
-    CompletableFuture<Transfer> upload(
-            String requestedUsername,
-            String remoteFilename,
-            long size,
-            LongFunction<InputStream> inputStreamFactory,
-            Integer token,
-            TransferOptions transferOptions) {
-        return upload(
-                requestedUsername,
-                remoteFilename,
-                size,
-                inputStreamFactory,
-                token,
-                transferOptions,
-                CancellationSignal.none());
-    }
-    /** Uploads data supplied by an asynchronous stream factory. */
-    CompletableFuture<Transfer> upload(
-            String requestedUsername,
-            String remoteFilename,
-            long size,
-            LongFunction<InputStream> inputStreamFactory,
-            Integer token,
-            TransferOptions transferOptions,
-            CancellationSignal cancellationSignal) {
+
+    /** Uploads from a caller-supplied stream. */
+    private CompletableFuture<Transfer> uploadFromStream(UploadRequest request) {
+        String requestedUsername = request.getUsername();
+        String remoteFilename = request.getRemoteFilename();
         CommonUtils.requireText(requestedUsername, "username");
         CommonUtils.requireText(remoteFilename, "remoteFilename");
-        if (size < 0) {
+        if (request.getSize() < 0) {
             throw new IllegalArgumentException("size must be greater than or equal to zero");
         }
-        Objects.requireNonNull(inputStreamFactory, "inputStreamFactory");
+        Objects.requireNonNull(request.getInputStreamFactory(), "inputStreamFactory");
         server.requireLoggedIn("upload files");
-        int transferToken = token == null ? context.getTokenFactory().nextToken() : token;
+        int transferToken =
+                request.getToken() == null ? context.getTokenFactory().nextToken() : request.getToken();
         validateUploadUniqueness(requestedUsername, remoteFilename, transferToken);
         return uploadFromStreamAsync(
                 requestedUsername,
                 remoteFilename,
-                size,
-                inputStreamFactory,
+                request.getSize(),
+                request.getInputStreamFactory(),
                 transferToken,
-                transferOptions == null ? new TransferOptions() : transferOptions,
-                CommonUtils.token(cancellationSignal));
+                request.getOptions() == null ? new TransferOptions() : request.getOptions(),
+                CommonUtils.token(request.getCancellationSignal()));
     }
 
     Integer getDownloadPlaceInQueue(String requestedUsername, String filename) {
@@ -586,27 +281,6 @@ final class TransferEngine {
                     "Failed to fetch place in queue for download of " + filename + " from " + requestedUsername + ": ",
                     UserOfflineException.class);
         }
-    }
-
-    CompletableFuture<Transfer> downloadToStreamAsync(
-            String requestedUsername,
-            String remoteFilename,
-            Supplier<OutputStream> outputStreamFactory,
-            Long size,
-            long startOffset,
-            int token,
-            TransferOptions transferOptions,
-            CancellationSignal cancellationSignal) {
-        return downloadToStreamAsync(
-                requestedUsername,
-                remoteFilename,
-                outputStreamFactory,
-                size,
-                startOffset,
-                token,
-                transferOptions,
-                null,
-                cancellationSignal);
     }
 
     CompletableFuture<Transfer> downloadToStreamAsync(

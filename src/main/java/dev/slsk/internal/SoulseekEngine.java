@@ -522,33 +522,28 @@ final class SoulseekEngine implements AutoCloseable, PeerServices {
             dev.slsk.TransferId id = dev.slsk.TransferId.of("UPLOAD:" + token);
             dev.slsk.CancellationController cancellation = new dev.slsk.CancellationController();
             uploadCancellations.put(id, cancellation);
+            // Already on a virtual thread of its own, so the upload is simply
+            // waited for. The completion callback this replaces existed to
+            // carry the bookkeeping across a future boundary that is no longer
+            // here.
             try {
-                transfers
-                        .upload(
-                                user.value(),
-                                path,
-                                file.size(),
-                                offset -> {
+                Transfer transfer =
+                        transfers.upload(UploadRequest.fromStream(user.value(), path, file.size(), offset -> {
                                     try {
                                         return java.nio.channels.Channels.newInputStream(file.open(offset));
                                     } catch (java.io.IOException failure) {
                                         throw new java.io.UncheckedIOException(failure);
                                     }
-                                },
-                                token,
-                                null,
-                                cancellation.getSignal())
-                        .whenComplete((transfer, failure) -> {
-                            uploadCancellations.remove(id);
-                            uploadAdmission.forget(user, path);
-                            if (failure == null && transfer != null) {
-                                uploadAdmission.served(user, transfer.getBytesTransferred());
-                            }
-                        });
+                                })
+                                .token(token)
+                                .cancellation(cancellation.getSignal())
+                                .build());
+                uploadAdmission.served(user, transfer.getBytesTransferred());
             } catch (RuntimeException failure) {
+                diagnostic.warning("Failed to serve an upload of " + path + " to " + user, failure);
+            } finally {
                 uploadCancellations.remove(id);
                 uploadAdmission.forget(user, path);
-                diagnostic.warning("Failed to start an upload of " + path + " to " + user, failure);
             }
         });
     }
