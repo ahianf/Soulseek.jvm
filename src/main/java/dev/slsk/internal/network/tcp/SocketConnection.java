@@ -696,7 +696,18 @@ public class SocketConnection implements Connection {
                     + "; the write buffer stayed full for "
                     + options.getWriteQueueTimeout() + " milliseconds");
         }
-        acquire(writeSemaphore, cancellationSignal);
+        try {
+            acquire(writeSemaphore, cancellationSignal);
+        } catch (Exception failure) {
+            // The queue slot is already held, and the finally that releases it
+            // is not reached from here. Without this, every write cancelled
+            // while waiting for the write lock cost one of the queue's permits
+            // permanently — exhaust the 250 and every later write disconnects
+            // the connection as "buffer full". The C# source has the identical
+            // leak; it is a defect there too.
+            writeQueueSemaphore.release();
+            throw failure;
+        }
 
         try {
             resetInactivityTime();

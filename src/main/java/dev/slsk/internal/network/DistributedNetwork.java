@@ -98,6 +98,10 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     private final AtomicReference<ScheduledFuture<?>> statusDebounce = new AtomicReference<>();
     private final AtomicBoolean parentConnecting = new AtomicBoolean();
     private final AtomicBoolean statusUpdating = new AtomicBoolean();
+
+    /** Set when a state change arrived while an update was in flight; see updateStatus. */
+    private final AtomicBoolean statusDirty = new AtomicBoolean();
+
     private final AtomicBoolean disposed = new AtomicBoolean();
     private final ConcurrentHashMap<String, ConnectionCell> childConnections = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, InetSocketAddress> children = new ConcurrentHashMap<>();
@@ -693,50 +697,68 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             return;
         }
         if (!statusUpdating.compareAndSet(false, true)) {
+            // The C# source serializes concurrent callers behind a semaphore
+            // so every state change is eventually sent; skipping here dropped
+            // the change outright, and the server held stale branch state
+            // until the fifteen-minute watchdog. The in-flight updater
+            // recomputes before it returns instead.
+            statusDirty.set(true);
             return;
         }
 
         try {
-            int branchLevel = getBranchLevel();
-            String branchRoot = getBranchRoot();
-            boolean accept = canAcceptChildren();
-            boolean haveNoParents = isEnabled() && !hasParent();
-            String status = "Requesting parent: " + haveNoParents
-                    + ", Branch level: " + branchLevel
-                    + ", Branch root: " + branchRoot
-                    + ", Number of children: " + children.size() + "/"
-                    + getChildLimit()
-                    + ", Accepting children: " + accept;
-            if (lastStatus != null && lastStatus.equalsIgnoreCase(status)) {
-                diagnostic.debug("Update skipped; status has not changed: " + status);
-                return;
-            }
-
-            diagnostic.debug("Status changed; " + status);
-            byte[] payload = concatenate(
-                    new BranchLevelCommand(branchLevel).toByteArray(),
-                    new BranchRootCommand(branchRoot).toByteArray(),
-                    new AcceptChildrenCommand(accept).toByteArray(),
-                    new HaveNoParentsCommand(haveNoParents).toByteArray());
-            try {
-                server.writeBytes(payload, token(cancellationSignal));
-                raiseStateChanged();
-                diagnostic.info("Updated distributed status; " + status);
-                lastStatus = status;
-                lastStatusTimestamp = Instant.now();
-            } catch (Throwable failure) {
-                // A status update is nobody's to fail: every caller here is a
-                // state change reporting itself, not a request with a waiter.
-                Throwable cause = unwrap(failure);
-                String message = "Failed to update distributed status: " + message(cause);
-                if (!server.state().equals(SoulseekClientState.DISCONNECTED)) {
-                    diagnostic.warning(message, cause);
-                } else {
-                    diagnostic.debug(message, cause);
-                }
-            }
+            do {
+                statusDirty.set(false);
+                sendStatus(cancellationSignal);
+            } while (statusDirty.get());
         } finally {
             statusUpdating.set(false);
+        }
+        if (statusDirty.get()) {
+            // A skipped caller landed in the release window; pick it up.
+            updateStatus(cancellationSignal);
+        }
+    }
+
+    /** Computes and sends the status once; only {@link #updateStatus} calls this. */
+    private void sendStatus(CancellationSignal cancellationSignal) {
+        int branchLevel = getBranchLevel();
+        String branchRoot = getBranchRoot();
+        boolean accept = canAcceptChildren();
+        boolean haveNoParents = isEnabled() && !hasParent();
+        String status = "Requesting parent: " + haveNoParents
+                + ", Branch level: " + branchLevel
+                + ", Branch root: " + branchRoot
+                + ", Number of children: " + children.size() + "/"
+                + getChildLimit()
+                + ", Accepting children: " + accept;
+        if (lastStatus != null && lastStatus.equalsIgnoreCase(status)) {
+            diagnostic.debug("Update skipped; status has not changed: " + status);
+            return;
+        }
+
+        diagnostic.debug("Status changed; " + status);
+        byte[] payload = concatenate(
+                new BranchLevelCommand(branchLevel).toByteArray(),
+                new BranchRootCommand(branchRoot).toByteArray(),
+                new AcceptChildrenCommand(accept).toByteArray(),
+                new HaveNoParentsCommand(haveNoParents).toByteArray());
+        try {
+            server.writeBytes(payload, token(cancellationSignal));
+            raiseStateChanged();
+            diagnostic.info("Updated distributed status; " + status);
+            lastStatus = status;
+            lastStatusTimestamp = Instant.now();
+        } catch (Throwable failure) {
+            // A status update is nobody's to fail: every caller here is a
+            // state change reporting itself, not a request with a waiter.
+            Throwable cause = unwrap(failure);
+            String message = "Failed to update distributed status: " + message(cause);
+            if (!server.state().equals(SoulseekClientState.DISCONNECTED)) {
+                diagnostic.warning(message, cause);
+            } else {
+                diagnostic.debug(message, cause);
+            }
         }
     }
 
@@ -1175,7 +1197,15 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         if (lastStatusTimestamp != null
                 && lastStatusTimestamp.plusMillis(STATUS_AGE_LIMIT).isBefore(Instant.now())) {
             diagnostic.debug("Distributed status age exceeds limit of " + STATUS_AGE_LIMIT + "ms, forcing an update");
-            updateStatus();
+            // Dispatched: this runs from the parent connection's read loop —
+            // BRANCH_LEVEL and BRANCH_ROOT land here — and the update is a
+            // blocking server write. The C# source fires and forgets the same
+            // call; inline, a stalled server socket blocked the loop carrying
+            // every inbound distributed search.
+            NetworkExecutor.dispatch(
+                    this::updateStatus,
+                    failure -> diagnostic.debug(
+                            "Failed to force a distributed status update: " + message(unwrap(failure))));
         }
         ScheduledFuture<?> next = scheduler.schedule(this::updateStatus, STATUS_DEBOUNCE_TIME, TimeUnit.MILLISECONDS);
         ScheduledFuture<?> prior = statusDebounce.getAndSet(next);

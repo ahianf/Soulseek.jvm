@@ -21,6 +21,13 @@ import java.util.concurrent.CompletionException;
  */
 final class TcpClientAdapter implements TcpClient {
     private static final byte SOCKS_5 = 0x05;
+
+    /**
+     * How long one SOCKS5 handshake reply may take, matching the C# source's
+     * default receive timeout. See the note in the handshake itself.
+     */
+    private static final int PROXY_HANDSHAKE_TIMEOUT_MILLIS = 15_000;
+
     private static final byte AUTH_ANONYMOUS = 0x00;
     private static final byte AUTH_USERNAME = 0x02;
     private static final byte AUTH_VERSION = 0x01;
@@ -126,6 +133,17 @@ final class TcpClientAdapter implements TcpClient {
 
         try {
             socket.connect(new InetSocketAddress(proxyAddress, proxyPort));
+            // The connection's 250 ms cancellation-poll SO_TIMEOUT is already
+            // on the socket, and every handshake read below honors it — so a
+            // proxy that took longer than 250 ms to answer one reply, which a
+            // CONNECT across the WAN routinely does, failed every proxied
+            // connect. The C# source runs this handshake under its 15-second
+            // receive timeout. Same budget here, restored afterwards so the
+            // poll governs the connection's real reads; during the handshake a
+            // cancellation is noticed a read later rather than within 250 ms,
+            // and the connect deadline still bounds the caller's wait.
+            int pollTimeout = socket.getSoTimeout();
+            socket.setSoTimeout(PROXY_HANDSHAKE_TIMEOUT_MILLIS);
             NetworkStream stream = getStream();
 
             byte[] auth = usingCredentials
@@ -235,6 +253,7 @@ final class TcpClientAdapter implements TcpClient {
 
             byte[] port = read(stream, buffer, 2, CancellationSignal.none());
             int boundPort = (unsigned(port[0]) << 8) | unsigned(port[1]);
+            socket.setSoTimeout(pollTimeout);
             return new ProxyEndpoint(boundAddress, boundPort);
         } catch (ProxyException exception) {
             throw exception;
