@@ -518,6 +518,15 @@ final class TransferDomain implements PeerServices {
         return Transfers.outcomeOf(request.isFromStream() ? uploadFromStream(request) : uploadFromFile(request));
     }
 
+    /** Returns a local file's size, or zero when there is no file yet. */
+    private long localFileSize(String path) {
+        try {
+            return io.getFileInfo(path).size();
+        } catch (IOException missing) {
+            return 0;
+        }
+    }
+
     /** Downloads to a local path, opening it as the destination stream. */
     private Transfer downloadToFile(DownloadRequest request) {
         String requestedUsername = request.getUsername();
@@ -540,6 +549,21 @@ final class TransferDomain implements PeerServices {
                 remoteFilename,
                 () -> {
                     try {
+                        if (startOffset > 0) {
+                            // Appending ignores position: O_APPEND puts every
+                            // write at end-of-file whatever a seek said. If
+                            // the local file is not exactly startOffset bytes,
+                            // the resumed bytes would land at the wrong place
+                            // with no error. The C# source fails loudly on the
+                            // same mismatch; so does this.
+                            long existing = localFileSize(localFilename);
+                            if (existing != startOffset) {
+                                throw new IOException("Cannot resume " + localFilename
+                                        + " from offset " + startOffset + ": the local file is "
+                                        + existing + " bytes, and appending would put the"
+                                        + " requested bytes at the wrong place silently");
+                            }
+                        }
                         return io.getOutputStream(localFilename, startOffset > 0);
                     } catch (IOException failure) {
                         throw new UncheckedIOException(failure);

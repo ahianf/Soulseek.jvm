@@ -63,6 +63,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class EngineDownloadTest {
@@ -656,6 +657,37 @@ class EngineDownloadTest {
                                     .options(options())
                                     .build()));
             assertArrayEquals(new byte[] {1, 2, 3, 4}, Files.readAllBytes(file));
+        } finally {
+            Files.deleteIfExists(file);
+        }
+    }
+
+    /**
+     * Appending ignores position — O_APPEND puts every write at end-of-file —
+     * so resuming a file whose length is not the requested offset would land
+     * the bytes at the wrong place with no error. The C# source fails loudly
+     * on the same mismatch.
+     */
+    @Test
+    @DisplayName("a resume whose offset does not match the local file fails loudly, not silently")
+    void resumeWithMismatchedLocalLengthFailsLoudly() throws IOException {
+        Path file = Files.createTempFile("soulseek-download-", ".bin");
+        try (Fixture fixture = new Fixture()) {
+            Files.write(file, new byte[] {1, 2, 3});
+            fixture.transfer.data = new byte[] {9, 9};
+            fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(30, 4));
+
+            TransferOutcome outcome = fixture.client
+                    .transfers()
+                    .download(DownloadRequest.toFile("alice", "file", file.toString())
+                            .size(4L)
+                            .startOffset(2)
+                            .token(30)
+                            .options(options())
+                            .build());
+
+            assertInstanceOf(TransferOutcome.Failed.class, outcome);
+            assertArrayEquals(new byte[] {1, 2, 3}, Files.readAllBytes(file), "the local file is untouched");
         } finally {
             Files.deleteIfExists(file);
         }
