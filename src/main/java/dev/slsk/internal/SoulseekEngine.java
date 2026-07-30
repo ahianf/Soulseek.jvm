@@ -107,7 +107,6 @@ final class SoulseekEngine implements AutoCloseable {
     private final int minorVersion;
     final Waiter waiter;
     private final TokenFactory tokenFactory;
-    private final Semaphore searchSemaphore;
     final Semaphore stateSemaphore = new Semaphore(1);
     private final IOAdapter ioAdapter;
     final TokenBucket uploadTokenBucket;
@@ -250,7 +249,6 @@ final class SoulseekEngine implements AutoCloseable {
         this.users = new UserDirectory(this, server);
         this.searchDomain = new SearchDomain(this, server);
         this.tokenFactory = tokenFactory == null ? new TokenFactory(this.options.getStartingToken()) : tokenFactory;
-        this.searchSemaphore = new Semaphore(this.options.getMaximumConcurrentSearches());
         this.ioAdapter = ioAdapter == null ? new IOAdapter() : ioAdapter;
         this.uploadTokenBucket = uploadTokenBucket == null
                 ? new TokenBucket((this.options.getMaximumUploadSpeed() * 1024L) / 10, 100, scheduler)
@@ -719,22 +717,6 @@ final class SoulseekEngine implements AutoCloseable {
         return searchResponder;
     }
 
-    final ServerMessageHandler getServerMessageHandler() {
-        return serverMessageHandler;
-    }
-
-    IOAdapter getIoAdapter() {
-        return ioAdapter;
-    }
-
-    TokenBucket getUploadTokenBucket() {
-        return uploadTokenBucket;
-    }
-
-    TokenBucket getDownloadTokenBucket() {
-        return downloadTokenBucket;
-    }
-
     /** Duplicate-transfer keys, owned by the transfer domain. */
     final Map<String, Boolean> getUniqueKeys() {
         return transfers.uniqueKeys();
@@ -1177,10 +1159,6 @@ final class SoulseekEngine implements AutoCloseable {
         users.cleanupUserEndpointSemaphores();
     }
 
-    java.net.InetSocketAddress resolveUserEndpoint(String username, CancellationSignal cancellationSignal) {
-        return users.getUserEndpoint(username, cancellationSignal);
-    }
-
     void reportBrowseProgress(
             String requestedUsername,
             BrowseOptions operationOptions,
@@ -1223,10 +1201,6 @@ final class SoulseekEngine implements AutoCloseable {
 
     java.util.Map<Integer, TransferInternal> getUploadRegistry() {
         return transfers.uploads();
-    }
-
-    String getLoggedInUsername() {
-        return server.username();
     }
 
     SoulseekClientOptions getClientOptions() {

@@ -296,14 +296,6 @@ public final class TransferInternal {
     }
 
     private static Duration durationFromSeconds(double seconds) {
-        if (Double.isNaN(seconds)) {
-            throw new IllegalArgumentException("TimeSpan does not accept NaN");
-        }
-        double ticks = seconds * 10_000_000;
-        if (!Double.isFinite(ticks) || ticks >= 0x1.0p63 || ticks < -0x1.0p63) {
-            throw new ArithmeticException("TimeSpan overflowed because the duration is too long");
-        }
-        long truncatedTicks = (long) ticks;
-        return Duration.ofSeconds(truncatedTicks / 10_000_000, (truncatedTicks % 10_000_000) * 100);
+        return Transfer.durationFromSeconds(seconds);
     }
 }

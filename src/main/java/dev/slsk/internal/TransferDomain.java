@@ -715,11 +715,11 @@ final class TransferDomain implements PeerServices {
     }
 
     /**
-     * Asks a peer where we are in its queue for a download already in flight.
+     * Asks a peer where we are in its queue for a download already in flight,
+     * uncancellably; the queue's periodic poll is the only caller.
      *
      * @param requestedUsername the peer
      * @param filename the file
-     * @param cancellationSignal stops the request
      * @return the peer's place-in-queue
      */
     Integer getDownloadPlaceInQueue(String requestedUsername, String filename) {

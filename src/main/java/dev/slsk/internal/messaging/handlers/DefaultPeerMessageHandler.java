@@ -464,27 +464,28 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
             }
             // Not live in the engine, which is not the same as not wanted: the
             // queue holds downloads that have not been given a slot yet, and
-            // this offer is the peer telling us our turn has come.
-            PeerServices.OfferDisposition disposition =
-                    services.offered(connection.getUsername(), request.getFilename(), request);
-            if (disposition == PeerServices.OfferDisposition.TAKEN) {
-                diagnostic.debug("Taking up an offered upload from " + connection.getUsername()
-                        + " for " + request.getFilename() + " with token "
-                        + request.getToken() + "; the queued download starts now");
-                // Deliberately no reply. The download writes the acceptance
-                // once it has the peer connection, exactly as it would have
-                // done had it been waiting on this message all along.
-                return;
-            }
+            // this offer is the peer telling us our turn has come. Dispatched:
+            // taking the offer ends in the consumer's TransferStore.save, and
+            // consumer code never runs on a read loop.
+            answer(MessageCode.Peer.TRANSFER_REQUEST, connection, () -> {
+                PeerServices.OfferDisposition disposition =
+                        services.offered(connection.getUsername(), request.getFilename(), request);
+                if (disposition == PeerServices.OfferDisposition.TAKEN) {
+                    diagnostic.debug("Taking up an offered upload from " + connection.getUsername()
+                            + " for " + request.getFilename() + " with token "
+                            + request.getToken() + "; the queued download starts now");
+                    // Deliberately no reply. The download writes the acceptance
+                    // once it has the peer connection, exactly as it would have
+                    // done had it been waiting on this message all along.
+                    return;
+                }
 
-            String reason = disposition == PeerServices.OfferDisposition.COMPLETE ? "Complete" : "Cancelled";
-            diagnostic.debug("Rejecting unknown upload from " + connection.getUsername()
-                    + " for " + request.getFilename() + " with token "
-                    + request.getToken() + " (" + reason + ")");
-            answer(
-                    MessageCode.Peer.TRANSFER_REQUEST,
-                    connection,
-                    () -> connection.write(new TransferResponse(request.getToken(), reason)));
+                String reason = disposition == PeerServices.OfferDisposition.COMPLETE ? "Complete" : "Cancelled";
+                diagnostic.debug("Rejecting unknown upload from " + connection.getUsername()
+                        + " for " + request.getFilename() + " with token "
+                        + request.getToken() + " (" + reason + ")");
+                connection.write(new TransferResponse(request.getToken(), reason));
+            });
             return;
         }
 

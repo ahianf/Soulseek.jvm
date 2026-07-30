@@ -6,7 +6,6 @@ package dev.slsk.internal;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.BrowseResponse;
@@ -52,9 +51,13 @@ class DefaultSharesTest {
         return DefaultSoulseek.create("alice", "password", 157, new SoulseekClientOptions());
     }
 
-    /** Scans, tolerating the offline announcement the scan ends with. */
+    /**
+     * Scans. The offline announcement at the end used to throw the whole index
+     * away after the scan had succeeded; it is tolerated and logged now, the
+     * same way the login-time announcement always tolerated it.
+     */
     private static void scan(Soulseek slsk) {
-        assertThrows(Exception.class, () -> slsk.shares().rescan(CancellationSignal.none()));
+        slsk.shares().rescan(CancellationSignal.none());
     }
 
     private static ShareCatalog catalogOf(Soulseek slsk) {

@@ -222,7 +222,7 @@ public final class ServerLink {
 
     public void acknowledgePrivateMessage(int privateMessageId, CancellationSignal cancellationSignal) {
         if (privateMessageId < 0) {
-            throw new IllegalArgumentException("The private message ID must be greater than zero");
+            throw new IllegalArgumentException("The private message ID must not be negative");
         }
         requireLoggedIn("acknowledge private messages");
         send(
@@ -238,7 +238,7 @@ public final class ServerLink {
 
     public void acknowledgePrivilegeNotification(int privilegeNotificationId, CancellationSignal cancellationSignal) {
         if (privilegeNotificationId < 0) {
-            throw new IllegalArgumentException("The privilege notification ID must be greater than zero");
+            throw new IllegalArgumentException("The privilege notification ID must not be negative");
         }
         requireLoggedIn("acknowledge privilege notifications");
         send(

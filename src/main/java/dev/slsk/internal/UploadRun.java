@@ -116,27 +116,15 @@ final class UploadRun {
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + " acquired");
 
-            try {
-                // The slot gate is the upload policy: serveUpload is only
-                // reached on an Allow, and Allow is only returned when a slot is
-                // free. A second, pluggable gate in front of it was two places
-                // to express one rule.
-                slot.set(true);
-                domain.diagnostic.debug("Upload slot for file "
-                        + filenameOnly(upload.getFilename()) + " to "
-                        + upload.getUsername() + " acquired");
-            } catch (Throwable failure) {
-                Throwable cause = Failures.unwrap(failure);
-                if (cause instanceof CancellationException) {
-                    throw cause;
-                }
-                throw new TransferException(
-                        "Failed to acquire an upload slot for file "
-                                + filenameOnly(upload.getFilename())
-                                + " to " + upload.getUsername() + ": "
-                                + Failures.message(cause),
-                        cause);
-            }
+            // The slot gate is the upload policy: serveUpload is only reached
+            // on an Allow, and Allow is only returned when a slot is free. A
+            // second, pluggable gate in front of it was two places to express
+            // one rule; the try/catch that guarded the pluggable one went with
+            // it, because setting a flag cannot fail.
+            slot.set(true);
+            domain.diagnostic.debug("Upload slot for file "
+                    + filenameOnly(upload.getFilename()) + " to "
+                    + upload.getUsername() + " acquired");
 
             Permits.acquire(domain.globalUploadSemaphore(), cancellationSignal);
             globalPermit.set(true);

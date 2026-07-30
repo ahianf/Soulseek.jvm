@@ -150,9 +150,10 @@ class SoulseekShapeTest {
 
         try (Soulseek slsk = client()) {
             slsk.shares().configure(List.of(SharedFolder.of(directory)));
-            // setSharedCounts reaches the client, which throws when offline; the
-            // scan still has to have counted correctly before it got there.
-            assertThrows(Exception.class, () -> slsk.shares().rescan(CancellationSignal.none()));
+            // The offline announcement at the end of the scan is tolerated —
+            // scanning before connect() is the natural order — so the scan
+            // returns its index rather than throwing it away.
+            slsk.shares().rescan(CancellationSignal.none());
             assertEquals(3, slsk.shares().index().fileCount());
             assertEquals(7, slsk.shares().index().totalBytes());
         }

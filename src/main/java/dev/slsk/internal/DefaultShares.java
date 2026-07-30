@@ -152,7 +152,16 @@ final class DefaultShares implements Shares {
         // the walk sees empty directories and the catalog does not — and
         // announcing one while reporting the other would leave the server and
         // index() disagreeing about the same share.
-        client.server().setSharedCounts(scanned.directoryCount(), scanned.fileCount());
+        //
+        // Tolerated when not logged in, the same way the login-time announce
+        // tolerates it: scanning before connect() is the natural order, and
+        // throwing here after the scan succeeded threw away the index and left
+        // ScanStarted forever unanswered. The counts are re-sent at login.
+        try {
+            client.server().setSharedCounts(scanned.directoryCount(), scanned.fileCount());
+        } catch (RuntimeException failure) {
+            client.getDiagnostic().warning("Failed to announce the share counts", failure);
+        }
         events.publish(new ShareEvent.ScanCompleted(scanned, Instant.now()));
         return scanned;
     }

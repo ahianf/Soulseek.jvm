@@ -128,7 +128,7 @@ final class UserDirectory {
                 new WaitKey(MessageCode.Server.GET_USER_STATS, requestedUsername),
                 UserStatistics.class,
                 cancellationSignal,
-                "Failed to retrieve statistics for user " + context.getLoggedInUsername() + ": ");
+                "Failed to retrieve statistics for user " + requestedUsername + ": ");
     }
 
     UserStatus getUserStatus(String requestedUsername) {
@@ -143,7 +143,7 @@ final class UserDirectory {
                 new WaitKey(MessageCode.Server.GET_STATUS, requestedUsername),
                 UserStatus.class,
                 cancellationSignal,
-                "Failed to retrieve status for user " + context.getLoggedInUsername() + ": ",
+                "Failed to retrieve status for user " + requestedUsername + ": ",
                 UserOfflineException.class);
     }
 

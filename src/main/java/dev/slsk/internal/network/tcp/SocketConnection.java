@@ -33,7 +33,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -1020,14 +1019,5 @@ public class SocketConnection implements Connection {
             address = "[" + address + "]";
         }
         return address + ":" + endpoint.getPort();
-    }
-
-    private static ThreadFactory daemonFactory(String prefix) {
-        return runnable -> {
-            Thread thread = new Thread(runnable);
-            thread.setName(prefix + "-" + thread.threadId());
-            thread.setDaemon(true);
-            return thread;
-        };
     }
 }
