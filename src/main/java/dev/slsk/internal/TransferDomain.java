@@ -353,6 +353,47 @@ final class TransferDomain implements PeerServices {
     }
 
     /**
+     * Where the lifecycle of a served upload lands; the uploads facet plugs in
+     * here.
+     *
+     * <p>Nothing published an {@code UploadEvent} before this existed: the
+     * facet's bus was silent forever, and a finished upload vanished from
+     * {@code all()} without a {@code Finished} ever firing — an upload was
+     * observable only while in flight, and only by polling.
+     */
+    interface UploadObserver {
+        /** An upload changed state; a null previous state means it just began. */
+        void stateChanged(dev.slsk.internal.options.TransferStateChange change);
+
+        /** Bytes moved. */
+        void progressed(dev.slsk.internal.options.TransferProgressUpdate update);
+    }
+
+    private volatile UploadObserver uploadObserver;
+
+    void uploadObserver(UploadObserver observer) {
+        this.uploadObserver = Objects.requireNonNull(observer, "observer");
+    }
+
+    UploadObserver uploadObserverForTest() {
+        return uploadObserver;
+    }
+
+    private void notifyUploadState(dev.slsk.internal.options.TransferStateChange change) {
+        UploadObserver observer = uploadObserver;
+        if (observer != null) {
+            observer.stateChanged(change);
+        }
+    }
+
+    private void notifyUploadProgress(dev.slsk.internal.options.TransferProgressUpdate update) {
+        UploadObserver observer = uploadObserver;
+        if (observer != null) {
+            observer.progressed(update);
+        }
+    }
+
+    /**
      * Serves a file to a peer whose request the policy allowed.
      *
      * <p>Nothing did this before 1.0. The old surface accepted the request in
@@ -403,6 +444,8 @@ final class TransferDomain implements PeerServices {
                                         })
                                         .token(token)
                                         .cancellation(cancellation.getSignal())
+                                        .options(new dev.slsk.internal.options.TransferOptions(
+                                                this::notifyUploadState, this::notifyUploadProgress))
                                         .build());
                         if (outcome instanceof TransferOutcome.Succeeded succeeded) {
                             admission.served(user, succeeded.bytes());

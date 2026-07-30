@@ -41,7 +41,15 @@ final class Transfers {
      * match an earlier, non-terminal case.
      */
     static TransferState state(Transfer transfer) {
-        dev.slsk.internal.TransferState source = transfer.getState();
+        return state(transfer, transfer.getState());
+    }
+
+    /**
+     * Maps a specific bit-flag state onto the sealed hierarchy, for callers
+     * holding a transition's previous state rather than the transfer's current
+     * one.
+     */
+    static TransferState state(Transfer transfer, dev.slsk.internal.TransferState source) {
         if (source == null) {
             return new TransferState.Queued(0);
         }

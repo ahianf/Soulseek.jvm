@@ -40,10 +40,55 @@ final class DefaultUploads implements Uploads {
     private final SoulseekEngine client;
     private final EventBus<UploadEvent> events;
     private final Map<TransferId, Priority> priorities = new ConcurrentHashMap<>();
+    private final ProgressCoalescer progress = new ProgressCoalescer(System::nanoTime);
 
     DefaultUploads(SoulseekEngine client, EventBus<UploadEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
         this.events = Objects.requireNonNull(events, "events");
+        // This wiring is what makes the bus speak at all: nothing published an
+        // UploadEvent before it, so uploads().events() was silent forever and
+        // a finished upload vanished from all() with no Finished ever firing.
+        client.transfers().uploadObserver(new TransferDomain.UploadObserver() {
+            @Override
+            public void stateChanged(dev.slsk.internal.options.TransferStateChange change) {
+                onStateChanged(change);
+            }
+
+            @Override
+            public void progressed(dev.slsk.internal.options.TransferProgressUpdate update) {
+                onProgressed(update);
+            }
+        });
+        client.transfers()
+                .admission()
+                .onDenied((user, path, reason) ->
+                        events.publish(new UploadEvent.Denied(user, path, reason, Instant.now())));
+    }
+
+    /** Turns an upload transition into the events a consumer sees. */
+    private void onStateChanged(dev.slsk.internal.options.TransferStateChange change) {
+        Transfer transfer = change.transfer();
+        TransferId id = Transfers.id(transfer);
+        Instant at = Instant.now();
+        if (dev.slsk.internal.TransferState.NONE.equals(change.previousState())) {
+            // The first transition is the upload existing at all: a peer asked
+            // and the policy accepted.
+            events.publish(new UploadEvent.Requested(project(transfer), at));
+            return;
+        }
+        events.publish(new UploadEvent.StateChanged(
+                id, Transfers.state(transfer, change.previousState()), Transfers.state(transfer), at));
+        if (Transfers.state(transfer) instanceof dev.slsk.TransferState.Finished finished) {
+            progress.forget(id);
+            events.publish(new UploadEvent.Finished(id, finished.outcome(), at));
+        }
+    }
+
+    private void onProgressed(dev.slsk.internal.options.TransferProgressUpdate update) {
+        Transfer transfer = update.transfer();
+        TransferId id = Transfers.id(transfer);
+        progress.offer(id, transfer.getBytesTransferred(), transfer.getSize())
+                .ifPresent(sample -> events.publish(new UploadEvent.Progressed(id, sample, Instant.now())));
     }
 
     private Upload project(Transfer transfer) {

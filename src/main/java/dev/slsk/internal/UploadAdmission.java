@@ -89,6 +89,20 @@ public final class UploadAdmission {
         sent.computeIfAbsent(user, key -> new AtomicLong()).addAndGet(bytes);
     }
 
+    /** Hears every refusal this admission makes; the uploads facet plugs in here. */
+    @FunctionalInterface
+    public interface DeniedListener {
+        /** A peer was refused, by ban or by policy. */
+        void denied(Username user, String path, String reason);
+    }
+
+    private volatile DeniedListener onDenied;
+
+    /** Names where refusals are reported; UploadEvent.Denied is published from it. */
+    public void onDenied(DeniedListener listener) {
+        this.onDenied = java.util.Objects.requireNonNull(listener, "listener");
+    }
+
     /**
      * Answers a peer's request.
      *
@@ -97,6 +111,17 @@ public final class UploadAdmission {
      * @return what to tell them
      */
     public UploadPolicy.Decision decide(Username user, String path) {
+        UploadPolicy.Decision decision = resolve(user, path);
+        if (decision instanceof UploadPolicy.Decision.Deny denied) {
+            DeniedListener listener = onDenied;
+            if (listener != null) {
+                listener.denied(user, path, denied.message());
+            }
+        }
+        return decision;
+    }
+
+    private UploadPolicy.Decision resolve(Username user, String path) {
         String reason = bans.get(user);
         if (reason != null) {
             // Ahead of the policy, and not expressible by one: a consumer that
