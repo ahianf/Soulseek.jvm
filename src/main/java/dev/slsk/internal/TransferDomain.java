@@ -33,6 +33,7 @@ import dev.slsk.internal.network.PeerConnectionManager;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.options.TransferOptions;
 import dev.slsk.internal.transfer.TransferInternal;
+import dev.slsk.internal.transfer.TransferStreams;
 import dev.slsk.spi.ResolvedFile;
 import dev.slsk.spi.ShareCatalog;
 import dev.slsk.spi.UploadPolicy;
@@ -441,7 +442,9 @@ final class TransferDomain implements PeerServices {
                         TransferOutcome outcome =
                                 upload(UploadRequest.fromStream(user.value(), path, file.size(), offset -> {
                                             try {
-                                                return java.nio.channels.Channels.newInputStream(file.open(offset));
+                                                // Positioned rather than plain, so a resume can say
+                                                // where it starts; see TransferStreams.positionedStream.
+                                                return TransferStreams.positionedStream(file.open(offset), offset);
                                             } catch (IOException failure) {
                                                 throw new UncheckedIOException(failure);
                                             }
