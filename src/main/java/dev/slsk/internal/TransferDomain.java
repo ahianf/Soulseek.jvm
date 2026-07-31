@@ -17,6 +17,7 @@ import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.IOAdapter;
 import dev.slsk.internal.common.NetworkExecutor;
+import dev.slsk.internal.common.Scheduler;
 import dev.slsk.internal.common.TokenBucket;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.Wait;
@@ -138,6 +139,7 @@ final class TransferDomain implements PeerServices {
 
     private volatile UploadPolicy uploadPolicy = UploadPolicy.standard(2, 1);
     private final UploadAdmission admission;
+    private final UploadRetry uploadRetry;
 
     /**
      * Who decides what an offered file is.
@@ -174,7 +176,8 @@ final class TransferDomain implements PeerServices {
             TokenBucket uploadTokenBucket,
             Supplier<ShareCatalog> catalog,
             Supplier<UserProfile> profile,
-            Predicate<String> privileged) {
+            Predicate<String> privileged,
+            Scheduler scheduler) {
         this.options = Objects.requireNonNull(options, "options");
         this.diagnostic = Objects.requireNonNull(diagnostic, "diagnostic");
         this.waiter = Objects.requireNonNull(waiter, "waiter");
@@ -191,6 +194,12 @@ final class TransferDomain implements PeerServices {
         this.globalUploadSemaphore = new Semaphore(options.get().getMaximumConcurrentUploads());
         this.admission = new UploadAdmission(
                 this::uploadPolicy, this::uploads, Objects.requireNonNull(privileged, "privileged"), diagnostic);
+        this.uploadRetry = new UploadRetry(
+                Objects.requireNonNull(scheduler, "scheduler"),
+                UploadRetry.DELAY,
+                UploadRetry.MAX_ATTEMPTS,
+                this::reofferFailedUpload,
+                diagnostic);
     }
 
     // --- what the runs read ------------------------------------------------
@@ -456,6 +465,12 @@ final class TransferDomain implements PeerServices {
                                         .build());
                         if (outcome instanceof TransferOutcome.Succeeded succeeded) {
                             admission.served(user, succeeded.bytes());
+                            uploadRetry.succeeded(user, path);
+                        } else if (outcome instanceof TransferOutcome.Failed failed && failed.retryable()) {
+                            // The peer was sent UploadFailed, which prompts a
+                            // well-behaved client to re-queue on its own; the
+                            // booking covers the peer that never comes back.
+                            uploadRetry.failed(user, path);
                         }
                     } catch (RuntimeException failure) {
                         diagnostic.warning("Failed to serve an upload of " + path + " to " + user, failure);
@@ -501,6 +516,55 @@ final class TransferDomain implements PeerServices {
         if (admission.decide(user, path) instanceof dev.slsk.spi.UploadPolicy.Decision.Allow) {
             serve(user, path);
         }
+    }
+
+    /**
+     * Offers a failed upload to the admission again, when its retry comes due.
+     *
+     * <p>The peer may have re-asked on its own in the meantime — its fresh
+     * request is the normal recovery — so a file that is queued or running
+     * again makes this re-offer redundant and it is dropped. Otherwise the
+     * re-offer takes the same path as a peer's request: the policy decides,
+     * and a denial ends the retrying rather than booking another attempt
+     * against the same answer.
+     *
+     * @param user who the failed upload was for
+     * @param path the file that failed
+     */
+    private void reofferFailedUpload(Username user, String path) {
+        if (admission.isQueued(user, path) || uploadActiveFor(user, path)) {
+            return;
+        }
+        UploadPolicy.Decision decision;
+        try {
+            decision = admission.decide(user, path);
+        } catch (RuntimeException failure) {
+            diagnostic.warning("Failed to re-offer " + path + " to " + user, failure);
+            return;
+        }
+        if (decision instanceof UploadPolicy.Decision.Allow) {
+            serve(user, path);
+        } else if (decision instanceof UploadPolicy.Decision.Queue) {
+            // Queued by the decision itself; poke the pump in case no upload
+            // is running to free a slot and draw it.
+            startNextQueued();
+        } else {
+            uploadRetry.abandoned(user, path);
+        }
+    }
+
+    /** Returns whether an upload of this file to this peer is running right now. */
+    private boolean uploadActiveFor(Username user, String path) {
+        for (TransferInternal upload : uploads().values()) {
+            TransferState state = upload.getState();
+            if (state == null || state.contains(TransferState.COMPLETED)) {
+                continue;
+            }
+            if (user.value().equals(upload.getUsername()) && path.equals(upload.getFilename())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

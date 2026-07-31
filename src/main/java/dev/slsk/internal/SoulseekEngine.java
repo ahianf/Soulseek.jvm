@@ -272,7 +272,8 @@ final class SoulseekEngine implements AutoCloseable {
                 this.uploadTokenBucket,
                 this::catalog,
                 this::profile,
-                this::isPrivileged);
+                this::isPrivileged,
+                scheduler);
         this.connectionMonitor = new ConnectionMonitor(scheduler);
         this.clientListenerFactory = (address, port, connectionOptions) ->
                 new SocketListener(address, port, connectionOptions, connectionMonitor);

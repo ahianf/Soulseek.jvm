@@ -217,6 +217,19 @@ public final class UploadAdmission {
         return UploadScheduler.placeInQueue(schedulerState(), user, path).orElse(null);
     }
 
+    /**
+     * Returns whether this peer's request for this file is queued right now.
+     *
+     * @param user who asked
+     * @param path the file they asked for
+     * @return whether the request is waiting in the queue
+     */
+    public boolean isQueued(Username user, String path) {
+        synchronized (lock) {
+            return queued.containsKey(new PeerFile(user, path));
+        }
+    }
+
     /** Forgets a queued request, once it has been served or refused. */
     public void forget(Username user, String path) {
         synchronized (lock) {
