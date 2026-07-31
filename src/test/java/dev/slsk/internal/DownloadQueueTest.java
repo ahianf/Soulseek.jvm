@@ -669,6 +669,55 @@ class DownloadQueueTest {
      * place it is offering took the length of its queue to earn, so refusing it
      * on the strength of the older, weaker evidence throws that away.
      */
+    /**
+     * A place-in-queue question blocks on its answer and there is no bulk form
+     * of it, so the only thing stopping one unreachable peer from holding up
+     * every other peer's questions is that they are asked in parallel. Walked as
+     * one list, the peer answering here would have waited out the peer that
+     * never answers — for the message timeout, per file it is holding.
+     */
+    @Test
+    @DisplayName("a peer that will not answer does not delay the peers that will")
+    void oneSilentPeerDoesNotHoldUpTheRest() throws InterruptedException {
+        GatedRunner runner = new GatedRunner();
+        DownloadQueue queue = queue(runner);
+        queue.policy(DownloadPolicy.defaults().queuePositionPollInterval(Duration.ofMillis(20)));
+
+        CountDownLatch bobAnswered = new CountDownLatch(1);
+        CountDownLatch aliceMayAnswer = new CountDownLatch(1);
+        queue.onPositionChanged((entry, place) -> {
+            if (entry.user().equals(Username.of("bob"))) {
+                bobAnswered.countDown();
+            }
+        });
+        queue.positionProbe(entry -> {
+            if (entry.user().equals(Username.of("alice"))) {
+                try {
+                    aliceMayAnswer.await(15, TimeUnit.SECONDS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            return java.util.OptionalInt.of(2);
+        });
+
+        TransferId alice = TransferId.of("alice-one");
+        TransferId bob = TransferId.of("bob-one");
+        queue.enqueue(alice, request("alice", "music\\alice.mp3"));
+        queue.enqueue(bob, request("bob", "music\\bob.mp3"));
+        awaitStarted(runner, 2);
+        queue.observed(alice, new TransferState.QueuedRemotely(java.util.OptionalInt.empty(), java.time.Instant.now()));
+        queue.observed(bob, new TransferState.QueuedRemotely(java.util.OptionalInt.empty(), java.time.Instant.now()));
+
+        assertTrue(
+                bobAnswered.await(15, TimeUnit.SECONDS),
+                "bob's position should arrive while alice is still not answering");
+
+        aliceMayAnswer.countDown();
+        runner.releaseAll();
+        queue.close();
+    }
+
     @Test
     @DisplayName("a peer's offer starts its download immediately, past that peer's ceiling")
     void anOfferedDownloadIsPromotedPastTheCeiling() {

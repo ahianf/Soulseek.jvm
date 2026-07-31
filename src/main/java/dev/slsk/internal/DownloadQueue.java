@@ -246,6 +246,9 @@ final class DownloadQueue {
     /** The running poll, cancelled and replaced whenever the interval changes. */
     private volatile java.util.concurrent.ScheduledFuture<?> poll;
 
+    /** Whether a poll cycle is still in flight; see {@link #pollPositions}. */
+    private final AtomicBoolean polling = new AtomicBoolean();
+
     private volatile DownloadPolicy policy = DownloadPolicy.defaults();
     private final AtomicBoolean closed = new AtomicBoolean();
 
@@ -454,38 +457,95 @@ final class DownloadQueue {
         poll = scheduler.scheduleAtFixedRate(this::pollPositions, millis, millis, TimeUnit.MILLISECONDS);
     }
 
-    /** Asks each remotely-queued peer where we are, and publishes any change. */
+    /**
+     * Asks each peer where we are in its queue, one peer at a time in parallel.
+     *
+     * <p>Per peer rather than per file, because a place-in-queue question blocks
+     * on its answer and there is no bulk form of it on the wire. Walked as one
+     * list this cost the sum of every answer: a peer holding fifteen of our
+     * files took fifteen round trips, and a peer that had stopped answering
+     * charged the message timeout for each of its files before the next peer was
+     * even asked. Fifteen silent files at a five-second timeout is seventy-five
+     * seconds of a poll that was scheduled once a minute, so the polls ran
+     * back-to-back with no gap between them.
+     *
+     * <p>Grouped by peer, a cycle costs the slowest <em>peer</em> rather than the
+     * sum of all of them, and one unreachable peer no longer delays the rest. It
+     * stays one outstanding question per peer, which is the part worth keeping:
+     * fifteen at once would be fifteen simultaneous requests at a peer that is
+     * already doing us a favour.
+     *
+     * <p>The guard is what makes the cost bounded rather than merely spread. A
+     * cycle that outlasts its own interval skips the next tick instead of
+     * overlapping with it, so a slow peer can never accumulate rounds of
+     * questions nobody is waiting for.
+     */
     private void pollPositions() {
         PositionProbe current = probe;
-        if (current == null || closed.get()) {
+        if (current == null || closed.get() || !polling.compareAndSet(false, true)) {
             return;
         }
-        List<Entry> waiting = new ArrayList<>();
+        Map<Username, List<Entry>> byPeer = new LinkedHashMap<>();
         synchronized (lock) {
             for (Entry entry : entries.values()) {
                 if (entry.state instanceof TransferState.QueuedRemotely) {
-                    waiting.add(entry);
+                    byPeer.computeIfAbsent(entry.user(), user -> new ArrayList<>())
+                            .add(entry);
                 }
             }
         }
-        for (Entry entry : waiting) {
-            java.util.OptionalInt place;
-            try {
-                place = current.place(entry);
-            } catch (RuntimeException unreachable) {
-                // A peer that will not answer is not a reason to stop asking the
-                // rest, and the position we have is still the last one it gave.
-                continue;
-            }
-            if (!(entry.state instanceof TransferState.QueuedRemotely known)) {
-                continue;
-            }
-            if (known.position().equals(place)) {
-                continue;
-            }
-            transition(entry, new TransferState.QueuedRemotely(place, Instant.now()));
-            onPositionChanged.accept(entry, place);
+        if (byPeer.isEmpty()) {
+            polling.set(false);
+            return;
         }
+
+        java.util.concurrent.atomic.AtomicInteger outstanding =
+                new java.util.concurrent.atomic.AtomicInteger(byPeer.size());
+        for (List<Entry> peerEntries : byPeer.values()) {
+            NetworkExecutor.executor().execute(() -> {
+                try {
+                    for (Entry entry : peerEntries) {
+                        if (closed.get()) {
+                            return;
+                        }
+                        askWhereWeAre(current, entry);
+                    }
+                } finally {
+                    if (outstanding.decrementAndGet() == 0) {
+                        polling.set(false);
+                    }
+                }
+            });
+        }
+    }
+
+    /** Asks one peer about one file, and publishes the answer if it has moved. */
+    private void askWhereWeAre(PositionProbe current, Entry entry) {
+        java.util.OptionalInt place;
+        try {
+            place = current.place(entry);
+        } catch (RuntimeException unreachable) {
+            // A peer that will not answer about one file is not a reason to stop
+            // asking about the rest, and the position we have is still the last
+            // one it gave.
+            return;
+        }
+        recordPosition(entry, place);
+    }
+
+    /**
+     * Records where a peer says we are, from wherever we heard it.
+     *
+     * @param entry the download
+     * @param place the peer's position, or empty if it did not say
+     */
+    private void recordPosition(Entry entry, java.util.OptionalInt place) {
+        if (!(entry.state instanceof TransferState.QueuedRemotely known)
+                || known.position().equals(place)) {
+            return;
+        }
+        transition(entry, new TransferState.QueuedRemotely(place, Instant.now()));
+        onPositionChanged.accept(entry, place);
     }
 
     // --- intents -----------------------------------------------------------
