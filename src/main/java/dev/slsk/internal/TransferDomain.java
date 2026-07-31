@@ -169,6 +169,12 @@ final class TransferDomain implements PeerServices {
      */
     private volatile DownloadOffers downloadOffers = (username, filename, offer) -> OfferDisposition.UNKNOWN;
 
+    /**
+     * Where a reported place-in-queue goes. The downloads facet plugs in here;
+     * until it does there is no queue to record one against.
+     */
+    private volatile DownloadPositions downloadPositions = (username, filename, position) -> {};
+
     /** Resolves a peer's address. Owned by {@code UserDirectory}; see I5 in the goal. */
     @FunctionalInterface
     interface EndpointResolver {
@@ -179,6 +185,12 @@ final class TransferDomain implements PeerServices {
     @FunctionalInterface
     interface DownloadOffers {
         OfferDisposition offered(String username, String filename, TransferRequest offer);
+    }
+
+    /** Takes a place-in-queue a peer reported, asked for or not. */
+    @FunctionalInterface
+    interface DownloadPositions {
+        void reported(String username, String filename, int position);
     }
 
     TransferDomain(
@@ -410,6 +422,15 @@ final class TransferDomain implements PeerServices {
     @Override
     public OfferDisposition offered(String username, String filename, TransferRequest offer) {
         return downloadOffers.offered(username, filename, offer);
+    }
+
+    void downloadPositions(DownloadPositions value) {
+        this.downloadPositions = Objects.requireNonNull(value, "downloadPositions");
+    }
+
+    @Override
+    public void queuePosition(String username, String filename, int position) {
+        downloadPositions.reported(username, filename, position);
     }
 
     /**

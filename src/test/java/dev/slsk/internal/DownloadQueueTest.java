@@ -718,6 +718,47 @@ class DownloadQueueTest {
         queue.close();
     }
 
+    /**
+     * A peer volunteering a place in its queue used to be read and dropped,
+     * because the only thing listening was the wait registered by whoever had
+     * asked. Keeping it is what lets the poll interval be measured in minutes
+     * without a consumer's positions going stale in between.
+     */
+    @Test
+    @DisplayName("a place in queue nobody asked for is still recorded")
+    void anUnsolicitedPositionIsRecorded() {
+        GatedRunner runner = new GatedRunner();
+        DownloadQueue queue = queue(runner);
+
+        List<java.util.OptionalInt> published = new CopyOnWriteArrayList<>();
+        queue.onPositionChanged((entry, place) -> published.add(place));
+
+        TransferId id = TransferId.of("one");
+        queue.enqueue(id, request("alice", "music\\one.mp3"));
+        awaitStarted(runner, 1);
+        queue.observed(id, new TransferState.QueuedRemotely(java.util.OptionalInt.empty(), java.time.Instant.now()));
+
+        queue.positionReported(Username.of("alice"), "music\\one.mp3", 4);
+
+        TransferState.QueuedRemotely recorded = assertInstanceOf(
+                TransferState.QueuedRemotely.class,
+                queue.find(id).orElseThrow().snapshot().state());
+        assertEquals(java.util.OptionalInt.of(4), recorded.position());
+        assertEquals(List.of(java.util.OptionalInt.of(4)), published);
+
+        // Said twice, heard once: a position that has not moved is not news,
+        // however it arrived.
+        queue.positionReported(Username.of("alice"), "music\\one.mp3", 4);
+        assertEquals(List.of(java.util.OptionalInt.of(4)), published);
+
+        // And a file this peer is not holding for us is not ours to record.
+        queue.positionReported(Username.of("alice"), "music\\other.mp3", 9);
+        assertEquals(List.of(java.util.OptionalInt.of(4)), published);
+
+        runner.releaseAll();
+        queue.close();
+    }
+
     @Test
     @DisplayName("a peer's offer starts its download immediately, past that peer's ceiling")
     void anOfferedDownloadIsPromotedPastTheCeiling() {

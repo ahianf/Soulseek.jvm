@@ -107,6 +107,7 @@ final class DefaultDownloads implements Downloads {
                 events.publish(new DownloadEvent.QueuePositionChanged(entry.id(), place, Instant.now())));
         this.queue.positionProbe(this::place);
         client.transfers().downloadOffers(this::offered);
+        client.transfers().downloadPositions(this::positionReported);
         applyConcurrency(queue.policy());
     }
 
@@ -183,6 +184,23 @@ final class DefaultDownloads implements Downloads {
             SinkOutputStream opened = stream.get();
             entry.resumeOffset(opened == null ? resumeFrom : opened.getPosition());
         }
+    }
+
+    /**
+     * Takes a place-in-queue a peer reported, whether we asked or not.
+     *
+     * @param username who sent it
+     * @param filename the file it is about
+     * @param position where that peer says we are
+     */
+    private void positionReported(String username, String filename, int position) {
+        Username user = Usernames.fromWire(username);
+        if (user == null) {
+            // Peer-supplied; nothing we queued can be keyed by an
+            // unrepresentable name.
+            return;
+        }
+        queue.positionReported(user, filename, position);
     }
 
     /**

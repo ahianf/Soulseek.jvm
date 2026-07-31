@@ -548,6 +548,38 @@ final class DownloadQueue {
         onPositionChanged.accept(entry, place);
     }
 
+    /**
+     * Records a place-in-queue a peer sent without being asked.
+     *
+     * <p>Peers volunteer these — this library's own uploader answers a
+     * {@code QueueUpload} with one — and until now a place that arrived without
+     * a wait registered for it was dropped on the floor. Keeping it is what lets
+     * the poll interval be measured in minutes without a consumer's queue
+     * positions going stale in between.
+     *
+     * @param user who sent it
+     * @param path the file it is about
+     * @param position where that peer says we are
+     */
+    void positionReported(Username user, String path, int position) {
+        Objects.requireNonNull(user, "user");
+        Objects.requireNonNull(path, "path");
+        Entry reported = null;
+        synchronized (lock) {
+            for (Entry entry : entries.values()) {
+                if (entry.user().equals(user)
+                        && entry.request().path().equals(path)
+                        && entry.state instanceof TransferState.QueuedRemotely) {
+                    reported = entry;
+                    break;
+                }
+            }
+        }
+        if (reported != null) {
+            recordPosition(reported, java.util.OptionalInt.of(position));
+        }
+    }
+
     // --- intents -----------------------------------------------------------
 
     Entry enqueue(TransferId id, DownloadRequest request) {

@@ -57,4 +57,18 @@ public interface PeerServices {
      */
     OfferDisposition offered(
             String username, String filename, dev.slsk.internal.messaging.messages.TransferRequest offer);
+
+    /**
+     * Records where a peer says one of our downloads is in its queue.
+     *
+     * <p>Called for every place-in-queue a peer sends, not only the ones we
+     * asked for. A peer volunteering one — this library's own uploader answers a
+     * {@code QueueUpload} with one — used to be dropped, because the only thing
+     * reading these was the wait registered by whoever had asked.
+     *
+     * @param username who sent it
+     * @param filename the file it is about
+     * @param position where that peer says we are
+     */
+    void queuePosition(String username, String filename, int position);
 }

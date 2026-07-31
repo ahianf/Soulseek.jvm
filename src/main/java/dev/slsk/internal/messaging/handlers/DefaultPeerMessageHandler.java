@@ -242,6 +242,14 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                                     connection.getUsername(),
                                     response.getFilename()),
                             response);
+                    // Both, and the second is not redundant. Completing the wait
+                    // answers whoever asked; a peer that volunteers a place —
+                    // and this library's own uploader volunteers one in reply to
+                    // a QueueUpload — has nobody waiting, so without this the
+                    // only unprompted news a peer ever sends about its queue was
+                    // read and dropped.
+                    services.queuePosition(
+                            connection.getUsername(), response.getFilename(), response.getPlaceInQueue());
                 }
                 case PLACE_IN_QUEUE_REQUEST -> {
                     PlaceInQueueRequest request = PlaceInQueueRequest.fromByteArray(message);

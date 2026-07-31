@@ -693,6 +693,14 @@ class PeerMessageHandlerTest {
             served.add(user.value() + " " + path);
         }
 
+        /** Places in queue the handler passed on, whether asked for or not. */
+        private final java.util.List<String> positions = new java.util.ArrayList<>();
+
+        @Override
+        public void queuePosition(String username, String filename, int position) {
+            positions.add(username + " " + filename + " " + position);
+        }
+
         /** What the download queue would make of an offer. */
         private OfferDisposition disposition = OfferDisposition.UNKNOWN;
 
