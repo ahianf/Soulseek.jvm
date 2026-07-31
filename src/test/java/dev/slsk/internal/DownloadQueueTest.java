@@ -556,26 +556,6 @@ class DownloadQueueTest {
     }
 
     @Test
-    @DisplayName("raising the cap starts something immediately rather than at the next completion")
-    void aWiderPolicyTakesEffectAtOnce() {
-        GatedRunner runner = new GatedRunner();
-        DownloadQueue queue = queue(runner);
-        queue.policy(DownloadPolicy.defaults().maxConcurrent(1).maxConcurrentPerUser(1));
-
-        queue.enqueue(TransferId.of("first"), request("alice", "music\\one.mp3"));
-        queue.enqueue(TransferId.of("second"), request("bob", "music\\two.mp3"));
-        awaitStarted(runner, 1);
-        assertEquals(1, runner.started.size());
-
-        queue.policy(DownloadPolicy.defaults().maxConcurrent(2).maxConcurrentPerUser(1));
-        awaitStarted(runner, 2);
-        assertEquals(2, runner.started.size());
-
-        runner.releaseAll();
-        queue.close();
-    }
-
-    @Test
     @DisplayName("a running transfer's own states reach the snapshot")
     void observedStatesAreRecordedWhileRunning() {
         GatedRunner runner = new GatedRunner();

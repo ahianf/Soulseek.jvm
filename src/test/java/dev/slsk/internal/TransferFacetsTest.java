@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.slsk.DownloadPolicy;
 import dev.slsk.DownloadRequest;
 import dev.slsk.Priority;
 import dev.slsk.RejectionReason;
@@ -134,6 +135,28 @@ class TransferFacetsTest {
     void downloadRequestRejectsNonsense() {
         assertThrows(IllegalArgumentException.class, () -> DownloadRequest.of(BOB, " ", Path.of("/tmp/x")));
         assertThrows(NullPointerException.class, () -> DownloadRequest.of(null, "a\\b", Path.of("/tmp/x")));
+    }
+
+    /**
+     * The ceilings bound transfers, so they have to reach the thing that runs
+     * them. The queue no longer applies them at all — it asks a peer for
+     * everything and lets the peer's refusals narrow that — so a policy whose
+     * numbers stopped here would be a setting that silently did nothing.
+     */
+    @Test
+    @DisplayName("a download policy's ceilings reach the transfer path, at construction and on change")
+    void downloadPolicyCeilingsReachTheTransferPath() {
+        try (Soulseek slsk = client()) {
+            TransferDomain transfers = ((DefaultSoulseek) slsk).client().transfers();
+
+            assertEquals(3, transfers.globalDownloadSemaphore().availablePermits());
+            assertEquals(1, transfers.downloadSemaphoreFor("bob").availablePermits());
+
+            slsk.downloads().policy(DownloadPolicy.defaults().maxConcurrent(6).maxConcurrentPerUser(2));
+
+            assertEquals(6, transfers.globalDownloadSemaphore().availablePermits());
+            assertEquals(2, transfers.downloadSemaphoreFor("bob").availablePermits());
+        }
     }
 
     @Test
