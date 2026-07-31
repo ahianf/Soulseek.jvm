@@ -88,8 +88,11 @@ class DistributedMessageTest {
         assertEquals("u", outgoing.getUsername());
         assertEquals(0x12345678, outgoing.getToken());
         assertEquals("q", outgoing.getQuery());
+        // The leading identifier is the code point of ASCII character 1 (49),
+        // not zero: SLSKPROTOCOL.md Distributed Code 3 states peers reject any
+        // other value, and Nicotine+ drops such messages outright.
         assertArrayEquals(
-                new byte[] {19, 0, 0, 0, 3, 0, 0, 0, 0, 1, 0, 0, 0, 'u', 0x78, 0x56, 0x34, 0x12, 1, 0, 0, 0, 'q'},
+                new byte[] {19, 0, 0, 0, 3, 49, 0, 0, 0, 1, 0, 0, 0, 'u', 0x78, 0x56, 0x34, 0x12, 1, 0, 0, 0, 'q'},
                 bytes);
 
         DistributedSearchRequest parsed = DistributedSearchRequest.fromByteArray(bytes);

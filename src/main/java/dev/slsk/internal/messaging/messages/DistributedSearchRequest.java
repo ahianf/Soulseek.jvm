@@ -11,6 +11,17 @@ import dev.slsk.internal.messaging.MessageReader;
 
 /** A distributed file-search request. */
 public final class DistributedSearchRequest implements IncomingMessage, OutgoingMessage {
+    /**
+     * The leading identifier, always the code point of ASCII character 1.
+     *
+     * <p>SLSKPROTOCOL.md (Distributed Code 3) states the value "is always the
+     * code point of ASCII character 1 (49)" and that peers "reject messages
+     * that use any other value" — Nicotine+ drops them in
+     * {@code slskproto.py}. The C# source wrote a zero here under the comment
+     * "nobody knows what this is", which predates that documentation.</p>
+     */
+    private static final int IDENTIFIER = 49;
+
     private final String query;
     private final int token;
     private final String username;
@@ -62,7 +73,7 @@ public final class DistributedSearchRequest implements IncomingMessage, Outgoing
     public byte[] toByteArray() {
         return new MessageBuilder()
                 .writeCode(MessageCode.Distributed.SEARCH_REQUEST)
-                .writeInteger(0)
+                .writeInteger(IDENTIFIER)
                 .writeString(username)
                 .writeInteger(token)
                 .writeString(query)
