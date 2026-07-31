@@ -122,10 +122,9 @@ final class DownloadQueue {
          *
          * <p>Distinct from paused, and from a retry backoff. The download is
          * still wanted and the peer is still willing; there is simply no room
-         * in its queue yet, so it waits for room rather than for a timer. Held
-         * entries are skipped by {@link #admit()} until the peer's queue drains
-         * and {@link #releaseQueueLimit} lets them back in — without which the
-         * refused file would be re-announced immediately and refused again.
+         * in its queue yet. Held entries are skipped by {@link #admit()} until
+         * {@link #holdForQueueLimit} 's timer clears this — without which the
+         * refused file would be asked for again immediately and refused again.
          */
         private volatile boolean queueLimited;
 
@@ -711,17 +710,18 @@ final class DownloadQueue {
      *
      * <p>A ceiling is a fact about how full a peer's queue was when it refused
      * us, and once the last of our files has left that queue the fact has
-     * expired. Releasing it here rather than on a timer is what makes the
-     * backoff self-clearing: the peer's own progress is the signal. Under the
-     * lock.
+     * expired. The peer's own progress is the signal, which is what lets a
+     * ceiling lift as soon as there is room rather than when a timer says so.
+     *
+     * <p>Deliberately does not un-hold the download the refusal was about. That
+     * one waits out {@link #holdForQueueLimit}'s timer, because a peer can
+     * refuse a file when it is holding nothing else of ours — a peer whose queue
+     * is full of other people's files does exactly that — and there is no
+     * progress to wait for. Clearing the hold here as well would re-ask that
+     * peer the instant it refused, forever. Under the lock.
      */
     private void releaseDrainedQueueLimits(Map<Username, Integer> inFlight) {
         userQueueLimits.keySet().removeIf(user -> inFlight.getOrDefault(user, 0) == 0);
-        for (Entry entry : entries.values()) {
-            if (entry.queueLimited && !userQueueLimits.containsKey(entry.user())) {
-                entry.queueLimited = false;
-            }
-        }
     }
 
     /** Recomputes the queue positions of everything still waiting. Under the lock. */
@@ -823,6 +823,25 @@ final class DownloadQueue {
             entry.attempt = Math.max(0, entry.attempt - 1);
         }
         transition(entry, new TransferState.Queued(0));
+
+        // The peer's queue draining lifts its ceiling, but it cannot lift this
+        // download's own hold: a peer whose queue is full of other people's
+        // files refuses while holding nothing of ours, so there is no progress
+        // to wait on and nothing to signal. A timer is the only thing left, and
+        // the poll interval is already this library's answer to "how often is it
+        // worth asking a peer about its queue".
+        long millis = Math.max(1, policy.queuePositionPollInterval().toMillis());
+        onRetryScheduled.accept(entry, Instant.now().plusMillis(millis));
+        scheduler.schedule(
+                () -> {
+                    if (closed.get()) {
+                        return;
+                    }
+                    entry.queueLimited = false;
+                    admit();
+                },
+                millis,
+                TimeUnit.MILLISECONDS);
     }
 
     private void scheduleRetry(Entry entry, Duration backoff) {

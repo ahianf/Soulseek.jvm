@@ -325,6 +325,38 @@ class DownloadQueueTest {
         queue.close();
     }
 
+    /**
+     * The refusal that has no progress to wait on.
+     *
+     * <p>A peer whose queue is full of other people's files refuses while
+     * holding nothing of ours, so its ceiling lifts the moment it is set — there
+     * is nothing of ours left in its queue for the ceiling to describe. If the
+     * refused download went back with it, that peer would be asked again the
+     * instant it said no, and again, for as long as its queue stayed full. It
+     * waits out its own backoff instead, and only that expiring asks again.
+     */
+    @Test
+    @DisplayName("a peer refusing with nothing else of ours queued is asked again later, not at once")
+    void aRefusalWithNothingElseInFlightBacksOff() {
+        GatedRunner runner = new GatedRunner();
+        DownloadQueue queue = queue(runner);
+        queue.policy(DownloadPolicy.defaults().queuePositionPollInterval(Duration.ofMillis(250)));
+
+        TransferId only = TransferId.of("only");
+        queue.enqueue(only, request("alice", "music\\only.mp3"));
+        awaitStarted(runner, 1);
+        runner.refuseAsFull(only);
+        awaitQueued(queue, only);
+
+        assertEquals(1, runner.started.size(), "the refusal must not turn straight back into another ask");
+
+        awaitStarted(runner, 2);
+        assertEquals(2, runner.started.size(), "and the backoff must expire, or the download is stranded");
+
+        runner.releaseAll();
+        queue.close();
+    }
+
     /** Enqueues {@code count} downloads from one peer and waits for all of them to be asked for. */
     private List<TransferId> fill(DownloadQueue queue, GatedRunner runner, String user, int count) {
         List<TransferId> ids = new ArrayList<>();
