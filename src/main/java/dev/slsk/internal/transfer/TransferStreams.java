@@ -13,6 +13,9 @@ import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.channels.Channels;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Path;
 
 /**
@@ -64,6 +67,62 @@ public final class TransferStreams {
             long skipped = super.skip(count);
             position += skipped;
             return skipped;
+        }
+    }
+
+    /**
+     * Adapts a channel that was opened at an offset to a stream that knows it.
+     *
+     * <p>{@link java.nio.channels.Channels#newInputStream} alone is not enough
+     * here. It returns a stream of a JDK-internal type, which is none of the
+     * three {@link #seekInputStream} can position and none of the two {@link
+     * #determinePosition} can interrogate — so a resumed upload asked to seek
+     * one threw "input stream is not seekable" and failed every time, while
+     * every upload starting at zero passed straight through the early return
+     * and worked. That made resume the one broken case and hid it behind the
+     * fifteen that were not.
+     *
+     * <p>Which is doubly wrong, because the channel arrives <em>already</em> at
+     * the offset: {@link dev.slsk.spi.ResolvedFile#open} takes one for
+     * exactly that reason. So the seek was never work, only a check — and this
+     * is what lets it be one. A seekable channel answers from the channel; a
+     * channel that cannot seek answers with where it was opened, which is the
+     * truth it has and all the check needs.
+     *
+     * @param channel the channel to read from
+     * @param offset where it was opened
+     * @return a stream that reports and honours that position
+     */
+    public static InputStream positionedStream(ReadableByteChannel channel, long offset) {
+        return new PositionedChannelStream(channel, offset);
+    }
+
+    private static final class PositionedChannelStream extends FilterInputStream implements PositionableInputStream {
+        private final ReadableByteChannel channel;
+        private final long openedAt;
+
+        PositionedChannelStream(ReadableByteChannel channel, long openedAt) {
+            super(Channels.newInputStream(channel));
+            this.channel = channel;
+            this.openedAt = openedAt;
+        }
+
+        @Override
+        public long getPosition() throws IOException {
+            // Reads through the stream advance the channel, so a seekable one
+            // stays the better answer for as long as it is open.
+            return channel instanceof SeekableByteChannel seekable ? seekable.position() : openedAt;
+        }
+
+        @Override
+        public void setPosition(long position) throws IOException {
+            if (channel instanceof SeekableByteChannel seekable) {
+                seekable.position(position);
+                return;
+            }
+            if (position != openedAt) {
+                throw new IOException("Channel opened at " + openedAt + " cannot seek to " + position);
+            }
         }
     }
 
