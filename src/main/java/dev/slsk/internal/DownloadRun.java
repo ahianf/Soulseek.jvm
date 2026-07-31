@@ -5,7 +5,6 @@ package dev.slsk.internal;
 
 import static dev.slsk.internal.transfer.TransferStreams.determineOutputPosition;
 import static dev.slsk.internal.transfer.TransferStreams.filenameOnly;
-import static dev.slsk.internal.transfer.TransferStreams.isQueuedResponse;
 import static dev.slsk.internal.transfer.TransferStreams.seekOutputStream;
 
 import dev.slsk.CancellationController;
@@ -23,6 +22,7 @@ import dev.slsk.internal.common.Settlement;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.messaging.MessageCode;
+import dev.slsk.internal.messaging.messages.QueueDownloadRequest;
 import dev.slsk.internal.messaging.messages.TransferRequest;
 import dev.slsk.internal.messaging.messages.TransferResponse;
 import dev.slsk.internal.network.MessageConnection;
@@ -43,7 +43,6 @@ import java.nio.ByteOrder;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
@@ -82,7 +81,8 @@ final class DownloadRun {
 
     private final CancellationSignal cancellationSignal;
     private final String uniqueKey;
-    private final AtomicBoolean globalPermit = new AtomicBoolean();
+    private final java.util.concurrent.atomic.AtomicBoolean globalPermit =
+            new java.util.concurrent.atomic.AtomicBoolean();
     private final WaitKey transferStartRequestedWaitKey;
     private TransferState lastState = TransferState.NONE;
     private InetSocketAddress endpoint;
@@ -149,42 +149,32 @@ final class DownloadRun {
                         + " is taking up an offer already made (remote token: "
                         + offer.getToken() + ")");
                 updateState(TransferState.REQUESTED);
-                beginQueuedDownload(() -> offer, peerConnection);
+                beginQueuedDownload(() -> offer);
                 receiveFile();
                 return download.toTransfer();
             }
 
-            Wait<TransferResponse> transferRequestAcknowledged = domain.waiter.register(
-                    new WaitKey(MessageCode.Peer.TRANSFER_RESPONSE, download.getUsername(), download.getToken()),
-                    TransferResponse.class,
-                    domain.clientOptions().getPeerConnectionOptions().getInactivityTimeout(),
-                    cancellationSignal);
+            // Registered before the ask, because a peer with a free slot can
+            // answer before the write call returns and a wait registered
+            // afterwards would miss its own reply.
             Wait<TransferRequest> transferStartRequested = domain.waiter.registerIndefinitely(
                     transferStartRequestedWaitKey, TransferRequest.class, cancellationSignal);
 
+            // QueueUpload, not a download-direction TransferRequest. Both ask
+            // for the same thing and every peer still understands the older
+            // form, but only this one is fire-and-forget: there is no
+            // acknowledgement to wait out, so asking for a whole album costs
+            // one write per file instead of a round trip per file. A refusal
+            // arrives later and out of band as UploadDenied, which fails the
+            // wait registered above.
             peerConnection.write(
-                    new TransferRequest(TransferDirection.DOWNLOAD, download.getToken(), download.getFilename()),
-                    CommonUtils.token(cancellationSignal));
-            domain.diagnostic.debug("Wrote transfer request for download of "
-                    + filenameOnly(download.getFilename()) + " from "
-                    + download.getUsername() + " (id: " + peerConnection.getId()
+                    new QueueDownloadRequest(download.getFilename()), CommonUtils.token(cancellationSignal));
+            domain.diagnostic.debug("Asked " + download.getUsername() + " to queue "
+                    + filenameOnly(download.getFilename()) + " (id: " + peerConnection.getId()
                     + ", state: " + peerConnection.getState() + ")");
             updateState(TransferState.REQUESTED);
 
-            TransferResponse acknowledgement = transferRequestAcknowledged.await();
-            domain.diagnostic.debug("Received transfer request ACK for download of "
-                    + filenameOnly(download.getFilename()) + " from "
-                    + download.getUsername() + ": allowed: " + acknowledgement.isAllowed()
-                    + ", message: " + acknowledgement.getMessage()
-                    + " (token: " + download.getToken() + ")");
-            if (acknowledgement.isAllowed()) {
-                peerConnection = beginImmediateDownload(acknowledgement, peerConnection);
-            } else if (!isQueuedResponse(acknowledgement.getMessage())) {
-                throw new TransferRejectedException("Transfer rejected: " + acknowledgement.getMessage());
-            } else {
-                peerConnection = beginQueuedDownload(transferStartRequested, peerConnection);
-            }
-
+            beginQueuedDownload(transferStartRequested);
             receiveFile();
         } catch (Throwable failure) {
             handleFailure(Failures.unwrap(failure));
@@ -222,27 +212,7 @@ final class DownloadRun {
         connection.disconnect("Transfer complete");
     }
 
-    private MessageConnection beginImmediateDownload(
-            TransferResponse acknowledgement, MessageConnection peerConnection) {
-        validateRemoteSize(acknowledgement.getFileSize());
-        updateState(TransferState.QUEUED.or(TransferState.REMOTELY));
-        if (download.getSize() == null) {
-            download.setSize(acknowledgement.getFileSize());
-        }
-        updateState(TransferState.INITIALIZING);
-        connection = domain.peers()
-                .getTransferConnection(
-                        download.getUsername(), endpoint, acknowledgement.getToken(), cancellationSignal);
-        domain.diagnostic.debug("Fetched transfer connection for download of "
-                + filenameOnly(download.getFilename()) + " from "
-                + download.getUsername() + " (id: " + connection.getId()
-                + ", state: " + connection.getState() + ")");
-        download.setConnection(connection);
-        return peerConnection;
-    }
-
-    private MessageConnection beginQueuedDownload(
-            Wait<TransferRequest> transferStartRequested, MessageConnection peerConnection) {
+    private void beginQueuedDownload(Wait<TransferRequest> transferStartRequested) {
         updateState(TransferState.QUEUED.or(TransferState.REMOTELY));
         TransferRequest request = transferStartRequested.await();
         validateRemoteSize(request.getFileSize());
@@ -304,7 +274,6 @@ final class DownloadRun {
                     + download.getUsername() + " for download of " + download.getFilename());
         }
         download.setConnection(connection);
-        return refreshed;
     }
 
     private void validateRemoteSize(long remoteSize) {

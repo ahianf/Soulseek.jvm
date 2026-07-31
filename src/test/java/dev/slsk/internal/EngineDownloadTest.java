@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
+import dev.slsk.RejectionReason;
 import dev.slsk.TransferOutcome;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.DuplicateTokenException;
@@ -27,6 +28,7 @@ import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
+import dev.slsk.internal.messaging.messages.QueueDownloadRequest;
 import dev.slsk.internal.messaging.messages.TransferRequest;
 import dev.slsk.internal.messaging.messages.TransferResponse;
 import dev.slsk.internal.messaging.messages.UserAddressResponse;
@@ -180,12 +182,22 @@ class EngineDownloadTest {
         }
     }
 
+    /**
+     * The ask is a {@code QueueUpload}, and it carries nothing but the filename.
+     *
+     * <p>It used to be a download-direction {@code TransferRequest} carrying a
+     * token and a size the peer had no use for, which every modern client
+     * answers by queueing anyway. What the wire sees now is what Nicotine+,
+     * Museek+ and the official clients send, and — because there is no
+     * acknowledgement to wait for — the whole of what a queued download costs.
+     */
     @Test
-    void immediateDownloadUsesRemoteSizeProtocolAndStateOrder() {
+    void theAskIsAQueueUploadAndTheStateOrderIsUnchanged() {
         try (Fixture fixture = new Fixture()) {
             byte[] bytes = new byte[] {1, 2, 3, 4};
             fixture.transfer.data = bytes;
-            fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(11, bytes.length));
+            fixture.waiter.startRequest = CompletableFuture.completedFuture(
+                    new TransferRequest(TransferDirection.UPLOAD, 11, "file", bytes.length));
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             Timeline timeline = new Timeline();
 
@@ -202,10 +214,8 @@ class EngineDownloadTest {
             assertEquals(bytes.length, result.getBytesTransferred());
             assertArrayEquals(bytes, output.toByteArray());
             assertArrayEquals(new byte[8], fixture.transfer.offsetBytes);
-            TransferRequest request = assertInstanceOf(TransferRequest.class, fixture.message.messages.get(0));
-            assertEquals(TransferDirection.DOWNLOAD, request.getDirection());
-            assertEquals(0, request.getFileSize());
-            assertEquals("remote\\file", request.getFilename());
+            QueueDownloadRequest queued = assertInstanceOf(QueueDownloadRequest.class, fixture.message.messages.get(0));
+            assertEquals("remote\\file", queued.getFilename());
             assertEquals(
                     List.of(
                             TransferState.QUEUED.or(TransferState.LOCALLY),
@@ -225,7 +235,8 @@ class EngineDownloadTest {
     @Test
     void expectedSizeMismatchIsPreservedAndAborted() {
         try (Fixture fixture = new Fixture()) {
-            fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(12, 5));
+            fixture.waiter.startRequest =
+                    CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 12, "file", 5));
             Timeline timeline = new Timeline();
 
             TransferOutcome outcome = fixture.client
@@ -248,7 +259,6 @@ class EngineDownloadTest {
     @Test
     void queuedSizeMismatchIsPreservedAndAborted() {
         try (Fixture fixture = new Fixture()) {
-            fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(30, "Queued"));
             fixture.waiter.startRequest =
                     CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 130, "file", 6));
             Timeline timeline = new Timeline();
@@ -270,10 +280,19 @@ class EngineDownloadTest {
         }
     }
 
+    /**
+     * A refusal is out of band now. {@code QueueUpload} is not acknowledged when
+     * it succeeds, so there is no response to carry a reason; the peer says no
+     * with an {@code UploadDenied}, which the handler turns into a failure of
+     * the wait for its offer. The peer's own words reach the caller with nothing
+     * in between to reword them — the {@code "Transfer rejected: "} prefix went
+     * with the acknowledgement that used to be parsed here.
+     */
     @Test
-    void nonQueueDenialIsRejected() {
+    void aDenialArrivesAsAFailedOfferAndKeepsThePeersWords() {
         try (Fixture fixture = new Fixture()) {
-            fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(13, "not shared"));
+            fixture.waiter.startRequest =
+                    CompletableFuture.failedFuture(new TransferRejectedException("File not shared."));
 
             TransferOutcome outcome = fixture.client
                     .transfers()
@@ -283,9 +302,35 @@ class EngineDownloadTest {
                             .options(options())
                             .build());
 
+            TransferOutcome.Rejected rejected = assertInstanceOf(TransferOutcome.Rejected.class, outcome);
+            assertEquals("File not shared.", rejected.rawMessage());
+            assertEquals(RejectionReason.FILE_NOT_SHARED, rejected.reason());
+        }
+    }
+
+    /**
+     * The two refusals that stop being true on their own. A peer whose queue is
+     * full for us has not looked at the file, so the reason is classified apart
+     * from a denial about the file itself and the queue above waits it out
+     * rather than giving up. See {@code DownloadQueue.holdForQueueLimit}.
+     */
+    @Test
+    void aFullQueueIsClassifiedApartFromADenial() {
+        try (Fixture fixture = new Fixture()) {
+            fixture.waiter.startRequest =
+                    CompletableFuture.failedFuture(new TransferRejectedException("Too many files"));
+
+            TransferOutcome outcome = fixture.client
+                    .transfers()
+                    .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                            .size(1L)
+                            .token(33)
+                            .options(options())
+                            .build());
+
             assertEquals(
-                    "Transfer rejected: not shared",
-                    assertInstanceOf(TransferOutcome.Rejected.class, outcome).rawMessage());
+                    RejectionReason.TOO_MANY_FILES,
+                    assertInstanceOf(TransferOutcome.Rejected.class, outcome).reason());
         }
     }
 
@@ -294,7 +339,6 @@ class EngineDownloadTest {
         try (Fixture fixture = new Fixture()) {
             byte[] bytes = new byte[] {7, 8, 9};
             fixture.transfer.data = bytes;
-            fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(14, "Queued..."));
             fixture.waiter.startRequest = CompletableFuture.completedFuture(
                     new TransferRequest(TransferDirection.UPLOAD, 99, "file", bytes.length));
             ByteArrayOutputStream output = new ByteArrayOutputStream();
@@ -324,7 +368,6 @@ class EngineDownloadTest {
     void queuedDownloadFallsBackToOutgoingConnection() {
         try (Fixture fixture = new Fixture()) {
             fixture.transfer.data = new byte[] {1};
-            fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(15, "queued"));
             fixture.waiter.startRequest =
                     CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 100, "file", 1));
             fixture.peerManager.awaitResult =
@@ -359,7 +402,6 @@ class EngineDownloadTest {
     @Test
     void aRemotelyQueuedDownloadWaitsForThePeerToStartTheTransfer() {
         try (Fixture fixture = new Fixture()) {
-            fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(16, "Queued"));
             fixture.waiter.startRequest = new CompletableFuture<>();
 
             CompletableFuture<TransferOutcome> download = inBackground(() -> fixture.client
@@ -390,7 +432,7 @@ class EngineDownloadTest {
     void aRefusalBeforeRemoteQueueingReachesTheCallerUnchanged() {
         try (Fixture fixture = new Fixture()) {
             TransferRejectedException rejection = new TransferRejectedException("rejected");
-            fixture.waiter.response = CompletableFuture.failedFuture(rejection);
+            fixture.waiter.startRequest = CompletableFuture.failedFuture(rejection);
             Timeline timeline = new Timeline();
 
             TransferOutcome outcome = fixture.client
@@ -412,7 +454,8 @@ class EngineDownloadTest {
     void resumeSeeksOutputWritesOffsetAndReadsRemainingBytes() {
         try (Fixture fixture = new Fixture()) {
             fixture.transfer.data = new byte[] {3, 4, 5};
-            fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(18, 5));
+            fixture.waiter.startRequest =
+                    CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 18, "file", 5));
             PositionableBuffer output = new PositionableBuffer(new byte[] {1, 2});
 
             Timeline timeline = new Timeline();
@@ -444,7 +487,8 @@ class EngineDownloadTest {
     void nonSeekableResumeFailsUnlessAutomaticSeekingDisabled() {
         try (Fixture fixture = new Fixture()) {
             fixture.transfer.data = new byte[] {2};
-            fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(19, 2));
+            fixture.waiter.startRequest =
+                    CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 19, "file", 2));
             TransferOutcome seekFailed = fixture.client
                     .transfers()
                     .download(DownloadRequest.toStream("alice", "file", outputFactory())
@@ -484,7 +528,8 @@ class EngineDownloadTest {
         try (Fixture fixture = new Fixture()) {
             fixture.transfer.data = new byte[] {1, 2, 3, 4, 5};
             fixture.transfer.maximumActualPerIteration = 2;
-            fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(21, 5));
+            fixture.waiter.startRequest =
+                    CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 21, "file", 5));
             List<Integer> grants = new ArrayList<>();
             List<List<Integer>> reports = new ArrayList<>();
             Timeline timeline = new Timeline();
@@ -511,7 +556,8 @@ class EngineDownloadTest {
     @Test
     void remoteFailureRaceIsWrappedAndRecorded() {
         try (Fixture fixture = new Fixture()) {
-            fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(22, 1));
+            fixture.waiter.startRequest =
+                    CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 22, "file", 1));
             fixture.transfer.readHook = () -> fixture.client
                     .getDownloadRegistry()
                     .get(22)
@@ -541,7 +587,8 @@ class EngineDownloadTest {
     @Test
     void remoteDenialDuringReadIsPreservedAndRejected() {
         try (Fixture fixture = new Fixture()) {
-            fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(31, 1));
+            fixture.waiter.startRequest =
+                    CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 31, "file", 1));
             TransferRejectedException rejection = new TransferRejectedException("download denied");
             fixture.transfer.readHook = () ->
                     fixture.client.getDownloadRegistry().get(31).settlement().fail(rejection);
@@ -568,7 +615,8 @@ class EngineDownloadTest {
     void unexpectedDisconnectIsWrappedAsConnectionFailure() {
         try (Fixture fixture = new Fixture()) {
             IOException socketFailure = new IOException("socket failed");
-            fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(23, 1));
+            fixture.waiter.startRequest =
+                    CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 23, "file", 1));
             fixture.transfer.disconnectOnRead = socketFailure;
 
             TransferOutcome outcome = fixture.client
@@ -589,7 +637,7 @@ class EngineDownloadTest {
         try (Fixture timeoutFixture = new Fixture();
                 Fixture cancellationFixture = new Fixture()) {
             TimeoutException timeout = new TimeoutException("timed out");
-            timeoutFixture.waiter.response = CompletableFuture.failedFuture(timeout);
+            timeoutFixture.waiter.startRequest = CompletableFuture.failedFuture(timeout);
             Timeline timedOut = new Timeline();
 
             TransferOutcome lapsed = timeoutFixture
@@ -607,7 +655,7 @@ class EngineDownloadTest {
             assertTrue(timedOut.terminal().getState().contains(TransferState.TIMED_OUT));
 
             CancellationException cancellation = new CancellationException("cancelled");
-            cancellationFixture.waiter.response = CompletableFuture.failedFuture(cancellation);
+            cancellationFixture.waiter.startRequest = CompletableFuture.failedFuture(cancellation);
             Timeline cancelled = new Timeline();
 
             TransferOutcome stopped = cancellationFixture
@@ -630,7 +678,8 @@ class EngineDownloadTest {
         try (Fixture first = new Fixture()) {
             Files.write(file, new byte[] {9, 9, 9});
             first.transfer.data = new byte[] {1, 2};
-            first.waiter.response = CompletableFuture.completedFuture(new TransferResponse(26, 2));
+            first.waiter.startRequest =
+                    CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 26, "file", 2));
             assertInstanceOf(
                     TransferOutcome.Succeeded.class,
                     first.client
@@ -645,7 +694,8 @@ class EngineDownloadTest {
 
         try (Fixture second = new Fixture()) {
             second.transfer.data = new byte[] {3, 4};
-            second.waiter.response = CompletableFuture.completedFuture(new TransferResponse(27, 4));
+            second.waiter.startRequest =
+                    CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 27, "file", 4));
             assertInstanceOf(
                     TransferOutcome.Succeeded.class,
                     second.client
@@ -675,7 +725,8 @@ class EngineDownloadTest {
         try (Fixture fixture = new Fixture()) {
             Files.write(file, new byte[] {1, 2, 3});
             fixture.transfer.data = new byte[] {9, 9};
-            fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(30, 4));
+            fixture.waiter.startRequest =
+                    CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 30, "file", 4));
 
             TransferOutcome outcome = fixture.client
                     .transfers()
@@ -697,7 +748,8 @@ class EngineDownloadTest {
     void outputDisposalOptionIsHonored() {
         try (Fixture fixture = new Fixture()) {
             fixture.transfer.data = new byte[] {1};
-            fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(28, 1));
+            fixture.waiter.startRequest =
+                    CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 28, "file", 1));
             CloseTrackingOutputStream disposable = new CloseTrackingOutputStream();
             fixture.client
                     .transfers()
@@ -727,7 +779,8 @@ class EngineDownloadTest {
         DiagnosticProbe diagnostic = new DiagnosticProbe();
         try (Fixture fixture = new Fixture(diagnostic.proxy)) {
             fixture.transfer.data = new byte[] {1};
-            fixture.waiter.response = CompletableFuture.completedFuture(new TransferResponse(32, 1));
+            fixture.waiter.startRequest =
+                    CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 32, "file", 1));
             fixture.waiter.cancelFailure = new IllegalStateException("cancel failed");
             fixture.transfer.closeFailure = new IllegalStateException("close failed");
             FailingCleanupOutputStream output = new FailingCleanupOutputStream();
@@ -933,9 +986,20 @@ class EngineDownloadTest {
     }
 
     private static final class WaiterProbe {
-        private CompletableFuture<TransferResponse> response =
-                CompletableFuture.completedFuture(new TransferResponse(0, 0));
-        private CompletableFuture<TransferRequest> startRequest = new CompletableFuture<>();
+
+        /**
+         * The peer's offer, and the only thing a download now waits for.
+         *
+         * <p>Completed by default rather than pending, because under
+         * {@code QueueUpload} every download reaches this wait — there is no
+         * longer an acknowledgement that can allow a transfer outright and skip
+         * it. A test that wants to observe the wait replaces this with a pending
+         * future; one that wants a refusal fails it, which is what
+         * {@code UploadDenied} and {@code UploadFailed} do in production.
+         */
+        private CompletableFuture<TransferRequest> startRequest =
+                CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 0, "file", 0));
+
         private final List<WaitKey> cancelled = new ArrayList<>();
         private RuntimeException cancelFailure;
         private final Waiter proxy = (Waiter)
@@ -944,9 +1008,6 @@ class EngineDownloadTest {
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().startsWith("register") && arguments != null) {
                 for (Object argument : arguments) {
-                    if (argument == TransferResponse.class) {
-                        return (Wait<Object>) () -> Outcomes.raise(response);
-                    }
                     if (argument == TransferRequest.class) {
                         return (Wait<Object>) () -> Outcomes.raise(startRequest);
                     }
