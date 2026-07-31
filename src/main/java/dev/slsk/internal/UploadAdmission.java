@@ -3,15 +3,23 @@
 
 package dev.slsk.internal;
 
+import dev.slsk.Priority;
 import dev.slsk.RejectionReason;
+import dev.slsk.TransferId;
 import dev.slsk.UserStatistics;
 import dev.slsk.Username;
+import dev.slsk.internal.transfer.UploadScheduler;
 import dev.slsk.spi.UploadContext;
 import dev.slsk.spi.UploadPolicy;
 import dev.slsk.spi.UploadRequest;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -45,8 +53,33 @@ public final class UploadAdmission {
     /** Who is refused outright, and what they are told. */
     private final Map<Username, String> bans = new ConcurrentHashMap<>();
 
-    /** Who is waiting, in the order the policy put them. */
-    private final Map<PeerFile, Integer> queued = new LinkedHashMap<>();
+    /**
+     * Who is waiting, in arrival order.
+     *
+     * <p>This used to map to the {@code position} the policy returned, which was
+     * a number reported to the peer and nothing else: no code read it back as an
+     * ordering, so two peers could both be told they were first. It now holds
+     * the request itself, and {@link UploadScheduler} derives both the service
+     * order and the reported place from it.
+     */
+    private final Map<PeerFile, UploadScheduler.Waiting> queued = new LinkedHashMap<>();
+
+    /** Arrival order, so the scheduler can break ties by who asked first. */
+    private final AtomicLong sequence = new AtomicLong();
+
+    /** The embedder's ordering hints, by queued-upload id. */
+    private final Map<TransferId, Priority> priorities = new ConcurrentHashMap<>();
+
+    /**
+     * Per user, when one of their uploads last started.
+     *
+     * <p>This is the round-robin counter. A user absent from the map has never
+     * started one and therefore sorts ahead of everyone who has.
+     */
+    private final Map<Username, Long> lastStarted = new ConcurrentHashMap<>();
+
+    /** Ticks each time an upload starts, so the counters above are comparable. */
+    private final AtomicLong startTick = new AtomicLong();
 
     /** How much we have sent each peer this session. */
     private final Map<Username, AtomicLong> sent = new ConcurrentHashMap<>();
@@ -143,10 +176,25 @@ public final class UploadAdmission {
 
         synchronized (lock) {
             PeerFile file = new PeerFile(user, path);
-            if (decision instanceof UploadPolicy.Decision.Queue queue) {
-                queued.put(file, queue.position());
+            if (decision instanceof UploadPolicy.Decision.Queue) {
+                // The policy's own position is deliberately discarded. It was
+                // never an ordering — UploadPolicy.standard returns 1 for every
+                // privileged user — and the peer is now told the place the
+                // scheduler actually implies. What the policy decides is
+                // whether to queue, not where.
+                queued.computeIfAbsent(
+                        file,
+                        key -> new UploadScheduler.Waiting(
+                                TransferId.of("UPLOAD:queued:" + sequence.get()),
+                                user,
+                                path,
+                                sequence.getAndIncrement(),
+                                Priority.NORMAL));
             } else {
-                queued.remove(file);
+                UploadScheduler.Waiting removed = queued.remove(file);
+                if (removed != null) {
+                    priorities.remove(removed.id());
+                }
             }
         }
         return decision;
@@ -156,21 +204,109 @@ public final class UploadAdmission {
      * Returns where a peer is in our queue, or {@code null} if they are not in
      * it.
      *
+     * <p>The number is the place the scheduler's ordering implies, recomputed on
+     * each ask rather than frozen when the request arrived: a privileged peer
+     * queueing behind an ordinary one really does move ahead of them, and the
+     * ordinary peer's next {@code PlaceInQueueRequest} should say so.
+     *
      * @param user who is asking
      * @param path the file they asked for
      * @return their place, counting from one
      */
     public Integer place(Username user, String path) {
-        synchronized (lock) {
-            return queued.get(new PeerFile(user, path));
-        }
+        return UploadScheduler.placeInQueue(schedulerState(), user, path).orElse(null);
     }
 
     /** Forgets a queued request, once it has been served or refused. */
     public void forget(Username user, String path) {
         synchronized (lock) {
-            queued.remove(new PeerFile(user, path));
+            UploadScheduler.Waiting removed = queued.remove(new PeerFile(user, path));
+            if (removed != null) {
+                priorities.remove(removed.id());
+            }
         }
+    }
+
+    /**
+     * Gives a queued upload its place in the ordering.
+     *
+     * <p>This is what makes {@code Uploads.prioritize} do what its javadoc has
+     * always promised. The stored value used to be read back only into the
+     * display snapshot, so {@code HIGH} claimed to run "ahead of NORMAL and LOW
+     * work" and changed nothing.
+     *
+     * @param id which queued upload
+     * @param priority its new priority
+     * @return whether a queued upload by that id was found
+     */
+    public boolean prioritize(TransferId id, Priority priority) {
+        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(priority, "priority");
+        synchronized (lock) {
+            for (Map.Entry<PeerFile, UploadScheduler.Waiting> entry : queued.entrySet()) {
+                if (entry.getValue().id().equals(id)) {
+                    priorities.put(id, priority);
+                    entry.setValue(new UploadScheduler.Waiting(
+                            id,
+                            entry.getValue().user(),
+                            entry.getValue().path(),
+                            entry.getValue().sequence(),
+                            priority));
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** Returns every queued request, in the order they will be served. */
+    public List<UploadScheduler.Waiting> waiting() {
+        return UploadScheduler.serviceOrder(schedulerState());
+    }
+
+    /**
+     * Picks the queued upload to start next, or empty if none may start.
+     *
+     * <p>Slot accounting stays in the {@link UploadPolicy}, which already owns
+     * it: this answers <em>who</em> is next, and the caller asks the policy
+     * whether to admit them. Duplicating the slot count here would give two
+     * places to change it and two chances to disagree.
+     *
+     * @return the next candidate
+     */
+    public Optional<UploadScheduler.Waiting> next() {
+        return UploadScheduler.select(schedulerState());
+    }
+
+    /** Records that an upload for this user has started, for round-robin fairness. */
+    public void started(Username user) {
+        Objects.requireNonNull(user, "user");
+        lastStarted.put(user, startTick.getAndIncrement());
+    }
+
+    private UploadScheduler.State schedulerState() {
+        List<UploadScheduler.Waiting> pending;
+        synchronized (lock) {
+            pending = new ArrayList<>(queued.values());
+        }
+
+        Set<Username> busy = new HashSet<>();
+        for (dev.slsk.internal.transfer.TransferInternal upload : uploads.get().values()) {
+            dev.slsk.internal.TransferState state = upload.getState();
+            if (state == null || state.contains(dev.slsk.internal.TransferState.COMPLETED)) {
+                continue;
+            }
+            busy.add(Username.of(upload.getUsername()));
+        }
+
+        return new UploadScheduler.State(
+                pending,
+                busy,
+                0,
+                Integer.MAX_VALUE,
+                candidate -> privileged.test(candidate.value()),
+                Map.copyOf(lastStarted),
+                UploadScheduler.Fairness.ROUND_ROBIN);
     }
 
     /** Gathers what the policy decides on. */

@@ -51,12 +51,6 @@ public interface Uploads {
     Optional<Upload> find(TransferId id);
 
     /**
-     * Moves an upload within our own queue.
-     *
-     * @param id the upload
-     * @param priority its new priority
-     */
-    /**
      * Stops an upload.
      *
      * <p>An idempotent intent: cancelling an upload that already finished is a
@@ -67,6 +61,23 @@ public interface Uploads {
      */
     void cancel(TransferId id);
 
+    /**
+     * Moves an upload within our own queue.
+     *
+     * <p>This orders work we have not started yet, so it applies to an upload
+     * still queued and does nothing to one already running — that slot is
+     * already taken. Within a priority, peers are served round-robin, and a
+     * user the server marks privileged outranks every priority: that part is
+     * protocol-mandated rather than a matter of taste.
+     *
+     * <p>This is also how an application expresses a favoured peer. The library
+     * has no buddy list and should not grow one, because who counts as a buddy
+     * is the application's knowledge; raising their queued uploads to
+     * {@link Priority#HIGH} is how that preference reaches the queue.
+     *
+     * @param id the upload
+     * @param priority its new priority
+     */
     void prioritize(TransferId id, Priority priority);
 
     /**

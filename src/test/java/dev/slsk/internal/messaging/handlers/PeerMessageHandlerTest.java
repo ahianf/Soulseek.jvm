@@ -338,10 +338,13 @@ class PeerMessageHandlerTest {
      */
     @Test
     void queueDownloadSendsThePolicysAnswer() {
+        // The policy decides *whether* to queue; the scheduler decides where.
+        // The peer is told the place its ordering implies — here 1, the only
+        // request in the queue — rather than the policy's unrelated number.
         Fixture queued = new Fixture(policy((request, context) -> new UploadPolicy.Decision.Queue(4)));
         queued.handler.handleMessageRead(queued.connection.proxy, new QueueDownloadRequest(FILENAME).toByteArray());
         assertArrayEquals(
-                new PlaceInQueueResponse(FILENAME, 4).toByteArray(),
+                new PlaceInQueueResponse(FILENAME, 1).toByteArray(),
                 queued.connection.outgoing.getFirst().toByteArray());
 
         Fixture denied = new Fixture(
@@ -481,8 +484,9 @@ class PeerMessageHandlerTest {
         placed.handler.handleMessageRead(placed.connection.proxy, new QueueDownloadRequest(FILENAME).toByteArray());
         placed.connection.outgoing.clear();
         placed.handler.handleMessageRead(placed.connection.proxy, new PlaceInQueueRequest(FILENAME).toByteArray());
+        // One queued request, so the honest answer is 1 whatever the policy said.
         assertArrayEquals(
-                new PlaceInQueueResponse(FILENAME, 9).toByteArray(),
+                new PlaceInQueueResponse(FILENAME, 1).toByteArray(),
                 placed.connection.outgoing.getFirst().toByteArray());
 
         Fixture absent = new Fixture(policy((request, context) -> new UploadPolicy.Decision.Allow()));

@@ -107,9 +107,13 @@ class UploadAdmissionTest {
     @Test
     @DisplayName("a queued peer has a place; anyone else has none")
     void theQueueIsWhereAPlaceComesFrom() {
+        // The policy's own number is deliberately not echoed back. It never
+        // was an ordering — UploadPolicy.standard hands every privileged user a
+        // 1 — so the peer is told the place the scheduler's ordering implies.
+        // One queued request means one place: first.
         policy.set((request, context) -> new UploadPolicy.Decision.Queue(7));
         admission.decide(ALICE, "music\\song.mp3");
-        assertEquals(7, admission.place(ALICE, "music\\song.mp3"));
+        assertEquals(1, admission.place(ALICE, "music\\song.mp3"));
 
         assertNull(admission.place(ALICE, "music\\other.mp3"), "a file we are not holding has no place");
         assertNull(admission.place(BOB, "music\\song.mp3"), "and neither does another peer");
@@ -138,7 +142,9 @@ class UploadAdmissionTest {
         policy.set((request, context) -> new UploadPolicy.Decision.Queue(3));
         admission.decide(Username.of("alice bob"), "music\\song.mp3");
 
-        assertEquals(3, admission.place(Username.of("alice bob"), "music\\song.mp3"));
+        // The place is the scheduler's, so a single queued request is first.
+        // What this test is about is the key: the lookup below must miss.
+        assertEquals(1, admission.place(Username.of("alice bob"), "music\\song.mp3"));
         assertNull(admission.place(ALICE, "bob music\\song.mp3"));
     }
 

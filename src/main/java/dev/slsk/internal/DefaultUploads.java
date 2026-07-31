@@ -107,10 +107,32 @@ final class DefaultUploads implements Uploads {
 
     @Override
     public List<Upload> all() {
-        return client.getUploadRegistry().values().stream()
+        List<Upload> running = client.getUploadRegistry().values().stream()
                 .map(dev.slsk.internal.transfer.TransferInternal::toTransfer)
                 .map(this::project)
-                .toList();
+                .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+
+        // Queued requests are uploads too. They were invisible here, which is
+        // why prioritize() had nothing it could name: an upload only entered the
+        // registry once it started, and by then its place in the queue no longer
+        // mattered. TransferState.Queued exists for exactly this — "our own
+        // queue, which we control and can reorder".
+        List<dev.slsk.internal.transfer.UploadScheduler.Waiting> waiting =
+                client.transfers().admission().waiting();
+        for (int index = 0; index < waiting.size(); index++) {
+            dev.slsk.internal.transfer.UploadScheduler.Waiting pending = waiting.get(index);
+            running.add(new Upload(
+                    pending.id(),
+                    pending.user(),
+                    pending.path(),
+                    0,
+                    new dev.slsk.TransferState.Queued(index),
+                    pending.priority(),
+                    Instant.now(),
+                    Optional.empty(),
+                    Optional.empty()));
+        }
+        return List.copyOf(running);
     }
 
     @Override
@@ -135,6 +157,11 @@ final class DefaultUploads implements Uploads {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(priority, "priority");
         priorities.put(id, priority);
+        // Where the promise in the javadoc is actually kept. For a queued
+        // upload this moves it in the scheduler's ordering; for one already
+        // running it changes nothing, because the slot is taken and this
+        // orders work we have not started yet.
+        client.transfers().admission().prioritize(id, priority);
     }
 
     @Override

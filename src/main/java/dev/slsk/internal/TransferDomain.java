@@ -427,6 +427,10 @@ final class TransferDomain implements PeerServices {
                         return;
                     }
                     ResolvedFile file = resolved.get();
+                    // Stamps the round-robin counter at the moment the slot is
+                    // taken, which is what "who has waited longest since their last
+                    // upload started" is measured against.
+                    admission.started(user);
                     int token = tokens.nextToken();
                     TransferId id = TransferId.of("UPLOAD:" + token);
                     CancellationController cancellation = new CancellationController();
@@ -455,9 +459,45 @@ final class TransferDomain implements PeerServices {
                     } finally {
                         uploadCancellations.remove(id);
                         admission.forget(user, path);
+                        // The slot this upload held is now free, so the queue moves.
+                        // Nothing did this before: a queued peer waited until it
+                        // asked again, and a peer that never re-asked waited for
+                        // ever.
+                        startNextQueued();
                     }
                 },
                 failure -> diagnostic.warning("Failed to serve " + path + " to " + user, failure));
+    }
+
+    /**
+     * Starts the next queued upload, if one may start.
+     *
+     * <p>The scheduler answers <em>who</em> is next; the upload policy answers
+     * <em>whether</em> anyone may start at all, because it is the policy that
+     * owns the slot count. Asking it here rather than duplicating the slot
+     * accounting means there is one place that decides a slot is free.
+     *
+     * <p>Only one candidate is drawn per freed slot. If the policy still admits
+     * more, the next completion draws the next one — a loop here would race the
+     * admission's own view of what is running.
+     */
+    void startNextQueued() {
+        java.util.Optional<dev.slsk.internal.transfer.UploadScheduler.Waiting> candidate;
+        try {
+            candidate = admission.next();
+        } catch (RuntimeException failure) {
+            diagnostic.warning("Failed to pick the next queued upload", failure);
+            return;
+        }
+        if (candidate.isEmpty()) {
+            return;
+        }
+
+        Username user = candidate.get().user();
+        String path = candidate.get().path();
+        if (admission.decide(user, path) instanceof dev.slsk.spi.UploadPolicy.Decision.Allow) {
+            serve(user, path);
+        }
     }
 
     /**
