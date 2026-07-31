@@ -338,4 +338,101 @@ class MessagePrimitivesTest {
 
         assertArrayEquals(content, reader.getPayload());
     }
+
+    /**
+     * Ported from aioslsk's {@code tests/unit/protocol/test_primitives.py}
+     * (GPL-3.0-or-later, which permits electing version 3).
+     *
+     * <p>Only the cases that say something this suite did not already say are
+     * carried over. aioslsk's {@code fieldWithoutType} cases test its
+     * declarative field-metadata machinery, which has no Java counterpart, and
+     * its attribute-map case is already covered by
+     * "File reader skips an unknown attribute type and keeps the file".
+     */
+    @org.junit.jupiter.api.Nested
+    @DisplayName("aioslsk primitives cross-check")
+    class AioslskPrimitives {
+
+        @Test
+        @DisplayName("A UTF-8 string decodes as UTF-8")
+        void utf8DecodesAsUtf8() {
+            String value = "test 丠";
+            byte[] message = new MessageBuilder()
+                    .writeCode(MessageCode.Peer.INFO_REQUEST)
+                    .writeString(value)
+                    .build();
+
+            MessageReader<MessageCode.Peer> reader = new MessageReader<>(message, MessageCode.Peer.class);
+            DecodedString decoded = reader.readStringAndEncoding();
+
+            assertEquals(value, decoded.value());
+            assertSame(CharacterEncoding.getUtf8(), decoded.encoding());
+        }
+
+        /**
+         * The one place this port and aioslsk genuinely disagree, and the
+         * documentation does not settle it.
+         *
+         * <p>aioslsk falls back to cp1252; this library falls back to
+         * ISO-8859-1. Neither {@code SLSKPROTOCOL.md} nor {@code SOULSEEK.rst}
+         * says anything about string encoding at all. Nicotine+ decides it:
+         * {@code pynicotine/slskmessages.py} decodes UTF-8 and falls back to
+         * {@code latin-1}, which is ISO-8859-1 — the same choice made here.
+         *
+         * <p>The two differ only over 0x80–0x9F, which cp1252 maps to printable
+         * punctuation and ISO-8859-1 maps to C1 control codes. 0x92 is the
+         * clearest case: a right single quotation mark to aioslsk, a control
+         * character here and in Nicotine+.
+         */
+        @Test
+        @DisplayName("Malformed UTF-8 falls back to ISO-8859-1, as Nicotine+ does, not to cp1252")
+        void fallbackMatchesNicotineNotAioslsk() {
+            byte[] message = new MessageBuilder()
+                    .writeCode(MessageCode.Peer.INFO_REQUEST)
+                    .writeInteger(2)
+                    .writeByte(0xf1)
+                    .writeByte(0x92)
+                    .build();
+
+            MessageReader<MessageCode.Peer> reader = new MessageReader<>(message, MessageCode.Peer.class);
+            DecodedString decoded = reader.readStringAndEncoding();
+
+            assertSame(CharacterEncoding.getIso88591(), decoded.encoding());
+            assertEquals("ñ", decoded.value());
+            // What aioslsk would have produced for the same byte.
+            assertFalse(decoded.value().contains("’"));
+        }
+
+        @Test
+        @DisplayName("Trailing unparsed bytes are visible rather than silently dropped")
+        void trailingBytesRemainVisible() {
+            // aioslsk logs a warning here. This library exposes it as state:
+            // getRemaining() is non-zero, which is what the Tier C vector
+            // assertions rely on to catch a field-count error.
+            byte[] message = new MessageBuilder()
+                    .writeCode(MessageCode.Peer.INFO_REQUEST)
+                    .writeInteger(1)
+                    .writeByte(0xff)
+                    .build();
+
+            MessageReader<MessageCode.Peer> reader = new MessageReader<>(message, MessageCode.Peer.class);
+            reader.readInteger();
+
+            assertEquals(1, reader.getRemaining());
+            assertTrue(reader.hasMoreData());
+        }
+
+        @Test
+        @DisplayName("A message code that is not the expected one is refused")
+        void mismatchedCodeIsRefused() {
+            byte[] wrongCode = new MessageBuilder()
+                    .writeCode(MessageCode.Peer.TRANSFER_REQUEST)
+                    .writeString("file")
+                    .build();
+
+            assertThrows(
+                    dev.slsk.exceptions.MessageException.class,
+                    () -> dev.slsk.internal.messaging.messages.QueueDownloadRequest.fromByteArray(wrongCode));
+        }
+    }
 }
