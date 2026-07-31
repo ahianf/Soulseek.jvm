@@ -58,6 +58,25 @@ class PeerTransferMessageTest {
     }
 
     @Test
+    @DisplayName("TransferRequest omits the file size for a download")
+    void transferRequestOmitsFileSizeForDownload() {
+        // SLSKPROTOCOL.md Peer Code 40 guards the uint64 file size with
+        // "If direction == 1 (upload)"; Nicotine+ writes it under the same
+        // condition. A download-direction request therefore ends at the
+        // filename.
+        byte[] bytes = new TransferRequest(TransferDirection.DOWNLOAD, 0x12345678, "f").toByteArray();
+
+        assertArrayEquals(
+                new byte[] {17, 0, 0, 0, 40, 0, 0, 0, 0, 0, 0, 0, 0x78, 0x56, 0x34, 0x12, 1, 0, 0, 0, 'f'}, bytes);
+
+        TransferRequest parsed = TransferRequest.fromByteArray(bytes);
+        assertEquals(TransferDirection.DOWNLOAD, parsed.getDirection());
+        assertEquals(0x12345678, parsed.getToken());
+        assertEquals("f", parsed.getFilename());
+        assertEquals(0, parsed.getFileSize());
+    }
+
+    @Test
     @DisplayName("TransferRequest defaults a missing file size to zero")
     void transferRequestDefaultsMissingFileSize() {
         byte[] bytes = new MessageBuilder()

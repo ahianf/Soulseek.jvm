@@ -69,12 +69,20 @@ public final class TransferRequest implements IncomingMessage, OutgoingMessage {
 
     @Override
     public byte[] toByteArray() {
-        return new MessageBuilder()
+        MessageBuilder builder = new MessageBuilder()
                 .writeCode(MessageCode.Peer.TRANSFER_REQUEST)
                 .writeInteger(direction.getValue())
                 .writeInteger(token)
-                .writeString(filename)
-                .writeLong(fileSize)
-                .build();
+                .writeString(filename);
+
+        // The file size is present only for an upload. SLSKPROTOCOL.md (Peer
+        // Code 40) guards it with "If direction == 1 (upload)", and Nicotine+
+        // both writes and parses it under the same condition. The C# source
+        // wrote it unconditionally, which appended eight spurious bytes to
+        // every download-direction request.
+        if (direction == TransferDirection.UPLOAD) {
+            builder.writeLong(fileSize);
+        }
+        return builder.build();
     }
 }
