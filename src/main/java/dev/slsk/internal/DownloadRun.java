@@ -414,6 +414,7 @@ final class DownloadRun {
     }
 
     private void handleFailure(Throwable failure) {
+        reportFailure(failure);
         if (failure instanceof TransferRejectedException) {
             download.setException(failure);
             updateState(TransferState.COMPLETED.or(TransferState.REJECTED));
@@ -442,6 +443,36 @@ final class DownloadRun {
         download.setException(failure);
         updateProgress(currentOutputPosition());
         updateState(TransferState.COMPLETED.or(TransferState.ERRORED));
+    }
+
+    /**
+     * Says why a download ended badly, at the volume that ending deserves.
+     *
+     * <p>The counterpart to {@code UploadRun.reportFailure}, and it exists for
+     * the same reason: a download narrated every step it took and then went
+     * quiet at the only step worth reading, so a failed transfer left a trace
+     * that stopped at whatever it had last managed to do and never said what
+     * went wrong. Success has said {@code "Download of … complete"} all along.
+     *
+     * <p>A peer that refuses, goes quiet, or a transfer we cancelled ourselves
+     * are ordinary events on this network and go to debug alongside the rest of
+     * the run's narration. Anything else is a fault worth surfacing, and gets
+     * the exception with it.
+     */
+    private void reportFailure(Throwable failure) {
+        String summary = "Download of " + filenameOnly(download.getFilename())
+                + " from " + download.getUsername() + " failed after "
+                + currentOutputPosition() + " of " + download.getSize()
+                + " bytes (start offset " + download.getStartOffset() + "): "
+                + failure.getClass().getSimpleName() + ": " + Failures.message(failure);
+        if (failure instanceof TransferRejectedException
+                || failure instanceof CancellationException
+                || failure instanceof TimeoutException) {
+            domain.diagnostic.debug(summary);
+            return;
+        }
+        domain.diagnostic.warning(
+                summary, failure instanceof Exception exception ? exception : new RuntimeException(failure));
     }
 
     private void disconnectTransfer(String message, Throwable failure) {

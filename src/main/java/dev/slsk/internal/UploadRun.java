@@ -354,6 +354,7 @@ final class UploadRun {
     }
 
     private void handleFailure(Throwable failure) {
+        reportFailure(failure);
         if (failure instanceof TransferRejectedException) {
             upload.setException(failure);
             updateState(TransferState.COMPLETED.or(TransferState.REJECTED));
@@ -377,6 +378,36 @@ final class UploadRun {
         upload.setException(failure);
         updateProgress(currentStreamPosition());
         updateState(TransferState.COMPLETED.or(TransferState.ERRORED));
+    }
+
+    /**
+     * Says why an upload ended badly, at the volume that ending deserves.
+     *
+     * <p>A peer that refuses, goes quiet, or a transfer we cancelled ourselves
+     * are ordinary events on this network and go to debug alongside the rest of
+     * the run's narration — a peer declining an upload it already finished is
+     * the routine end of a race, not a fault. Anything else is worth surfacing,
+     * and gets the exception with it.
+     *
+     * <p>That anything at all is written here is the fix. Every other step of an
+     * upload announced itself and this one did not, so a failed upload left a
+     * trace that stopped at whatever it had last managed to do and never said
+     * what went wrong — the byte counts were all there, the reason never was.
+     */
+    private void reportFailure(Throwable failure) {
+        String summary = "Upload of " + filenameOnly(upload.getFilename())
+                + " to " + upload.getUsername() + " failed after "
+                + currentStreamPosition() + " of " + upload.getSize()
+                + " bytes (start offset " + upload.getStartOffset() + "): "
+                + failure.getClass().getSimpleName() + ": " + Failures.message(failure);
+        if (failure instanceof TransferRejectedException
+                || failure instanceof CancellationException
+                || failure instanceof TimeoutException) {
+            domain.diagnostic.debug(summary);
+            return;
+        }
+        domain.diagnostic.warning(
+                summary, failure instanceof Exception exception ? exception : new RuntimeException(failure));
     }
 
     private void disconnectTransfer(String message, Throwable failure) {
