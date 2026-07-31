@@ -882,6 +882,63 @@ class EngineDownloadTest {
      * be concurrent, and a test that wants to observe a call mid-flight is
      * exactly such a caller. The assertions around it are unchanged.
      */
+    /**
+     * A place in a peer's queue is not a transfer, and must not cost a slot.
+     *
+     * <p>The reason a fifteen-track album used to arrive one track at a time.
+     * Both ceilings are set to one here and the download is left waiting for the
+     * peer, which is where it spends almost all of its life; if waiting took a
+     * slot, the other fourteen tracks could not even be asked for until this one
+     * had finished. The slot is taken when the peer says it is ready, and not
+     * before.
+     */
+    @Test
+    void aDownloadWaitingInAPeersQueueHoldsNoTransferSlot() {
+        try (Fixture fixture = new Fixture()) {
+            fixture.client.transfers().downloadConcurrency(1, 1);
+            fixture.waiter.startRequest = new CompletableFuture<>();
+
+            CompletableFuture<TransferOutcome> download = inBackground(() -> fixture.client
+                    .transfers()
+                    .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                            .size(1L)
+                            .token(34)
+                            .options(options())
+                            .build()));
+
+            awaitAsk(fixture);
+            assertEquals(
+                    1,
+                    fixture.client.transfers().globalDownloadSemaphore().availablePermits(),
+                    "waiting in a peer's queue must not take an overall slot");
+            assertEquals(
+                    1,
+                    fixture.client.transfers().downloadSemaphoreFor("alice").availablePermits(),
+                    "waiting in a peer's queue must not take that peer's slot");
+
+            fixture.transfer.data = new byte[] {1};
+            fixture.waiter.startRequest.complete(new TransferRequest(TransferDirection.UPLOAD, 102, "file", 1));
+            assertInstanceOf(TransferOutcome.Succeeded.class, download.join());
+
+            assertEquals(
+                    1,
+                    fixture.client.transfers().downloadSemaphoreFor("alice").availablePermits(),
+                    "the slot is given back when the transfer ends");
+        }
+    }
+
+    /** Waits until the download has asked the peer to queue the file. */
+    private static void awaitAsk(Fixture fixture) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+        while (System.nanoTime() < deadline) {
+            if (fixture.message.messages.stream().anyMatch(QueueDownloadRequest.class::isInstance)) {
+                return;
+            }
+            Thread.onSpinWait();
+        }
+        throw new AssertionError("the peer was never asked to queue the file");
+    }
+
     private static <T> CompletableFuture<T> inBackground(java.util.function.Supplier<T> call) {
         return CompletableFuture.supplyAsync(call, Executors.newVirtualThreadPerTaskExecutor());
     }
@@ -1073,7 +1130,9 @@ class EngineDownloadTest {
     }
 
     private static final class MessageConnectionProbe {
-        private final List<OutgoingMessage> messages = new ArrayList<>();
+        // Copy-on-write because a test that watches for the ask while the
+        // download runs on another thread reads this while the run writes it.
+        private final List<OutgoingMessage> messages = new java.util.concurrent.CopyOnWriteArrayList<>();
         private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 

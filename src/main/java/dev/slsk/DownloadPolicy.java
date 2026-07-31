@@ -18,8 +18,24 @@ import java.util.Objects;
  * application has no reason to know it and every reason to want the album
  * faster.
  *
- * @param maxConcurrent how many downloads run at once, across all peers
- * @param maxConcurrentPerUser how many run at once against any one peer
+ * <p><strong>These bound transfers, not queueing.</strong> The distinction is
+ * the whole reason an album arrives at a sensible speed. Wanting a file from a
+ * peer costs one line in that peer's queue, sent over the message connection
+ * that peer already has; it opens nothing, so there is nothing for a ceiling to
+ * protect and every one of an album's tracks is asked for at once. Only when a
+ * peer says it is ready does a transfer connection exist, and that is where
+ * these two apply.
+ *
+ * <p>The consequence is that the peer, not this policy, decides when a download
+ * starts — there is no way to decline an offer and keep your place in the queue
+ * that made it, so the library takes what it is given. What throttles queueing
+ * instead is the peer's own refusal: a peer that will hold no more files says
+ * so, and the library asks for less until its queue drains. That is reactive by
+ * necessity, because the protocol has no way to ask a peer how much it will
+ * hold.
+ *
+ * @param maxConcurrent how many downloads transfer at once, across all peers
+ * @param maxConcurrentPerUser how many transfer at once from any one peer
  * @param speedLimit the aggregate download rate ceiling
  * @param queuePositionPollInterval how often to ask a peer where we are in its
  *     queue
@@ -66,7 +82,7 @@ public record DownloadPolicy(
     /**
      * Returns this policy with a different overall concurrency.
      *
-     * @param value how many downloads run at once
+     * @param value how many downloads transfer at once
      * @return the policy
      */
     public DownloadPolicy maxConcurrent(int value) {
@@ -77,7 +93,7 @@ public record DownloadPolicy(
     /**
      * Returns this policy with a different per-peer concurrency.
      *
-     * @param value how many downloads run at once against any one peer
+     * @param value how many downloads transfer at once from any one peer
      * @return the policy
      */
     public DownloadPolicy maxConcurrentPerUser(int value) {

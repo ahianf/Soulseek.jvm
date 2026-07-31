@@ -107,6 +107,20 @@ final class DefaultDownloads implements Downloads {
                 events.publish(new DownloadEvent.QueuePositionChanged(entry.id(), place, Instant.now())));
         this.queue.positionProbe(this::place);
         client.transfers().downloadOffers(this::offered);
+        applyConcurrency(queue.policy());
+    }
+
+    /**
+     * Hands the transfer path the policy's concurrency ceilings.
+     *
+     * <p>The same division as the rate ceiling below: the queue decides which
+     * downloads exist and how many each peer is asked to hold, and these bound
+     * how many may be moving bytes at once. They are applied there rather than
+     * here because the moment they bind is the moment a peer says it is ready,
+     * which is inside the transfer, not inside the queue.
+     */
+    private void applyConcurrency(DownloadPolicy policy) {
+        client.transfers().downloadConcurrency(policy.maxConcurrent(), policy.maxConcurrentPerUser());
     }
 
     /**
@@ -367,6 +381,7 @@ final class DefaultDownloads implements Downloads {
         // and the token bucket decides how fast, and a policy that carried a
         // limit nothing read would be a setting that silently did nothing.
         client.setDownloadSpeedLimit(policy.speedLimit());
+        applyConcurrency(policy);
         queue.policy(policy);
     }
 

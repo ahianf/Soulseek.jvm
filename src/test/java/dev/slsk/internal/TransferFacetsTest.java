@@ -144,6 +144,12 @@ class TransferFacetsTest {
         assertEquals(RejectionReason.BANNED, RejectionReasons.parse("Banned"));
         assertEquals(RejectionReason.TOO_MANY_FILES, RejectionReasons.parse("Too many files"));
         assertEquals(RejectionReason.TOO_MANY_MEGABYTES, RejectionReasons.parse("Too many megabytes"));
+        // Nicotine+ said the same two things this way before 3.1.1. Deprecated,
+        // still on the wire from anyone who has not upgraded, and worth
+        // classifying because the queue waits these out instead of giving up.
+        assertEquals(RejectionReason.TOO_MANY_FILES, RejectionReasons.parse("User limit of 100 files exceeded"));
+        assertEquals(
+                RejectionReason.TOO_MANY_MEGABYTES, RejectionReasons.parse("User limit of 500 megabytes exceeded"));
         assertEquals(RejectionReason.PENDING_SHUTDOWN, RejectionReasons.parse("Pending shutdown."));
         assertEquals(RejectionReason.QUEUE_FULL, RejectionReasons.parse("Queue full"));
         assertEquals(RejectionReason.CANCELLED_BY_PEER, RejectionReasons.parse("Cancelled"));

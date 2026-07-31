@@ -54,6 +54,17 @@ import java.util.function.BiConsumer;
 final class DownloadQueue {
 
     /**
+     * The narrowest ceiling a peer's refusal may impose.
+     *
+     * <p>Nicotine+'s floor, and it is a floor rather than a number because a
+     * peer that refuses at one file is describing a moment, not a policy:
+     * dropping to one file per peer on the strength of a single refusal is the
+     * behaviour this class exists to avoid, and would be entered by any peer
+     * that happened to be busy when we first asked.
+     */
+    private static final int MINIMUM_QUEUE_LIMIT = 5;
+
+    /**
      * Asks a peer where we are in its queue.
      *
      * <p>Separate from {@link Runner} because it is asked <em>while</em> a run
@@ -105,6 +116,18 @@ final class DownloadQueue {
         private volatile long resumeOffset;
         /** Set while paused, so resume knows there is nothing running to stop. */
         private final AtomicBoolean paused = new AtomicBoolean();
+
+        /**
+         * Set when the peer refused this file because its queue for us is full.
+         *
+         * <p>Distinct from paused, and from a retry backoff. The download is
+         * still wanted and the peer is still willing; there is simply no room
+         * in its queue yet, so it waits for room rather than for a timer. Held
+         * entries are skipped by {@link #admit()} until the peer's queue drains
+         * and {@link #releaseQueueLimit} lets them back in — without which the
+         * refused file would be re-announced immediately and refused again.
+         */
+        private volatile boolean queueLimited;
 
         Entry(TransferId id, DownloadRequest request) {
             this.id = id;
@@ -194,6 +217,20 @@ final class DownloadQueue {
     private final Object storeLock = new Object();
 
     private final Map<TransferId, Entry> entries = new LinkedHashMap<>();
+
+    /**
+     * How many files each peer has told us it will hold for us at once.
+     *
+     * <p>Learned, never configured. Soulseek has no way to ask a peer how big
+     * its queue is, so the only honest number is the one its refusal implies,
+     * and a client that guesses low is slow for everyone while a client that
+     * guesses high is refused. Absent means no peer has said, which is the
+     * common case and means unbounded.
+     *
+     * <p>Guarded by {@link #lock}.
+     */
+    private final Map<Username, Integer> userQueueLimits = new LinkedHashMap<>();
+
     private final Scheduler scheduler;
     private final Runner runner;
     private final TransferStore store;
@@ -328,6 +365,9 @@ final class DownloadQueue {
             if (promoted == null) {
                 return Optional.empty();
             }
+            // A peer offering a file has room for it by definition, whatever it
+            // last said about its queue being full.
+            promoted.queueLimited = false;
             promoted.state = new TransferState.Requesting();
             renumber();
         }
@@ -504,6 +544,9 @@ final class DownloadQueue {
         if (entry == null || entry.isTerminal() || !entry.paused.compareAndSet(true, false)) {
             return;
         }
+        // A consumer asking for this download again is a reason to ask the peer
+        // again, whatever it said about its queue while we were not asking.
+        entry.queueLimited = false;
         transition(entry, new TransferState.Queued(0));
         admit();
     }
@@ -535,6 +578,7 @@ final class DownloadQueue {
         // a rejection is not asking to resume a transfer the peer refused.
         entry.resumeOffset = 0;
         entry.paused.set(false);
+        entry.queueLimited = false;
         entry.cancellation.set(new CancellationController());
         transition(entry, new TransferState.Queued(0));
         admit();
@@ -587,11 +631,29 @@ final class DownloadQueue {
     // --- scheduling --------------------------------------------------------
 
     /**
-     * Starts whatever the policy now allows to start.
+     * Asks each peer to queue everything we want from it.
+     *
+     * <p>Everything, not a slot's worth. Asking is a {@code QueueUpload} on the
+     * peer message connection that peer already has, so a download waiting in a
+     * peer's queue costs one line in that queue and nothing else — no
+     * connection, no slot, no thread that another download could have used. The
+     * ceilings in {@link DownloadPolicy} bound transfers, and are taken when a
+     * peer says it is ready rather than when we ask.
+     *
+     * <p>Charging a place in a peer's queue as though it were a transfer is what
+     * this used to do, and it made {@code maxConcurrentPerUser}'s default of one
+     * mean "one file per peer at a time, end to end". A fifteen-track album
+     * therefore paid the peer's whole queue wait fifteen times over, rejoining
+     * the back of it after every track, when one wait would have done: the point
+     * of a remote queue is to hold your place in it for all of them at once.
+     *
+     * <p>What still bounds this is the peer itself, through
+     * {@link #userQueueLimits} — a ceiling learned from its refusals rather than
+     * guessed at in advance. See {@link #holdForQueueLimit}.
      *
      * <p>Ordering is by priority and then by arrival: two downloads of the same
-     * priority run in the order they were asked for, which is the only ordering
-     * a consumer can predict.
+     * priority are announced in the order they were asked for, which is the only
+     * ordering a consumer can predict.
      */
     private void admit() {
         List<Entry> starting = new ArrayList<>();
@@ -599,34 +661,28 @@ final class DownloadQueue {
             if (closed.get()) {
                 return;
             }
-            int running = 0;
-            Map<Username, Integer> perUser = new LinkedHashMap<>();
+            Map<Username, Integer> inFlight = new LinkedHashMap<>();
             for (Entry entry : entries.values()) {
                 if (entry.isRunning()) {
-                    running++;
-                    perUser.merge(entry.user(), 1, Integer::sum);
+                    inFlight.merge(entry.user(), 1, Integer::sum);
                 }
             }
+            releaseDrainedQueueLimits(inFlight);
 
             List<Entry> waiting = new ArrayList<>();
             for (Entry entry : entries.values()) {
-                if (entry.state instanceof TransferState.Queued && !entry.paused.get()) {
+                if (entry.state instanceof TransferState.Queued && !entry.paused.get() && !entry.queueLimited) {
                     waiting.add(entry);
                 }
             }
             waiting.sort(Comparator.comparingInt(entry -> -entry.priority.ordinal()));
 
-            DownloadPolicy current = policy;
             for (Entry entry : waiting) {
-                if (running >= current.maxConcurrent()) {
-                    break;
-                }
-                int mine = perUser.getOrDefault(entry.user(), 0);
-                if (mine >= current.maxConcurrentPerUser()) {
+                int mine = inFlight.getOrDefault(entry.user(), 0);
+                if (mine >= ceilingFor(entry.user())) {
                     continue;
                 }
-                perUser.put(entry.user(), mine + 1);
-                running++;
+                inFlight.put(entry.user(), mine + 1);
                 entry.state = new TransferState.Requesting();
                 starting.add(entry);
             }
@@ -642,6 +698,29 @@ final class DownloadQueue {
             onStateChanged.accept(entry, new TransferState.Queued(0));
             save(entry);
             NetworkExecutor.executor().execute(() -> attempt(entry));
+        }
+    }
+
+    /** Returns how many files a peer will hold for us, or unbounded if it has never said. */
+    private int ceilingFor(Username user) {
+        return userQueueLimits.getOrDefault(user, Integer.MAX_VALUE);
+    }
+
+    /**
+     * Forgets the ceilings of peers whose queues we no longer occupy.
+     *
+     * <p>A ceiling is a fact about how full a peer's queue was when it refused
+     * us, and once the last of our files has left that queue the fact has
+     * expired. Releasing it here rather than on a timer is what makes the
+     * backoff self-clearing: the peer's own progress is the signal. Under the
+     * lock.
+     */
+    private void releaseDrainedQueueLimits(Map<Username, Integer> inFlight) {
+        userQueueLimits.keySet().removeIf(user -> inFlight.getOrDefault(user, 0) == 0);
+        for (Entry entry : entries.values()) {
+            if (entry.queueLimited && !userQueueLimits.containsKey(entry.user())) {
+                entry.queueLimited = false;
+            }
         }
     }
 
@@ -684,6 +763,12 @@ final class DownloadQueue {
             return;
         }
 
+        if (outcome instanceof TransferOutcome.Rejected rejected && isQueueLimit(rejected.reason())) {
+            holdForQueueLimit(entry);
+            admit();
+            return;
+        }
+
         DownloadPolicy current = policy;
         if (current.retry().shouldRetry(outcome, entry.attempt)) {
             scheduleRetry(entry, current.retry().backoffBefore(entry.attempt + 1));
@@ -692,6 +777,52 @@ final class DownloadQueue {
         }
         finish(entry, outcome);
         admit();
+    }
+
+    /**
+     * Whether a refusal is about the size of the peer's queue rather than the
+     * file.
+     *
+     * <p>These two are the only refusals a peer sends that will stop being true
+     * on their own. Everything else — not shared, banned, cancelled — is about
+     * the file or about us, and waiting does not change it.
+     */
+    private static boolean isQueueLimit(dev.slsk.RejectionReason reason) {
+        return reason == dev.slsk.RejectionReason.TOO_MANY_FILES
+                || reason == dev.slsk.RejectionReason.TOO_MANY_MEGABYTES;
+    }
+
+    /**
+     * Parks a download the peer has no room for, and narrows what we ask of that
+     * peer.
+     *
+     * <p>This is the whole of the queue's backpressure, and it is reactive on
+     * purpose. A client cannot know how many files a peer will hold — the
+     * protocol has no way to ask — so the alternatives are to guess low, which
+     * is the slowness this class exists to remove, or to guess high and be
+     * refused. Being refused is cheap and carries the answer, so the ceiling is
+     * read off the refusal: {@code max(5, what the peer was already holding)},
+     * the same rule and the same floor as Nicotine+'s
+     * {@code _upload_denied}.
+     *
+     * <p>The attempt is given back. A full queue is not a failed attempt at this
+     * file — the peer never looked at it — and spending one of
+     * {@link dev.slsk.RetryPolicy#maxAttempts} on it would fail an album's
+     * tail after three refusals that were only ever about timing.
+     */
+    private void holdForQueueLimit(Entry entry) {
+        synchronized (lock) {
+            int announced = 0;
+            for (Entry other : entries.values()) {
+                if (other != entry && other.user().equals(entry.user()) && other.isRunning()) {
+                    announced++;
+                }
+            }
+            userQueueLimits.put(entry.user(), Math.max(MINIMUM_QUEUE_LIMIT, announced));
+            entry.queueLimited = true;
+            entry.attempt = Math.max(0, entry.attempt - 1);
+        }
+        transition(entry, new TransferState.Queued(0));
     }
 
     private void scheduleRetry(Entry entry, Duration backoff) {

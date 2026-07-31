@@ -4,6 +4,7 @@
 package dev.slsk.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -85,6 +86,10 @@ class DownloadQueueTest {
         private volatile boolean open;
 
         private final Map<TransferId, CountDownLatch> gates = new ConcurrentHashMap<>();
+
+        /** What a given run answers with, for driving a peer's refusal. */
+        private final Map<TransferId, TransferOutcome> outcomes = new ConcurrentHashMap<>();
+
         private final List<TransferId> started = new CopyOnWriteArrayList<>();
         private final AtomicInteger concurrent = new AtomicInteger();
         private final AtomicInteger peakConcurrent = new AtomicInteger();
@@ -118,7 +123,13 @@ class DownloadQueueTest {
                 mine.decrementAndGet();
                 concurrent.decrementAndGet();
             }
-            return new TransferOutcome.Succeeded(1024, Duration.ofSeconds(1));
+            return outcomes.getOrDefault(entry.id(), new TransferOutcome.Succeeded(1024, Duration.ofSeconds(1)));
+        }
+
+        /** Makes one run come back as a peer that has no room for it, then opens its gate. */
+        void refuseAsFull(TransferId id) {
+            outcomes.put(id, new TransferOutcome.Rejected(RejectionReason.TOO_MANY_FILES, "Too many files"));
+            release(id);
         }
 
         void release(TransferId id) {
@@ -161,12 +172,23 @@ class DownloadQueueTest {
         throw new AssertionError(id + " never reached a terminal state");
     }
 
+    /**
+     * The whole batch reaches the peer, not a slot's worth of it.
+     *
+     * <p>This is the rule the ceilings in {@link DownloadPolicy} used to break.
+     * They bound transfers — connections at a peer — and a download waiting in a
+     * peer's queue is not one: it is a line in that queue, sent over the message
+     * connection the peer already has. Charging it a slot meant an album was
+     * offered to the peer one track at a time, each track rejoining the back of
+     * a queue it had already waited out, so a wait that should have been paid
+     * once was paid once per track.
+     */
     @Test
-    @DisplayName("never more than maxConcurrent downloads at once")
-    void theOverallCapIsNeverExceeded() {
+    @DisplayName("every file goes into the peer's queue at once, not one at a time")
+    void theWholeBatchIsAnnouncedAtOnce() {
         GatedRunner runner = new GatedRunner();
         DownloadQueue queue = queue(runner);
-        queue.policy(DownloadPolicy.defaults().maxConcurrentPerUser(3).maxConcurrent(2));
+        queue.policy(DownloadPolicy.defaults().maxConcurrent(1).maxConcurrentPerUser(1));
 
         List<TransferId> ids = new ArrayList<>();
         for (int index = 0; index < 6; index++) {
@@ -175,95 +197,156 @@ class DownloadQueueTest {
             queue.enqueue(id, request("alice", "music\\" + index + ".mp3"));
         }
 
-        awaitStarted(runner, 2);
+        // Deterministic: admit() moves every entry out of the local queue under
+        // its own lock before it hands any of them to a thread, so by the time
+        // the last enqueue returns there is nothing left waiting locally.
+        assertTrue(
+                queue.all().stream().noneMatch(download -> download.state() instanceof TransferState.Queued),
+                "no file should still be waiting its turn locally");
+
+        awaitStarted(runner, 6);
+        assertEquals(6, runner.started.size(), "the peer should have been asked for all six");
+
         runner.releaseAll();
         ids.forEach(id -> awaitTerminal(queue, id));
-        assertEquals(2, runner.peakConcurrent.get());
         queue.close();
     }
 
     /**
-     * The rule the library exists to hold. Four connections to one peer for four
-     * tracks of one album is indistinguishable, from their side, from an attack.
+     * Two peers are two queues, and neither one's ceiling reaches the other.
      */
     @Test
-    @DisplayName("never more than maxConcurrentPerUser against any one peer")
-    void thePerUserCapIsNeverExceeded() {
+    @DisplayName("a peer's refusal narrows what we ask of that peer and no other")
+    void aRefusalIsScopedToThePeerThatSentIt() {
         GatedRunner runner = new GatedRunner();
         DownloadQueue queue = queue(runner);
-        queue.policy(DownloadPolicy.defaults().maxConcurrent(6).maxConcurrentPerUser(1));
 
-        List<TransferId> ids = new ArrayList<>();
-        for (int index = 0; index < 3; index++) {
-            TransferId alice = TransferId.of("a" + index);
-            TransferId bob = TransferId.of("b" + index);
-            ids.add(alice);
-            ids.add(bob);
-            queue.enqueue(alice, request("alice", "music\\a" + index + ".mp3"));
-            queue.enqueue(bob, request("bob", "music\\b" + index + ".mp3"));
-        }
+        List<TransferId> alice = fill(queue, runner, "alice", 6);
+        runner.refuseAsFull(alice.get(0));
+        awaitQueued(queue, alice.get(0));
 
-        awaitStarted(runner, 2);
+        TransferId more = TransferId.of("alice-more");
+        queue.enqueue(more, request("alice", "music\\more.mp3"));
+        assertInstanceOf(
+                TransferState.Queued.class,
+                queue.find(more).orElseThrow().snapshot().state(),
+                "alice is full, so this waits");
+
+        TransferId bob = TransferId.of("bob-0");
+        queue.enqueue(bob, request("bob", "music\\bob.mp3"));
+        awaitStarted(runner, 7);
+        assertTrue(runner.started.contains(bob), "bob never said anything about its queue");
+
         runner.releaseAll();
-        ids.forEach(id -> awaitTerminal(queue, id));
-
-        assertEquals(1, runner.peakPerUser.get(Username.of("alice")).get());
-        assertEquals(1, runner.peakPerUser.get(Username.of("bob")).get());
-        assertEquals(6, runner.started.size(), "everything eventually ran");
         queue.close();
     }
 
+    /**
+     * Priority orders what is waiting, and under the new model the only thing
+     * that waits is what a peer has said it has no room for. With no contention
+     * everything is asked for at once and there is nothing to order — which is
+     * what a priority means in any scheduler.
+     */
     @Test
-    @DisplayName("higher priority goes first, and equal priority keeps its arrival order")
-    void priorityOrdersTheQueue() {
+    @DisplayName("higher priority is asked for first once a peer's queue has room again")
+    void priorityOrdersWhatAPeersCeilingIsHolding() {
         GatedRunner runner = new GatedRunner();
         DownloadQueue queue = queue(runner);
-        queue.policy(DownloadPolicy.defaults().maxConcurrent(1).maxConcurrentPerUser(1));
 
-        queue.enqueue(TransferId.of("running"), request("alice", "music\\running.mp3"));
-        awaitStarted(runner, 1);
+        List<TransferId> initial = fill(queue, runner, "alice", 6);
+        runner.refuseAsFull(initial.get(0));
+        awaitQueued(queue, initial.get(0));
 
-        queue.enqueue(TransferId.of("normal-first"), request("alice", "music\\one.mp3"));
-        queue.enqueue(TransferId.of("normal-second"), request("alice", "music\\two.mp3"));
-        queue.enqueue(TransferId.of("urgent"), request("alice", "music\\three.mp3"));
+        // Five are still in alice's queue and alice will hold five, so these
+        // three wait rather than being asked for.
+        for (String name : List.of("normal-first", "normal-second", "urgent")) {
+            queue.enqueue(TransferId.of(name), request("alice", "music\\" + name + ".mp3"));
+        }
         queue.prioritize(TransferId.of("urgent"), Priority.HIGH);
+        assertEquals(6, runner.started.size(), "nothing more should have been asked for");
+
+        // One leaves alice's queue, so there is room for exactly one more.
+        runner.release(initial.get(1));
+        awaitStarted(runner, 7);
+        assertEquals(TransferId.of("urgent"), runner.started.get(6), "the urgent one takes the room");
 
         runner.releaseAll();
-        for (String name : List.of("running", "normal-first", "normal-second", "urgent")) {
-            awaitTerminal(queue, TransferId.of(name));
-        }
-
-        assertEquals(
-                List.of(
-                        TransferId.of("running"),
-                        TransferId.of("urgent"),
-                        TransferId.of("normal-first"),
-                        TransferId.of("normal-second")),
-                runner.started);
         queue.close();
     }
 
     @Test
-    @DisplayName("a queued download reports where it is in the queue")
-    void queuedDownloadsCarryTheirLocalPosition() {
+    @DisplayName("a download a peer has no room for reports where it is in the local queue")
+    void heldDownloadsCarryTheirLocalPosition() {
         GatedRunner runner = new GatedRunner();
         DownloadQueue queue = queue(runner);
-        queue.policy(DownloadPolicy.defaults().maxConcurrent(1).maxConcurrentPerUser(1));
 
-        queue.enqueue(TransferId.of("running"), request("alice", "music\\running.mp3"));
-        awaitStarted(runner, 1);
+        List<TransferId> initial = fill(queue, runner, "alice", 6);
+        runner.refuseAsFull(initial.get(0));
+        awaitQueued(queue, initial.get(0));
+
         queue.enqueue(TransferId.of("first"), request("alice", "music\\one.mp3"));
         queue.enqueue(TransferId.of("second"), request("alice", "music\\two.mp3"));
 
         assertEquals(
-                new TransferState.Queued(0),
+                new TransferState.Queued(1),
                 queue.find(TransferId.of("first")).orElseThrow().snapshot().state());
         assertEquals(
-                new TransferState.Queued(1),
+                new TransferState.Queued(2),
                 queue.find(TransferId.of("second")).orElseThrow().snapshot().state());
 
         runner.releaseAll();
         queue.close();
+    }
+
+    /**
+     * A refusal about the size of a peer's queue is not a failed attempt at the
+     * file — the peer never looked at it — so it must not spend one of the
+     * retry policy's attempts. A three-attempt policy would otherwise fail an
+     * album's tail after three refusals that were only ever about timing.
+     */
+    @Test
+    @DisplayName("a full queue costs no retry attempt")
+    void aFullQueueDoesNotSpendAnAttempt() {
+        GatedRunner runner = new GatedRunner();
+        DownloadQueue queue = queue(runner);
+
+        List<TransferId> initial = fill(queue, runner, "alice", 6);
+        TransferId refused = initial.get(0);
+        runner.refuseAsFull(refused);
+        awaitQueued(queue, refused);
+
+        assertEquals(
+                1,
+                queue.find(refused).orElseThrow().snapshot().attempt(),
+                "the snapshot floors at one; the entry's own count went back to zero");
+        assertFalse(queue.find(refused).orElseThrow().isTerminal(), "a full queue is not an ending");
+
+        runner.releaseAll();
+        queue.close();
+    }
+
+    /** Enqueues {@code count} downloads from one peer and waits for all of them to be asked for. */
+    private List<TransferId> fill(DownloadQueue queue, GatedRunner runner, String user, int count) {
+        List<TransferId> ids = new ArrayList<>();
+        for (int index = 0; index < count; index++) {
+            TransferId id = TransferId.of(user + "-" + index);
+            ids.add(id);
+            queue.enqueue(id, request(user, "music\\" + user + index + ".mp3"));
+        }
+        awaitStarted(runner, count);
+        return ids;
+    }
+
+    /** Waits for an entry the peer refused to settle back into the local queue. */
+    private static void awaitQueued(DownloadQueue queue, TransferId id) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+        while (System.nanoTime() < deadline) {
+            if (queue.find(id).orElseThrow().snapshot().state() instanceof TransferState.Queued) {
+                return;
+            }
+            Thread.onSpinWait();
+        }
+        throw new AssertionError(id + " never went back to the local queue");
     }
 
     @Test
@@ -322,8 +405,10 @@ class DownloadQueueTest {
 
         queue.resume(waiting);
         queue.resume(waiting);
+        // Straight back to the peer rather than into a local queue: resuming is
+        // asking again, and asking no longer waits for a slot.
         assertInstanceOf(
-                TransferState.Queued.class,
+                TransferState.Requesting.class,
                 queue.find(waiting).orElseThrow().snapshot().state());
 
         runner.releaseAll();
@@ -566,40 +651,37 @@ class DownloadQueueTest {
     }
 
     /**
-     * The per-user cap is the rule this deliberately breaks. It exists so we do
-     * not open connections at a peer; a peer volunteering a file is the opposite
-     * situation, and the place it is offering took the length of its queue to
-     * earn. Refusing to spend a slot on it throws that away.
+     * The peer's own ceiling is the rule this deliberately breaks. That ceiling
+     * is a guess read off a refusal the peer sent some time ago; an offer is the
+     * peer speaking now, and it can only be offering a file it has room for. The
+     * place it is offering took the length of its queue to earn, so refusing it
+     * on the strength of the older, weaker evidence throws that away.
      */
     @Test
-    @DisplayName("a peer's offer starts its download immediately, past both caps")
-    void anOfferedDownloadIsPromotedPastTheCaps() {
+    @DisplayName("a peer's offer starts its download immediately, past that peer's ceiling")
+    void anOfferedDownloadIsPromotedPastTheCeiling() {
         GatedRunner runner = new GatedRunner();
         DownloadQueue queue = queue(runner);
-        queue.policy(DownloadPolicy.defaults().maxConcurrent(1).maxConcurrentPerUser(1));
 
-        TransferId first = TransferId.of("first");
+        List<TransferId> initial = fill(queue, runner, "alice", 6);
+        runner.refuseAsFull(initial.get(0));
+        awaitQueued(queue, initial.get(0));
+
         TransferId held = TransferId.of("held");
-        queue.enqueue(first, request("alice", "music\\first.mp3"));
         queue.enqueue(held, request("alice", "music\\held.mp3"));
-
-        // The cap admits one; the second is queued and invisible to the engine.
-        awaitStarted(runner, 1);
-        assertEquals(List.of(first), List.copyOf(runner.started));
         assertInstanceOf(
                 TransferState.Queued.class,
-                queue.find(held).orElseThrow().snapshot().state());
+                queue.find(held).orElseThrow().snapshot().state(),
+                "alice will hold no more, so this waits");
 
         assertEquals(
                 Optional.of(held),
                 queue.promote(Username.of("alice"), "music\\held.mp3"),
                 "an offer for a queued download should promote it");
-        awaitStarted(runner, 2);
-        assertEquals(2, runner.started.size());
+        awaitStarted(runner, 7);
+        assertTrue(runner.started.contains(held));
 
         runner.releaseAll();
-        awaitTerminal(queue, first);
-        awaitTerminal(queue, held);
         queue.close();
     }
 

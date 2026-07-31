@@ -81,8 +81,18 @@ final class DownloadRun {
 
     private final CancellationSignal cancellationSignal;
     private final String uniqueKey;
-    private final java.util.concurrent.atomic.AtomicBoolean globalPermit =
-            new java.util.concurrent.atomic.AtomicBoolean();
+
+    /**
+     * The ceilings this run took, or {@code null} until it takes them.
+     *
+     * <p>Held rather than re-fetched, because a policy change replaces them: a
+     * run that released to whatever the domain currently hands out would return
+     * a permit to a semaphore that never issued one, and inflate the new
+     * ceiling by one for the rest of the session.
+     */
+    private final AtomicReference<java.util.concurrent.Semaphore> globalPermit = new AtomicReference<>();
+
+    private final AtomicReference<java.util.concurrent.Semaphore> userPermit = new AtomicReference<>();
     private final WaitKey transferStartRequestedWaitKey;
     private TransferState lastState = TransferState.NONE;
     private InetSocketAddress endpoint;
@@ -125,12 +135,6 @@ final class DownloadRun {
     Transfer execute() {
         try {
             updateState(TransferState.QUEUED.or(TransferState.LOCALLY));
-            Permits.acquire(domain.globalDownloadSemaphore(), cancellationSignal);
-            globalPermit.set(true);
-            domain.diagnostic.debug("Global download semaphore for file "
-                    + filenameOnly(download.getFilename()) + " to "
-                    + download.getUsername() + " acquired");
-
             endpoint = domain.endpoint(download.getUsername(), cancellationSignal);
             MessageConnection peerConnection =
                     domain.peers().getOrAddMessageConnection(download.getUsername(), endpoint, cancellationSignal);
@@ -215,6 +219,24 @@ final class DownloadRun {
     private void beginQueuedDownload(Wait<TransferRequest> transferStartRequested) {
         updateState(TransferState.QUEUED.or(TransferState.REMOTELY));
         TransferRequest request = transferStartRequested.await();
+
+        // Acquired here rather than at the top of the run, because what these
+        // bound is transfers and until now there was none. A download waiting
+        // in a peer's queue holds no connection of its own — the peer message
+        // connection is shared with every other download from that peer — so
+        // charging it a slot bought nothing and cost everything: a whole album
+        // queued one file at a time, each one rejoining the back of the peer's
+        // queue after the last had finished.
+        java.util.concurrent.Semaphore perUser = domain.downloadSemaphoreFor(download.getUsername());
+        Permits.acquire(perUser, cancellationSignal);
+        userPermit.set(perUser);
+        java.util.concurrent.Semaphore overall = domain.globalDownloadSemaphore();
+        Permits.acquire(overall, cancellationSignal);
+        globalPermit.set(overall);
+        domain.diagnostic.debug("Download slots for file "
+                + filenameOnly(download.getFilename()) + " from "
+                + download.getUsername() + " acquired");
+
         validateRemoteSize(request.getFileSize());
         if (download.getSize() == null) {
             download.setSize(request.getFileSize());
@@ -507,22 +529,28 @@ final class DownloadRun {
                 }
             }
         } finally {
-            if (globalPermit.compareAndSet(true, false)) {
-                try {
-                    domain.globalDownloadSemaphore().release();
-                } catch (Throwable failure) {
-                    domain.diagnostic.warning(
-                            "Failed to release global download "
-                                    + "semaphore for file "
-                                    + filenameOnly(download.getFilename())
-                                    + " from "
-                                    + download.getUsername() + ": "
-                                    + Failures.message(failure),
-                            failure);
-                }
-            }
+            release(globalPermit, "global");
+            release(userPermit, "per-user");
             domain.downloads().remove(download.getToken(), download);
             domain.releaseUniqueKey(uniqueKey);
+        }
+    }
+
+    /** Returns one held ceiling, at most once, to the instance it was taken from. */
+    private void release(AtomicReference<java.util.concurrent.Semaphore> held, String which) {
+        java.util.concurrent.Semaphore permit = held.getAndSet(null);
+        if (permit == null) {
+            return;
+        }
+        try {
+            permit.release();
+        } catch (Throwable failure) {
+            domain.diagnostic.warning(
+                    "Failed to release the " + which + " download slot for file "
+                            + filenameOnly(download.getFilename())
+                            + " from " + download.getUsername() + ": "
+                            + Failures.message(failure),
+                    failure);
         }
     }
 

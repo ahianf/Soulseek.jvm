@@ -100,7 +100,25 @@ final class TransferDomain implements PeerServices {
      * engine, along with a per-user map the engine swept and the upload path
      * never used. One owner now, and the sweep reaches the map that is real.
      */
-    private final Semaphore globalDownloadSemaphore;
+    /**
+     * How many downloads may move bytes at once, and how many per peer.
+     *
+     * <p>Replaceable, because {@link dev.slsk.DownloadPolicy} owns these
+     * numbers and a consumer may change them while transfers are in flight. A
+     * run holds the instance it acquired and releases to that same one, so a
+     * resize never returns a permit to a semaphore that did not issue it.
+     *
+     * <p>They bound <em>transfers</em>, not places in a peer's queue. Under
+     * QueueUpload a download waits in the peer's queue holding nothing but a
+     * line in it — the peer message connection is shared — so the ceiling is
+     * taken when the peer says it is ready, which is the first moment there is
+     * a connection to be rude with.
+     */
+    private final java.util.concurrent.atomic.AtomicReference<Semaphore> globalDownloadSemaphore;
+
+    private volatile int maximumDownloadsPerUser;
+
+    private final Map<String, Semaphore> downloadSemaphores = new ConcurrentHashMap<>();
 
     private final Semaphore globalUploadSemaphore;
 
@@ -190,7 +208,9 @@ final class TransferDomain implements PeerServices {
         this.uploadTokenBucket = Objects.requireNonNull(uploadTokenBucket, "uploadTokenBucket");
         this.catalog = Objects.requireNonNull(catalog, "catalog");
         this.profile = Objects.requireNonNull(profile, "profile");
-        this.globalDownloadSemaphore = new Semaphore(options.get().getMaximumConcurrentDownloads());
+        this.globalDownloadSemaphore = new java.util.concurrent.atomic.AtomicReference<>(
+                new Semaphore(options.get().getMaximumConcurrentDownloads()));
+        this.maximumDownloadsPerUser = Integer.MAX_VALUE;
         this.globalUploadSemaphore = new Semaphore(options.get().getMaximumConcurrentUploads());
         this.admission = new UploadAdmission(
                 this::uploadPolicy, this::uploads, Objects.requireNonNull(privileged, "privileged"), diagnostic);
@@ -217,7 +237,37 @@ final class TransferDomain implements PeerServices {
     }
 
     Semaphore globalDownloadSemaphore() {
-        return globalDownloadSemaphore;
+        return globalDownloadSemaphore.get();
+    }
+
+    /**
+     * Returns the ceiling on concurrent transfers from one peer.
+     *
+     * @param username the peer
+     * @return its semaphore, created on first use
+     */
+    Semaphore downloadSemaphoreFor(String username) {
+        return downloadSemaphores.computeIfAbsent(username, ignored -> new Semaphore(maximumDownloadsPerUser));
+    }
+
+    /**
+     * Applies a download policy's concurrency ceilings.
+     *
+     * <p>The policy's to set and the engine's to apply, the same division the
+     * rate ceiling already follows: the queue decides which downloads exist and
+     * these decide how many of them may be moving bytes at once.
+     *
+     * <p>Existing semaphores are dropped rather than resized. A run that already
+     * holds a permit releases it to the instance it took it from, so the only
+     * cost of a change mid-flight is that the new ceiling counts from zero.
+     *
+     * @param overall how many downloads may transfer at once
+     * @param perUser how many may transfer at once from any one peer
+     */
+    void downloadConcurrency(int overall, int perUser) {
+        globalDownloadSemaphore.set(new Semaphore(overall));
+        maximumDownloadsPerUser = perUser;
+        downloadSemaphores.clear();
     }
 
     Semaphore globalUploadSemaphore() {
