@@ -122,7 +122,7 @@ final class DefaultUploads implements Uploads {
         for (int index = 0; index < waiting.size(); index++) {
             dev.slsk.internal.transfer.UploadScheduler.Waiting pending = waiting.get(index);
             running.add(new Upload(
-                    pending.id(),
+                    Transfers.uploadId(pending.token()),
                     pending.user(),
                     pending.path(),
                     0,

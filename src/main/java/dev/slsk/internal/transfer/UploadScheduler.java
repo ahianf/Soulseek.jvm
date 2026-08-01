@@ -5,7 +5,6 @@
 package dev.slsk.internal.transfer;
 
 import dev.slsk.Priority;
-import dev.slsk.TransferId;
 import dev.slsk.Username;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -92,17 +91,19 @@ public final class UploadScheduler {
     /**
      * A request waiting for a slot.
      *
-     * @param id what the uploads facet calls it, so {@code prioritize} can name it
+     * @param token the upload token reserved for it. The upload keeps it when a
+     *     slot frees, so the id the uploads facet reports for this request is
+     *     the id of the transfer it becomes — what {@code prioritize} names
+     *     while it waits still names it once it runs
      * @param user who asked
      * @param path what they asked for
      * @param sequence arrival order; lower is earlier
      * @param priority the embedder's ordering hint
      */
-    public record Waiting(TransferId id, Username user, String path, long sequence, Priority priority) {
+    public record Waiting(int token, Username user, String path, long sequence, Priority priority) {
 
         /** Validates and returns the request. */
         public Waiting {
-            Objects.requireNonNull(id, "id");
             Objects.requireNonNull(user, "user");
             Objects.requireNonNull(path, "path");
             Objects.requireNonNull(priority, "priority");

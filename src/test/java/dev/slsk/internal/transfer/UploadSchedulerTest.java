@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.Priority;
-import dev.slsk.TransferId;
 import dev.slsk.Username;
 import dev.slsk.internal.transfer.UploadScheduler.Fairness;
 import dev.slsk.internal.transfer.UploadScheduler.State;
@@ -45,12 +44,8 @@ class UploadSchedulerTest {
         List<Waiting> waiting = new ArrayList<>();
         long sequence = 0;
         for (String user : queued) {
-            waiting.add(new Waiting(
-                    TransferId.of("UPLOAD:" + sequence),
-                    Username.of(user),
-                    user + "/" + sequence,
-                    sequence,
-                    Priority.NORMAL));
+            waiting.add(
+                    new Waiting((int) sequence, Username.of(user), user + "/" + sequence, sequence, Priority.NORMAL));
             sequence++;
         }
 
@@ -373,8 +368,7 @@ class UploadSchedulerTest {
     }
 
     private static Waiting waiting(long sequence, String user, Priority priority) {
-        return new Waiting(
-                TransferId.of("UPLOAD:" + sequence), Username.of(user), user + "/" + sequence, sequence, priority);
+        return new Waiting((int) sequence, Username.of(user), user + "/" + sequence, sequence, priority);
     }
 
     private static State state(List<Waiting> waiting, Set<Username> active) {

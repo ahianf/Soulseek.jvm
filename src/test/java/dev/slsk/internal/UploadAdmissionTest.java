@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.slsk.Priority;
 import dev.slsk.RejectionReason;
 import dev.slsk.Username;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
@@ -31,8 +32,16 @@ class UploadAdmissionTest {
     private final AtomicReference<Map<Integer, TransferInternal>> uploads = new AtomicReference<>(Map.of());
     private final AtomicReference<String> warned = new AtomicReference<>();
 
-    private final UploadAdmission admission =
-            new UploadAdmission(policy::get, uploads::get, username -> "vip".equals(username), new DiagnosticSink() {
+    /** Stands in for the client's token factory: a counter, as that one is. */
+    private final java.util.concurrent.atomic.AtomicInteger nextToken =
+            new java.util.concurrent.atomic.AtomicInteger(700);
+
+    private final UploadAdmission admission = new UploadAdmission(
+            policy::get,
+            uploads::get,
+            username -> "vip".equals(username),
+            nextToken::getAndIncrement,
+            new DiagnosticSink() {
                 @Override
                 public void trace(String message) {}
 
@@ -122,6 +131,53 @@ class UploadAdmissionTest {
         policy.set((request, context) -> new UploadPolicy.Decision.Allow());
         admission.decide(ALICE, "music\\song.mp3");
         assertNull(admission.place(ALICE, "music\\song.mp3"));
+    }
+
+    /**
+     * The queue and the transfer it becomes are one id, not two.
+     *
+     * <p>A queued request used to be called {@code UPLOAD:queued:7} and the
+     * upload that served it {@code UPLOAD:8301}. Nothing joined them: an id
+     * handed to a consumer while the request waited stopped resolving the
+     * moment a slot freed, {@code prioritize} could only ever name the half
+     * that was about to be discarded, and a consumer recording what it saw
+     * recorded two transfers per request — the waiting one, which vanished
+     * without an outcome, and the running one.
+     */
+    @Test
+    @DisplayName("a queued request wears the id its upload will wear")
+    void aQueuedRequestReservesTheTokenItsUploadWillCarry() {
+        policy.set((request, context) -> new UploadPolicy.Decision.Queue(1));
+        admission.decide(ALICE, "music\\song.mp3");
+
+        int token = admission.waiting().get(0).token();
+        assertEquals(700, token, "reserved from the token factory, not invented");
+
+        // The id the facet reports for the wait is the one Transfers derives
+        // from the transfer once it is running under that token.
+        TransferInternal running =
+                new TransferInternal(TransferDirection.UPLOAD, ALICE.value(), "music\\song.mp3", token);
+        assertEquals(Transfers.id(running.toTransfer()), Transfers.uploadId(token));
+
+        // And it is the id prioritize names, while the request is still waiting.
+        assertTrue(admission.prioritize(Transfers.uploadId(token), Priority.HIGH));
+        assertEquals(Priority.HIGH, admission.waiting().get(0).priority());
+    }
+
+    @Test
+    void eachQueuedRequestReservesItsOwnToken() {
+        policy.set((request, context) -> new UploadPolicy.Decision.Queue(1));
+        admission.decide(ALICE, "music\\song.mp3");
+        admission.decide(BOB, "music\\song.mp3");
+        // Asking twice for the same file does not reserve a second token: the
+        // request is already waiting, and it is one request.
+        admission.decide(ALICE, "music\\song.mp3");
+
+        assertEquals(
+                java.util.Set.of(700, 701),
+                admission.waiting().stream()
+                        .map(dev.slsk.internal.transfer.UploadScheduler.Waiting::token)
+                        .collect(java.util.stream.Collectors.toSet()));
     }
 
     @Test

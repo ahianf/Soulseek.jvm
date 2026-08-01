@@ -225,7 +225,11 @@ final class TransferDomain implements PeerServices {
         this.maximumDownloadsPerUser = Integer.MAX_VALUE;
         this.globalUploadSemaphore = new Semaphore(options.get().getMaximumConcurrentUploads());
         this.admission = new UploadAdmission(
-                this::uploadPolicy, this::uploads, Objects.requireNonNull(privileged, "privileged"), diagnostic);
+                this::uploadPolicy,
+                this::uploads,
+                Objects.requireNonNull(privileged, "privileged"),
+                tokens::nextToken,
+                diagnostic);
         this.uploadRetry = new UploadRetry(
                 Objects.requireNonNull(scheduler, "scheduler"),
                 UploadRetry.DELAY,
@@ -492,6 +496,23 @@ final class TransferDomain implements PeerServices {
      */
     @Override
     public void serve(Username user, String path) {
+        serve(user, path, java.util.OptionalInt.empty());
+    }
+
+    /**
+     * Serves a file, carrying the token a queued request already reserved.
+     *
+     * <p>A request that waited is served under the token it was given while it
+     * waited, so the id the uploads facet reports does not change when the wait
+     * ends. Minting a fresh one here made every queued upload two transfers to
+     * anything watching: the queued one, which vanished without an outcome the
+     * moment a slot freed, and the running one that replaced it.
+     *
+     * @param user who asked
+     * @param path the file they asked for
+     * @param reserved the token reserved while the request waited, if it waited
+     */
+    private void serve(Username user, String path, java.util.OptionalInt reserved) {
         NetworkExecutor.dispatch(
                 () -> {
                     java.util.Optional<ResolvedFile> resolved;
@@ -512,8 +533,8 @@ final class TransferDomain implements PeerServices {
                     // taken, which is what "who has waited longest since their last
                     // upload started" is measured against.
                     admission.started(user);
-                    int token = tokens.nextToken();
-                    TransferId id = TransferId.of("UPLOAD:" + token);
+                    int token = reserved.orElseGet(tokens::nextToken);
+                    TransferId id = Transfers.uploadId(token);
                     CancellationController cancellation = new CancellationController();
                     uploadCancellations.put(id, cancellation);
                     // Already on a virtual thread of its own, so the upload is simply
@@ -585,7 +606,10 @@ final class TransferDomain implements PeerServices {
         Username user = candidate.get().user();
         String path = candidate.get().path();
         if (admission.decide(user, path) instanceof dev.slsk.spi.UploadPolicy.Decision.Allow) {
-            serve(user, path);
+            // With the token the request has worn since it was queued: the
+            // decision above dropped it from the queue, and this is the same
+            // request continuing, not a new one.
+            serve(user, path, java.util.OptionalInt.of(candidate.get().token()));
         }
     }
 

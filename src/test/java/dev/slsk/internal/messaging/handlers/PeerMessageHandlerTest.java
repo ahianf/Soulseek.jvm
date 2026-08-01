@@ -661,8 +661,11 @@ class PeerMessageHandlerTest {
         /** Where a misbehaving policy is reported; asserted on by the tests. */
         private final RecordingDiagnostic admissionDiagnostic = new RecordingDiagnostic();
 
+        private final java.util.concurrent.atomic.AtomicInteger nextToken =
+                new java.util.concurrent.atomic.AtomicInteger(900);
+
         private final dev.slsk.internal.UploadAdmission admission = new dev.slsk.internal.UploadAdmission(
-                this::uploadPolicy, Map::of, username -> false, admissionDiagnostic);
+                this::uploadPolicy, Map::of, username -> false, nextToken::getAndIncrement, admissionDiagnostic);
         private final Map<Integer, SearchInternal> searches = new HashMap<>();
         private final Map<Integer, TransferInternal> downloads = new HashMap<>();
 

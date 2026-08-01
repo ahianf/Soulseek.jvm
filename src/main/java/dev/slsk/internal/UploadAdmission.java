@@ -38,9 +38,9 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class UploadAdmission {
 
     /**
-     * The four things an admission reads, named rather than "the engine".
+     * The things an admission reads, named rather than "the engine".
      *
-     * <p>A test supplies them as four lambdas without standing up a client. The
+     * <p>A test supplies them as lambdas without standing up a client. The
      * alternative — a test that reimplements the admission's rules against its
      * own fake — asserts its own copy.
      */
@@ -48,6 +48,13 @@ public final class UploadAdmission {
 
     private final java.util.function.Supplier<Map<Integer, dev.slsk.internal.transfer.TransferInternal>> uploads;
     private final java.util.function.Predicate<String> privileged;
+
+    /**
+     * The same token source the transfer uses, so a queued request can reserve
+     * the token its upload will carry on the wire.
+     */
+    private final java.util.function.IntSupplier tokens;
+
     private final dev.slsk.internal.diagnostics.DiagnosticSink diagnostic;
 
     /** Who is refused outright, and what they are told. */
@@ -95,10 +102,12 @@ public final class UploadAdmission {
             java.util.function.Supplier<UploadPolicy> uploadPolicy,
             java.util.function.Supplier<Map<Integer, dev.slsk.internal.transfer.TransferInternal>> uploads,
             java.util.function.Predicate<String> privileged,
+            java.util.function.IntSupplier tokens,
             dev.slsk.internal.diagnostics.DiagnosticSink diagnostic) {
         this.uploadPolicy = Objects.requireNonNull(uploadPolicy, "uploadPolicy");
         this.uploads = Objects.requireNonNull(uploads, "uploads");
         this.privileged = Objects.requireNonNull(privileged, "privileged");
+        this.tokens = Objects.requireNonNull(tokens, "tokens");
         this.diagnostic = Objects.requireNonNull(diagnostic, "diagnostic");
     }
 
@@ -182,18 +191,23 @@ public final class UploadAdmission {
                 // privileged user — and the peer is now told the place the
                 // scheduler actually implies. What the policy decides is
                 // whether to queue, not where.
+                // The token is reserved here, not when a slot frees, so the
+                // request and the upload it becomes are one id. They used to be
+                // two — "UPLOAD:queued:7" while it waited, "UPLOAD:8301" once it
+                // ran — which meant an id handed out during the wait stopped
+                // resolving the moment the wait ended, and anything recording
+                // uploads saw a second transfer that then disappeared.
                 queued.computeIfAbsent(
                         file,
                         key -> new UploadScheduler.Waiting(
-                                TransferId.of("UPLOAD:queued:" + sequence.get()),
-                                user,
-                                path,
-                                sequence.getAndIncrement(),
-                                Priority.NORMAL));
+                                tokens.getAsInt(), user, path, sequence.getAndIncrement(), Priority.NORMAL));
             } else {
+                // No longer waiting, either way. A caller that drew this
+                // request already holds the reservation it is about to serve
+                // with; a denial has nothing left to serve.
                 UploadScheduler.Waiting removed = queued.remove(file);
                 if (removed != null) {
-                    priorities.remove(removed.id());
+                    priorities.remove(Transfers.uploadId(removed.token()));
                 }
             }
         }
@@ -235,7 +249,7 @@ public final class UploadAdmission {
         synchronized (lock) {
             UploadScheduler.Waiting removed = queued.remove(new PeerFile(user, path));
             if (removed != null) {
-                priorities.remove(removed.id());
+                priorities.remove(Transfers.uploadId(removed.token()));
             }
         }
     }
@@ -257,10 +271,10 @@ public final class UploadAdmission {
         Objects.requireNonNull(priority, "priority");
         synchronized (lock) {
             for (Map.Entry<PeerFile, UploadScheduler.Waiting> entry : queued.entrySet()) {
-                if (entry.getValue().id().equals(id)) {
+                if (Transfers.uploadId(entry.getValue().token()).equals(id)) {
                     priorities.put(id, priority);
                     entry.setValue(new UploadScheduler.Waiting(
-                            id,
+                            entry.getValue().token(),
                             entry.getValue().user(),
                             entry.getValue().path(),
                             entry.getValue().sequence(),

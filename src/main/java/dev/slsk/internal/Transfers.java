@@ -34,6 +34,24 @@ final class Transfers {
     }
 
     /**
+     * The id an upload holding this token wears — the same string
+     * {@link #id(Transfer)} derives once that upload is running.
+     *
+     * <p>A queued request reserves its token before a slot frees, so the wait
+     * and the transfer it becomes are one id rather than two. They were two:
+     * the queue named a request {@code UPLOAD:queued:7} and the upload that
+     * served it {@code UPLOAD:8301}, so an id a consumer was handed while the
+     * request waited stopped resolving the moment it started, and every waiting
+     * upload looked like a second transfer that then vanished.
+     *
+     * @param token the token reserved for the upload
+     * @return the id it wears, queued and running alike
+     */
+    static TransferId uploadId(int token) {
+        return TransferId.of(TransferDirection.UPLOAD + ":" + token);
+    }
+
+    /**
      * Maps the bit-flag state onto the sealed hierarchy.
      *
      * <p>Order matters: terminal states are checked first, because a finished
