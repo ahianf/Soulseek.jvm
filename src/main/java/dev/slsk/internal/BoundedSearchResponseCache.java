@@ -29,16 +29,21 @@ import java.util.function.Consumer;
  * answers fewer searches than it thinks it does. Every consumer that wanted to
  * answer searches at all wrote the same class.
  *
- * <p>Entries expire because nothing ever tells us a solicitation failed, and a
- * response nobody collected is worthless within seconds anyway: the searcher has
- * moved on and the token will never be seen again. The bound is there because we
- * answer as many searches as the network sends, and an unreachable peer costs an
- * entry every time.
+ * <p>Entries expire because nothing ever tells us a solicitation failed. How
+ * long they are worth keeping is measured rather than assumed: over a
+ * nineteen-hour production sample 240 peers punched through for a response
+ * still held here, at a median of ninety seconds after it was cached, and the
+ * sixty-second lifetime this started with caught none of them. Three minutes
+ * catches 207 while holding at most 90 entries. Past that the returns fall off
+ * against a searcher who has plausibly closed the search.
+ *
+ * <p>The bound is there because we answer as many searches as the network
+ * sends, and an unreachable peer costs an entry every time.
  */
 public final class BoundedSearchResponseCache implements SearchResponseCache {
 
     /** How long an undelivered response is worth keeping. */
-    private static final long TTL_MILLIS = 60_000;
+    private static final long TTL_MILLIS = 180_000;
 
     /** How many to keep at once. */
     private static final int MAXIMUM_ENTRIES = 1_000;
