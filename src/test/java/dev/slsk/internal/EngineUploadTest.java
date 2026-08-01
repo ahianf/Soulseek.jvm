@@ -379,6 +379,12 @@ class EngineUploadTest {
                             .options(options(20))
                             .build());
             assertInstanceOf(TransferException.class, causeOf(tooLong));
+            // Not retryable: the offset cannot shrink and the file cannot grow,
+            // so every re-offer fails the same way. Classified retryable, one
+            // peer resuming past the end of a file cost eight doomed attempts.
+            assertFalse(
+                    assertInstanceOf(TransferOutcome.Failed.class, tooLong).retryable(),
+                    "an offset past the end of the file cannot be satisfied by trying again");
 
             fixture.transfer.offset = 1;
             TransferOutcome notSeekable = fixture.client

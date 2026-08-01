@@ -360,6 +360,21 @@ final class UploadRun {
             updateState(TransferState.COMPLETED.or(TransferState.REJECTED));
             return;
         }
+        if (failure instanceof TransferException) {
+            // The only TransferException this run raises is the start offset
+            // check above: the peer asked to resume past the end of our file.
+            // Its offset cannot shrink and the file cannot grow, so a re-offer
+            // replays the same exchange to the same end — the same reasoning
+            // that makes a download's size mismatch ABORTED rather than
+            // ERRORED. Falling through to the retryable branch below is what
+            // spent three re-offers, then the peer's next request, then three
+            // more, on an answer that was settled the first time.
+            disconnectTransfer("Transfer aborted", failure);
+            upload.setException(failure);
+            updateProgress(currentStreamPosition());
+            updateState(TransferState.COMPLETED.or(TransferState.ABORTED));
+            return;
+        }
         if (failure instanceof CancellationException) {
             disconnectTransfer("Transfer cancelled", failure);
             upload.setException(failure);
