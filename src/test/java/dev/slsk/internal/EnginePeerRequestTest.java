@@ -5,9 +5,11 @@
 package dev.slsk.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationController;
 import dev.slsk.CancellationSignal;
@@ -93,13 +95,17 @@ class EnginePeerRequestTest {
 
         fixture.client.users().connectToUser("alice", true);
 
+        // Asserted by absence of the one line rather than by an empty list: the
+        // endpoint lookup on the way through logs a cache miss of its own, and
+        // what is under test is that a no-op invalidation stays quiet.
+        String invalidated = "Invalidated message connection cache for alice";
         assertEquals(1, fixture.peerManager.invalidations);
-        assertEquals(List.of(), fixture.diagnostic.debugMessages);
+        assertFalse(fixture.diagnostic.debugMessages.contains(invalidated));
 
         fixture.peerManager.invalidationResult = true;
         fixture.client.users().connectToUser("alice", true);
         assertEquals(2, fixture.peerManager.invalidations);
-        assertEquals(List.of("Invalidated message connection cache for alice"), fixture.diagnostic.debugMessages);
+        assertTrue(fixture.diagnostic.debugMessages.contains(invalidated));
         fixture.close();
     }
 

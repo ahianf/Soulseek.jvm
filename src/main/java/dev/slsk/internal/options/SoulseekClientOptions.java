@@ -285,7 +285,11 @@ public class SoulseekClientOptions {
         this.distributedConnectionOptions =
                 distributedConnectionOptions == null ? new ConnectionOptions() : distributedConnectionOptions;
 
-        this.userEndpointCache = userEndpointCache;
+        // Defaulted rather than left null: a peer's address is something only
+        // the server can tell us, peers search us repeatedly, and without a
+        // cache every answer costs a lookup the server has already answered.
+        this.userEndpointCache =
+                userEndpointCache == null ? new dev.slsk.internal.BoundedUserEndpointCache() : userEndpointCache;
         // Defaulted rather than left null: without a cache we silently answer
         // fewer searches than we think we do, and which searches is decided by
         // whether the peer is behind NAT.

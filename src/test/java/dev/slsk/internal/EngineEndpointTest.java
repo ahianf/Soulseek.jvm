@@ -152,33 +152,32 @@ class EngineEndpointTest {
     }
 
     @Test
-    void issuesAnIndependentRequestPerCallerWhenNoCacheIsConfigured() {
-        // The source only serializes same-user lookups when a cache is configured; with no cache
-        // every caller performs its own request under its own cancellation signal.
+    void issuesOneRequestPerUserUnderTheDefaultCache() {
+        // Passing no cache no longer means having no cache: the options default
+        // one in. Two concurrent lookups of the same user therefore serialize
+        // behind the per-user semaphore and the second is answered from the
+        // cache, so the server sees one request where it used to see two.
         Fixture fixture = new Fixture(null);
         CompletableFuture<UserAddressResponse> response = new CompletableFuture<>();
         fixture.waiter.result = response;
 
-        // Blocking calls, so the two callers need threads of their own to be
-        // in flight at the same time. What is being asserted is unchanged: two
-        // independent requests, two registrations, both satisfied by one
-        // response.
         java.util.concurrent.atomic.AtomicReference<InetSocketAddress> first = new AtomicReference<>();
         java.util.concurrent.atomic.AtomicReference<InetSocketAddress> second = new AtomicReference<>();
         Thread firstCaller =
                 Thread.ofVirtual().start(() -> first.set(fixture.client.users().getUserEndpoint("alice")));
+
+        // The first caller must be holding the semaphore before the second
+        // starts, or the second can win the race and the pairing is untestable.
+        awaitValue(() -> fixture.connection.writes.get() == 1);
         Thread secondCaller =
                 Thread.ofVirtual().start(() -> second.set(fixture.client.users().getUserEndpoint("alice")));
-
-        // Both callers run on their own threads; wait for the write as well as
-        // the registration before asserting on either.
-        awaitValue(() -> fixture.waiter.registrations.get() == 2 && fixture.connection.writes.get() == 2);
-        assertEquals(2, fixture.connection.writes.get());
-        assertEquals(2, fixture.waiter.registrations.get());
 
         response.complete(new UserAddressResponse("alice", ENDPOINT));
         join(firstCaller);
         join(secondCaller);
+
+        assertEquals(1, fixture.connection.writes.get());
+        assertEquals(1, fixture.waiter.registrations.get());
         assertEquals(ENDPOINT, first.get());
         assertEquals(ENDPOINT, second.get());
         fixture.close();
