@@ -60,6 +60,8 @@ public final class DefaultSearchResponder implements SearchResponder {
             responseDeliveredListeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<SearchResponderEventListener<SearchRequestResponseEvent>>
             responseFailedListeners = new CopyOnWriteArrayList<>();
+    private final Object evictionBinding = new Object();
+    private volatile SearchResponseCache evictionBoundTo;
 
     /** Creates a responder with its default diagnostic factory. */
     public DefaultSearchResponder(
@@ -279,12 +281,48 @@ public final class DefaultSearchResponder implements SearchResponder {
         connection.write(response.toByteArray());
     }
 
+    /**
+     * Registers the eviction listener on the cache currently in force.
+     *
+     * <p>Bound here rather than in the constructor because the cache arrives
+     * through an options supplier and options can be patched at runtime; a
+     * response can only be evicted from a cache it was first put into, so
+     * binding on the way in covers every instance that will ever hold one.
+     */
+    private void bindEvictionListener(SearchResponseCache cache) {
+        if (evictionBoundTo == cache) {
+            return;
+        }
+        synchronized (evictionBinding) {
+            if (evictionBoundTo == cache) {
+                return;
+            }
+            cache.setEvictionListener(this::onEvicted);
+            evictionBoundTo = cache;
+        }
+    }
+
+    /**
+     * Reports a response that left the cache without reaching the peer who
+     * searched.
+     *
+     * <p>Nothing tells us a solicitation failed, so most undelivered responses
+     * end here rather than at a {@code CannotConnect}. Left silent, the failure
+     * event reported a small fraction of the responses that were actually lost.
+     */
+    private void onEvicted(SearchResponseCacheRecord record) {
+        diagnostic.debug("Expired undelivered search response to " + record.username() + " for query '" + record.query()
+                + "' with token " + record.token());
+        raiseResponseFailed(record);
+    }
+
     private void cacheUndelivered(
             int responseToken, String username, int token, String query, SearchResponse response) {
         SearchResponseCache cache = options.get().getSearchResponseCache();
         if (cache == null) {
             return;
         }
+        bindEvictionListener(cache);
         try {
             cache.put(responseToken, new SearchResponseCacheRecord(username, token, query, response));
             diagnostic.debug("Failed to connect to " + username

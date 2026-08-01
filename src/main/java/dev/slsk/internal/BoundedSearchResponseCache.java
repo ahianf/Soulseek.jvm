@@ -3,11 +3,13 @@
 
 package dev.slsk.internal;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.Consumer;
 
 /**
  * Holds search responses we could not deliver, so they can still go out if the
@@ -46,6 +48,7 @@ public final class BoundedSearchResponseCache implements SearchResponseCache {
     private final ConcurrentMap<Integer, Entry> entries = new ConcurrentHashMap<>();
     private final long ttlMillis;
     private final int maximumEntries;
+    private volatile Consumer<SearchResponseCacheRecord> evictionListener;
 
     /** Creates a cache with the default lifetime and bound. */
     public BoundedSearchResponseCache() {
@@ -64,17 +67,34 @@ public final class BoundedSearchResponseCache implements SearchResponseCache {
     }
 
     @Override
+    public void setEvictionListener(Consumer<SearchResponseCacheRecord> listener) {
+        evictionListener = listener;
+    }
+
+    @Override
     public void put(int responseToken, SearchResponseCacheRecord response) {
         long now = System.currentTimeMillis();
-        entries.values().removeIf(entry -> entry.expiresAtMillis() <= now);
+        List<SearchResponseCacheRecord> evicted = new ArrayList<>();
+        for (Map.Entry<Integer, Entry> entry : entries.entrySet()) {
+            if (entry.getValue().expiresAtMillis() <= now && entries.remove(entry.getKey(), entry.getValue())) {
+                evicted.add(entry.getValue().record());
+            }
+        }
         if (entries.size() >= maximumEntries) {
             List<Map.Entry<Integer, Entry>> oldest = entries.entrySet().stream()
                     .sorted(Comparator.comparingLong(entry -> entry.getValue().expiresAtMillis()))
                     .limit(Math.max(1, entries.size() - maximumEntries + 1))
                     .toList();
-            oldest.forEach(entry -> entries.remove(entry.getKey(), entry.getValue()));
+            for (Map.Entry<Integer, Entry> entry : oldest) {
+                if (entries.remove(entry.getKey(), entry.getValue())) {
+                    evicted.add(entry.getValue().record());
+                }
+            }
         }
         entries.put(responseToken, new Entry(response, now + ttlMillis));
+        // After the map is settled, so a listener that comes back into the
+        // cache finds it in a consistent state.
+        evicted.forEach(this::notifyEvicted);
     }
 
     @Override
@@ -84,7 +104,9 @@ public final class BoundedSearchResponseCache implements SearchResponseCache {
             return CacheLookupResult.notFound();
         }
         if (entry.expiresAtMillis() <= System.currentTimeMillis()) {
-            entries.remove(responseToken, entry);
+            if (entries.remove(responseToken, entry)) {
+                notifyEvicted(entry.record());
+            }
             return CacheLookupResult.notFound();
         }
         return CacheLookupResult.found(entry.record());
@@ -94,5 +116,18 @@ public final class BoundedSearchResponseCache implements SearchResponseCache {
     public CacheLookupResult<SearchResponseCacheRecord> remove(int responseToken) {
         Entry entry = entries.remove(responseToken);
         return entry == null ? CacheLookupResult.notFound() : CacheLookupResult.found(entry.record());
+    }
+
+    private void notifyEvicted(SearchResponseCacheRecord record) {
+        Consumer<SearchResponseCacheRecord> listener = evictionListener;
+        if (listener == null) {
+            return;
+        }
+        try {
+            listener.accept(record);
+        } catch (Throwable ignored) {
+            // A listener that throws is not allowed to fail the put or the
+            // lookup that happened to be the one to notice the expiry.
+        }
     }
 }

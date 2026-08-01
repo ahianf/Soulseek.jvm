@@ -7,6 +7,7 @@ package dev.slsk.internal.search;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -168,6 +169,28 @@ class SearchResponderTest {
         cache.throwOnAdd = cacheFailure;
         assertFalse(fixture.responder.tryRespond("alice", 3, "query"));
         assertSame(cacheFailure, fixture.diagnostic.lastWarningThrowable);
+    }
+
+    @Test
+    void aResponseEvictedBeforeDeliveryIsReportedAsFailed() {
+        TestCache cache = new TestCache();
+        Fixture fixture = catalogFixture(MATCHES, cache);
+        fixture.manager.connectionFailure = new RuntimeException("connect");
+        AtomicReference<SearchRequestResponseEvent> failed = new AtomicReference<>();
+        fixture.responder.addResponseDeliveryFailedListener((sender, args) -> failed.set(args));
+
+        assertFalse(fixture.responder.tryRespond("alice", 3, "query"));
+
+        // Caching is what binds the listener: a response can only be evicted
+        // from a cache it was put into.
+        assertNotNull(cache.evictionListener, "the responder never registered for evictions");
+        cache.evictionListener.accept(cache.added);
+
+        assertNotNull(failed.get(), "an evicted response raised no failure event");
+        assertEquals("alice", failed.get().getUsername());
+        assertEquals(3, failed.get().getToken());
+        assertTrue(fixture.diagnostic.debug.stream()
+                .anyMatch(text -> text.startsWith("Expired undelivered search response to alice")));
     }
 
     @Test
@@ -398,6 +421,12 @@ class SearchResponderTest {
         private int lastAddedToken;
         private int addCount;
         private SearchResponseCacheRecord added;
+        private java.util.function.Consumer<SearchResponseCacheRecord> evictionListener;
+
+        @Override
+        public void setEvictionListener(java.util.function.Consumer<SearchResponseCacheRecord> listener) {
+            evictionListener = listener;
+        }
 
         @Override
         public void put(int responseToken, SearchResponseCacheRecord response) {
