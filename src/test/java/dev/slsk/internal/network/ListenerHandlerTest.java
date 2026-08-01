@@ -221,7 +221,7 @@ class ListenerHandlerTest {
         return new SoulseekClientOptions(
                 true,
                 null,
-                50_000,
+                30_000,
                 true,
                 true,
                 25,
@@ -291,7 +291,7 @@ class ListenerHandlerTest {
 
         @Override
         public int getPort() {
-            return 50_000;
+            return 30_000;
         }
 
         @Override

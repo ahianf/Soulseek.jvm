@@ -95,7 +95,7 @@ class EngineConnectTest {
     @Test
     void listenerPreflightFailureIsReportedBeforeConnecting() throws Exception {
         InetAddress nonLocalAddress = InetAddress.getByAddress(new byte[] {(byte) 192, 0, 2, 1});
-        SoulseekClientOptions options = new SoulseekClientOptions(true, nonLocalAddress, 50_000);
+        SoulseekClientOptions options = new SoulseekClientOptions(true, nonLocalAddress, 30_000);
         Fixture fixture = new Fixture(options);
         assertThrows(ListenException.class, () -> fixture.client.connect("127.0.0.1", 2271, "user", "password"));
         assertEquals(0, fixture.connection.connectCount);

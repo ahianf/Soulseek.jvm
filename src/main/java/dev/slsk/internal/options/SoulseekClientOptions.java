@@ -14,7 +14,7 @@ import java.util.Objects;
 /** Options for a Soulseek client. */
 public class SoulseekClientOptions {
     /** Default listener port. */
-    public static final int DEFAULT_LISTEN_PORT = 50_000;
+    public static final int DEFAULT_LISTEN_PORT = 30_000;
     /** Default distributed-child limit. */
     public static final int DEFAULT_DISTRIBUTED_CHILD_LIMIT = 25;
     /** Default maximum concurrent searches. */

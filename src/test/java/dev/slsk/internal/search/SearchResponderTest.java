@@ -285,7 +285,7 @@ class SearchResponderTest {
         return new SoulseekClientOptions(
                 true,
                 null,
-                50_000,
+                30_000,
                 true,
                 true,
                 25,

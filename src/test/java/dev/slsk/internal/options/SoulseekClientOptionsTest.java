@@ -92,7 +92,7 @@ class SoulseekClientOptionsTest {
 
         assertTrue(options.isEnableListener());
         assertEquals("0.0.0.0", options.getListenIpAddress().getHostAddress());
-        assertEquals(50_000, options.getListenPort());
+        assertEquals(30_000, options.getListenPort());
         assertTrue(options.isEnableDistributedNetwork());
         assertTrue(options.isAcceptDistributedChildren());
         assertEquals(25, options.getDistributedChildLimit());
@@ -212,7 +212,7 @@ class SoulseekClientOptionsTest {
     void prefixOverloadsPreserveTrailingDefaults() {
         assertEquals(
                 "0.0.0.0", new SoulseekClientOptions(false).getListenIpAddress().getHostAddress());
-        assertEquals(50_000, new SoulseekClientOptions(false, InetAddress.getLoopbackAddress()).getListenPort());
+        assertEquals(30_000, new SoulseekClientOptions(false, InetAddress.getLoopbackAddress()).getListenPort());
         assertTrue(
                 new SoulseekClientOptions(false, InetAddress.getLoopbackAddress(), 1234).isEnableDistributedNetwork());
     }

@@ -276,7 +276,7 @@ class EngineEndpointTest {
         return new SoulseekClientOptions(
                 false,
                 InetAddress.getLoopbackAddress(),
-                50_000,
+                30_000,
                 true,
                 true,
                 25,
