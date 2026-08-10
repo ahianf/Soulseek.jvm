@@ -59,11 +59,16 @@ public sealed interface ConnectionState {
     /**
      * Waiting to try again after a failure.
      *
-     * <p><strong>Not produced in 1.0.</strong> Automatic reconnection is 1.1
-     * work; this variant ships now so that adding it then is additive rather
-     * than a change to a sealed hierarchy every consumer switches over. A 1.0
-     * consumer must still handle it for the switch to compile, which is the
-     * point.
+     * <p>Reported whenever the connection has dropped, or a {@code connect} has
+     * failed, and the library is waiting to try again. Reconnection is automatic
+     * and always on: it stops only for a rejected login, an explicit
+     * {@code connect} or {@code disconnect}, and {@code close}.
+     *
+     * <p>This variant shipped in 1.0 without ever being produced, so that
+     * switching it on later would be additive rather than a change to a sealed
+     * hierarchy every consumer switches over. That is what happened, and a
+     * consumer written against 1.0 needs no change: handling it was already
+     * required for the switch to compile, which was the point.
      *
      * @param attempt which attempt the next one will be
      * @param nextAttemptAt when it will happen, so a UI can count down and offer
