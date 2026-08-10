@@ -182,7 +182,11 @@ public final class DefaultSoulseek implements Soulseek {
     @Override
     public void close() {
         if (closed.compareAndSet(false, true)) {
-            // The queue first: a transfer cancelled by a closing socket looks
+            // Reconnects first of all: closing the engine disconnects, and a
+            // supervisor still listening would read that as a drop and start
+            // retrying a client that is being disposed.
+            connection.close();
+            // The queue next: a transfer cancelled by a closing socket looks
             // like a peer failure and would be retried on the way down.
             downloads.close();
             search.close();

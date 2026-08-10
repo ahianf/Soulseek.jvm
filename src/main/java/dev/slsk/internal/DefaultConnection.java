@@ -11,6 +11,8 @@ import dev.slsk.EventStream;
 import dev.slsk.ServerAddress;
 import dev.slsk.ServerInfo;
 import dev.slsk.events.ConnectionEvent;
+import dev.slsk.exceptions.ConnectionException;
+import dev.slsk.exceptions.LoginRejectedException;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.events.SoulseekClientDisconnectedEvent;
 import dev.slsk.internal.events.SoulseekClientStateChangedEvent;
@@ -20,6 +22,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -45,17 +48,43 @@ final class DefaultConnection implements Connection {
     private final Credentials credentials;
     private final EventBus<ConnectionEvent> events;
 
+    /** Gets the connection back after it drops. */
+    private final ReconnectSupervisor reconnects;
+
     /** When the current session began; {@code null} whenever not logged in. */
     private final AtomicReference<Instant> onlineSince = new AtomicReference<>();
 
     /** The last state we published, so a transition can report what it came from. */
     private final AtomicReference<ConnectionState> published = new AtomicReference<>(new ConnectionState.Offline());
 
+    /**
+     * Where the consumer last asked to connect; {@code null} for the default
+     * server. A reconnect goes back to the same place, which for a private or
+     * loopback server is the difference between recovering and wandering onto
+     * the public network.
+     */
+    private final AtomicReference<ServerAddress> target = new AtomicReference<>();
+
+    /**
+     * Set while the consumer's own {@code connect} is running, so a disconnect
+     * raised by a failing attempt is left for that call to handle rather than
+     * being treated as a drop.
+     */
+    private final AtomicBoolean connecting = new AtomicBoolean();
+
+    /**
+     * Set by {@link #disconnect(String)}. A disconnect the consumer asked for is
+     * not a drop, and reconnecting over the top of it would be the library
+     * overruling the caller.
+     */
+    private final AtomicBoolean disconnected = new AtomicBoolean();
+
     DefaultConnection(SoulseekEngine client, Credentials credentials, EventBus<ConnectionEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
         this.server = client.server();
         this.credentials = Objects.requireNonNull(credentials, "credentials");
         this.events = Objects.requireNonNull(events, "events");
+        this.reconnects = new ReconnectSupervisor(this::connectOnce, this::onStateChanged, client.getDiagnostic());
         wire();
     }
 
@@ -72,7 +101,12 @@ final class DefaultConnection implements Connection {
         // and state-changed for what a consumer sees as a single move.
         client.events().on(Kind.STATE_CHANGED, (SoulseekClientStateChangedEvent event) -> onStateChanged());
         client.events().on(Kind.CONNECTED, (Void event) -> onStateChanged());
-        client.events().on(Kind.DISCONNECTED, (SoulseekClientDisconnectedEvent event) -> onStateChanged());
+        client.events().on(Kind.DISCONNECTED, (SoulseekClientDisconnectedEvent event) -> onDisconnected(event));
+        // Deliberately not cancelling the supervisor here. Logging in is how a
+        // retry run ends, and the loop already returns on a connect that
+        // succeeded — but this event can arrive on the supervisor's own thread,
+        // from inside that connect, and cancelling interrupts the thread it is
+        // delivered on.
         client.events().on(Kind.LOGGED_IN, (Void event) -> onStateChanged());
 
         client.events()
@@ -126,9 +160,102 @@ final class DefaultConnection implements Connection {
             return new ConnectionState.Authenticating();
         }
         if (state.contains(SoulseekClientState.CONNECTING)) {
-            return new ConnectionState.Connecting(1);
+            return new ConnectionState.Connecting(reconnects.attempt());
         }
-        return new ConnectionState.Offline();
+        // The engine has no bit for "waiting to try again", so the supervisor
+        // supplies the one state it cannot describe.
+        ConnectionState.Reconnecting waiting = reconnects.pending();
+        return waiting != null ? waiting : new ConnectionState.Offline();
+    }
+
+    /**
+     * Handles a disconnect, arming the supervisor when it was not asked for.
+     *
+     * <p>A disconnect raised while the consumer's own {@code connect} is running
+     * belongs to that call, which arms the supervisor itself if the attempt ends
+     * up failing. Arming here as well would start retrying underneath a call
+     * that has not returned yet.
+     */
+    private void onDisconnected(SoulseekClientDisconnectedEvent event) {
+        onStateChanged();
+        if (connecting.get() || disconnected.get()) {
+            return;
+        }
+        Throwable cause = causeOf(event);
+        if (retryable(cause)) {
+            reconnects.arm(cause);
+        }
+    }
+
+    /** The failure behind a disconnect, synthesised when the event carries none. */
+    private static Throwable causeOf(SoulseekClientDisconnectedEvent event) {
+        Throwable reported = event == null ? null : event.getException();
+        if (reported != null) {
+            return reported;
+        }
+        String message =
+                event == null || event.getMessage() == null ? "The server connection was lost" : event.getMessage();
+        return new ConnectionException(message);
+    }
+
+    /**
+     * Returns whether a failure is worth trying again.
+     *
+     * <p>Credentials the server refused are the one thing that never becomes
+     * right by waiting, and retrying them is abuse from the server's side.
+     */
+    private static boolean retryable(Throwable cause) {
+        for (Throwable walk = cause; walk != null; walk = walk.getCause()) {
+            if (walk instanceof LoginRejectedException) {
+                return false;
+            }
+            if (walk.getCause() == walk) {
+                break;
+            }
+        }
+        return true;
+    }
+
+    /** One reconnect attempt, aimed wherever the consumer last pointed us. */
+    private void connectOnce() {
+        ServerAddress address = target.get();
+        if (address == null) {
+            client.connect(credentials.username(), credentials.password(), CancellationSignal.none());
+        } else {
+            client.connect(
+                    address.host(),
+                    address.port(),
+                    credentials.username(),
+                    credentials.password(),
+                    CancellationSignal.none());
+        }
+    }
+
+    /**
+     * Runs a consumer-initiated connect, keeping its contract and arming the
+     * supervisor if it fails.
+     *
+     * <p>The call still blocks and still throws, because {@link Connection}
+     * documents that it does. Arming as well is what turns a transient failure
+     * at startup — a DNS lookup that fails twenty seconds after boot — from a
+     * process that is offline until someone restarts it into one that comes back
+     * on its own.
+     */
+    private void consumerConnect(ServerAddress address, Runnable attempt) {
+        reconnects.cancel();
+        target.set(address);
+        disconnected.set(false);
+        connecting.set(true);
+        try {
+            attempt.run();
+        } catch (RuntimeException failure) {
+            if (retryable(failure) && !(failure instanceof IllegalStateException)) {
+                reconnects.arm(failure);
+            }
+            throw failure;
+        } finally {
+            connecting.set(false);
+        }
     }
 
     private ServerInfo serverInfo() {
@@ -150,18 +277,23 @@ final class DefaultConnection implements Connection {
     @Override
     public void connect(CancellationSignal signal) {
         Objects.requireNonNull(signal, "signal");
-        client.connect(credentials.username(), credentials.password(), signal);
+        consumerConnect(null, () -> client.connect(credentials.username(), credentials.password(), signal));
     }
 
     @Override
     public void connect(ServerAddress address, CancellationSignal signal) {
         Objects.requireNonNull(address, "address");
         Objects.requireNonNull(signal, "signal");
-        client.connect(address.host(), address.port(), credentials.username(), credentials.password(), signal);
+        consumerConnect(
+                address,
+                () -> client.connect(
+                        address.host(), address.port(), credentials.username(), credentials.password(), signal));
     }
 
     @Override
     public void disconnect(String reason) {
+        disconnected.set(true);
+        reconnects.cancel();
         client.disconnect(reason == null ? "disconnect requested" : reason);
     }
 
@@ -190,5 +322,17 @@ final class DefaultConnection implements Connection {
     @Override
     public Attachment<ConnectionState> attach(Consumer<ConnectionEvent> listener) {
         return events.attach(this::mapState, listener);
+    }
+
+    /**
+     * Stops reconnecting, for a client on its way down.
+     *
+     * <p>Must run before the engine is closed. Closing the engine disconnects,
+     * and a supervisor still listening would read that as a drop and start
+     * retrying against a client that is being disposed.
+     */
+    void close() {
+        disconnected.set(true);
+        reconnects.close();
     }
 }

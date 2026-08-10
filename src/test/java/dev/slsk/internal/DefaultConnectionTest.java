@@ -16,6 +16,8 @@ import dev.slsk.ServerAddress;
 import dev.slsk.Soulseek;
 import dev.slsk.events.ConnectionEvent;
 import dev.slsk.internal.options.SoulseekClientOptions;
+import java.io.IOException;
+import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -99,6 +101,74 @@ class DefaultConnectionTest {
             // there is no server to reach in a unit test.
             assertThrows(Exception.class, () -> slsk.connection().connect(CancellationSignal.none()));
         }
+    }
+
+    @Test
+    @DisplayName("a connect that fails starts trying again rather than staying offline")
+    void afailedConnectKeepsTrying() throws Exception {
+        try (Soulseek slsk = client()) {
+            ServerAddress nowhere = ServerAddress.of("127.0.0.1", closedPort());
+
+            // The call still throws, because Connection documents that it does.
+            assertThrows(Exception.class, () -> slsk.connection().connect(nowhere, CancellationSignal.none()));
+
+            // ...and the supervisor picks it up from there. This is the case
+            // that used to cost a restart: one transient failure at startup and
+            // the process stayed offline until someone noticed.
+            assertTrue(
+                    awaitState(slsk, ConnectionState.Reconnecting.class),
+                    "a failed connect left the client offline instead of retrying");
+        }
+    }
+
+    @Test
+    @DisplayName("an explicit disconnect is honoured, not reconnected over the top of")
+    void disconnectStopsTheRetrying() throws Exception {
+        try (Soulseek slsk = client()) {
+            ServerAddress nowhere = ServerAddress.of("127.0.0.1", closedPort());
+            assertThrows(Exception.class, () -> slsk.connection().connect(nowhere, CancellationSignal.none()));
+            assertTrue(awaitState(slsk, ConnectionState.Reconnecting.class));
+
+            slsk.connection().disconnect("that will do");
+
+            // Offline immediately, and it stays that way: the consumer's intent
+            // outranks the library's.
+            assertInstanceOf(ConnectionState.Offline.class, slsk.connection().state());
+            Thread.sleep(300);
+            assertInstanceOf(ConnectionState.Offline.class, slsk.connection().state());
+        }
+    }
+
+    @Test
+    @DisplayName("closing the client stops the retrying")
+    void closeStopsTheRetrying() throws Exception {
+        Soulseek slsk = client();
+        ServerAddress nowhere = ServerAddress.of("127.0.0.1", closedPort());
+        assertThrows(Exception.class, () -> slsk.connection().connect(nowhere, CancellationSignal.none()));
+        assertTrue(awaitState(slsk, ConnectionState.Reconnecting.class));
+
+        slsk.close();
+
+        assertInstanceOf(ConnectionState.Offline.class, slsk.connection().state());
+    }
+
+    /** A port with nothing on it, so a connect is refused rather than routed. */
+    private static int closedPort() throws IOException {
+        try (ServerSocket probe = new ServerSocket(0)) {
+            return probe.getLocalPort();
+        }
+    }
+
+    /** Waits for a state, because the supervisor runs on its own thread. */
+    private static boolean awaitState(Soulseek slsk, Class<? extends ConnectionState> wanted)
+            throws InterruptedException {
+        for (int waited = 0; waited < 5_000; waited += 20) {
+            if (wanted.isInstance(slsk.connection().state())) {
+                return true;
+            }
+            Thread.sleep(20);
+        }
+        return false;
     }
 
     @Test
