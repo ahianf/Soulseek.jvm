@@ -15,6 +15,9 @@ import dev.slsk.ConnectionState;
 import dev.slsk.ServerAddress;
 import dev.slsk.Soulseek;
 import dev.slsk.events.ConnectionEvent;
+import dev.slsk.exceptions.ConnectionReadException;
+import dev.slsk.exceptions.LoginRejectedException;
+import dev.slsk.internal.events.SoulseekClientDisconnectedEvent;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -150,6 +153,49 @@ class DefaultConnectionTest {
         slsk.close();
 
         assertInstanceOf(ConnectionState.Offline.class, slsk.connection().state());
+    }
+
+    @Test
+    @DisplayName("a dropped connection starts trying again on its own")
+    void aDroppedConnectionReconnects() throws Exception {
+        try (Soulseek slsk = client()) {
+            // The production path exactly: the read loop surfaces a dead socket
+            // as a disconnect nobody asked for. Reaching for the event rather
+            // than a real socket is what makes this assertable offline — the
+            // branch under test is the one that reads it.
+            engineOf(slsk)
+                    .events()
+                    .raise(
+                            EngineEvents.Kind.DISCONNECTED,
+                            new SoulseekClientDisconnectedEvent(
+                                    "Read error: Connection timed out",
+                                    new ConnectionReadException("Connection timed out")));
+
+            assertTrue(awaitState(slsk, ConnectionState.Reconnecting.class), "a dropped connection stayed offline");
+        }
+    }
+
+    @Test
+    @DisplayName("a login the server refused is terminal, not something to retry")
+    void aRejectedLoginDoesNotReconnect() throws Exception {
+        try (Soulseek slsk = client()) {
+            engineOf(slsk)
+                    .events()
+                    .raise(
+                            EngineEvents.Kind.DISCONNECTED,
+                            new SoulseekClientDisconnectedEvent(
+                                    "The server rejected the login", new LoginRejectedException("INVALIDPASS")));
+
+            // A wrong password does not become right by waiting, and a client
+            // that retries it forever is abuse from the server's side.
+            Thread.sleep(300);
+            assertInstanceOf(ConnectionState.Offline.class, slsk.connection().state());
+        }
+    }
+
+    /** The engine behind a client, for a test that needs to raise its events. */
+    private static SoulseekEngine engineOf(Soulseek slsk) {
+        return ((DefaultSoulseek) slsk).client();
     }
 
     /** A port with nothing on it, so a connect is refused rather than routed. */
