@@ -205,13 +205,20 @@ final class DefaultConnection implements Connection {
      * right by waiting, and retrying them is abuse from the server's side.
      */
     private static boolean retryable(Throwable cause) {
-        for (Throwable walk = cause; walk != null; walk = walk.getCause()) {
+        // Bounded rather than walked to the end: a cause chain that cycles is
+        // rare but constructible, and this runs on the disconnect path, where
+        // spinning would cost the reconnect it is deciding about. The same
+        // guard, for the same reason, as Throwable's own stack-trace printing.
+        Throwable walk = cause;
+        for (int depth = 0; walk != null && depth < 32; depth++) {
             if (walk instanceof LoginRejectedException) {
                 return false;
             }
-            if (walk.getCause() == walk) {
+            Throwable next = walk.getCause();
+            if (next == walk) {
                 break;
             }
+            walk = next;
         }
         return true;
     }
