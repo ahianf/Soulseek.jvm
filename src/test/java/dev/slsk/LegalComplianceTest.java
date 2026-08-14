@@ -37,8 +37,11 @@ class LegalComplianceTest {
         try {
             String text = Files.readString(path);
             int headerEnd = text.indexOf("package ");
+            if (headerEnd < 0 && path.getFileName().toString().equals("module-info.java")) {
+                headerEnd = text.indexOf("module ");
+            }
             if (headerEnd < 0) {
-                failures.add(path + ": missing package declaration");
+                failures.add(path + ": missing package or module declaration");
                 return;
             }
             String header = text.substring(0, headerEnd);
