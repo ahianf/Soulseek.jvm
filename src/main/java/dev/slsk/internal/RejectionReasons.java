@@ -3,7 +3,7 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.RejectionReason;
+import dev.slsk.transfer.RejectionReason;
 import java.util.Locale;
 
 /**

@@ -13,8 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
-import dev.slsk.RejectionReason;
-import dev.slsk.TransferOutcome;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.DuplicateTokenException;
 import dev.slsk.exceptions.DuplicateTransferException;
@@ -44,6 +42,8 @@ import dev.slsk.internal.network.tcp.ConnectionState;
 import dev.slsk.internal.options.PositionableOutputStream;
 import dev.slsk.internal.options.TransferOptions;
 import dev.slsk.internal.transfer.TransferInternal;
+import dev.slsk.transfer.RejectionReason;
+import dev.slsk.transfer.TransferOutcome;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;

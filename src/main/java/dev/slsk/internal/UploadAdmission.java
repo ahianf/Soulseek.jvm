@@ -3,13 +3,13 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.Priority;
-import dev.slsk.RejectionReason;
-import dev.slsk.TransferId;
 import dev.slsk.internal.transfer.UploadScheduler;
 import dev.slsk.spi.UploadContext;
 import dev.slsk.spi.UploadPolicy;
 import dev.slsk.spi.UploadRequest;
+import dev.slsk.transfer.Priority;
+import dev.slsk.transfer.RejectionReason;
+import dev.slsk.transfer.TransferId;
 import dev.slsk.user.UserStatistics;
 import dev.slsk.user.Username;
 import java.util.ArrayList;

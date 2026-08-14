@@ -5,6 +5,8 @@ package dev.slsk;
 
 import dev.slsk.events.UploadEvent;
 import dev.slsk.spi.UploadPolicy;
+import dev.slsk.transfer.Priority;
+import dev.slsk.transfer.TransferId;
 import dev.slsk.user.Username;
 import java.util.List;
 import java.util.Map;

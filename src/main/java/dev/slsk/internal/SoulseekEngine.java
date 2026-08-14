@@ -414,7 +414,7 @@ final class SoulseekEngine implements AutoCloseable {
      *
      * @param limit the ceiling
      */
-    void setDownloadSpeedLimit(dev.slsk.Bandwidth limit) {
+    void setDownloadSpeedLimit(dev.slsk.transfer.Bandwidth limit) {
         downloadTokenBucket.setCapacity(
                 limit == null || limit.isUnlimited() ? Long.MAX_VALUE / 16 : Math.max(1, limit.bytesPerSecond() / 10));
     }

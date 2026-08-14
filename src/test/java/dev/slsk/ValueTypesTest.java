@@ -10,6 +10,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.search.SearchId;
+import dev.slsk.transfer.Bandwidth;
+import dev.slsk.transfer.Priority;
+import dev.slsk.transfer.TransferId;
 import dev.slsk.user.Username;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;

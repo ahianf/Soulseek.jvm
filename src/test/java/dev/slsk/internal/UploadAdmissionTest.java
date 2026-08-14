@@ -8,11 +8,11 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.Priority;
-import dev.slsk.RejectionReason;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.spi.UploadPolicy;
+import dev.slsk.transfer.Priority;
+import dev.slsk.transfer.RejectionReason;
 import dev.slsk.user.Username;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;

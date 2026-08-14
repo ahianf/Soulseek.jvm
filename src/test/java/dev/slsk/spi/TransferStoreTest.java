@@ -7,10 +7,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.slsk.Download;
-import dev.slsk.Priority;
-import dev.slsk.Progress;
-import dev.slsk.TransferId;
-import dev.slsk.TransferState;
+import dev.slsk.transfer.Priority;
+import dev.slsk.transfer.Progress;
+import dev.slsk.transfer.TransferId;
+import dev.slsk.transfer.TransferState;
 import dev.slsk.user.Username;
 import java.time.Instant;
 import java.util.List;

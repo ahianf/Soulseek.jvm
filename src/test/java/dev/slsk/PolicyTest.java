@@ -8,6 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.slsk.transfer.Bandwidth;
+import dev.slsk.transfer.RejectionReason;
+import dev.slsk.transfer.RetryPolicy;
+import dev.slsk.transfer.TransferOutcome;
 import java.time.Duration;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;

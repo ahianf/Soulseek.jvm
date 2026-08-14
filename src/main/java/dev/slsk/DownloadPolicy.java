@@ -3,6 +3,8 @@
 
 package dev.slsk;
 
+import dev.slsk.transfer.Bandwidth;
+import dev.slsk.transfer.RetryPolicy;
 import java.time.Duration;
 import java.util.Objects;
 

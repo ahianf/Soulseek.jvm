@@ -9,12 +9,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.DownloadPolicy;
 import dev.slsk.DownloadRequest;
-import dev.slsk.Priority;
-import dev.slsk.RejectionReason;
 import dev.slsk.Soulseek;
-import dev.slsk.TransferId;
 import dev.slsk.exceptions.TransferNotFoundException;
 import dev.slsk.internal.options.SoulseekClientOptions;
+import dev.slsk.transfer.Priority;
+import dev.slsk.transfer.RejectionReason;
+import dev.slsk.transfer.TransferId;
 import dev.slsk.user.Username;
 import java.nio.file.Path;
 import java.util.Arrays;

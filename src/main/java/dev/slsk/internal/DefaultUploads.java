@@ -5,12 +5,12 @@ package dev.slsk.internal;
 
 import dev.slsk.Attachment;
 import dev.slsk.EventStream;
-import dev.slsk.Priority;
-import dev.slsk.TransferId;
 import dev.slsk.Upload;
 import dev.slsk.Uploads;
 import dev.slsk.events.UploadEvent;
 import dev.slsk.spi.UploadPolicy;
+import dev.slsk.transfer.Priority;
+import dev.slsk.transfer.TransferId;
 import dev.slsk.user.Username;
 import java.time.Instant;
 import java.util.List;
@@ -78,7 +78,7 @@ final class DefaultUploads implements Uploads {
         }
         events.publish(new UploadEvent.StateChanged(
                 id, Transfers.state(transfer, change.previousState()), Transfers.state(transfer), at));
-        if (Transfers.state(transfer) instanceof dev.slsk.TransferState.Finished finished) {
+        if (Transfers.state(transfer) instanceof dev.slsk.transfer.TransferState.Finished finished) {
             progress.forget(id);
             events.publish(new UploadEvent.Finished(id, finished.outcome(), at));
         }
@@ -126,7 +126,7 @@ final class DefaultUploads implements Uploads {
                     pending.user(),
                     pending.path(),
                     0,
-                    new dev.slsk.TransferState.Queued(index),
+                    new dev.slsk.transfer.TransferState.Queued(index),
                     pending.priority(),
                     Instant.now(),
                     Optional.empty(),

@@ -7,14 +7,14 @@ import dev.slsk.CancellationController;
 import dev.slsk.Download;
 import dev.slsk.DownloadPolicy;
 import dev.slsk.DownloadRequest;
-import dev.slsk.Priority;
-import dev.slsk.Progress;
-import dev.slsk.TransferId;
-import dev.slsk.TransferOutcome;
-import dev.slsk.TransferState;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Scheduler;
 import dev.slsk.spi.TransferStore;
+import dev.slsk.transfer.Priority;
+import dev.slsk.transfer.Progress;
+import dev.slsk.transfer.TransferId;
+import dev.slsk.transfer.TransferOutcome;
+import dev.slsk.transfer.TransferState;
 import dev.slsk.user.Username;
 import java.time.Duration;
 import java.time.Instant;
@@ -879,9 +879,9 @@ final class DownloadQueue {
      * on their own. Everything else — not shared, banned, cancelled — is about
      * the file or about us, and waiting does not change it.
      */
-    private static boolean isQueueLimit(dev.slsk.RejectionReason reason) {
-        return reason == dev.slsk.RejectionReason.TOO_MANY_FILES
-                || reason == dev.slsk.RejectionReason.TOO_MANY_MEGABYTES;
+    private static boolean isQueueLimit(dev.slsk.transfer.RejectionReason reason) {
+        return reason == dev.slsk.transfer.RejectionReason.TOO_MANY_FILES
+                || reason == dev.slsk.transfer.RejectionReason.TOO_MANY_MEGABYTES;
     }
 
     /**
@@ -899,7 +899,7 @@ final class DownloadQueue {
      *
      * <p>The attempt is given back. A full queue is not a failed attempt at this
      * file — the peer never looked at it — and spending one of
-     * {@link dev.slsk.RetryPolicy#maxAttempts} on it would fail an album's
+     * {@link dev.slsk.transfer.RetryPolicy#maxAttempts} on it would fail an album's
      * tail after three refusals that were only ever about timing.
      */
     private void holdForQueueLimit(Entry entry) {

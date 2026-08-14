@@ -5,8 +5,6 @@ package dev.slsk.internal;
 
 import dev.slsk.CancellationController;
 import dev.slsk.CancellationSignal;
-import dev.slsk.TransferId;
-import dev.slsk.TransferOutcome;
 import dev.slsk.exceptions.DuplicateTokenException;
 import dev.slsk.exceptions.DuplicateTransferException;
 import dev.slsk.exceptions.TransferNotFoundException;
@@ -36,6 +34,8 @@ import dev.slsk.internal.transfer.TransferStreams;
 import dev.slsk.spi.ResolvedFile;
 import dev.slsk.spi.ShareCatalog;
 import dev.slsk.spi.UploadPolicy;
+import dev.slsk.transfer.TransferId;
+import dev.slsk.transfer.TransferOutcome;
 import dev.slsk.user.UserProfile;
 import dev.slsk.user.Username;
 import java.io.FileNotFoundException;

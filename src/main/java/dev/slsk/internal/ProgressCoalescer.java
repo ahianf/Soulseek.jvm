@@ -3,8 +3,8 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.Progress;
-import dev.slsk.TransferId;
+import dev.slsk.transfer.Progress;
+import dev.slsk.transfer.TransferId;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;

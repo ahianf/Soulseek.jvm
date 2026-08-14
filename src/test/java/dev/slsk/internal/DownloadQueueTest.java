@@ -11,15 +11,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.Download;
 import dev.slsk.DownloadPolicy;
 import dev.slsk.DownloadRequest;
-import dev.slsk.Priority;
-import dev.slsk.RejectionReason;
-import dev.slsk.RetryPolicy;
-import dev.slsk.TransferId;
-import dev.slsk.TransferOutcome;
-import dev.slsk.TransferState;
 import dev.slsk.internal.common.Scheduler;
 import dev.slsk.spi.TransferSink;
 import dev.slsk.spi.TransferStore;
+import dev.slsk.transfer.Priority;
+import dev.slsk.transfer.RejectionReason;
+import dev.slsk.transfer.RetryPolicy;
+import dev.slsk.transfer.TransferId;
+import dev.slsk.transfer.TransferOutcome;
+import dev.slsk.transfer.TransferState;
 import dev.slsk.user.Username;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -606,7 +606,7 @@ class DownloadQueueTest {
         awaitTerminal(queue, id);
 
         // A state arriving late must not resurrect something already finished.
-        queue.observed(id, new TransferState.Transferring(dev.slsk.Progress.none(100)));
+        queue.observed(id, new TransferState.Transferring(dev.slsk.transfer.Progress.none(100)));
         assertInstanceOf(
                 TransferState.Finished.class,
                 queue.find(id).orElseThrow().snapshot().state());
@@ -632,12 +632,12 @@ class DownloadQueueTest {
 
         // Before IN_PROGRESS there is nothing to update: progress that arrives
         // early must not invent a Transferring state.
-        queue.progressed(id, dev.slsk.Progress.of(50, 100, 1_000));
+        queue.progressed(id, dev.slsk.transfer.Progress.of(50, 100, 1_000));
         assertInstanceOf(
                 TransferState.Requesting.class,
                 queue.find(id).orElseThrow().snapshot().state());
 
-        queue.observed(id, new TransferState.Transferring(dev.slsk.Progress.none(100)));
+        queue.observed(id, new TransferState.Transferring(dev.slsk.transfer.Progress.none(100)));
         assertEquals(
                 0,
                 ((TransferState.Transferring)
@@ -645,7 +645,7 @@ class DownloadQueueTest {
                         .progress()
                         .transferred());
 
-        queue.progressed(id, dev.slsk.Progress.of(64, 100, 2_048));
+        queue.progressed(id, dev.slsk.transfer.Progress.of(64, 100, 2_048));
         TransferState moved = queue.find(id).orElseThrow().snapshot().state();
         assertEquals(64, ((TransferState.Transferring) moved).progress().transferred());
         assertEquals(2_048.0, ((TransferState.Transferring) moved).progress().bytesPerSecond(), 0.0);
@@ -655,7 +655,7 @@ class DownloadQueueTest {
 
         // A sample still in flight when the transfer settled must not pull it
         // back out of its terminal state.
-        queue.progressed(id, dev.slsk.Progress.of(99, 100, 2_048));
+        queue.progressed(id, dev.slsk.transfer.Progress.of(99, 100, 2_048));
         assertInstanceOf(
                 TransferState.Finished.class,
                 queue.find(id).orElseThrow().snapshot().state());

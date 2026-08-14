@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.transfer;
 
-import dev.slsk.Priority;
+import dev.slsk.transfer.Priority;
 import dev.slsk.user.Username;
 import java.util.ArrayList;
 import java.util.Comparator;

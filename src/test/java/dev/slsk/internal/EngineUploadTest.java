@@ -14,7 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationController;
 import dev.slsk.CancellationSignal;
-import dev.slsk.TransferOutcome;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.ConnectionReadException;
 import dev.slsk.exceptions.DuplicateTokenException;
@@ -44,6 +43,7 @@ import dev.slsk.internal.network.tcp.ConnectionReporter;
 import dev.slsk.internal.network.tcp.ConnectionState;
 import dev.slsk.internal.options.TransferOptions;
 import dev.slsk.internal.transfer.TransferInternal;
+import dev.slsk.transfer.TransferOutcome;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

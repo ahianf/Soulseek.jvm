@@ -162,7 +162,7 @@ final class DefaultDiagnostics implements Diagnostics {
         int queuedDownloads = 0;
         for (dev.slsk.Download download : downloadList) {
             downloadedBytes += transferred(download.state());
-            if (download.state() instanceof dev.slsk.TransferState.Queued) {
+            if (download.state() instanceof dev.slsk.transfer.TransferState.Queued) {
                 queuedDownloads++;
             } else if (running(download.state())) {
                 activeDownloads++;
@@ -174,7 +174,7 @@ final class DefaultDiagnostics implements Diagnostics {
         int queuedUploads = 0;
         for (dev.slsk.Upload upload : uploadList) {
             uploadedBytes += transferred(upload.state());
-            if (upload.state() instanceof dev.slsk.TransferState.Queued) {
+            if (upload.state() instanceof dev.slsk.transfer.TransferState.Queued) {
                 queuedUploads++;
             } else if (running(upload.state())) {
                 activeUploads++;
@@ -194,16 +194,16 @@ final class DefaultDiagnostics implements Diagnostics {
                 0);
     }
 
-    private static long transferred(dev.slsk.TransferState state) {
-        return state instanceof dev.slsk.TransferState.Transferring transferring
+    private static long transferred(dev.slsk.transfer.TransferState state) {
+        return state instanceof dev.slsk.transfer.TransferState.Transferring transferring
                 ? transferring.progress().transferred()
                 : 0;
     }
 
-    private static boolean running(dev.slsk.TransferState state) {
-        return !(state instanceof dev.slsk.TransferState.Queued)
-                && !(state instanceof dev.slsk.TransferState.Paused)
-                && !(state instanceof dev.slsk.TransferState.Finished);
+    private static boolean running(dev.slsk.transfer.TransferState state) {
+        return !(state instanceof dev.slsk.transfer.TransferState.Queued)
+                && !(state instanceof dev.slsk.transfer.TransferState.Paused)
+                && !(state instanceof dev.slsk.transfer.TransferState.Finished);
     }
 
     /**

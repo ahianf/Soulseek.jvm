@@ -4,6 +4,9 @@
 package dev.slsk;
 
 import dev.slsk.share.RemotePath;
+import dev.slsk.transfer.Priority;
+import dev.slsk.transfer.TransferId;
+import dev.slsk.transfer.TransferState;
 import dev.slsk.user.Username;
 import java.time.Instant;
 import java.util.Map;

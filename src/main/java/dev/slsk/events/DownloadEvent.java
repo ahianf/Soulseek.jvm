@@ -4,10 +4,10 @@
 package dev.slsk.events;
 
 import dev.slsk.Download;
-import dev.slsk.Progress;
-import dev.slsk.TransferId;
-import dev.slsk.TransferOutcome;
-import dev.slsk.TransferState;
+import dev.slsk.transfer.Progress;
+import dev.slsk.transfer.TransferId;
+import dev.slsk.transfer.TransferOutcome;
+import dev.slsk.transfer.TransferState;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.OptionalInt;

@@ -4,7 +4,7 @@
 package dev.slsk.spi;
 
 import dev.slsk.Download;
-import dev.slsk.TransferId;
+import dev.slsk.transfer.TransferId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;

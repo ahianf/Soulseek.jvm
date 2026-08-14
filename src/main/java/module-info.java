@@ -24,5 +24,6 @@ module dev.slsk.soulseek {
     exports dev.slsk.search;
     exports dev.slsk.share;
     exports dev.slsk.spi;
+    exports dev.slsk.transfer;
     exports dev.slsk.user;
 }

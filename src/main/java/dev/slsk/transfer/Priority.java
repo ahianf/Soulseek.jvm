@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Ahian Fernandez
 // SPDX-License-Identifier: GPL-3.0-only
 
-package dev.slsk;
+package dev.slsk.transfer;
 
 /**
  * Where a transfer sits in the library's own queue.

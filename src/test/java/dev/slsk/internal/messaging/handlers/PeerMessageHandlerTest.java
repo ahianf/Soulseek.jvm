@@ -12,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
-import dev.slsk.RejectionReason;
 import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
@@ -58,6 +57,7 @@ import dev.slsk.share.ShareIndex;
 import dev.slsk.spi.ResolvedFile;
 import dev.slsk.spi.ShareCatalog;
 import dev.slsk.spi.UploadPolicy;
+import dev.slsk.transfer.RejectionReason;
 import dev.slsk.user.UserProfile;
 import dev.slsk.user.Username;
 import java.io.ByteArrayInputStream;

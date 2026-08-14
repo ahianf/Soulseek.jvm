@@ -4,6 +4,8 @@
 package dev.slsk;
 
 import dev.slsk.events.DownloadEvent;
+import dev.slsk.transfer.Priority;
+import dev.slsk.transfer.TransferId;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
