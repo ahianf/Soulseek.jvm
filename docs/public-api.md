@@ -11,8 +11,9 @@ in five minutes. Read the concepts section to understand the design once and
 predict the rest. Read the facet reference for every method. Read the SPI and
 recipe sections when you need to replace a default.
 
-Everything in this document is the frozen 1.0 surface. The library's internals
-are being rewritten, but no exported signature changes.
+Everything in this document is the current public surface. Public entry points
+and shared control contracts stay in `dev.slsk`; requests and snapshots are
+grouped by the capability that owns them.
 
 ---
 
@@ -56,14 +57,23 @@ are being rewritten, but no exported signature changes.
 | Threading model | Blocking calls, designed for virtual threads |
 | Root type | `dev.slsk.Soulseek` |
 
-The module exports exactly four packages. Each has one rule:
+The module exports these architectural packages:
 
 | Package | Rule |
 |---|---|
-| `dev.slsk` | What you call. The root type, ten facets, ids, and immutable value types. |
+| `dev.slsk` | What you call. The root type, ten facets, cancellation, subscriptions, and attachments. |
+| `dev.slsk.connection` | Server addresses, metadata, and connection state. |
+| `dev.slsk.diagnostics` | Diagnostic levels, metrics, and distributed-mesh snapshots. |
+| `dev.slsk.download` | Download requests, policies, and snapshots. |
 | `dev.slsk.events` | What you receive. One sealed event hierarchy per facet. |
 | `dev.slsk.exceptions` | What can go wrong. An unchecked exception hierarchy. |
+| `dev.slsk.room` | Room directory, membership, users, and tickers. |
+| `dev.slsk.search` | Search queries, filters, results, files, and lifecycle snapshots. |
+| `dev.slsk.share` | Browse responses, shared directories, indexes, and remote paths. |
 | `dev.slsk.spi` | What you implement. Extension points with working defaults. |
+| `dev.slsk.transfer` | Transfer ids, state, outcomes, progress, priorities, and retry values. |
+| `dev.slsk.upload` | Upload snapshots. |
+| `dev.slsk.user` | User identity, presence, profiles, statistics, watches, and browse values. |
 
 Everything else lives under `dev.slsk.internal` and is not exported. No
 internal type is reachable from an exported signature. A test enforces this.
@@ -82,9 +92,19 @@ This program connects, searches the network, picks a source, downloads one
 file, and prints the outcome.
 
 ```java
-import dev.slsk.*;
 import java.nio.file.Path;
 import java.util.Comparator;
+import dev.slsk.CancellationSignal;
+import dev.slsk.Soulseek;
+import dev.slsk.download.Download;
+import dev.slsk.download.DownloadRequest;
+import dev.slsk.search.SearchFile;
+import dev.slsk.search.SearchQuery;
+import dev.slsk.search.SearchResponse;
+import dev.slsk.search.SearchResult;
+import dev.slsk.transfer.TransferId;
+import dev.slsk.transfer.TransferOutcome;
+import dev.slsk.transfer.TransferState;
 
 public class Quickstart {
     public static void main(String[] args) throws Exception {
@@ -1329,9 +1349,10 @@ scheduler.scheduleAtFixedRate(() -> {
 
 ## 11. Appendix: type index
 
-Every exported type, one line each.
+Every exported type, one line each. Entry contracts live in `dev.slsk`;
+capability models live in the package listed in [section 1](#1-the-library-at-a-glance).
 
-**`dev.slsk` — what you call**
+**Entry contracts and capability models**
 
 | Type | Kind | One line |
 |---|---|---|

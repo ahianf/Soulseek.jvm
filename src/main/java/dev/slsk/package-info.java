@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 /**
- * Public API for the Soulseek.jvm library.
+ * Client entry points and shared control contracts for Soulseek.jvm.
  *
- * <p>Being rebuilt as the 1.0 facet API. What is here today is what has already
- * earned its place on the public surface: the cancellation contract, and
- * {@link dev.slsk.share.RemotePath}. Everything else moved to {@code
- * dev.slsk.internal} and comes back only as part of a facet.
- *
- * <p>See {@code JAVA_API_1_0_GOAL.md} for the target shape.
+ * <p>This root package is intentionally narrow: it contains {@link Soulseek},
+ * its capability facets, and the cancellation, event-stream, attachment, and
+ * subscription contracts shared by those facets. Immutable requests and
+ * snapshots live in the capability package that owns them, such as {@code
+ * dev.slsk.search}, {@code dev.slsk.transfer}, and {@code
+ * dev.slsk.user}.
  */
 package dev.slsk;

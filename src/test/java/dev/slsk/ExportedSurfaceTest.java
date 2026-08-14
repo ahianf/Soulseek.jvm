@@ -168,8 +168,23 @@ class ExportedSurfaceTest {
     }
 
     @Test
-    @DisplayName("the exported packages are exactly the four the module promises")
-    void theExportsAreTheFourAndOnlyThose() throws IOException {
-        assertEquals(Set.of("dev.slsk", "dev.slsk.events", "dev.slsk.exceptions", "dev.slsk.spi"), exportedPackages());
+    @DisplayName("the module exports exactly the architectural public packages")
+    void theExportsAreExactlyThePublicPackages() throws IOException {
+        assertEquals(
+                Set.of(
+                        "dev.slsk",
+                        "dev.slsk.connection",
+                        "dev.slsk.diagnostics",
+                        "dev.slsk.download",
+                        "dev.slsk.events",
+                        "dev.slsk.exceptions",
+                        "dev.slsk.room",
+                        "dev.slsk.search",
+                        "dev.slsk.share",
+                        "dev.slsk.spi",
+                        "dev.slsk.transfer",
+                        "dev.slsk.upload",
+                        "dev.slsk.user"),
+                exportedPackages());
     }
 }

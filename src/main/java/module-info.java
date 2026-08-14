@@ -4,15 +4,15 @@
 /**
  * Soulseek.jvm.
  *
- * <p>Mid-rewrite toward the 1.0 facet API. The implementation lives under
- * {@code dev.slsk.internal.*} and is not exported. See
- * {@code JAVA_API_1_0_GOAL.md}.
+ * <p>The public surface is organized by responsibility. {@code dev.slsk}
+ * contains the client entry point, facets, cancellation, and subscriptions;
+ * capability packages contain their immutable requests and snapshots;
+ * {@code events} contains notifications, {@code exceptions} contains failures,
+ * and {@code spi} contains extension points.
  *
- * <p>Four exports, with one rule each: {@code dev.slsk} is what you call,
- * {@code dev.slsk.events} is what you receive, {@code dev.slsk.exceptions}
- * is what can go wrong, and {@code dev.slsk.spi} is what you implement.
- * Everything else is internal, and a test asserts that none of it is reachable
- * from a signature here.
+ * <p>The implementation lives under {@code dev.slsk.internal.*} and is not
+ * exported. A test asserts that none of it is reachable from a public
+ * signature.
  */
 module dev.slsk.soulseek {
     exports dev.slsk;

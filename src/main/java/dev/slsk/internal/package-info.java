@@ -5,11 +5,13 @@
  * Implementation of the Soulseek.jvm library. Not exported, not API, and no
  * part of it is covered by any compatibility promise.
  *
- * <p>This is where the ported implementation lives. Its shape still mirrors the
- * C# original it came from, because that is where it came from; that is a fact
- * about its history and not a constraint on its future. The 1.0 facets are
- * built over these types, and the internal architecture is rewritten after 1.0
- * ships.
+ * <p>The root of this package is the composition and orchestration layer:
+ * client facets, domains, queues, runs, registries, and supervisors. Leaf
+ * protocol and state types live under the subsystem that owns them, including
+ * {@code connection}, {@code events}, {@code messaging}, {@code network},
+ * {@code room}, {@code search}, {@code share}, {@code transfer}, and {@code
+ * user}. Cross-cutting implementation primitives live under {@code common},
+ * {@code diagnostics}, and {@code options}.
  *
  * <p>Because nothing here is exported, the no-prune rule does not apply:
  * unexported code with no caller is ordinary dead code. What is <em>not</em>
