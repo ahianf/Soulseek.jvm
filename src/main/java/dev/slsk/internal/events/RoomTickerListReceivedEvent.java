@@ -4,8 +4,8 @@
 
 package dev.slsk.internal.events;
 
-import dev.slsk.internal.RoomTicker;
 import dev.slsk.internal.messaging.messages.RoomTickerListNotification;
+import dev.slsk.internal.room.RoomTicker;
 import java.util.ArrayList;
 import java.util.List;
 

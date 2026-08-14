@@ -23,6 +23,8 @@ import dev.slsk.internal.messaging.messages.PrivateRoomRemoveUser;
 import dev.slsk.internal.messaging.messages.RoomListRequest;
 import dev.slsk.internal.messaging.messages.RoomMessageCommand;
 import dev.slsk.internal.messaging.messages.SetRoomTickerCommand;
+import dev.slsk.internal.room.RoomData;
+import dev.slsk.internal.room.RoomList;
 import java.util.Objects;
 import java.util.concurrent.TimeoutException;
 

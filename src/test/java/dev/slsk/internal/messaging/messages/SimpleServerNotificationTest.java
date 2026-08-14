@@ -9,9 +9,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.exceptions.MessageReadException;
-import dev.slsk.internal.RoomInfo;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
+import dev.slsk.internal.room.RoomInfo;
 import java.util.List;
 import java.util.function.Function;
 import org.junit.jupiter.api.DisplayName;

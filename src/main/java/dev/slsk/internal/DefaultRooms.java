@@ -144,7 +144,7 @@ final class DefaultRooms implements Rooms {
         client.events()
                 .on(
                         Kind.ROOM_LIST_RECEIVED,
-                        (dev.slsk.internal.RoomList list) ->
+                        (dev.slsk.internal.room.RoomList list) ->
                                 events.publish(new RoomEvent.ListReceived(roomList(list), Instant.now())));
         client.events()
                 .on(
@@ -217,11 +217,11 @@ final class DefaultRooms implements Rooms {
 
     // --- translation -------------------------------------------------------
 
-    private static RoomTicker ticker(dev.slsk.internal.RoomTicker source) {
+    private static RoomTicker ticker(dev.slsk.internal.room.RoomTicker source) {
         return new RoomTicker(Username.of(source.getUsername()), source.getMessage());
     }
 
-    private static List<RoomTicker> tickers(List<dev.slsk.internal.RoomTicker> source) {
+    private static List<RoomTicker> tickers(List<dev.slsk.internal.room.RoomTicker> source) {
         return source == null
                 ? List.of()
                 : source.stream()
@@ -262,7 +262,7 @@ final class DefaultRooms implements Rooms {
                 Optional.ofNullable(data.getCountryCode()));
     }
 
-    private static Room room(dev.slsk.internal.RoomData data) {
+    private static Room room(dev.slsk.internal.room.RoomData data) {
         if (data == null) {
             return blank("");
         }
@@ -289,7 +289,7 @@ final class DefaultRooms implements Rooms {
                 operators);
     }
 
-    private static RoomList roomList(dev.slsk.internal.RoomList source) {
+    private static RoomList roomList(dev.slsk.internal.room.RoomList source) {
         if (source == null) {
             return RoomList.empty();
         }
@@ -300,7 +300,7 @@ final class DefaultRooms implements Rooms {
                 source.getModeratedRoomNames() == null ? List.of() : List.copyOf(source.getModeratedRoomNames()));
     }
 
-    private static List<RoomInfo> infos(List<dev.slsk.internal.RoomInfo> source) {
+    private static List<RoomInfo> infos(List<dev.slsk.internal.room.RoomInfo> source) {
         return source == null
                 ? List.of()
                 : source.stream()

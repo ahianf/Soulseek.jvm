@@ -12,11 +12,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.exceptions.MessageReadException;
-import dev.slsk.internal.RoomData;
 import dev.slsk.internal.events.RoomJoinedEvent;
 import dev.slsk.internal.events.RoomLeftEvent;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
+import dev.slsk.internal.room.RoomData;
 import dev.slsk.internal.user.UserData;
 import dev.slsk.internal.user.UserPresence;
 import java.util.List;

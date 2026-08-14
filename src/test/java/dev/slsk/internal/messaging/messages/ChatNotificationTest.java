@@ -10,13 +10,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.exceptions.MessageReadException;
-import dev.slsk.internal.RoomTicker;
 import dev.slsk.internal.events.PrivateMessageReceivedEvent;
 import dev.slsk.internal.events.PublicChatMessageReceivedEvent;
 import dev.slsk.internal.events.RoomMessageReceivedEvent;
 import dev.slsk.internal.events.RoomTickerListReceivedEvent;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
+import dev.slsk.internal.room.RoomTicker;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;

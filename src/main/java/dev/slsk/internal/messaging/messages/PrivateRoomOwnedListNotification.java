@@ -4,9 +4,9 @@
 
 package dev.slsk.internal.messaging.messages;
 
-import dev.slsk.internal.RoomInfo;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
+import dev.slsk.internal.room.RoomInfo;
 import java.util.ArrayList;
 import java.util.List;
 

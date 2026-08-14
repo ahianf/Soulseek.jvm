@@ -37,6 +37,8 @@ import dev.slsk.internal.messaging.messages.UserStatusRequest;
 import dev.slsk.internal.messaging.messages.WatchUserRequest;
 import dev.slsk.internal.messaging.messages.WatchUserResponse;
 import dev.slsk.internal.network.MessageConnection;
+import dev.slsk.internal.room.RoomData;
+import dev.slsk.internal.room.RoomList;
 import dev.slsk.internal.user.UserData;
 import dev.slsk.internal.user.UserPresence;
 import dev.slsk.internal.user.UserStatistics;

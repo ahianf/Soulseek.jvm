@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.events;
 
-import dev.slsk.internal.RoomTicker;
+import dev.slsk.internal.room.RoomTicker;
 
 /**
  * Event arguments raised when a ticker is added to a chat room.

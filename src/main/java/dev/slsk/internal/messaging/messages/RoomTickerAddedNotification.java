@@ -4,9 +4,9 @@
 
 package dev.slsk.internal.messaging.messages;
 
-import dev.slsk.internal.RoomTicker;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
+import dev.slsk.internal.room.RoomTicker;
 
 /** Notification that a ticker was added to a chat room. */
 public final class RoomTickerAddedNotification implements IncomingMessage {
