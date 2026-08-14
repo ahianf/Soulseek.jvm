@@ -3,10 +3,10 @@
 
 package dev.slsk.events;
 
-import dev.slsk.Room;
-import dev.slsk.RoomList;
-import dev.slsk.RoomTicker;
-import dev.slsk.RoomUser;
+import dev.slsk.room.Room;
+import dev.slsk.room.RoomList;
+import dev.slsk.room.RoomTicker;
+import dev.slsk.room.RoomUser;
 import dev.slsk.user.Username;
 import java.time.Instant;
 import java.util.List;

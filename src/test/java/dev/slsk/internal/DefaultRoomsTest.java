@@ -9,11 +9,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.Attachment;
 import dev.slsk.CancellationSignal;
-import dev.slsk.Room;
-import dev.slsk.RoomTicker;
 import dev.slsk.Soulseek;
 import dev.slsk.events.RoomEvent;
 import dev.slsk.internal.options.SoulseekClientOptions;
+import dev.slsk.room.Room;
+import dev.slsk.room.RoomTicker;
 import dev.slsk.user.Username;
 import java.time.Instant;
 import java.util.List;

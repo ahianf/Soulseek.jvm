@@ -4,6 +4,8 @@
 package dev.slsk;
 
 import dev.slsk.events.RoomEvent;
+import dev.slsk.room.Room;
+import dev.slsk.room.RoomList;
 import java.util.List;
 import java.util.function.Consumer;
 
