@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.slsk.download.DownloadPolicy;
 import dev.slsk.transfer.Bandwidth;
 import dev.slsk.transfer.RejectionReason;
 import dev.slsk.transfer.RetryPolicy;

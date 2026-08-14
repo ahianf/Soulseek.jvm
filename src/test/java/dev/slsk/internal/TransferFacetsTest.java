@@ -7,9 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.DownloadPolicy;
-import dev.slsk.DownloadRequest;
 import dev.slsk.Soulseek;
+import dev.slsk.download.DownloadPolicy;
+import dev.slsk.download.DownloadRequest;
 import dev.slsk.exceptions.TransferNotFoundException;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.transfer.Priority;

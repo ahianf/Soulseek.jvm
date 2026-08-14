@@ -154,13 +154,13 @@ final class DefaultDiagnostics implements Diagnostics {
         // forgotten, and a scrape reads several of these — the counts also had
         // no reason to agree with each other, having been taken at ten different
         // moments.
-        List<dev.slsk.Download> downloadList = downloads.get().all();
+        List<dev.slsk.download.Download> downloadList = downloads.get().all();
         List<dev.slsk.Upload> uploadList = uploads.get().all();
 
         long downloadedBytes = 0;
         int activeDownloads = 0;
         int queuedDownloads = 0;
-        for (dev.slsk.Download download : downloadList) {
+        for (dev.slsk.download.Download download : downloadList) {
             downloadedBytes += transferred(download.state());
             if (download.state() instanceof dev.slsk.transfer.TransferState.Queued) {
                 queuedDownloads++;

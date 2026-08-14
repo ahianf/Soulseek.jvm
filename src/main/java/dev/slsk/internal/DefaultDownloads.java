@@ -5,11 +5,11 @@ package dev.slsk.internal;
 
 import dev.slsk.Attachment;
 import dev.slsk.CancellationSignal;
-import dev.slsk.Download;
-import dev.slsk.DownloadPolicy;
-import dev.slsk.DownloadRequest;
 import dev.slsk.Downloads;
 import dev.slsk.EventStream;
+import dev.slsk.download.Download;
+import dev.slsk.download.DownloadPolicy;
+import dev.slsk.download.DownloadRequest;
 import dev.slsk.events.DownloadEvent;
 import dev.slsk.exceptions.TransferNotFoundException;
 import dev.slsk.internal.common.Usernames;

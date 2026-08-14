@@ -3,7 +3,7 @@
 
 package dev.slsk.events;
 
-import dev.slsk.Download;
+import dev.slsk.download.Download;
 import dev.slsk.transfer.Progress;
 import dev.slsk.transfer.TransferId;
 import dev.slsk.transfer.TransferOutcome;

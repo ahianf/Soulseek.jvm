@@ -4,9 +4,9 @@
 package dev.slsk.internal;
 
 import dev.slsk.CancellationController;
-import dev.slsk.Download;
-import dev.slsk.DownloadPolicy;
-import dev.slsk.DownloadRequest;
+import dev.slsk.download.Download;
+import dev.slsk.download.DownloadPolicy;
+import dev.slsk.download.DownloadRequest;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Scheduler;
 import dev.slsk.spi.TransferStore;

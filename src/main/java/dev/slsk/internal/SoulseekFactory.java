@@ -3,9 +3,9 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.DownloadPolicy;
 import dev.slsk.Soulseek;
 import dev.slsk.diagnostics.DiagnosticLevel;
+import dev.slsk.download.DownloadPolicy;
 import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.options.SoulseekClientOptionsPatch;

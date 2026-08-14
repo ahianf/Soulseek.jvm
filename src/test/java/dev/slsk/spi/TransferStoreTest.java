@@ -6,7 +6,7 @@ package dev.slsk.spi;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import dev.slsk.Download;
+import dev.slsk.download.Download;
 import dev.slsk.transfer.Priority;
 import dev.slsk.transfer.Progress;
 import dev.slsk.transfer.TransferId;

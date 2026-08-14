@@ -8,9 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.Download;
-import dev.slsk.DownloadPolicy;
-import dev.slsk.DownloadRequest;
+import dev.slsk.download.Download;
+import dev.slsk.download.DownloadPolicy;
+import dev.slsk.download.DownloadRequest;
 import dev.slsk.internal.common.Scheduler;
 import dev.slsk.spi.TransferSink;
 import dev.slsk.spi.TransferStore;

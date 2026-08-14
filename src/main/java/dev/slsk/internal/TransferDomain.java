@@ -103,7 +103,7 @@ final class TransferDomain implements PeerServices {
     /**
      * How many downloads may move bytes at once, and how many per peer.
      *
-     * <p>Replaceable, because {@link dev.slsk.DownloadPolicy} owns these
+     * <p>Replaceable, because {@link dev.slsk.download.DownloadPolicy} owns these
      * numbers and a consumer may change them while transfers are in flight. A
      * run holds the instance it acquired and releases to that same one, so a
      * resize never returns a permit to a semaphore that did not issue it.

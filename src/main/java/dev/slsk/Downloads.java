@@ -3,6 +3,9 @@
 
 package dev.slsk;
 
+import dev.slsk.download.Download;
+import dev.slsk.download.DownloadPolicy;
+import dev.slsk.download.DownloadRequest;
 import dev.slsk.events.DownloadEvent;
 import dev.slsk.transfer.Priority;
 import dev.slsk.transfer.TransferId;

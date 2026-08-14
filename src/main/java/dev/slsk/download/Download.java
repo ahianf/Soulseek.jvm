@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Ahian Fernandez
 // SPDX-License-Identifier: GPL-3.0-only
 
-package dev.slsk;
+package dev.slsk.download;
 
 import dev.slsk.share.RemotePath;
 import dev.slsk.transfer.Priority;

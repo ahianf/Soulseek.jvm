@@ -6,8 +6,8 @@ package dev.slsk.internal;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.DownloadPolicy;
-import dev.slsk.DownloadRequest;
+import dev.slsk.download.DownloadPolicy;
+import dev.slsk.download.DownloadRequest;
 import dev.slsk.internal.common.Scheduler;
 import dev.slsk.soak.HeapProbe;
 import dev.slsk.soak.SoakReport;

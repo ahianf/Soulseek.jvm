@@ -113,7 +113,7 @@ class DefaultDiagnosticsTest {
             assertEquals(0, slsk.diagnostics().metrics().queuedDownloads());
 
             slsk.downloads()
-                    .enqueue(dev.slsk.DownloadRequest.of(
+                    .enqueue(dev.slsk.download.DownloadRequest.of(
                             dev.slsk.user.Username.of("alice"),
                             "music\\one.mp3",
                             dev.slsk.spi.TransferSink.file(
