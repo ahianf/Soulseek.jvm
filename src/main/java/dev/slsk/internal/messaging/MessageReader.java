@@ -6,7 +6,6 @@ package dev.slsk.internal.messaging;
 
 import dev.slsk.exceptions.MessageCompressionException;
 import dev.slsk.exceptions.MessageReadException;
-import dev.slsk.internal.CharacterEncoding;
 import dev.slsk.internal.share.Directory;
 import dev.slsk.internal.share.File;
 import dev.slsk.internal.share.FileAttribute;

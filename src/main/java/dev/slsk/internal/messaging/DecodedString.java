@@ -4,8 +4,6 @@
 
 package dev.slsk.internal.messaging;
 
-import dev.slsk.internal.CharacterEncoding;
-
 /**
  * A decoded string and the encoding that succeeded.
  *
