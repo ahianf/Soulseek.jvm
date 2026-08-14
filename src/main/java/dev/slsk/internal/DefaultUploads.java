@@ -7,6 +7,7 @@ import dev.slsk.Attachment;
 import dev.slsk.EventStream;
 import dev.slsk.Uploads;
 import dev.slsk.events.UploadEvent;
+import dev.slsk.internal.transfer.Transfer;
 import dev.slsk.spi.UploadPolicy;
 import dev.slsk.transfer.Priority;
 import dev.slsk.transfer.TransferId;
@@ -70,7 +71,7 @@ final class DefaultUploads implements Uploads {
         Transfer transfer = change.transfer();
         TransferId id = Transfers.id(transfer);
         Instant at = Instant.now();
-        if (dev.slsk.internal.TransferState.NONE.equals(change.previousState())) {
+        if (dev.slsk.internal.transfer.TransferState.NONE.equals(change.previousState())) {
             // The first transition is the upload existing at all: a peer asked
             // and the policy accepted.
             events.publish(new UploadEvent.Requested(project(transfer), at));

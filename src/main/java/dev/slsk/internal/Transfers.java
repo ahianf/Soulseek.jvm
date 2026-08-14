@@ -3,6 +3,8 @@
 
 package dev.slsk.internal;
 
+import dev.slsk.internal.transfer.Transfer;
+import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.transfer.Progress;
 import dev.slsk.transfer.TransferId;
 import dev.slsk.transfer.TransferOutcome;
@@ -12,7 +14,7 @@ import java.time.Instant;
 import java.util.Optional;
 
 /**
- * Translation from the internal {@link dev.slsk.internal.Transfer} to the 1.0
+ * Translation from the internal {@link dev.slsk.internal.transfer.Transfer} to the 1.0
  * transfer model.
  *
  * <p>Shared by the download and upload facets, because the state mapping is the
@@ -67,23 +69,23 @@ final class Transfers {
      * holding a transition's previous state rather than the transfer's current
      * one.
      */
-    static TransferState state(Transfer transfer, dev.slsk.internal.TransferState source) {
+    static TransferState state(Transfer transfer, dev.slsk.internal.transfer.TransferState source) {
         if (source == null) {
             return new TransferState.Queued(0);
         }
-        if (source.contains(dev.slsk.internal.TransferState.COMPLETED)) {
+        if (source.contains(dev.slsk.internal.transfer.TransferState.COMPLETED)) {
             return new TransferState.Finished(outcome(transfer, source));
         }
-        if (source.contains(dev.slsk.internal.TransferState.IN_PROGRESS)) {
+        if (source.contains(dev.slsk.internal.transfer.TransferState.IN_PROGRESS)) {
             return new TransferState.Transferring(progress(transfer));
         }
-        if (source.contains(dev.slsk.internal.TransferState.INITIALIZING)) {
+        if (source.contains(dev.slsk.internal.transfer.TransferState.INITIALIZING)) {
             return new TransferState.Connecting(false);
         }
-        if (source.contains(dev.slsk.internal.TransferState.QUEUED)) {
+        if (source.contains(dev.slsk.internal.transfer.TransferState.QUEUED)) {
             return new TransferState.QueuedRemotely(java.util.OptionalInt.empty(), Instant.now());
         }
-        if (source.contains(dev.slsk.internal.TransferState.REQUESTED)) {
+        if (source.contains(dev.slsk.internal.transfer.TransferState.REQUESTED)) {
             return new TransferState.Requesting();
         }
         return new TransferState.Queued(0);
@@ -106,28 +108,28 @@ final class Transfers {
                 : new TransferOutcome.Failed(new IllegalStateException("the transfer did not finish"), true);
     }
 
-    private static TransferOutcome outcome(Transfer transfer, dev.slsk.internal.TransferState source) {
-        if (source.contains(dev.slsk.internal.TransferState.SUCCEEDED)) {
+    private static TransferOutcome outcome(Transfer transfer, dev.slsk.internal.transfer.TransferState source) {
+        if (source.contains(dev.slsk.internal.transfer.TransferState.SUCCEEDED)) {
             return new TransferOutcome.Succeeded(
                     transfer.getBytesTransferred(),
                     transfer.getElapsedTime() == null ? Duration.ZERO : transfer.getElapsedTime());
         }
-        if (source.contains(dev.slsk.internal.TransferState.CANCELLED)) {
+        if (source.contains(dev.slsk.internal.transfer.TransferState.CANCELLED)) {
             return new TransferOutcome.Cancelled();
         }
-        if (source.contains(dev.slsk.internal.TransferState.REJECTED)) {
+        if (source.contains(dev.slsk.internal.transfer.TransferState.REJECTED)) {
             Throwable cause = transfer.getException();
             String message = cause == null ? "" : String.valueOf(cause.getMessage());
             return new TransferOutcome.Rejected(RejectionReasons.parse(message), message);
         }
-        if (source.contains(dev.slsk.internal.TransferState.TIMED_OUT)) {
+        if (source.contains(dev.slsk.internal.transfer.TransferState.TIMED_OUT)) {
             return new TransferOutcome.Failed(
                     transfer.getException() == null
                             ? new java.util.concurrent.TimeoutException("the transfer timed out")
                             : transfer.getException(),
                     true);
         }
-        if (source.contains(dev.slsk.internal.TransferState.ABORTED)) {
+        if (source.contains(dev.slsk.internal.transfer.TransferState.ABORTED)) {
             // A size mismatch: the peer's advertised size cannot change
             // between attempts, so retrying re-requests the same file to fail
             // the same way, peer-visibly, up to the attempt cap. The C# source

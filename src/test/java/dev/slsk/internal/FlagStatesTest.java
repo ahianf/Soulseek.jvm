@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.search.SearchState;
+import dev.slsk.internal.transfer.TransferState;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

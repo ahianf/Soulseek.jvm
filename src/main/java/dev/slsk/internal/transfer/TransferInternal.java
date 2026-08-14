@@ -4,9 +4,6 @@
 
 package dev.slsk.internal.transfer;
 
-import dev.slsk.internal.Transfer;
-import dev.slsk.internal.TransferDirection;
-import dev.slsk.internal.TransferState;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Settlement;
 import dev.slsk.internal.common.WaitKey;

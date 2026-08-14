@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.transfer.TransferOutcome;
 import org.junit.jupiter.api.DisplayName;
@@ -26,8 +27,8 @@ class TransfersOutcomeTest {
     @Test
     @DisplayName("an aborted transfer maps to a failure that is not retried")
     void abortedIsNotRetryable() {
-        TransferOutcome outcome =
-                outcomeOf(dev.slsk.internal.TransferState.COMPLETED.or(dev.slsk.internal.TransferState.ABORTED));
+        TransferOutcome outcome = outcomeOf(dev.slsk.internal.transfer.TransferState.COMPLETED.or(
+                dev.slsk.internal.transfer.TransferState.ABORTED));
 
         TransferOutcome.Failed failed = assertInstanceOf(TransferOutcome.Failed.class, outcome);
         assertFalse(failed.retryable(), "the peer's advertised size cannot change between attempts");
@@ -36,8 +37,8 @@ class TransfersOutcomeTest {
     @Test
     @DisplayName("a plain error stays retryable")
     void erroredStaysRetryable() {
-        TransferOutcome outcome =
-                outcomeOf(dev.slsk.internal.TransferState.COMPLETED.or(dev.slsk.internal.TransferState.ERRORED));
+        TransferOutcome outcome = outcomeOf(dev.slsk.internal.transfer.TransferState.COMPLETED.or(
+                dev.slsk.internal.transfer.TransferState.ERRORED));
 
         TransferOutcome.Failed failed = assertInstanceOf(TransferOutcome.Failed.class, outcome);
         assertTrue(failed.retryable());
@@ -47,10 +48,11 @@ class TransfersOutcomeTest {
     void cancelledMapsToCancelled() {
         assertEquals(
                 new TransferOutcome.Cancelled(),
-                outcomeOf(dev.slsk.internal.TransferState.COMPLETED.or(dev.slsk.internal.TransferState.CANCELLED)));
+                outcomeOf(dev.slsk.internal.transfer.TransferState.COMPLETED.or(
+                        dev.slsk.internal.transfer.TransferState.CANCELLED)));
     }
 
-    private static TransferOutcome outcomeOf(dev.slsk.internal.TransferState state) {
+    private static TransferOutcome outcomeOf(dev.slsk.internal.transfer.TransferState state) {
         TransferInternal transfer = new TransferInternal(TransferDirection.DOWNLOAD, "alice", "file", 42);
         transfer.setState(state);
         return Transfers.outcomeOf(transfer.toTransfer());

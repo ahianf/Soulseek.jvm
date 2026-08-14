@@ -16,6 +16,7 @@ import dev.slsk.internal.common.Usernames;
 import dev.slsk.internal.messaging.handlers.PeerServices;
 import dev.slsk.internal.messaging.messages.TransferRequest;
 import dev.slsk.internal.options.TransferOptions;
+import dev.slsk.internal.transfer.Transfer;
 import dev.slsk.spi.TransferStore;
 import dev.slsk.transfer.Priority;
 import dev.slsk.transfer.TransferId;
@@ -142,7 +143,7 @@ final class DefaultDownloads implements Downloads {
         // and the sink is opened there, so a download interrupted at ninety
         // percent costs ten percent to finish rather than another whole file.
         long resumeFrom = entry.resumeOffset();
-        dev.slsk.internal.DownloadRequest internal = dev.slsk.internal.DownloadRequest.toStream(
+        dev.slsk.internal.transfer.DownloadRequest internal = dev.slsk.internal.transfer.DownloadRequest.toStream(
                         request.user().value(), request.path(), () -> {
                             try {
                                 SinkOutputStream opened = new SinkOutputStream(request.sink(), resumeFrom);

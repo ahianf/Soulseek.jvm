@@ -48,6 +48,7 @@ import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.search.SearchQuery;
 import dev.slsk.internal.search.SearchResponder;
 import dev.slsk.internal.search.SearchScope;
+import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.upload.Upload;
 import dev.slsk.user.Username;

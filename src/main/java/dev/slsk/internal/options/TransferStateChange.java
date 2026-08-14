@@ -4,8 +4,8 @@
 
 package dev.slsk.internal.options;
 
-import dev.slsk.internal.Transfer;
-import dev.slsk.internal.TransferState;
+import dev.slsk.internal.transfer.Transfer;
+import dev.slsk.internal.transfer.TransferState;
 import java.util.Objects;
 
 /**

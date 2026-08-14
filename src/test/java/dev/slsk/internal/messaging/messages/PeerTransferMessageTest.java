@@ -13,9 +13,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.exceptions.MessageReadException;
-import dev.slsk.internal.TransferDirection;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
+import dev.slsk.internal.transfer.TransferDirection;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

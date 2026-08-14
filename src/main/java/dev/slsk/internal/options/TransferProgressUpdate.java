@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.options;
 
-import dev.slsk.internal.Transfer;
+import dev.slsk.internal.transfer.Transfer;
 
 /**
  * A transfer progress callback payload.

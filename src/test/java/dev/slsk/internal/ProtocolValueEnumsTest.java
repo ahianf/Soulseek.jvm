@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import dev.slsk.internal.diagnostics.DiagnosticLevel;
 import dev.slsk.internal.search.SearchScopeType;
 import dev.slsk.internal.share.FileAttributeType;
+import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.user.UserPresence;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;

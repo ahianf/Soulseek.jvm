@@ -10,9 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
-import dev.slsk.internal.Transfer;
-import dev.slsk.internal.TransferDirection;
-import dev.slsk.internal.TransferState;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Monitors;
 import dev.slsk.internal.common.WaitKey;
