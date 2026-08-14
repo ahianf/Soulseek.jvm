@@ -801,15 +801,22 @@ public final class PeerNetwork implements PeerConnectionManager {
      * dependency, which is how the rest of this class waits.
      */
     private void retainSolicitationForLateAnswer(int solicitationToken, String username) {
-        NetworkExecutor.executor().execute(() -> {
-            try {
-                Thread.sleep(LATE_SOLICITATION_GRACE_MILLIS);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-            } finally {
-                pendingSolicitations.remove(solicitationToken, username);
-            }
-        });
+        try {
+            NetworkExecutor.executor().execute(() -> {
+                try {
+                    Thread.sleep(LATE_SOLICITATION_GRACE_MILLIS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    pendingSolicitations.remove(solicitationToken, username);
+                }
+            });
+        } catch (Throwable dispatchFailed) {
+            // This is called from a finally. Throwing here would replace the
+            // failure that finally is unwinding, and a grace window is not
+            // worth that: drop it and expire the token now.
+            pendingSolicitations.remove(solicitationToken, username);
+        }
     }
 
     private Connection establishOutboundDirectTransferConnection(
