@@ -450,9 +450,6 @@ final class UploadRun {
                     // Best-effort stream cleanup.
                 }
             }
-            if (!upload.getState().contains(TransferState.SUCCEEDED)) {
-                notifyUploadFailure();
-            }
         } finally {
             releasePermits();
             if (perUserSemaphore != null) {
@@ -460,6 +457,12 @@ final class UploadRun {
             }
             domain.uploads().remove(upload.getToken(), upload);
             domain.releaseUniqueKey(uniqueKey);
+        }
+        // After the permits, never before them. This used to sit inside the try
+        // above, so the courtesy notification was sent while the run still held
+        // the per-user semaphore, the upload slot and a global upload permit.
+        if (!upload.getState().contains(TransferState.SUCCEEDED)) {
+            notifyUploadFailure();
         }
     }
 
@@ -475,11 +478,30 @@ final class UploadRun {
         }
     }
 
+    /**
+     * Tells the peer their upload failed, if we can already reach them.
+     *
+     * <p>Over a connection we already hold, or not at all. It used to resolve
+     * the endpoint through the server and then call {@code
+     * getOrAddMessageConnection}, which is the full direct-plus-indirect
+     * establish — with {@link CancellationSignal#none()}, so nothing could cut
+     * it short. For a peer that had just gone unreachable that is a guaranteed
+     * wait of the whole indirect budget, and it bought nothing: an upload that
+     * failed <em>because</em> the peer could not be reached cannot then be told
+     * so. A recorded session spent ten seconds here on every one of forty
+     * attempts to one firewalled peer, doubling the cost of each retry.
+     *
+     * <p>Nicotine+ sends the same message on the same event ({@code
+     * uploads.py}, {@code send_message_to_peer}), but its send is a queue-and-
+     * return on an event loop. The blocking establish is this port's own, and
+     * it belongs to neither the run nor the slot it was holding.
+     */
     private void notifyUploadFailure() {
         try {
-            InetSocketAddress currentEndpoint = domain.endpoint(upload.getUsername(), CancellationSignal.none());
-            MessageConnection messageConnection = domain.peers()
-                    .getOrAddMessageConnection(upload.getUsername(), currentEndpoint, CancellationSignal.none());
+            MessageConnection messageConnection = domain.peers().getCachedMessageConnection(upload.getUsername());
+            if (messageConnection == null) {
+                return;
+            }
             OutgoingMessage message = upload.getState().contains(TransferState.CANCELLED)
                     ? new UploadDenied(upload.getFilename(), "Cancelled")
                     : new UploadFailed(upload.getFilename());

@@ -507,6 +507,81 @@ class EngineUploadTest {
         }
     }
 
+    /**
+     * The failure notification is a courtesy, and it is not allowed to cost the
+     * slot.
+     *
+     * <p>It used to resolve the endpoint and establish a message connection
+     * from inside the same {@code try} whose {@code finally} released the
+     * permits, so an unreachable peer held the per-user semaphore, the upload
+     * slot and a global upload permit for the whole indirect budget — on an
+     * upload that had just failed because that peer was unreachable. A recorded
+     * session paid ten seconds of it on each of forty attempts.
+     *
+     * <p>Both halves are pinned here: nothing is established to deliver the
+     * message, and the slot is already released by the time it is attempted.
+     */
+    @Test
+    void failureNotificationNeitherEstablishesAConnectionNorOutlivesTheSlot() {
+        try (Fixture fixture = new Fixture()) {
+            fixture.peerManager.messageConnectionCached = false;
+            fixture.waiter.transferResponse =
+                    CompletableFuture.failedFuture(new ConnectionException("peer is unreachable"));
+            // Everything the run does for its own sake happens before the slot
+            // goes back. Only what follows the release belongs to the
+            // notification, so that is what the counts are measured against.
+            AtomicInteger releases = new AtomicInteger();
+            AtomicInteger establishesAtRelease = new AtomicInteger(-1);
+            TransferOptions options = options(20, null, null, transfer -> {
+                releases.incrementAndGet();
+                establishesAtRelease.set(fixture.peerManager.establishes);
+            });
+
+            TransferOutcome outcome = fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+                            .token(44)
+                            .options(options)
+                            .build());
+
+            assertInstanceOf(TransferOutcome.Failed.class, outcome);
+            assertEquals(1, releases.get(), "the slot was acquired and released");
+            assertEquals(
+                    establishesAtRelease.get(),
+                    fixture.peerManager.establishes,
+                    "a failure notification must not dial the peer");
+            assertTrue(
+                    fixture.message.messages.stream().noneMatch(message -> message instanceof UploadFailed),
+                    "nothing is sent when no connection to the peer is already held");
+        }
+    }
+
+    /**
+     * The other side of the rule: a peer we can still reach is still told.
+     * Skipping the dial-out must not become skipping the message.
+     */
+    @Test
+    void failureNotificationStillGoesOutOverAConnectionAlreadyHeld() {
+        try (Fixture fixture = new Fixture()) {
+            fixture.waiter.transferResponse =
+                    CompletableFuture.failedFuture(new ConnectionException("transfer connection died"));
+            AtomicInteger establishesAtRelease = new AtomicInteger(-1);
+            TransferOptions options =
+                    options(20, null, null, transfer -> establishesAtRelease.set(fixture.peerManager.establishes));
+
+            fixture.client
+                    .transfers()
+                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+                            .token(45)
+                            .options(options)
+                            .build());
+
+            assertEquals(
+                    establishesAtRelease.get(), fixture.peerManager.establishes, "the cached connection is enough");
+            assertInstanceOf(UploadFailed.class, fixture.message.messages.get(fixture.message.messages.size() - 1));
+        }
+    }
+
     @Test
     void timeoutIsPreservedAndProducesTimedOutState() {
         try (Fixture fixture = new Fixture()) {
@@ -854,6 +929,18 @@ class EngineUploadTest {
         private final MessageConnection messageConnection;
         private final Connection transferConnection;
         private CancellationSignal transferToken;
+        /**
+         * Whether this peer already has a message connection in the cache.
+         *
+         * <p>True is the ordinary case — the run reached the peer to offer the
+         * file at all — and it is what keeps the notification assertions below
+         * meaningful. A test sets it false to model the peer that went
+         * unreachable, which is the case that must not provoke a dial-out.
+         */
+        private boolean messageConnectionCached = true;
+        /** Counts establishes, which a failure notification must never cause. */
+        private int establishes;
+
         private final PeerConnectionManager proxy = (PeerConnectionManager) Proxy.newProxyInstance(
                 PeerConnectionManager.class.getClassLoader(),
                 new Class<?>[] {PeerConnectionManager.class},
@@ -865,10 +952,14 @@ class EngineUploadTest {
         }
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
+            if (method.getName().equals("getCachedMessageConnection")) {
+                return messageConnectionCached ? messageConnection : null;
+            }
             if (method.getName().equals("getOrAddMessageConnection")
                     && arguments != null
                     && arguments.length == 3
                     && arguments[0] instanceof String) {
+                establishes++;
                 return messageConnection;
             }
             if (method.getName().equals("getTransferConnection")
