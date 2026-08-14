@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.slsk.search.SearchId;
 import dev.slsk.user.Username;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;

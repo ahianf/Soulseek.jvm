@@ -3,7 +3,7 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.SearchFile;
+import dev.slsk.search.SearchFile;
 import java.util.ArrayList;
 import java.util.List;
 

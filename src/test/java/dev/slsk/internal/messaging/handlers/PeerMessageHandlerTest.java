@@ -12,9 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
-import dev.slsk.FileAttributes;
 import dev.slsk.RejectionReason;
-import dev.slsk.SearchFile;
 import dev.slsk.ShareIndex;
 import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.exceptions.TransferRejectedException;
@@ -55,6 +53,8 @@ import dev.slsk.internal.network.MessageReceivedEvent;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.transfer.TransferInternal;
+import dev.slsk.search.FileAttributes;
+import dev.slsk.search.SearchFile;
 import dev.slsk.spi.ResolvedFile;
 import dev.slsk.spi.ShareCatalog;
 import dev.slsk.spi.UploadPolicy;

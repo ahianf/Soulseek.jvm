@@ -4,6 +4,10 @@
 package dev.slsk;
 
 import dev.slsk.events.SearchEvent;
+import dev.slsk.search.SearchId;
+import dev.slsk.search.SearchQuery;
+import dev.slsk.search.SearchResult;
+import dev.slsk.search.SearchSnapshot;
 import java.util.List;
 import java.util.function.Consumer;
 

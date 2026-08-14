@@ -3,9 +3,9 @@
 
 package dev.slsk.events;
 
-import dev.slsk.SearchId;
-import dev.slsk.SearchResponse;
-import dev.slsk.SearchStatus;
+import dev.slsk.search.SearchId;
+import dev.slsk.search.SearchResponse;
+import dev.slsk.search.SearchStatus;
 import dev.slsk.user.Username;
 import java.time.Instant;
 import java.util.List;

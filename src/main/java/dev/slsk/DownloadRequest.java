@@ -3,6 +3,7 @@
 
 package dev.slsk;
 
+import dev.slsk.search.SearchFile;
 import dev.slsk.spi.TransferSink;
 import dev.slsk.user.Username;
 import java.nio.file.Path;

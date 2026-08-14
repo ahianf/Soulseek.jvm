@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Ahian Fernandez
 // SPDX-License-Identifier: GPL-3.0-only
 
-package dev.slsk;
+package dev.slsk.search;
 
 /**
  * Whether a search is still running, and if not, why it stopped.

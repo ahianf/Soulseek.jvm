@@ -4,7 +4,7 @@
 package dev.slsk.user;
 
 import dev.slsk.Directory;
-import dev.slsk.SearchFile;
+import dev.slsk.search.SearchFile;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;

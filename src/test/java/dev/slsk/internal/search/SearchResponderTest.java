@@ -13,7 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
-import dev.slsk.SearchFile;
 import dev.slsk.internal.CacheLookupResult;
 import dev.slsk.internal.File;
 import dev.slsk.internal.SearchResponse;
@@ -35,6 +34,7 @@ import dev.slsk.internal.network.TransferConnectionResult;
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.SoulseekClientOptions;
+import dev.slsk.search.SearchFile;
 import dev.slsk.spi.ShareCatalog;
 import dev.slsk.user.Username;
 import java.lang.reflect.Proxy;
@@ -49,7 +49,7 @@ import org.junit.jupiter.api.Test;
 class SearchResponderTest {
     /** What the catalog matches, and what the responder must encode from it. */
     private static final List<SearchFile> MATCHES =
-            List.of(new SearchFile("shared\\song.mp3", 42L, dev.slsk.FileAttributes.none()));
+            List.of(new SearchFile("shared\\song.mp3", 42L, dev.slsk.search.FileAttributes.none()));
 
     private static SearchResponse expectedResponse(int token) {
         return dev.slsk.internal.Catalogs.searchResponse("me", token, MATCHES, true, 0, 0);
