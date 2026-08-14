@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.ConnectionState;
+import dev.slsk.connection.ConnectionState;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.LoginRejectedException;
 import dev.slsk.internal.diagnostics.DiagnosticSink;

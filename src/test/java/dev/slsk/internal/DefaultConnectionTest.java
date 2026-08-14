@@ -11,9 +11,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.Attachment;
 import dev.slsk.CancellationSignal;
-import dev.slsk.ConnectionState;
-import dev.slsk.ServerAddress;
 import dev.slsk.Soulseek;
+import dev.slsk.connection.ConnectionState;
+import dev.slsk.connection.ServerAddress;
 import dev.slsk.events.ConnectionEvent;
 import dev.slsk.exceptions.ConnectionReadException;
 import dev.slsk.exceptions.LoginRejectedException;

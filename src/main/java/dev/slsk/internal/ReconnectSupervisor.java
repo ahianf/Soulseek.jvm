@@ -3,7 +3,7 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.ConnectionState;
+import dev.slsk.connection.ConnectionState;
 import dev.slsk.exceptions.LoginRejectedException;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.diagnostics.DiagnosticSink;

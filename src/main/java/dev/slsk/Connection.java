@@ -3,6 +3,9 @@
 
 package dev.slsk;
 
+import dev.slsk.connection.ConnectionState;
+import dev.slsk.connection.ServerAddress;
+import dev.slsk.connection.ServerInfo;
 import dev.slsk.events.ConnectionEvent;
 import java.time.Duration;
 import java.util.Optional;

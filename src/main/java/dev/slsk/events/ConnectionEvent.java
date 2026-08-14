@@ -3,8 +3,8 @@
 
 package dev.slsk.events;
 
-import dev.slsk.ConnectionState;
-import dev.slsk.ServerInfo;
+import dev.slsk.connection.ConnectionState;
+import dev.slsk.connection.ServerInfo;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
