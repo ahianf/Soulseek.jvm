@@ -3,7 +3,7 @@
 
 package dev.slsk.internal.user;
 
-import dev.slsk.internal.CacheLookupResult;
+import dev.slsk.internal.common.CacheLookupResult;
 import java.net.InetSocketAddress;
 import java.util.Comparator;
 import java.util.List;

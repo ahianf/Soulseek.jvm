@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.internal.CacheLookupResult;
+import dev.slsk.internal.common.CacheLookupResult;
 import dev.slsk.internal.diagnostics.DiagnosticLevel;
 import dev.slsk.internal.search.SearchResponseCache;
 import dev.slsk.internal.search.SearchResponseCacheRecord;

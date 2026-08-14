@@ -15,6 +15,7 @@ import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.UserEndpointCacheException;
 import dev.slsk.exceptions.UserEndpointException;
 import dev.slsk.exceptions.UserOfflineException;
+import dev.slsk.internal.common.CacheLookupResult;
 import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;

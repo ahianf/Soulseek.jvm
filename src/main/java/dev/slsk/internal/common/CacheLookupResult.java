@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Ahian Fernandez
 // SPDX-License-Identifier: GPL-3.0-only
 
-package dev.slsk.internal;
+package dev.slsk.internal.common;
 
 /**
  * The result of a C#-style cache {@code TryGet} or {@code TryRemove}

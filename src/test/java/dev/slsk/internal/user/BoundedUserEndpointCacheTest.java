@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.internal.CacheLookupResult;
+import dev.slsk.internal.common.CacheLookupResult;
 import java.net.InetSocketAddress;
 import org.junit.jupiter.api.Test;
 

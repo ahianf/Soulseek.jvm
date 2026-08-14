@@ -5,7 +5,7 @@
 package dev.slsk.internal.network;
 
 import dev.slsk.exceptions.ConnectionException;
-import dev.slsk.internal.CacheLookupResult;
+import dev.slsk.internal.common.CacheLookupResult;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;

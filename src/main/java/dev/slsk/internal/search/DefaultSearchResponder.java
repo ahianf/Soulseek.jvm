@@ -5,7 +5,7 @@
 package dev.slsk.internal.search;
 
 import dev.slsk.CancellationSignal;
-import dev.slsk.internal.CacheLookupResult;
+import dev.slsk.internal.common.CacheLookupResult;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;

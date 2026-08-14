@@ -9,6 +9,7 @@ import dev.slsk.exceptions.UserEndpointCacheException;
 import dev.slsk.exceptions.UserEndpointException;
 import dev.slsk.exceptions.UserNotFoundException;
 import dev.slsk.exceptions.UserOfflineException;
+import dev.slsk.internal.common.CacheLookupResult;
 import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Failures;

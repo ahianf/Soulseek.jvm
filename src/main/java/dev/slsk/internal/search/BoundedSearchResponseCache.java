@@ -3,7 +3,7 @@
 
 package dev.slsk.internal.search;
 
-import dev.slsk.internal.CacheLookupResult;
+import dev.slsk.internal.common.CacheLookupResult;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;

@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.search;
 
-import dev.slsk.internal.CacheLookupResult;
+import dev.slsk.internal.common.CacheLookupResult;
 import java.util.function.Consumer;
 
 /** A cache for undelivered search responses. */
