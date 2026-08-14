@@ -183,7 +183,22 @@ public final class DefaultListenerHandler implements ListenerHandler {
                     + connection.getIpEndpoint().getAddress().getHostAddress()
                     + ":" + listener.get().getPort()
                     + ") (id: " + connection.getId() + ")");
-            waiter.complete(new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, token), connection);
+            WaitKey waitKey = new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, token);
+            if (waiter.hasWait(waitKey)) {
+                waiter.complete(waitKey, connection);
+            } else {
+                // Answered, just not in time. Whatever solicited this has
+                // already given up, but the peer did the work and the socket is
+                // open — and for a peer we cannot dial, one they opened is the
+                // only kind there is. Caching it is what makes the next attempt
+                // cost nothing; closing it, as this used to, made the next
+                // attempt solicit all over again.
+                diagnostic.debug("Peer PierceFirewall with token " + token
+                        + " from " + username + " arrived after its solicitation "
+                        + "lapsed; caching the connection (id: "
+                        + connection.getId() + ")");
+                peers.get().addOrUpdateMessageConnection(username, connection);
+            }
             return;
         }
 

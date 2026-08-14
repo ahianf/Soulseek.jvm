@@ -10,6 +10,7 @@ import dev.slsk.CancellationSubscription;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.internal.ServerLink;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
@@ -58,6 +59,15 @@ import java.util.function.Supplier;
  * is gone.
  */
 public final class PeerNetwork implements PeerConnectionManager {
+
+    /**
+     * How long a lapsed solicitation stays resolvable, in milliseconds.
+     *
+     * <p>Long enough to cover a peer that answered just past the deadline,
+     * short enough that the map does not accumulate. See {@link
+     * #retainSolicitationForLateAnswer}.
+     */
+    private static final long LATE_SOLICITATION_GRACE_MILLIS = 20_000;
 
     /**
      * The live options, not a snapshot of them.
@@ -722,18 +732,20 @@ public final class PeerNetwork implements PeerConnectionManager {
             String username, int solicitationToken, CancellationSignal cancellationSignal) {
         diagnostic.debug("Soliciting indirect message connection to " + username + " with token " + solicitationToken);
         pendingSolicitations.putIfAbsent(solicitationToken, username);
+        boolean answered = false;
         try {
             // Registered before the request that provokes it: the peer can be
             // knocking on the listener before this write returns.
             Wait<Connection> wait = waiter.register(
                     new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),
                     Connection.class,
-                    options.get().getPeerConnectionOptions().getConnectTimeout(),
+                    options.get().getPeerConnectionOptions().getIndirectSolicitationTimeout(),
                     cancellationSignal);
             server.write(
                     new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.PEER),
                     cancellationSignal);
             Connection accepted = wait.await();
+            answered = true;
             try {
                 MessageConnection connection = connectionFactory.getMessageConnection(
                         username,
@@ -761,8 +773,43 @@ public final class PeerNetwork implements PeerConnectionManager {
                     + ": " + message(unwrap(failure)));
             throw new CompletionException(unwrap(failure));
         } finally {
-            pendingSolicitations.remove(solicitationToken, username);
+            if (answered) {
+                pendingSolicitations.remove(solicitationToken, username);
+            } else {
+                retainSolicitationForLateAnswer(solicitationToken, username);
+            }
         }
+    }
+
+    /**
+     * Keeps a lapsed solicitation resolvable for a while longer.
+     *
+     * <p>The token is the only thing that names the peer behind an inbound
+     * PierceFirewall, so dropping it the instant the wait expired turned every
+     * late answer into an unknown one: the listener could not say who had
+     * connected, and closed a connection the peer had just successfully made.
+     * One recorded session did that 2,598 times.
+     *
+     * <p>The wait is gone either way — whatever provoked the solicitation has
+     * already failed — but the connection need not be. {@code
+     * DefaultListenerHandler} adopts it into the cache instead, so the next
+     * attempt at this peer starts from a connection that is already open.
+     * Transfer solicitations get no such grace: a transfer connection with no
+     * transfer waiting on it has nothing to carry.
+     *
+     * <p>The removal parks a virtual thread rather than taking a scheduler
+     * dependency, which is how the rest of this class waits.
+     */
+    private void retainSolicitationForLateAnswer(int solicitationToken, String username) {
+        NetworkExecutor.executor().execute(() -> {
+            try {
+                Thread.sleep(LATE_SOLICITATION_GRACE_MILLIS);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            } finally {
+                pendingSolicitations.remove(solicitationToken, username);
+            }
+        });
     }
 
     private Connection establishOutboundDirectTransferConnection(
@@ -802,7 +849,7 @@ public final class PeerNetwork implements PeerConnectionManager {
             Wait<Connection> wait = waiter.register(
                     new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),
                     Connection.class,
-                    options.get().getTransferConnectionOptions().getConnectTimeout(),
+                    options.get().getTransferConnectionOptions().getIndirectSolicitationTimeout(),
                     cancellationSignal);
             server.write(
                     new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.TRANSFER),

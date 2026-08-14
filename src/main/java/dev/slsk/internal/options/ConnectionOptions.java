@@ -18,6 +18,20 @@ public class ConnectionOptions {
     public static final int DEFAULT_WRITE_QUEUE_SIZE = 250;
     /** Default connection timeout in milliseconds. */
     public static final int DEFAULT_CONNECT_TIMEOUT = 10_000;
+    /**
+     * Floor for the wait on an answer to a solicited indirect connection.
+     *
+     * <p>Not a connect timeout, which is what that wait used to be given. A
+     * direct connect is one round trip to a host that is either listening or
+     * not; a solicitation goes to the server, is relayed, is noticed by a peer
+     * that may be busy, and only then comes back as a PierceFirewall. Charging
+     * the second to the first's budget writes off peers that were answering.
+     *
+     * <p>Twenty seconds is Nicotine+'s {@code INDIRECT_REQUEST_TIMEOUT}. One
+     * recorded peer on a mobile link answered between 0.6 and 7.3 seconds when
+     * it answered at all, against a ten-second budget.
+     */
+    public static final int DEFAULT_INDIRECT_SOLICITATION_TIMEOUT = 20_000;
     /** Default inactivity timeout in milliseconds. */
     public static final int DEFAULT_INACTIVITY_TIMEOUT = 15_000;
     /**
@@ -195,6 +209,20 @@ public class ConnectionOptions {
      */
     public final int getConnectTimeout() {
         return connectTimeout;
+    }
+
+    /**
+     * Returns how long to wait for an answer to a solicited indirect connection.
+     *
+     * <p>The configured connect timeout or {@link
+     * #DEFAULT_INDIRECT_SOLICITATION_TIMEOUT}, whichever is longer: a consumer
+     * that raises the connect timeout means connections here are slow, which is
+     * a reason to wait longer for the relayed path too, never less.
+     *
+     * @return the timeout in milliseconds
+     */
+    public final int getIndirectSolicitationTimeout() {
+        return Math.max(connectTimeout, DEFAULT_INDIRECT_SOLICITATION_TIMEOUT);
     }
 
     /**

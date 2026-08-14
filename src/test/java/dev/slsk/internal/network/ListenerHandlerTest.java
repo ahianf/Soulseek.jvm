@@ -143,6 +143,31 @@ class ListenerHandlerTest {
         }
     }
 
+    /**
+     * A PierceFirewall whose solicitation has already lapsed is still the peer
+     * doing what we asked, on a socket they opened.
+     *
+     * <p>It used to fall past the pending-solicitation branch into the
+     * unknown-token throw, which closed it — so a peer we could not dial had
+     * its one usable connection discarded and the next attempt solicited from
+     * scratch. One recorded session closed 2,598 of them.
+     */
+    @Test
+    void latePeerPierceFirewallIsCachedRatherThanClosed() throws Exception {
+        try (Fixture fixture = fixture(null)) {
+            // The token still resolves to the peer; only the wait is gone.
+            fixture.peer.pending = Map.of(8, "alice");
+            ConnectionProbe peer = ConnectionProbe.message(new PierceFirewall(8).toByteArray());
+
+            fixture.handler.handleConnection(null, peer.proxy);
+
+            assertEquals("alice", fixture.peer.addedUsername);
+            assertSame(peer.proxy, fixture.peer.addedConnection);
+            assertNull(peer.disconnectMessage);
+            assertFalse(peer.closed);
+        }
+    }
+
     @Test
     void cachedSearchPierceAddsConnectionThenResponds() throws Exception {
         TestCache cache = new TestCache();

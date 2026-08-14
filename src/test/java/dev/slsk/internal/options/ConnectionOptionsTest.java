@@ -44,6 +44,18 @@ class ConnectionOptionsTest {
         }
     }
 
+    /**
+     * The relayed path gets its own budget, and never a shorter one than the
+     * direct connect it used to borrow.
+     */
+    @Test
+    @DisplayName("Indirect solicitation waits at least twenty seconds")
+    void indirectSolicitationTimeoutFloorsAtTwentySeconds() {
+        assertEquals(20_000, new ConnectionOptions().getIndirectSolicitationTimeout());
+        assertEquals(20_000, new ConnectionOptions(1, 1, 1, 5_000, 1).getIndirectSolicitationTimeout());
+        assertEquals(45_000, new ConnectionOptions(1, 1, 1, 45_000, 1).getIndirectSolicitationTimeout());
+    }
+
     @Test
     @DisplayName("Optional overloads preserve trailing defaults")
     void optionalOverloadsPreserveTrailingDefaults() {
