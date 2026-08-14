@@ -3,13 +3,13 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.BrowseResponse;
-import dev.slsk.Directory;
-import dev.slsk.RemotePath;
-import dev.slsk.ShareIndex;
-import dev.slsk.SharedFolder;
 import dev.slsk.search.FileAttributes;
 import dev.slsk.search.SearchFile;
+import dev.slsk.share.BrowseResponse;
+import dev.slsk.share.Directory;
+import dev.slsk.share.RemotePath;
+import dev.slsk.share.ShareIndex;
+import dev.slsk.share.SharedFolder;
 import dev.slsk.spi.ResolvedFile;
 import dev.slsk.spi.ShareCatalog;
 import dev.slsk.user.Username;

@@ -4,7 +4,6 @@
 package dev.slsk.internal;
 
 import dev.slsk.CancellationSignal;
-import dev.slsk.Directory;
 import dev.slsk.EventStream;
 import dev.slsk.Users;
 import dev.slsk.events.UserEvent;
@@ -15,6 +14,7 @@ import dev.slsk.internal.options.BrowseOptions;
 import dev.slsk.internal.options.BrowseProgressCallback;
 import dev.slsk.search.FileAttributes;
 import dev.slsk.search.SearchFile;
+import dev.slsk.share.Directory;
 import dev.slsk.user.Browse;
 import dev.slsk.user.BrowseProgress;
 import dev.slsk.user.BrowseRequest;

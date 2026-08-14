@@ -274,12 +274,12 @@ class SearchResponderTest {
         Fixture fixture = fixture(cache);
         fixture.client.catalog = new ShareCatalog() {
             @Override
-            public dev.slsk.BrowseResponse browse(Username requester) {
-                return dev.slsk.BrowseResponse.empty();
+            public dev.slsk.share.BrowseResponse browse(Username requester) {
+                return dev.slsk.share.BrowseResponse.empty();
             }
 
             @Override
-            public List<dev.slsk.Directory> directory(Username requester, String path) {
+            public List<dev.slsk.share.Directory> directory(Username requester, String path) {
                 return List.of();
             }
 
@@ -297,8 +297,8 @@ class SearchResponderTest {
             }
 
             @Override
-            public dev.slsk.ShareIndex index() {
-                return dev.slsk.ShareIndex.empty();
+            public dev.slsk.share.ShareIndex index() {
+                return dev.slsk.share.ShareIndex.empty();
             }
         };
         return fixture;

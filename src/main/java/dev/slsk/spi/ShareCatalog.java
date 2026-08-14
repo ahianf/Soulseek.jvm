@@ -3,10 +3,10 @@
 
 package dev.slsk.spi;
 
-import dev.slsk.BrowseResponse;
-import dev.slsk.Directory;
-import dev.slsk.ShareIndex;
 import dev.slsk.search.SearchFile;
+import dev.slsk.share.BrowseResponse;
+import dev.slsk.share.Directory;
+import dev.slsk.share.ShareIndex;
 import dev.slsk.user.Username;
 import java.util.List;
 import java.util.Optional;

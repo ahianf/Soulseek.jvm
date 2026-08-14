@@ -5,10 +5,10 @@ package dev.slsk.internal;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.EventStream;
-import dev.slsk.ShareIndex;
-import dev.slsk.SharedFolder;
 import dev.slsk.Shares;
 import dev.slsk.events.ShareEvent;
+import dev.slsk.share.ShareIndex;
+import dev.slsk.share.SharedFolder;
 import dev.slsk.spi.ShareCatalog;
 import java.io.IOException;
 import java.nio.file.Files;

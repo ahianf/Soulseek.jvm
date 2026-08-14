@@ -4,6 +4,7 @@
 package dev.slsk;
 
 import dev.slsk.events.UserEvent;
+import dev.slsk.share.Directory;
 import dev.slsk.user.Browse;
 import dev.slsk.user.BrowseRequest;
 import dev.slsk.user.UserInfo;

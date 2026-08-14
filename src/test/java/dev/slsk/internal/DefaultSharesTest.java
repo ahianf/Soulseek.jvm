@@ -8,14 +8,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.BrowseResponse;
 import dev.slsk.CancellationSignal;
-import dev.slsk.Directory;
-import dev.slsk.ShareIndex;
-import dev.slsk.SharedFolder;
 import dev.slsk.Soulseek;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.search.SearchFile;
+import dev.slsk.share.BrowseResponse;
+import dev.slsk.share.Directory;
+import dev.slsk.share.ShareIndex;
+import dev.slsk.share.SharedFolder;
 import dev.slsk.spi.ResolvedFile;
 import dev.slsk.spi.ShareCatalog;
 import dev.slsk.user.Username;

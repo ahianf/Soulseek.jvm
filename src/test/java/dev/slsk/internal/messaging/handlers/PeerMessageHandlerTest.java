@@ -13,7 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.RejectionReason;
-import dev.slsk.ShareIndex;
 import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
@@ -55,6 +54,7 @@ import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.search.FileAttributes;
 import dev.slsk.search.SearchFile;
+import dev.slsk.share.ShareIndex;
 import dev.slsk.spi.ResolvedFile;
 import dev.slsk.spi.ShareCatalog;
 import dev.slsk.spi.UploadPolicy;
@@ -205,12 +205,12 @@ class PeerMessageHandlerTest {
         java.util.concurrent.atomic.AtomicInteger askedLimit = new java.util.concurrent.atomic.AtomicInteger(-1);
         Fixture fixture = new Fixture(new ShareCatalog() {
             @Override
-            public dev.slsk.BrowseResponse browse(Username requester) {
-                return dev.slsk.BrowseResponse.empty();
+            public dev.slsk.share.BrowseResponse browse(Username requester) {
+                return dev.slsk.share.BrowseResponse.empty();
             }
 
             @Override
-            public List<dev.slsk.Directory> directory(Username requester, String path) {
+            public List<dev.slsk.share.Directory> directory(Username requester, String path) {
                 return List.of();
             }
 
@@ -281,14 +281,16 @@ class PeerMessageHandlerTest {
 
     @Test
     void browseWritesTheCatalogsShareAndAnswersEmptyWhenItFails() {
-        dev.slsk.Directory shared =
-                new dev.slsk.Directory("shared", List.of(new SearchFile("shared\\song.mp3", 7, FileAttributes.none())));
-        Fixture resolved = new Fixture(catalog(requester -> dev.slsk.BrowseResponse.of(List.of(shared)), null, null));
+        dev.slsk.share.Directory shared = new dev.slsk.share.Directory(
+                "shared", List.of(new SearchFile("shared\\song.mp3", 7, FileAttributes.none())));
+        Fixture resolved =
+                new Fixture(catalog(requester -> dev.slsk.share.BrowseResponse.of(List.of(shared)), null, null));
 
         resolved.handler.handleMessageRead(resolved.connection.proxy, new BrowseRequest().toByteArray());
 
         assertArrayEquals(
-                Catalogs.browse(dev.slsk.BrowseResponse.of(List.of(shared))).toByteArray(),
+                Catalogs.browse(dev.slsk.share.BrowseResponse.of(List.of(shared)))
+                        .toByteArray(),
                 resolved.connection.bytes.getFirst());
 
         // A catalog that throws is a bug in the application. Leaving the peer
@@ -307,8 +309,8 @@ class PeerMessageHandlerTest {
 
     @Test
     void folderRequestWritesTheCatalogsContentsAndAFailureOnlyWarns() {
-        dev.slsk.Directory shared =
-                new dev.slsk.Directory("shared", List.of(new SearchFile(FILENAME, 123L, FileAttributes.none())));
+        dev.slsk.share.Directory shared =
+                new dev.slsk.share.Directory("shared", List.of(new SearchFile(FILENAME, 123L, FileAttributes.none())));
         Fixture resolved = new Fixture(catalog(null, (requester, path) -> List.of(shared), null));
 
         resolved.handler.handleMessageRead(
@@ -551,17 +553,17 @@ class PeerMessageHandlerTest {
     }
 
     private static ShareCatalog catalog(
-            Function<Username, dev.slsk.BrowseResponse> browse,
-            BiFunction<Username, String, List<dev.slsk.Directory>> directory,
+            Function<Username, dev.slsk.share.BrowseResponse> browse,
+            BiFunction<Username, String, List<dev.slsk.share.Directory>> directory,
             BiFunction<Username, String, List<SearchFile>> search) {
         return new ShareCatalog() {
             @Override
-            public dev.slsk.BrowseResponse browse(Username requester) {
-                return browse == null ? dev.slsk.BrowseResponse.empty() : browse.apply(requester);
+            public dev.slsk.share.BrowseResponse browse(Username requester) {
+                return browse == null ? dev.slsk.share.BrowseResponse.empty() : browse.apply(requester);
             }
 
             @Override
-            public List<dev.slsk.Directory> directory(Username requester, String path) {
+            public List<dev.slsk.share.Directory> directory(Username requester, String path) {
                 return directory == null ? List.of() : directory.apply(requester, path);
             }
 

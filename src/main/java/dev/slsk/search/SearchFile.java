@@ -3,7 +3,7 @@
 
 package dev.slsk.search;
 
-import dev.slsk.RemotePath;
+import dev.slsk.share.RemotePath;
 import java.util.Objects;
 
 /**

@@ -9,10 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.Connection;
-import dev.slsk.ShareIndex;
-import dev.slsk.SharedFolder;
 import dev.slsk.Soulseek;
 import dev.slsk.internal.options.SoulseekClientOptions;
+import dev.slsk.share.ShareIndex;
+import dev.slsk.share.SharedFolder;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;

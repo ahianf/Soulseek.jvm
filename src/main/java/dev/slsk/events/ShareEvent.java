@@ -3,7 +3,7 @@
 
 package dev.slsk.events;
 
-import dev.slsk.ShareIndex;
+import dev.slsk.share.ShareIndex;
 import dev.slsk.user.Username;
 import java.time.Instant;
 import java.util.Objects;

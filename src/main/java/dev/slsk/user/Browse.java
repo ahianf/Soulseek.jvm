@@ -3,8 +3,8 @@
 
 package dev.slsk.user;
 
-import dev.slsk.Directory;
 import dev.slsk.search.SearchFile;
+import dev.slsk.share.Directory;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;

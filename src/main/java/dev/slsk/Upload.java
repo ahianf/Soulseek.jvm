@@ -3,6 +3,7 @@
 
 package dev.slsk;
 
+import dev.slsk.share.RemotePath;
 import dev.slsk.user.Username;
 import java.time.Instant;
 import java.util.Objects;

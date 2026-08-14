@@ -4,6 +4,8 @@
 package dev.slsk;
 
 import dev.slsk.events.ShareEvent;
+import dev.slsk.share.ShareIndex;
+import dev.slsk.share.SharedFolder;
 import dev.slsk.spi.ShareCatalog;
 import java.util.List;
 

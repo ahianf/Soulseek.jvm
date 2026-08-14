@@ -4,6 +4,7 @@
 package dev.slsk;
 
 import dev.slsk.diagnostics.DiagnosticLevel;
+import dev.slsk.share.SharedFolder;
 import dev.slsk.spi.ShareCatalog;
 import dev.slsk.spi.TransferStore;
 import dev.slsk.spi.UploadPolicy;
