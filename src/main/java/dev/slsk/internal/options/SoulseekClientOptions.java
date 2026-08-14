@@ -5,8 +5,8 @@
 package dev.slsk.internal.options;
 
 import dev.slsk.internal.SearchResponseCache;
-import dev.slsk.internal.UserEndpointCache;
 import dev.slsk.internal.diagnostics.DiagnosticLevel;
+import dev.slsk.internal.user.UserEndpointCache;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Objects;
@@ -289,7 +289,7 @@ public class SoulseekClientOptions {
         // the server can tell us, peers search us repeatedly, and without a
         // cache every answer costs a lookup the server has already answered.
         this.userEndpointCache =
-                userEndpointCache == null ? new dev.slsk.internal.BoundedUserEndpointCache() : userEndpointCache;
+                userEndpointCache == null ? new dev.slsk.internal.user.BoundedUserEndpointCache() : userEndpointCache;
         // Defaulted rather than left null: without a cache we silently answer
         // fewer searches than we think we do, and which searches is decided by
         // whether the peer is behind NAT.

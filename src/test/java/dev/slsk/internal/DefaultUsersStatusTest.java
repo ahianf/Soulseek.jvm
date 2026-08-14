@@ -53,7 +53,7 @@ class DefaultUsersStatusTest {
 
             fixture.client.raiseEvent(
                     EngineEvents.Kind.USER_STATUS_CHANGED,
-                    new dev.slsk.internal.UserStatus("bob", dev.slsk.internal.UserPresence.ONLINE, true));
+                    new dev.slsk.internal.user.UserStatus("bob", dev.slsk.internal.user.UserPresence.ONLINE, true));
 
             assertTrue(received.await(5, TimeUnit.SECONDS), "the status change was never published");
             assertEquals(UserPresence.ONLINE, watch.status().presence(), "the watch snapshot moved");

@@ -234,7 +234,7 @@ final class DefaultRooms implements Rooms {
         return user(Username.of(event.getUsername()), event.getUserData());
     }
 
-    private static RoomUser user(Username name, dev.slsk.internal.UserData data) {
+    private static RoomUser user(Username name, dev.slsk.internal.user.UserData data) {
         if (data == null) {
             return new RoomUser(
                     name,

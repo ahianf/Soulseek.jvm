@@ -18,7 +18,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import dev.slsk.internal.TransferDirection;
-import dev.slsk.internal.UserPresence;
+import dev.slsk.internal.user.UserPresence;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.messages.*;
 

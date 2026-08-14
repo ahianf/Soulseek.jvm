@@ -4,10 +4,10 @@
 
 package dev.slsk.internal.messaging.messages;
 
-import dev.slsk.internal.UserPresence;
-import dev.slsk.internal.UserStatus;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
+import dev.slsk.internal.user.UserPresence;
+import dev.slsk.internal.user.UserStatus;
 
 /** Parses responses to user-status requests. */
 public final class UserStatusResponseFactory {

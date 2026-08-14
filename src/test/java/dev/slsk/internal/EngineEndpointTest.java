@@ -27,6 +27,7 @@ import dev.slsk.internal.messaging.messages.UserAddressRequest;
 import dev.slsk.internal.messaging.messages.UserAddressResponse;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.options.SoulseekClientOptions;
+import dev.slsk.internal.user.UserEndpointCache;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.net.InetAddress;

@@ -4,8 +4,8 @@
 
 package dev.slsk.internal.events;
 
-import dev.slsk.internal.UserData;
 import dev.slsk.internal.messaging.messages.UserJoinedRoomNotification;
+import dev.slsk.internal.user.UserData;
 
 /**
  * Event arguments raised when a user joins a chat room.

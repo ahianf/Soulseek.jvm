@@ -11,9 +11,9 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import dev.slsk.internal.UserPresence;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.messages.*;
+import dev.slsk.internal.user.UserPresence;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import org.junit.jupiter.api.DisplayName;

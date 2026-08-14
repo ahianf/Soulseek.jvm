@@ -4,6 +4,7 @@
 
 package dev.slsk.internal;
 
+import dev.slsk.internal.user.UserData;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;

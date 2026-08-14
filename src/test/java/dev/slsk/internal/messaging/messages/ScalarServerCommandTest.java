@@ -7,9 +7,9 @@ package dev.slsk.internal.messaging.messages;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import dev.slsk.internal.UserPresence;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
+import dev.slsk.internal.user.UserPresence;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

@@ -28,6 +28,7 @@ import dev.slsk.internal.messaging.messages.StartPublicChatCommand;
 import dev.slsk.internal.messaging.messages.StopPublicChatCommand;
 import dev.slsk.internal.messaging.messages.UnwatchUserCommand;
 import dev.slsk.internal.network.MessageConnection;
+import dev.slsk.internal.user.UserPresence;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;

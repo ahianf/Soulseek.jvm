@@ -26,6 +26,7 @@ import dev.slsk.internal.messaging.messages.SetSharedCountsCommand;
 import dev.slsk.internal.messaging.messages.StartPublicChatCommand;
 import dev.slsk.internal.messaging.messages.StopPublicChatCommand;
 import dev.slsk.internal.network.MessageConnection;
+import dev.slsk.internal.user.UserPresence;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 

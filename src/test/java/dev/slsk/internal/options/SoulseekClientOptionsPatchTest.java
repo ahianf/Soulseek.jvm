@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import dev.slsk.internal.CacheLookupResult;
 import dev.slsk.internal.SearchResponseCache;
 import dev.slsk.internal.SearchResponseCacheRecord;
-import dev.slsk.internal.UserEndpointCache;
+import dev.slsk.internal.user.UserEndpointCache;
 import java.net.InetAddress;
 import org.junit.jupiter.api.Test;
 

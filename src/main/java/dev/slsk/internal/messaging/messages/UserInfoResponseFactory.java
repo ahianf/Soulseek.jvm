@@ -5,10 +5,10 @@
 package dev.slsk.internal.messaging.messages;
 
 import dev.slsk.exceptions.MessageException;
-import dev.slsk.internal.UserInfo;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
+import dev.slsk.internal.user.UserInfo;
 import java.util.Objects;
 
 /** Serializes and parses user-info response messages. */

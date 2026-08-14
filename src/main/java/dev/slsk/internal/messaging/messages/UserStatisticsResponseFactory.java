@@ -4,9 +4,9 @@
 
 package dev.slsk.internal.messaging.messages;
 
-import dev.slsk.internal.UserStatistics;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
+import dev.slsk.internal.user.UserStatistics;
 
 /** Parses responses to user-statistics requests. */
 public final class UserStatisticsResponseFactory {

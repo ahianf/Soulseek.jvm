@@ -4,10 +4,10 @@
 
 package dev.slsk.internal.messaging.messages;
 
-import dev.slsk.internal.UserData;
-import dev.slsk.internal.UserPresence;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
+import dev.slsk.internal.user.UserData;
+import dev.slsk.internal.user.UserPresence;
 
 /** The response to a request to watch a user. */
 public final class WatchUserResponse implements IncomingMessage {
