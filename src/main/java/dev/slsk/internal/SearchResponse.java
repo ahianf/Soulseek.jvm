@@ -5,6 +5,7 @@
 package dev.slsk.internal;
 
 import dev.slsk.internal.messaging.messages.SearchResponseFactory;
+import dev.slsk.internal.share.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;

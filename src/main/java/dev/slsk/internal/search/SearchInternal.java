@@ -231,11 +231,11 @@ public final class SearchInternal implements AutoCloseable {
                         return;
                     }
 
-                    List<dev.slsk.internal.File> files = stream(response.getFiles())
+                    List<dev.slsk.internal.share.File> files = stream(response.getFiles())
                             .filter(file -> options.getFileFilter() == null
                                     || options.getFileFilter().test(file))
                             .toList();
-                    List<dev.slsk.internal.File> lockedFiles = stream(response.getLockedFiles())
+                    List<dev.slsk.internal.share.File> lockedFiles = stream(response.getLockedFiles())
                             .filter(file -> options.getFileFilter() == null
                                     || options.getFileFilter().test(file))
                             .toList();

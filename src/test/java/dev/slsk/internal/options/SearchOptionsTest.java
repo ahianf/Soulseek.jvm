@@ -10,10 +10,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.internal.File;
 import dev.slsk.internal.Search;
 import dev.slsk.internal.SearchResponse;
 import dev.slsk.internal.SearchState;
+import dev.slsk.internal.share.File;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;

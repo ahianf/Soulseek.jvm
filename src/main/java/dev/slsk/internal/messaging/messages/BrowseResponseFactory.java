@@ -5,11 +5,11 @@
 package dev.slsk.internal.messaging.messages;
 
 import dev.slsk.exceptions.MessageException;
-import dev.slsk.internal.BrowseResponse;
-import dev.slsk.internal.Directory;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
+import dev.slsk.internal.share.BrowseResponse;
+import dev.slsk.internal.share.Directory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;

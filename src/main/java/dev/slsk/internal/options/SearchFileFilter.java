@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.options;
 
-import dev.slsk.internal.File;
+import dev.slsk.internal.share.File;
 
 /** Determines whether a file is accepted from a search response. */
 @FunctionalInterface

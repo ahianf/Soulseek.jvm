@@ -171,12 +171,12 @@ final class DefaultSearch implements Search {
 
     // --- translation -------------------------------------------------------
 
-    private static FileAttributes attributes(dev.slsk.internal.File file) {
+    private static FileAttributes attributes(dev.slsk.internal.share.File file) {
         if (file.getAttributes() == null) {
             return FileAttributes.none();
         }
         Map<FileAttributeType, Integer> raw = new HashMap<>();
-        for (dev.slsk.internal.FileAttribute attribute : file.getAttributes()) {
+        for (dev.slsk.internal.share.FileAttribute attribute : file.getAttributes()) {
             FileAttributeType type =
                     FileAttributeType.fromCode(attribute.getType().getValue());
             if (type != null) {
@@ -186,7 +186,7 @@ final class DefaultSearch implements Search {
         return new FileAttributes(raw);
     }
 
-    private static SearchFile file(dev.slsk.internal.File source) {
+    private static SearchFile file(dev.slsk.internal.share.File source) {
         return new SearchFile(source.getFilename(), source.getSize(), attributes(source));
     }
 

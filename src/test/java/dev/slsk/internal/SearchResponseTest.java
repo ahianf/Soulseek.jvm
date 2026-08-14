@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import dev.slsk.internal.share.File;
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.List;

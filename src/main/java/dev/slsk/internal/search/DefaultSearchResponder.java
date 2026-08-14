@@ -6,7 +6,6 @@ package dev.slsk.internal.search;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.internal.CacheLookupResult;
-import dev.slsk.internal.Catalogs;
 import dev.slsk.internal.RawSearchResponse;
 import dev.slsk.internal.SearchResponse;
 import dev.slsk.internal.SearchResponseCache;
@@ -21,6 +20,7 @@ import dev.slsk.internal.events.SearchRequestResponseEvent;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.PeerConnectionManager;
 import dev.slsk.internal.options.SoulseekClientOptions;
+import dev.slsk.internal.share.Catalogs;
 import java.net.InetSocketAddress;
 import java.util.Objects;
 import java.util.concurrent.CompletionException;

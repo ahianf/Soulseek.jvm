@@ -31,6 +31,8 @@ import dev.slsk.internal.messaging.messages.WatchUserRequest;
 import dev.slsk.internal.messaging.messages.WatchUserResponse;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.options.BrowseOptions;
+import dev.slsk.internal.share.BrowseResponse;
+import dev.slsk.internal.share.Directory;
 import dev.slsk.internal.user.UserData;
 import dev.slsk.internal.user.UserEndpointCache;
 import dev.slsk.internal.user.UserInfo;

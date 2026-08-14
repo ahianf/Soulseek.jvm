@@ -45,6 +45,8 @@ import dev.slsk.internal.network.PeerConnectionManager;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.internal.network.tcp.ConnectionEventListener;
 import dev.slsk.internal.options.BrowseOptions;
+import dev.slsk.internal.share.BrowseResponse;
+import dev.slsk.internal.share.Directory;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.internal.user.UserInfo;
 import java.lang.reflect.Method;

@@ -25,6 +25,7 @@ import dev.slsk.internal.messaging.messages.WishlistSearchRequest;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.options.SearchOptions;
 import dev.slsk.internal.search.SearchInternal;
+import dev.slsk.internal.share.File;
 import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
