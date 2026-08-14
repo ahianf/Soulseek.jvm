@@ -8,8 +8,6 @@ import dev.slsk.CancellationController;
 import dev.slsk.CancellationSignal;
 import dev.slsk.CancellationSubscription;
 import dev.slsk.exceptions.ConnectionException;
-import dev.slsk.internal.DistributedNetworkInfo;
-import dev.slsk.internal.DistributedPeer;
 import dev.slsk.internal.ServerLink;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Failures;

@@ -5,7 +5,6 @@
 package dev.slsk.internal.network;
 
 import dev.slsk.CancellationSignal;
-import dev.slsk.internal.DistributedNetworkInfo;
 import dev.slsk.internal.diagnostics.DiagnosticSource;
 import dev.slsk.internal.events.DistributedChildEvent;
 import dev.slsk.internal.events.DistributedParentEvent;

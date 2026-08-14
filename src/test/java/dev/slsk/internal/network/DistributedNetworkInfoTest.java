@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Ahian Fernandez
 // SPDX-License-Identifier: GPL-3.0-only
 
-package dev.slsk.internal;
+package dev.slsk.internal.network;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
