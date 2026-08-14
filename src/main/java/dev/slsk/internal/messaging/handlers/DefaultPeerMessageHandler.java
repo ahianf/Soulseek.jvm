@@ -351,7 +351,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     private void handleInfoRequest(MessageConnection connection) {
         // Read rather than resolved: the profile is a value this account set,
         // not a question to ask on every request.
-        dev.slsk.UserProfile profile = services.profile();
+        dev.slsk.user.UserProfile profile = services.profile();
         UserInfo info = new UserInfo(
                 profile.description(),
                 profile.uploadSlots(),
@@ -377,7 +377,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                         // direct peer search with at most two files.
                         services.catalog()
                                 .search(
-                                        dev.slsk.Username.of(connection.getUsername()),
+                                        dev.slsk.user.Username.of(connection.getUsername()),
                                         request.getQuery(),
                                         Catalogs.MAXIMUM_SEARCH_MATCHES),
                         true,
@@ -406,7 +406,8 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         answer(MessageCode.Peer.BROWSE_REQUEST, connection, () -> {
             BrowseResponse response;
             try {
-                response = Catalogs.browse(services.catalog().browse(dev.slsk.Username.of(connection.getUsername())));
+                response =
+                        Catalogs.browse(services.catalog().browse(dev.slsk.user.Username.of(connection.getUsername())));
             } catch (Throwable failure) {
                 Throwable cause = unwrap(failure);
                 // A catalog that throws is a bug in the application, not a
@@ -432,7 +433,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
             Iterable<Directory> directories;
             try {
                 directories = Catalogs.directories(services.catalog()
-                        .directory(dev.slsk.Username.of(connection.getUsername()), request.getDirectoryName()));
+                        .directory(dev.slsk.user.Username.of(connection.getUsername()), request.getDirectoryName()));
             } catch (Throwable failure) {
                 Throwable cause = unwrap(failure);
                 diagnostic.warning("The share catalog failed to answer a folder request: " + message(cause), cause);
@@ -543,13 +544,13 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
      */
     private EnqueueResult tryEnqueueDownload(String username, java.net.InetSocketAddress endpoint, String filename) {
         dev.slsk.spi.UploadPolicy.Decision decision =
-                services.admission().decide(dev.slsk.Username.of(username), filename);
+                services.admission().decide(dev.slsk.user.Username.of(username), filename);
         if (decision instanceof dev.slsk.spi.UploadPolicy.Decision.Deny denied) {
             return new EnqueueResult(true, denied.message());
         }
         if (decision instanceof dev.slsk.spi.UploadPolicy.Decision.Allow) {
             try {
-                services.serve(dev.slsk.Username.of(username), filename);
+                services.serve(dev.slsk.user.Username.of(username), filename);
             } catch (RuntimeException failure) {
                 // The admission catches a throwing policy itself; this is the
                 // upload failing to start after the policy said yes. The peer
@@ -574,7 +575,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
      * asking about a file we are not holding for them should get.
      */
     private void trySendPlaceInQueue(MessageConnection connection, String filename) {
-        Integer place = services.admission().place(dev.slsk.Username.of(connection.getUsername()), filename);
+        Integer place = services.admission().place(dev.slsk.user.Username.of(connection.getUsername()), filename);
         if (place != null) {
             connection.write(new PlaceInQueueResponse(filename, place));
         }

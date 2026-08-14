@@ -24,7 +24,7 @@ public interface PeerServices {
     dev.slsk.spi.ShareCatalog catalog();
 
     /** Returns what peers are told about this account. */
-    dev.slsk.UserProfile profile();
+    dev.slsk.user.UserProfile profile();
 
     /** Returns who we serve and in what order. */
     dev.slsk.spi.UploadPolicy uploadPolicy();
@@ -38,7 +38,7 @@ public interface PeerServices {
      * @param user who asked
      * @param path the file they asked for
      */
-    void serve(dev.slsk.Username user, String path);
+    void serve(dev.slsk.user.Username user, String path);
 
     /** What an unsolicited offer of a file turned out to be. */
     enum OfferDisposition {

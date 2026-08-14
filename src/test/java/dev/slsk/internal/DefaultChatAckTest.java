@@ -202,7 +202,7 @@ class DefaultChatAckTest {
             CountDownLatch done = new CountDownLatch(1);
             events.publish(
                     new ChatEvent.MessageReceived(
-                            dev.slsk.Username.of("barrier"), "", false, Instant.now(), Instant.now()),
+                            dev.slsk.user.Username.of("barrier"), "", false, Instant.now(), Instant.now()),
                     delivered -> done.countDown());
             assertTrue(await(done));
         }

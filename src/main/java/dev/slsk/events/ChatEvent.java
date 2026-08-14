@@ -3,7 +3,7 @@
 
 package dev.slsk.events;
 
-import dev.slsk.Username;
+import dev.slsk.user.Username;
 import java.time.Instant;
 import java.util.Objects;
 

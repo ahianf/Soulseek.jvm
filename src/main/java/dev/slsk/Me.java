@@ -4,6 +4,9 @@
 package dev.slsk;
 
 import dev.slsk.events.MeEvent;
+import dev.slsk.user.UserPresence;
+import dev.slsk.user.UserProfile;
+import dev.slsk.user.Username;
 
 /**
  * This account: who we are, and the things only we can change about ourselves.

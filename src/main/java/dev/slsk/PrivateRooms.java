@@ -3,6 +3,8 @@
 
 package dev.slsk;
 
+import dev.slsk.user.Username;
+
 /**
  * Administration of private rooms we own or moderate.
  *

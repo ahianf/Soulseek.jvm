@@ -3,8 +3,8 @@
 
 package dev.slsk.spi;
 
-import dev.slsk.UserStatistics;
-import dev.slsk.Username;
+import dev.slsk.user.UserStatistics;
+import dev.slsk.user.Username;
 
 /**
  * What is true when a peer asks for a file.

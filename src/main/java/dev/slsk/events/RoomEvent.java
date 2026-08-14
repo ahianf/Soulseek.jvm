@@ -7,7 +7,7 @@ import dev.slsk.Room;
 import dev.slsk.RoomList;
 import dev.slsk.RoomTicker;
 import dev.slsk.RoomUser;
-import dev.slsk.Username;
+import dev.slsk.user.Username;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;

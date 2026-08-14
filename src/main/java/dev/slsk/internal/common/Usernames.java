@@ -3,7 +3,7 @@
 
 package dev.slsk.internal.common;
 
-import dev.slsk.Username;
+import dev.slsk.user.Username;
 
 /**
  * Maps wire-supplied names onto {@link Username} without trusting them.

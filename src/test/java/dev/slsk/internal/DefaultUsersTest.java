@@ -10,11 +10,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.Soulseek;
-import dev.slsk.UserPresence;
-import dev.slsk.UserStatus;
-import dev.slsk.Username;
-import dev.slsk.Watch;
 import dev.slsk.internal.options.SoulseekClientOptions;
+import dev.slsk.user.UserPresence;
+import dev.slsk.user.UserStatus;
+import dev.slsk.user.Username;
+import dev.slsk.user.Watch;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

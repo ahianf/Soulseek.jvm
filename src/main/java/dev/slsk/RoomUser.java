@@ -3,6 +3,9 @@
 
 package dev.slsk;
 
+import dev.slsk.user.UserPresence;
+import dev.slsk.user.UserStatistics;
+import dev.slsk.user.Username;
 import java.util.Objects;
 import java.util.OptionalInt;
 

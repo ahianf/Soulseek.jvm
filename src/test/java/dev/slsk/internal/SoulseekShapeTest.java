@@ -83,7 +83,7 @@ class SoulseekShapeTest {
         // which is why this checks parameter types rather than counting.
         for (Method method : dev.slsk.Chat.class.getDeclaredMethods()) {
             if (method.getName().equals("send")) {
-                assertEquals(dev.slsk.Username.class, method.getParameterTypes()[0]);
+                assertEquals(dev.slsk.user.Username.class, method.getParameterTypes()[0]);
             }
         }
         // Not "the first parameter is a Username": browse takes a request
@@ -95,7 +95,7 @@ class SoulseekShapeTest {
             }
             Class<?> first = method.getParameterTypes()[0];
             assertTrue(
-                    first == dev.slsk.Username.class || first == dev.slsk.BrowseRequest.class,
+                    first == dev.slsk.user.Username.class || first == dev.slsk.user.BrowseRequest.class,
                     method.getName() + " leads with " + first.getSimpleName() + ", not a user");
         }
     }

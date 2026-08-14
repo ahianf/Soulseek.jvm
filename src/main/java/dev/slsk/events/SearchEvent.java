@@ -6,7 +6,7 @@ package dev.slsk.events;
 import dev.slsk.SearchId;
 import dev.slsk.SearchResponse;
 import dev.slsk.SearchStatus;
-import dev.slsk.Username;
+import dev.slsk.user.Username;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;

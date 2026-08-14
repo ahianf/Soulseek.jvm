@@ -4,9 +4,9 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.Username;
 import dev.slsk.internal.common.Scheduler;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
+import dev.slsk.user.Username;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;

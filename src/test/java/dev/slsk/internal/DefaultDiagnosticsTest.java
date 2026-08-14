@@ -9,11 +9,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.Soulseek;
-import dev.slsk.Username;
 import dev.slsk.diagnostics.MeshState;
 import dev.slsk.diagnostics.Metrics;
 import dev.slsk.events.MeshEvent;
 import dev.slsk.internal.options.SoulseekClientOptions;
+import dev.slsk.user.Username;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -114,7 +114,7 @@ class DefaultDiagnosticsTest {
 
             slsk.downloads()
                     .enqueue(dev.slsk.DownloadRequest.of(
-                            dev.slsk.Username.of("alice"),
+                            dev.slsk.user.Username.of("alice"),
                             "music\\one.mp3",
                             dev.slsk.spi.TransferSink.file(
                                     java.nio.file.Path.of(System.getProperty("java.io.tmpdir"), "one.mp3"))));

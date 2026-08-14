@@ -5,7 +5,6 @@ package dev.slsk.internal;
 
 import dev.slsk.Diagnostics;
 import dev.slsk.EventStream;
-import dev.slsk.Username;
 import dev.slsk.diagnostics.DiagnosticLevel;
 import dev.slsk.diagnostics.MeshState;
 import dev.slsk.diagnostics.Metrics;
@@ -16,6 +15,7 @@ import dev.slsk.internal.events.DistributedChildEvent;
 import dev.slsk.internal.events.DistributedParentEvent;
 import dev.slsk.internal.network.DistributedConnectionManager;
 import dev.slsk.internal.network.PeerEndpoint;
+import dev.slsk.user.Username;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;

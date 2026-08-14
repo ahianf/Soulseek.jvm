@@ -4,6 +4,7 @@
 package dev.slsk;
 
 import dev.slsk.spi.TransferSink;
+import dev.slsk.user.Username;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;

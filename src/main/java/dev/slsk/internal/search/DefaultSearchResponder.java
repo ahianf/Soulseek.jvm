@@ -171,7 +171,7 @@ public final class DefaultSearchResponder implements SearchResponder {
             response = Catalogs.searchResponse(
                     loggedInUsername.get(),
                     token,
-                    catalog.get().search(dev.slsk.Username.of(username), query, MAXIMUM_MATCHES),
+                    catalog.get().search(dev.slsk.user.Username.of(username), query, MAXIMUM_MATCHES),
                     true,
                     0,
                     0);

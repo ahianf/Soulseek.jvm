@@ -4,6 +4,7 @@
 package dev.slsk;
 
 import dev.slsk.events.ChatEvent;
+import dev.slsk.user.Username;
 
 /**
  * Private messages between users.

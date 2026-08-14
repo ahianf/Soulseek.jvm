@@ -6,7 +6,6 @@ package dev.slsk.internal;
 import dev.slsk.DownloadPolicy;
 import dev.slsk.SharedFolder;
 import dev.slsk.Soulseek;
-import dev.slsk.UserProfile;
 import dev.slsk.diagnostics.DiagnosticLevel;
 import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.SoulseekClientOptions;
@@ -14,6 +13,7 @@ import dev.slsk.internal.options.SoulseekClientOptionsPatch;
 import dev.slsk.spi.ShareCatalog;
 import dev.slsk.spi.TransferStore;
 import dev.slsk.spi.UploadPolicy;
+import dev.slsk.user.UserProfile;
 import java.util.List;
 
 /**

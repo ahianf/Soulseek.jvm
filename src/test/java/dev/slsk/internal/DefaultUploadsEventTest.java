@@ -9,12 +9,12 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.TransferOutcome;
-import dev.slsk.Username;
 import dev.slsk.events.UploadEvent;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.options.TransferStateChange;
 import dev.slsk.internal.transfer.TransferInternal;
+import dev.slsk.user.Username;
 import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;

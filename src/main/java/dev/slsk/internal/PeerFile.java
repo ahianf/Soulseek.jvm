@@ -3,7 +3,7 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.Username;
+import dev.slsk.user.Username;
 import java.util.Objects;
 
 /**

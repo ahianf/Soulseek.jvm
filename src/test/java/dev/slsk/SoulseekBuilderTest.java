@@ -10,6 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import dev.slsk.diagnostics.DiagnosticLevel;
 import dev.slsk.spi.ShareCatalog;
 import dev.slsk.spi.UploadPolicy;
+import dev.slsk.user.UserProfile;
+import dev.slsk.user.Username;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;

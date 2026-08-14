@@ -7,7 +7,7 @@ import dev.slsk.BrowseResponse;
 import dev.slsk.Directory;
 import dev.slsk.SearchFile;
 import dev.slsk.ShareIndex;
-import dev.slsk.Username;
+import dev.slsk.user.Username;
 import java.util.List;
 import java.util.Optional;
 

@@ -6,12 +6,12 @@ package dev.slsk.internal;
 import dev.slsk.CancellationSignal;
 import dev.slsk.Chat;
 import dev.slsk.EventStream;
-import dev.slsk.Username;
 import dev.slsk.events.ChatEvent;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Usernames;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.PrivateMessageReceivedEvent;
+import dev.slsk.user.Username;
 import java.time.Instant;
 import java.util.Objects;
 

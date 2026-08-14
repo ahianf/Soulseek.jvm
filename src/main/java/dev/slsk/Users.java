@@ -4,6 +4,13 @@
 package dev.slsk;
 
 import dev.slsk.events.UserEvent;
+import dev.slsk.user.Browse;
+import dev.slsk.user.BrowseRequest;
+import dev.slsk.user.UserInfo;
+import dev.slsk.user.UserStatistics;
+import dev.slsk.user.UserStatus;
+import dev.slsk.user.Username;
+import dev.slsk.user.Watch;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Set;

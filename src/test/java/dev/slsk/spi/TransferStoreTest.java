@@ -11,7 +11,7 @@ import dev.slsk.Priority;
 import dev.slsk.Progress;
 import dev.slsk.TransferId;
 import dev.slsk.TransferState;
-import dev.slsk.Username;
+import dev.slsk.user.Username;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;

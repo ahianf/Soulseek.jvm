@@ -7,6 +7,7 @@ import dev.slsk.diagnostics.DiagnosticLevel;
 import dev.slsk.spi.ShareCatalog;
 import dev.slsk.spi.TransferStore;
 import dev.slsk.spi.UploadPolicy;
+import dev.slsk.user.UserProfile;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;

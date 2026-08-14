@@ -5,7 +5,6 @@
 package dev.slsk.internal;
 
 import dev.slsk.CancellationSignal;
-import dev.slsk.UserProfile;
 import dev.slsk.exceptions.AddressException;
 import dev.slsk.exceptions.KickedFromServerException;
 import dev.slsk.exceptions.ListenException;
@@ -65,6 +64,7 @@ import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.search.SearchResponder;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.spi.ShareCatalog;
+import dev.slsk.user.UserProfile;
 import java.io.ByteArrayOutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;

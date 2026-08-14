@@ -8,8 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.slsk.RejectionReason;
-import dev.slsk.UserStatistics;
-import dev.slsk.Username;
+import dev.slsk.user.UserStatistics;
+import dev.slsk.user.Username;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

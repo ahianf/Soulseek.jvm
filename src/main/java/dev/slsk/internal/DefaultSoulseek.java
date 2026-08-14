@@ -57,7 +57,7 @@ public final class DefaultSoulseek implements Soulseek {
         this.connection = new DefaultConnection(client, credentials, bus("connection", diagnostics));
         this.chat = new DefaultChat(client, bus("chat", diagnostics), diagnostics);
         this.me = new DefaultMe(
-                client, dev.slsk.Username.of(credentials.username()), bus("me", diagnostics), diagnostics);
+                client, dev.slsk.user.Username.of(credentials.username()), bus("me", diagnostics), diagnostics);
         this.users = new DefaultUsers(client, bus("users", diagnostics), diagnostics);
         this.diagnostics = new DefaultDiagnostics(client, bus("diagnostics", diagnostics), bus("mesh", diagnostics));
         this.rooms = new DefaultRooms(client, bus("rooms", diagnostics));

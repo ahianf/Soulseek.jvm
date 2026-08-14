@@ -3,27 +3,27 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.Browse;
-import dev.slsk.BrowseProgress;
-import dev.slsk.BrowseRequest;
 import dev.slsk.CancellationSignal;
 import dev.slsk.Directory;
 import dev.slsk.EventStream;
 import dev.slsk.FileAttributes;
 import dev.slsk.SearchFile;
-import dev.slsk.UserInfo;
-import dev.slsk.UserPresence;
-import dev.slsk.UserStatistics;
-import dev.slsk.UserStatus;
-import dev.slsk.Username;
 import dev.slsk.Users;
-import dev.slsk.Watch;
 import dev.slsk.events.UserEvent;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Usernames;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.options.BrowseOptions;
 import dev.slsk.internal.options.BrowseProgressCallback;
+import dev.slsk.user.Browse;
+import dev.slsk.user.BrowseProgress;
+import dev.slsk.user.BrowseRequest;
+import dev.slsk.user.UserInfo;
+import dev.slsk.user.UserPresence;
+import dev.slsk.user.UserStatistics;
+import dev.slsk.user.UserStatus;
+import dev.slsk.user.Username;
+import dev.slsk.user.Watch;
 import java.net.InetSocketAddress;
 import java.time.Instant;
 import java.util.ArrayList;

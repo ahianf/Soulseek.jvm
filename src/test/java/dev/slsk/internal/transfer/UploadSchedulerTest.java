@@ -8,10 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.Priority;
-import dev.slsk.Username;
 import dev.slsk.internal.transfer.UploadScheduler.Fairness;
 import dev.slsk.internal.transfer.UploadScheduler.State;
 import dev.slsk.internal.transfer.UploadScheduler.Waiting;
+import dev.slsk.user.Username;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;

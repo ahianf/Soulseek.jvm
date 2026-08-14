@@ -3,7 +3,7 @@
 
 package dev.slsk.diagnostics;
 
-import dev.slsk.Username;
+import dev.slsk.user.Username;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;

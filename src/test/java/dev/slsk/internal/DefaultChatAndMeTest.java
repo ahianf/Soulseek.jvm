@@ -9,12 +9,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.Soulseek;
-import dev.slsk.UserPresence;
-import dev.slsk.UserProfile;
-import dev.slsk.Username;
 import dev.slsk.events.ChatEvent;
 import dev.slsk.events.MeEvent;
 import dev.slsk.internal.options.SoulseekClientOptions;
+import dev.slsk.user.UserPresence;
+import dev.slsk.user.UserProfile;
+import dev.slsk.user.Username;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;

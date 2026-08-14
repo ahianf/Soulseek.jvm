@@ -10,10 +10,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.Priority;
 import dev.slsk.RejectionReason;
-import dev.slsk.Username;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.spi.UploadPolicy;
+import dev.slsk.user.Username;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;

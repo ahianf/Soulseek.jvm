@@ -6,10 +6,10 @@ package dev.slsk.internal;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.Username;
 import dev.slsk.internal.common.Eventually;
 import dev.slsk.internal.common.Scheduler;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
+import dev.slsk.user.Username;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;

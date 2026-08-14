@@ -3,9 +3,9 @@
 
 package dev.slsk.events;
 
-import dev.slsk.UserPresence;
-import dev.slsk.Username;
 import dev.slsk.connection.ServerInfo;
+import dev.slsk.user.UserPresence;
+import dev.slsk.user.Username;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;

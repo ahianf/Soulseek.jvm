@@ -8,7 +8,7 @@ import dev.slsk.TransferId;
 import dev.slsk.TransferOutcome;
 import dev.slsk.TransferState;
 import dev.slsk.Upload;
-import dev.slsk.Username;
+import dev.slsk.user.Username;
 import java.time.Instant;
 import java.util.Objects;
 

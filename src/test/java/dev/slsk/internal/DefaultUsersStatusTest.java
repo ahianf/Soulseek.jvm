@@ -6,15 +6,15 @@ package dev.slsk.internal;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.UserPresence;
-import dev.slsk.Username;
-import dev.slsk.Watch;
 import dev.slsk.events.UserEvent;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.messaging.messages.WatchUserResponse;
 import dev.slsk.internal.network.MessageConnection;
+import dev.slsk.user.UserPresence;
+import dev.slsk.user.Username;
+import dev.slsk.user.Watch;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.List;

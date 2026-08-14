@@ -14,7 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.SearchFile;
-import dev.slsk.Username;
 import dev.slsk.internal.CacheLookupResult;
 import dev.slsk.internal.File;
 import dev.slsk.internal.SearchResponse;
@@ -37,6 +36,7 @@ import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.spi.ShareCatalog;
+import dev.slsk.user.Username;
 import java.lang.reflect.Proxy;
 import java.net.InetSocketAddress;
 import java.util.List;

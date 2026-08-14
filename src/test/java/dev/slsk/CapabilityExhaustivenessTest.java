@@ -6,6 +6,7 @@ package dev.slsk;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.slsk.user.Watch;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
@@ -138,7 +139,7 @@ class CapabilityExhaustivenessTest {
             assertTrue(FACETS.contains(typeName), row.getKey() + ": '" + typeName + "' is not a facet");
 
             try {
-                Class<?> type = Class.forName("dev.slsk." + typeName);
+                Class<?> type = typeName.equals("Watch") ? Watch.class : Class.forName("dev.slsk." + typeName);
                 boolean found =
                         Arrays.stream(type.getMethods()).map(Method::getName).anyMatch(memberName::equals);
                 if (!found) {
