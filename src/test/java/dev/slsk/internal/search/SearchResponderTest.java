@@ -14,9 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.internal.CacheLookupResult;
-import dev.slsk.internal.SearchResponse;
-import dev.slsk.internal.SearchResponseCache;
-import dev.slsk.internal.SearchResponseCacheRecord;
 import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;

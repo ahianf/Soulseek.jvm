@@ -6,7 +6,6 @@ package dev.slsk.internal.network;
 
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.internal.CacheLookupResult;
-import dev.slsk.internal.SearchResponseCacheRecord;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
@@ -20,6 +19,7 @@ import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.Listener;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.search.SearchResponder;
+import dev.slsk.internal.search.SearchResponseCacheRecord;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;

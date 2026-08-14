@@ -18,7 +18,13 @@ import dev.slsk.internal.messaging.messages.WishlistSearchRequest;
 import dev.slsk.internal.options.SearchOptions;
 import dev.slsk.internal.options.SearchResponseReceived;
 import dev.slsk.internal.options.SearchStateChange;
+import dev.slsk.internal.search.Search;
 import dev.slsk.internal.search.SearchInternal;
+import dev.slsk.internal.search.SearchQuery;
+import dev.slsk.internal.search.SearchResponse;
+import dev.slsk.internal.search.SearchResult;
+import dev.slsk.internal.search.SearchScope;
+import dev.slsk.internal.search.SearchState;
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -110,7 +116,7 @@ final class SearchDomain {
      * @param request the search to perform
      * @return the completed search and collected responses
      */
-    SearchResult search(dev.slsk.internal.SearchRequest request) {
+    SearchResult search(dev.slsk.internal.search.SearchRequest request) {
         // Qualified: this file also talks to the wire message of the same name.
         java.util.Objects.requireNonNull(request, "request");
         return search(
@@ -128,7 +134,7 @@ final class SearchDomain {
      * @param responseHandler receives each accepted response
      * @return the completed search
      */
-    Search search(dev.slsk.internal.SearchRequest request, Consumer<SearchResponse> responseHandler) {
+    Search search(dev.slsk.internal.search.SearchRequest request, Consumer<SearchResponse> responseHandler) {
         java.util.Objects.requireNonNull(request, "request");
         java.util.Objects.requireNonNull(responseHandler, "responseHandler");
         return search(

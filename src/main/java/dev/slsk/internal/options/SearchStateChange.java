@@ -4,8 +4,8 @@
 
 package dev.slsk.internal.options;
 
-import dev.slsk.internal.Search;
-import dev.slsk.internal.SearchState;
+import dev.slsk.internal.search.Search;
+import dev.slsk.internal.search.SearchState;
 
 /**
  * A search state-change callback payload.

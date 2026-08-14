@@ -5,10 +5,10 @@
 package dev.slsk.internal.messaging.messages;
 
 import dev.slsk.exceptions.MessageException;
-import dev.slsk.internal.SearchResponse;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
+import dev.slsk.internal.search.SearchResponse;
 import dev.slsk.internal.share.File;
 import java.util.List;
 import java.util.Objects;

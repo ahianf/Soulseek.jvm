@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.options;
 
-import dev.slsk.internal.SearchResponse;
+import dev.slsk.internal.search.SearchResponse;
 
 /** Determines whether a search response is accepted. */
 @FunctionalInterface

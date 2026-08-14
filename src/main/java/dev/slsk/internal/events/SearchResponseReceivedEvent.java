@@ -4,8 +4,8 @@
 
 package dev.slsk.internal.events;
 
-import dev.slsk.internal.Search;
-import dev.slsk.internal.SearchResponse;
+import dev.slsk.internal.search.Search;
+import dev.slsk.internal.search.SearchResponse;
 
 /** Event arguments raised when a search response is received. */
 public class SearchResponseReceivedEvent extends SearchEvent {

@@ -6,11 +6,6 @@ package dev.slsk.internal.search;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.CancellationSubscription;
-import dev.slsk.internal.Search;
-import dev.slsk.internal.SearchQuery;
-import dev.slsk.internal.SearchResponse;
-import dev.slsk.internal.SearchScope;
-import dev.slsk.internal.SearchState;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Scheduler;

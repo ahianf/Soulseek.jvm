@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.events;
 
-import dev.slsk.internal.SearchResponse;
+import dev.slsk.internal.search.SearchResponse;
 
 /** Event payload for the disposition of a search-request response. */
 public class SearchRequestResponseEvent extends SearchRequestEvent {

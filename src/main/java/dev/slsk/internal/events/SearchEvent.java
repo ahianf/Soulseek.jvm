@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.events;
 
-import dev.slsk.internal.Search;
+import dev.slsk.internal.search.Search;
 
 /**
  * Base event payload for search events.

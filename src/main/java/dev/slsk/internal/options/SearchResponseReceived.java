@@ -4,8 +4,8 @@
 
 package dev.slsk.internal.options;
 
-import dev.slsk.internal.Search;
-import dev.slsk.internal.SearchResponse;
+import dev.slsk.internal.search.Search;
+import dev.slsk.internal.search.SearchResponse;
 
 /**
  * A received search-response callback payload.

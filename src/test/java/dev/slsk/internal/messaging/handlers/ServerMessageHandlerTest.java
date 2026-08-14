@@ -14,8 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.RoomJoinForbiddenException;
-import dev.slsk.internal.SearchQuery;
-import dev.slsk.internal.SearchScope;
 import dev.slsk.internal.ServerLink;
 import dev.slsk.internal.ServerLinks;
 import dev.slsk.internal.TransferDirection;
@@ -60,7 +58,9 @@ import dev.slsk.internal.room.RoomData;
 import dev.slsk.internal.room.RoomInfo;
 import dev.slsk.internal.room.RoomList;
 import dev.slsk.internal.search.SearchInternal;
+import dev.slsk.internal.search.SearchQuery;
 import dev.slsk.internal.search.SearchResponder;
+import dev.slsk.internal.search.SearchScope;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.internal.user.UserPresence;
 import dev.slsk.internal.user.UserStatistics;

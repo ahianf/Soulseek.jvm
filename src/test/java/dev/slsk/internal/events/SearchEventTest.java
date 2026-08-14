@@ -9,11 +9,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import dev.slsk.internal.Search;
-import dev.slsk.internal.SearchQuery;
-import dev.slsk.internal.SearchResponse;
-import dev.slsk.internal.SearchScope;
-import dev.slsk.internal.SearchState;
+import dev.slsk.internal.search.Search;
+import dev.slsk.internal.search.SearchQuery;
+import dev.slsk.internal.search.SearchResponse;
+import dev.slsk.internal.search.SearchScope;
+import dev.slsk.internal.search.SearchState;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

@@ -4,8 +4,8 @@
 
 package dev.slsk.internal.options;
 
-import dev.slsk.internal.SearchResponseCache;
 import dev.slsk.internal.diagnostics.DiagnosticLevel;
+import dev.slsk.internal.search.SearchResponseCache;
 import dev.slsk.internal.user.UserEndpointCache;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -293,8 +293,9 @@ public class SoulseekClientOptions {
         // Defaulted rather than left null: without a cache we silently answer
         // fewer searches than we think we do, and which searches is decided by
         // whether the peer is behind NAT.
-        this.searchResponseCache =
-                searchResponseCache == null ? new dev.slsk.internal.BoundedSearchResponseCache() : searchResponseCache;
+        this.searchResponseCache = searchResponseCache == null
+                ? new dev.slsk.internal.search.BoundedSearchResponseCache()
+                : searchResponseCache;
     }
 
     /** Returns a clone with the supplied patch applied. */

@@ -2,8 +2,9 @@
 // SPDX-FileCopyrightText: 2026 Ahian Fernandez
 // SPDX-License-Identifier: GPL-3.0-only
 
-package dev.slsk.internal;
+package dev.slsk.internal.search;
 
+import dev.slsk.internal.CacheLookupResult;
 import java.util.function.Consumer;
 
 /** A cache for undelivered search responses. */

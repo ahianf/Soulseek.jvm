@@ -13,8 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.internal.CacheLookupResult;
-import dev.slsk.internal.SearchResponseCache;
-import dev.slsk.internal.SearchResponseCacheRecord;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.DefaultWaiter;
 import dev.slsk.internal.common.Outcomes;
@@ -31,6 +29,8 @@ import dev.slsk.internal.network.tcp.ListenerAcceptedEventListener;
 import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.search.SearchResponder;
+import dev.slsk.internal.search.SearchResponseCache;
+import dev.slsk.internal.search.SearchResponseCacheRecord;
 import java.lang.reflect.Proxy;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;

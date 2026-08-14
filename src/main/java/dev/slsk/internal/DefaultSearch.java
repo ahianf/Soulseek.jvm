@@ -152,7 +152,7 @@ final class DefaultSearch implements Search {
         client.events().on(Kind.SEARCH_RESPONSE_DELIVERED, (SearchRequestResponseEvent event) -> {
             Username requester = event == null ? null : Usernames.fromWire(event.getUsername());
             if (requester != null && event.getSearchResponse() != null) {
-                dev.slsk.internal.SearchResponse delivered = event.getSearchResponse();
+                dev.slsk.internal.search.SearchResponse delivered = event.getSearchResponse();
                 events.publish(new SearchEvent.ResponseDelivered(
                         requester, event.getToken(), delivered.getFileCount(), Instant.now()));
             }
@@ -190,7 +190,7 @@ final class DefaultSearch implements Search {
         return new SearchFile(source.getFilename(), source.getSize(), attributes(source));
     }
 
-    private static SearchResponse response(dev.slsk.internal.SearchResponse source, SearchFilters filters) {
+    private static SearchResponse response(dev.slsk.internal.search.SearchResponse source, SearchFilters filters) {
         List<SearchFile> files = source.getFiles() == null
                 ? List.of()
                 : source.getFiles().stream()
@@ -212,12 +212,14 @@ final class DefaultSearch implements Search {
                 locked);
     }
 
-    private static dev.slsk.internal.SearchScope scope(SearchScope scope) {
+    private static dev.slsk.internal.search.SearchScope scope(SearchScope scope) {
         return switch (scope.kind()) {
-            case NETWORK -> dev.slsk.internal.SearchScope.getNetwork();
-            case WISHLIST -> dev.slsk.internal.SearchScope.getWishlist();
-            case ROOM -> dev.slsk.internal.SearchScope.room(scope.targets().get(0));
-            case USER -> dev.slsk.internal.SearchScope.user(scope.targets().toArray(new String[0]));
+            case NETWORK -> dev.slsk.internal.search.SearchScope.getNetwork();
+            case WISHLIST -> dev.slsk.internal.search.SearchScope.getWishlist();
+            case ROOM ->
+                dev.slsk.internal.search.SearchScope.room(scope.targets().get(0));
+            case USER ->
+                dev.slsk.internal.search.SearchScope.user(scope.targets().toArray(new String[0]));
         };
     }
 
@@ -303,7 +305,7 @@ final class DefaultSearch implements Search {
         SearchStatus status;
         try {
             domain.search(
-                    dev.slsk.internal.SearchQuery.fromText(query.terms()),
+                    dev.slsk.internal.search.SearchQuery.fromText(query.terms()),
                     source -> accept(state, source, query.filters()),
                     scope(query.scope()),
                     state.token,
@@ -365,7 +367,7 @@ final class DefaultSearch implements Search {
     }
 
     /** Records a response and publishes it, keeping the snapshot and stream in step. */
-    private void accept(State state, dev.slsk.internal.SearchResponse source, SearchFilters filters) {
+    private void accept(State state, dev.slsk.internal.search.SearchResponse source, SearchFilters filters) {
         // The username is peer-supplied; a value no username can represent
         // drops the response rather than throwing out of the read dispatch.
         if (source == null || Usernames.fromWire(source.getUsername()) == null) {

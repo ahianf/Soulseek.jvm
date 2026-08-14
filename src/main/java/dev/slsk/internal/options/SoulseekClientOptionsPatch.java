@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.options;
 
-import dev.slsk.internal.SearchResponseCache;
+import dev.slsk.internal.search.SearchResponseCache;
 import dev.slsk.internal.user.UserEndpointCache;
 import java.net.InetAddress;
 

@@ -13,11 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationController;
-import dev.slsk.internal.Search;
-import dev.slsk.internal.SearchQuery;
-import dev.slsk.internal.SearchResponse;
-import dev.slsk.internal.SearchScope;
-import dev.slsk.internal.SearchState;
 import dev.slsk.internal.options.SearchOptions;
 import dev.slsk.internal.share.File;
 import java.util.List;
