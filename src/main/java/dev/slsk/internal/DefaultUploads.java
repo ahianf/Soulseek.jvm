@@ -5,12 +5,12 @@ package dev.slsk.internal;
 
 import dev.slsk.Attachment;
 import dev.slsk.EventStream;
-import dev.slsk.Upload;
 import dev.slsk.Uploads;
 import dev.slsk.events.UploadEvent;
 import dev.slsk.spi.UploadPolicy;
 import dev.slsk.transfer.Priority;
 import dev.slsk.transfer.TransferId;
+import dev.slsk.upload.Upload;
 import dev.slsk.user.Username;
 import java.time.Instant;
 import java.util.List;

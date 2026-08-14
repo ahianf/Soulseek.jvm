@@ -155,7 +155,7 @@ final class DefaultDiagnostics implements Diagnostics {
         // no reason to agree with each other, having been taken at ten different
         // moments.
         List<dev.slsk.download.Download> downloadList = downloads.get().all();
-        List<dev.slsk.Upload> uploadList = uploads.get().all();
+        List<dev.slsk.upload.Upload> uploadList = uploads.get().all();
 
         long downloadedBytes = 0;
         int activeDownloads = 0;
@@ -172,7 +172,7 @@ final class DefaultDiagnostics implements Diagnostics {
         long uploadedBytes = 0;
         int activeUploads = 0;
         int queuedUploads = 0;
-        for (dev.slsk.Upload upload : uploadList) {
+        for (dev.slsk.upload.Upload upload : uploadList) {
             uploadedBytes += transferred(upload.state());
             if (upload.state() instanceof dev.slsk.transfer.TransferState.Queued) {
                 queuedUploads++;
