@@ -11,6 +11,7 @@ import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
+import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.messaging.messages.WatchUserResponse;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.user.UserPresence;

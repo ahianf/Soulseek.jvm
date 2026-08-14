@@ -7,6 +7,7 @@ import dev.slsk.CancellationSignal;
 import dev.slsk.EventStream;
 import dev.slsk.Shares;
 import dev.slsk.events.ShareEvent;
+import dev.slsk.internal.events.EventBus;
 import dev.slsk.share.ShareIndex;
 import dev.slsk.share.SharedFolder;
 import dev.slsk.spi.ShareCatalog;

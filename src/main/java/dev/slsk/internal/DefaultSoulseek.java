@@ -15,6 +15,7 @@ import dev.slsk.Soulseek;
 import dev.slsk.Uploads;
 import dev.slsk.Users;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
+import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;

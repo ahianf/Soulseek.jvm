@@ -3,6 +3,7 @@
 
 package dev.slsk.internal;
 
+
 import dev.slsk.Subscription;
 import java.util.EnumMap;
 import java.util.Map;

@@ -13,6 +13,7 @@ import dev.slsk.events.MeshEvent;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.events.DistributedChildEvent;
 import dev.slsk.internal.events.DistributedParentEvent;
+import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.network.DistributedConnectionManager;
 import dev.slsk.internal.network.PeerEndpoint;
 import dev.slsk.user.Username;

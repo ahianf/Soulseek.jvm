@@ -11,6 +11,7 @@ import dev.slsk.events.MeEvent;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Usernames;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
+import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.events.PrivilegeNotificationReceivedEvent;
 import dev.slsk.user.UserPresence;
 import dev.slsk.user.UserProfile;

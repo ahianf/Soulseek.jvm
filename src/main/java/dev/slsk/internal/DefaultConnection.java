@@ -15,6 +15,7 @@ import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.LoginRejectedException;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.connection.SoulseekClientState;
+import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.events.SoulseekClientDisconnectedEvent;
 import dev.slsk.internal.events.SoulseekClientStateChangedEvent;
 import java.time.Duration;

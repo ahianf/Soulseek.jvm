@@ -12,6 +12,7 @@ import dev.slsk.events.MeEvent;
 import dev.slsk.internal.common.Usernames;
 import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
+import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.events.PrivateMessageReceivedEvent;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.user.Username;

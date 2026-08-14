@@ -13,6 +13,7 @@ import dev.slsk.events.SearchEvent;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Usernames;
+import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.events.SearchRequestEvent;
 import dev.slsk.internal.events.SearchRequestResponseEvent;
 import dev.slsk.search.FileAttributeType;

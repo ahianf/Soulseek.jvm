@@ -10,6 +10,7 @@ import dev.slsk.events.UserEvent;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Usernames;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
+import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.options.BrowseOptions;
 import dev.slsk.internal.options.BrowseProgressCallback;
 import dev.slsk.search.FileAttributes;

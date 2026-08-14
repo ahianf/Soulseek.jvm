@@ -11,6 +11,7 @@ import dev.slsk.Rooms;
 import dev.slsk.events.RoomEvent;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Usernames;
+import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.events.PublicChatMessageReceivedEvent;
 import dev.slsk.internal.events.RoomJoinedEvent;
 import dev.slsk.internal.events.RoomLeftEvent;

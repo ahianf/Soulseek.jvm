@@ -7,6 +7,7 @@ import dev.slsk.Attachment;
 import dev.slsk.EventStream;
 import dev.slsk.Uploads;
 import dev.slsk.events.UploadEvent;
+import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.transfer.Transfer;
 import dev.slsk.spi.UploadPolicy;
 import dev.slsk.transfer.Priority;

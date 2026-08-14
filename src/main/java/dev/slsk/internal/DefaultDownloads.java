@@ -13,6 +13,7 @@ import dev.slsk.download.DownloadRequest;
 import dev.slsk.events.DownloadEvent;
 import dev.slsk.exceptions.TransferNotFoundException;
 import dev.slsk.internal.common.Usernames;
+import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.messaging.handlers.PeerServices;
 import dev.slsk.internal.messaging.messages.TransferRequest;
 import dev.slsk.internal.options.TransferOptions;

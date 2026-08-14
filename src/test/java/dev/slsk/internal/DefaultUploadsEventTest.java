@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.events.UploadEvent;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
+import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.options.TransferStateChange;
 import dev.slsk.internal.transfer.TransferDirection;
