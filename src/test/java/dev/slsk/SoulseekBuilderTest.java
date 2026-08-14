@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import dev.slsk.diagnostics.DiagnosticLevel;
 import dev.slsk.spi.ShareCatalog;
 import dev.slsk.spi.UploadPolicy;
 import java.nio.file.Path;

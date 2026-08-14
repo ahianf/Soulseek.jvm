@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Ahian Fernandez
 // SPDX-License-Identifier: GPL-3.0-only
 
-package dev.slsk;
+package dev.slsk.diagnostics;
 
 /**
  * How much the library says about what it is doing.

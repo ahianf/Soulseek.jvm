@@ -8,10 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.MeshState;
-import dev.slsk.Metrics;
 import dev.slsk.Soulseek;
 import dev.slsk.Username;
+import dev.slsk.diagnostics.MeshState;
+import dev.slsk.diagnostics.Metrics;
 import dev.slsk.events.MeshEvent;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import java.time.Instant;
@@ -119,7 +119,7 @@ class DefaultDiagnosticsTest {
                             dev.slsk.spi.TransferSink.file(
                                     java.nio.file.Path.of(System.getProperty("java.io.tmpdir"), "one.mp3"))));
 
-            dev.slsk.Metrics metrics = slsk.diagnostics().metrics();
+            Metrics metrics = slsk.diagnostics().metrics();
             assertEquals(0, metrics.activeSearches());
             assertEquals(0, metrics.peerConnections());
             // Offline, the attempt fails at once and the download settles, so

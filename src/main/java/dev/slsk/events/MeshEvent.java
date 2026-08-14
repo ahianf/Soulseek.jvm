@@ -3,7 +3,7 @@
 
 package dev.slsk.events;
 
-import dev.slsk.MeshState;
+import dev.slsk.diagnostics.MeshState;
 import java.time.Instant;
 import java.util.Objects;
 

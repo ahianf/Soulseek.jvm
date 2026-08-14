@@ -13,11 +13,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.CancellationSignal;
-import dev.slsk.MeshState;
 import dev.slsk.Soulseek;
 import dev.slsk.Subscription;
 import dev.slsk.Upload;
 import dev.slsk.Username;
+import dev.slsk.diagnostics.MeshState;
 import dev.slsk.exceptions.KickedFromServerException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;

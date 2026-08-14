@@ -3,7 +3,7 @@
 
 package dev.slsk.events;
 
-import dev.slsk.DiagnosticLevel;
+import dev.slsk.diagnostics.DiagnosticLevel;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;

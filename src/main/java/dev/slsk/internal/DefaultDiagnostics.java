@@ -3,12 +3,12 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.DiagnosticLevel;
 import dev.slsk.Diagnostics;
 import dev.slsk.EventStream;
-import dev.slsk.MeshState;
-import dev.slsk.Metrics;
 import dev.slsk.Username;
+import dev.slsk.diagnostics.DiagnosticLevel;
+import dev.slsk.diagnostics.MeshState;
+import dev.slsk.diagnostics.Metrics;
 import dev.slsk.events.DiagnosticEvent;
 import dev.slsk.events.MeshEvent;
 import dev.slsk.internal.EngineEvents.Kind;

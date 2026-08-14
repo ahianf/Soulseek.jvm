@@ -17,6 +17,7 @@
 module dev.slsk.soulseek {
     exports dev.slsk;
     exports dev.slsk.connection;
+    exports dev.slsk.diagnostics;
     exports dev.slsk.events;
     exports dev.slsk.exceptions;
     exports dev.slsk.spi;

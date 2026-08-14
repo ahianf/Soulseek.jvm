@@ -3,6 +3,8 @@
 
 package dev.slsk;
 
+import dev.slsk.diagnostics.MeshState;
+import dev.slsk.diagnostics.Metrics;
 import dev.slsk.events.DiagnosticEvent;
 import dev.slsk.events.MeshEvent;
 
