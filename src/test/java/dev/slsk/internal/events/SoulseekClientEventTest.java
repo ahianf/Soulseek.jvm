@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import dev.slsk.internal.SoulseekClientState;
+import dev.slsk.internal.connection.SoulseekClientState;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

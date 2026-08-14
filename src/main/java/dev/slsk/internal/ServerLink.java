@@ -10,6 +10,7 @@ import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
+import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.messages.AcknowledgePrivateMessageCommand;

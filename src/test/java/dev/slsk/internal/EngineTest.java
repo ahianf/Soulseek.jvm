@@ -23,6 +23,8 @@ import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.TokenBucket;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.Waiter;
+import dev.slsk.internal.connection.ServerInfo;
+import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;
 import dev.slsk.internal.events.DistributedChildEvent;
@@ -228,7 +230,9 @@ class EngineTest {
         fixture.client.events().on(Kind.GLOBAL_MESSAGE_RECEIVED, (String value) -> global.set(value));
         fixture.client
                 .events()
-                .on(Kind.SERVER_INFO_RECEIVED, (dev.slsk.internal.ServerInfo value) -> serverInfo.set(value));
+                .on(
+                        Kind.SERVER_INFO_RECEIVED,
+                        (dev.slsk.internal.connection.ServerInfo value) -> serverInfo.set(value));
         fixture.client.events().on(Kind.KICKED_FROM_SERVER, (Void value) -> kicked.incrementAndGet());
 
         fixture.server.raise(ServerMessageEvent.GLOBAL_MESSAGE_RECEIVED, "global");

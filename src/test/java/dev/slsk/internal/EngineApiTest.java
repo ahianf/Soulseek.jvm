@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.internal.EngineEvents.Kind;
+import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;

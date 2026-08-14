@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.events.ChatEvent;
+import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.PrivateMessageReceivedEvent;
 import dev.slsk.internal.messaging.messages.AcknowledgePrivateMessageCommand;

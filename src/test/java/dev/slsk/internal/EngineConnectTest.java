@@ -26,6 +26,7 @@ import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
+import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.messages.LoginRequest;
 import dev.slsk.internal.messaging.messages.LoginResponse;
@@ -155,7 +156,7 @@ class EngineConnectTest {
         Fixture fixture = new Fixture();
         fixture.waiter.response = new LoginResponse(true, "", null, null, true);
         List<String> sequence = new ArrayList<>();
-        fixture.client.events().on(Kind.SERVER_INFO_RECEIVED, (dev.slsk.internal.ServerInfo eventData) -> {
+        fixture.client.events().on(Kind.SERVER_INFO_RECEIVED, (dev.slsk.internal.connection.ServerInfo eventData) -> {
             assertTrue(eventData.isSupporter());
             assertNull(fixture.client.getUsername());
             sequence.add("server-info");

@@ -26,6 +26,7 @@ import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
+import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.messaging.messages.TransferRequest;
 import dev.slsk.internal.messaging.messages.TransferResponse;

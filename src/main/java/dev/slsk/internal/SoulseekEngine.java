@@ -23,6 +23,8 @@ import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
+import dev.slsk.internal.connection.ServerInfo;
+import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.events.BrowseProgressUpdatedEvent;

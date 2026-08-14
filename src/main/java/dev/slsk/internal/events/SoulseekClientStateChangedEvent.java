@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.events;
 
-import dev.slsk.internal.SoulseekClientState;
+import dev.slsk.internal.connection.SoulseekClientState;
 import java.util.Objects;
 
 /**

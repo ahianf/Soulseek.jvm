@@ -14,6 +14,7 @@ import dev.slsk.events.ConnectionEvent;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.LoginRejectedException;
 import dev.slsk.internal.EngineEvents.Kind;
+import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.events.SoulseekClientDisconnectedEvent;
 import dev.slsk.internal.events.SoulseekClientStateChangedEvent;
 import java.time.Duration;
@@ -112,7 +113,7 @@ final class DefaultConnection implements Connection {
         client.events()
                 .on(
                         Kind.SERVER_INFO_RECEIVED,
-                        (dev.slsk.internal.ServerInfo event) ->
+                        (dev.slsk.internal.connection.ServerInfo event) ->
                                 events.publish(new ConnectionEvent.ServerInfoReceived(serverInfo(), Instant.now())));
         client.events()
                 .on(
@@ -266,7 +267,7 @@ final class DefaultConnection implements Connection {
     }
 
     private ServerInfo serverInfo() {
-        dev.slsk.internal.ServerInfo source = client.getServerInfo();
+        dev.slsk.internal.connection.ServerInfo source = client.getServerInfo();
         if (source == null) {
             return ServerInfo.empty();
         }

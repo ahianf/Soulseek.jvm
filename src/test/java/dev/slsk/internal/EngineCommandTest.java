@@ -14,6 +14,7 @@ import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.internal.common.Outcomes;
+import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.messaging.messages.AcknowledgePrivateMessageCommand;
 import dev.slsk.internal.messaging.messages.AcknowledgePrivilegeNotificationCommand;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;

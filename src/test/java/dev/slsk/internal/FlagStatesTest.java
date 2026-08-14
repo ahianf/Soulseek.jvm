@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.slsk.internal.connection.SoulseekClientState;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

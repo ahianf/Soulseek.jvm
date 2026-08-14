@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.CancellationController;
 import dev.slsk.CancellationSignal;
 import dev.slsk.events.SearchEvent;
+import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.diagnostics.DiagnosticLevel;
 import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.network.MessageConnection;
