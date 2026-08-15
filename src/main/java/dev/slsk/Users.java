@@ -8,6 +8,7 @@ import dev.slsk.share.Directory;
 import dev.slsk.user.Browse;
 import dev.slsk.user.BrowseRequest;
 import dev.slsk.user.UserInfo;
+import dev.slsk.user.UserPresence;
 import dev.slsk.user.UserStatistics;
 import dev.slsk.user.UserStatus;
 import dev.slsk.user.Username;

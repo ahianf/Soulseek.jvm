@@ -15,6 +15,9 @@ Everything in this document is the current public surface. Public entry points
 and shared control contracts stay in `dev.slsk`; requests and snapshots are
 grouped by the capability that owns them.
 
+All source links and examples use the current `dev.slsk` namespace. The former
+`tenine` package names are not part of the 1.0 API.
+
 ---
 
 ## Table of contents
@@ -47,7 +50,7 @@ grouped by the capability that owns them.
 
 | Fact | Value |
 |---|---|
-| Maven coordinates | `dev.slsk:slsk-jvm` (current: `2.0.3-SNAPSHOT`) |
+| Maven coordinates | `dev.slsk:slsk-jvm:1.0.0` |
 | Distribution | Local Maven repository only. Run `mvn install` in the library checkout. Not published to Maven Central. |
 | Java version | 25 or later |
 | JPMS module | `dev.slsk.soulseek` |
@@ -55,25 +58,25 @@ grouped by the capability that owns them.
 | License | GPL-3.0-only, based on Soulseek.NET 10.0.2 |
 | Root package | `dev.slsk` |
 | Threading model | Blocking calls, designed for virtual threads |
-| Root type | `dev.slsk.Soulseek` |
+| Root type | [`dev.slsk.Soulseek`](../src/main/java/dev/slsk/Soulseek.java) |
 
 The module exports these architectural packages:
 
 | Package | Rule |
 |---|---|
-| `dev.slsk` | What you call. The root type, ten facets, cancellation, subscriptions, and attachments. |
-| `dev.slsk.connection` | Server addresses, metadata, and connection state. |
-| `dev.slsk.diagnostics` | Diagnostic levels, metrics, and distributed-mesh snapshots. |
-| `dev.slsk.download` | Download requests, policies, and snapshots. |
-| `dev.slsk.events` | What you receive. One sealed event hierarchy per facet. |
-| `dev.slsk.exceptions` | What can go wrong. An unchecked exception hierarchy. |
-| `dev.slsk.room` | Room directory, membership, users, and tickers. |
-| `dev.slsk.search` | Search queries, filters, results, files, and lifecycle snapshots. |
-| `dev.slsk.share` | Browse responses, shared directories, indexes, and remote paths. |
-| `dev.slsk.spi` | What you implement. Extension points with working defaults. |
-| `dev.slsk.transfer` | Transfer ids, state, outcomes, progress, priorities, and retry values. |
-| `dev.slsk.upload` | Upload snapshots. |
-| `dev.slsk.user` | User identity, presence, profiles, statistics, watches, and browse values. |
+| [`dev.slsk`](../src/main/java/dev/slsk/package-info.java) | What you call. The root type, ten facets, cancellation, subscriptions, and attachments. |
+| [`dev.slsk.connection`](../src/main/java/dev/slsk/connection/package-info.java) | Server addresses, metadata, and connection state. |
+| [`dev.slsk.diagnostics`](../src/main/java/dev/slsk/diagnostics/package-info.java) | Diagnostic levels, metrics, and distributed-mesh snapshots. |
+| [`dev.slsk.download`](../src/main/java/dev/slsk/download/package-info.java) | Download requests, policies, and snapshots. |
+| [`dev.slsk.events`](../src/main/java/dev/slsk/events/package-info.java) | What you receive. One sealed event hierarchy per facet. |
+| [`dev.slsk.exceptions`](../src/main/java/dev/slsk/exceptions/package-info.java) | What can go wrong. An unchecked exception hierarchy. |
+| [`dev.slsk.room`](../src/main/java/dev/slsk/room/package-info.java) | Room directory, membership, users, and tickers. |
+| [`dev.slsk.search`](../src/main/java/dev/slsk/search/package-info.java) | Search queries, filters, results, files, and lifecycle snapshots. |
+| [`dev.slsk.share`](../src/main/java/dev/slsk/share/package-info.java) | Browse responses, shared directories, indexes, and remote paths. |
+| [`dev.slsk.spi`](../src/main/java/dev/slsk/spi/package-info.java) | What you implement. Extension points with working defaults. |
+| [`dev.slsk.transfer`](../src/main/java/dev/slsk/transfer/package-info.java) | Transfer ids, state, outcomes, progress, priorities, and retry values. |
+| [`dev.slsk.upload`](../src/main/java/dev/slsk/upload/package-info.java) | Upload snapshots. |
+| [`dev.slsk.user`](../src/main/java/dev/slsk/user/package-info.java) | User identity, presence, profiles, statistics, watches, and browse values. |
 
 Everything else lives under `dev.slsk.internal` and is not exported. No
 internal type is reachable from an exported signature. A test enforces this.
