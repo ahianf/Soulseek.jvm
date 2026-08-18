@@ -87,14 +87,6 @@ public interface Me {
     void changePassword(String newPassword, CancellationSignal signal);
 
     /**
-     * Tells the server how fast we upload, which is what peers see when ranking
-     * sources.
-     *
-     * @param bytesPerSecond the speed to report
-     */
-    void reportUploadSpeed(long bytesPerSecond);
-
-    /**
      * Returns the stream of account events.
      *
      * @return the event stream

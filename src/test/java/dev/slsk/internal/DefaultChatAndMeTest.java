@@ -71,7 +71,6 @@ class DefaultChatAndMeTest {
             assertThrows(
                     IllegalArgumentException.class,
                     () -> slsk.me().giftPrivileges(Username.of("bob"), 0, CancellationSignal.none()));
-            assertThrows(IllegalArgumentException.class, () -> slsk.me().reportUploadSpeed(-1));
         }
     }
 

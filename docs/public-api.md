@@ -891,7 +891,6 @@ This account: who we are, and the things only we can change about ourselves.
 | `privileges(CancellationSignal)` | Blocks | Days of privileges remaining, or zero. |
 | `giftPrivileges(Username to, int days, CancellationSignal)` | Blocks | Gives some of our privilege days to another user. |
 | `changePassword(String, CancellationSignal)` | Blocks | Changes this account's password. |
-| `reportUploadSpeed(long bytesPerSecond)` | Cheap | Tells the server how fast we upload — what peers see when ranking sources. |
 | `events()` | Cheap | `EventStream<MeEvent>`. |
 
 **`UserProfile`** — `description`, `picture` (`Optional<byte[]>`),

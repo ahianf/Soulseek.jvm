@@ -168,14 +168,6 @@ final class DefaultMe implements Me {
     }
 
     @Override
-    public void reportUploadSpeed(long bytesPerSecond) {
-        if (bytesPerSecond < 0) {
-            throw new IllegalArgumentException("bytesPerSecond must not be negative: " + bytesPerSecond);
-        }
-        server.sendUploadSpeed((int) Math.min(bytesPerSecond, Integer.MAX_VALUE));
-    }
-
-    @Override
     public EventStream<MeEvent> events() {
         return events;
     }
