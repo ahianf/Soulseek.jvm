@@ -48,8 +48,11 @@ class SearchResponderTest {
     private static final List<SearchFile> MATCHES =
             List.of(new SearchFile("shared\\song.mp3", 42L, dev.slsk.search.FileAttributes.none()));
 
+    /** What the responder is told we upload at, and what a response must advertise. */
+    private static final int ADVERTISED_SPEED = 4321;
+
     private static SearchResponse expectedResponse(int token) {
-        return dev.slsk.internal.share.Catalogs.searchResponse("me", token, MATCHES, true, 0, 0);
+        return dev.slsk.internal.share.Catalogs.searchResponse("me", token, MATCHES, true, ADVERTISED_SPEED, 0);
     }
 
     private static final SearchResponse RESPONSE =
@@ -66,7 +69,8 @@ class SearchResponderTest {
                         new TokenFactory(77),
                         nulls.client::endpoint,
                         nulls.client::getShareCatalog,
-                        () -> "me"));
+                        () -> "me",
+                        () -> ADVERTISED_SPEED));
         Fixture fixture = fixture(null);
         RecordingDiagnostic diagnostic = new RecordingDiagnostic();
         DefaultSearchResponder responder = responder(fixture.client, diagnostic);
@@ -407,6 +411,7 @@ class SearchResponderTest {
                 client::endpoint,
                 client::getShareCatalog,
                 () -> "me",
+                () -> ADVERTISED_SPEED,
                 diagnostic);
     }
 

@@ -381,7 +381,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                                         request.getQuery(),
                                         Catalogs.MAXIMUM_SEARCH_MATCHES),
                         true,
-                        0,
+                        services.advertisedUploadSpeed(),
                         0);
             } catch (Throwable failure) {
                 Throwable cause = unwrap(failure);

@@ -298,7 +298,8 @@ final class SoulseekEngine implements AutoCloseable {
                         this.tokenFactory,
                         users::getUserEndpoint,
                         this::catalog,
-                        server::username)
+                        server::username,
+                        transfers::advertisedUploadSpeed)
                 : searchResponder;
         this.peerMessageHandler = peerMessageHandler == null
                 ? new DefaultPeerMessageHandler(
@@ -835,7 +836,17 @@ final class SoulseekEngine implements AutoCloseable {
     private void bindServerEvents() {
         forwardServer(ServerMessageEvent.USER_CANNOT_CONNECT, Kind.USER_CANNOT_CONNECT);
         forwardServer(ServerMessageEvent.USER_STATUS_CHANGED, Kind.USER_STATUS_CHANGED);
-        forwardServer(ServerMessageEvent.USER_STATISTICS_CHANGED, Kind.USER_STATISTICS_CHANGED);
+        serverMessageHandler.<dev.slsk.internal.user.UserStatistics>addListener(
+                ServerMessageEvent.USER_STATISTICS_CHANGED, (sender, statistics) -> {
+                    // A statistics response naming us carries the upload
+                    // average the server computed from our reports, which is
+                    // what search responses advertise; the transfer domain
+                    // adopts it before the event goes out.
+                    if (statistics != null && statistics.getUsername().equals(server.username())) {
+                        transfers.advertisedUploadSpeed(statistics.getAverageSpeed());
+                    }
+                    events.raise(Kind.USER_STATISTICS_CHANGED, statistics);
+                });
         forwardServer(ServerMessageEvent.PRIVATE_MESSAGE_RECEIVED, Kind.PRIVATE_MESSAGE_RECEIVED);
         forwardServer(ServerMessageEvent.PRIVATE_ROOM_MEMBERSHIP_ADDED, Kind.PRIVATE_ROOM_MEMBERSHIP_ADDED);
         forwardServer(ServerMessageEvent.PRIVATE_ROOM_MEMBERSHIP_REMOVED, Kind.PRIVATE_ROOM_MEMBERSHIP_REMOVED);
@@ -1004,6 +1015,12 @@ final class SoulseekEngine implements AutoCloseable {
     void sendConfigurationMessages(CancellationSignal cancellationSignal) {
         server.write(new SetListenPortCommand(options.getListenPort()), cancellationSignal);
         server.write(new PrivateRoomToggle(options.isAcceptPrivateRoomInvitations()), cancellationSignal);
+        // Our own statistics, for the upload average the server keeps for this
+        // account: search responses advertise it, and the server only says it
+        // when asked. The response arrives as a statistics event naming us,
+        // which is what routes it to the transfer domain.
+        server.write(
+                new dev.slsk.internal.messaging.messages.UserStatisticsRequest(server.username()), cancellationSignal);
         distributedConnectionManager.updateStatus(cancellationSignal);
     }
 

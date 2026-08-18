@@ -33,6 +33,16 @@ public interface PeerServices {
     dev.slsk.internal.UploadAdmission admission();
 
     /**
+     * Returns what we tell peers our average upload speed is, in bytes per
+     * second.
+     *
+     * <p>The server's average for this account as last heard, not a local
+     * estimate. It goes into every search response, where peers read it to
+     * rank us as a source.
+     */
+    int advertisedUploadSpeed();
+
+    /**
      * Serves a file to a peer whose request the policy allowed.
      *
      * @param user who asked

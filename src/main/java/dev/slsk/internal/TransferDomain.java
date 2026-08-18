@@ -165,6 +165,19 @@ final class TransferDomain implements PeerServices {
     private final UploadRetry uploadRetry;
 
     /**
+     * What we tell peers our average upload speed is, in bytes per second.
+     *
+     * <p>The server's number, not a local estimate: every upload served is
+     * reported to the server, which folds it into the account's average, and
+     * this is that average as last heard — seeded after login, refreshed after
+     * each report. It goes into every search response we send, which is what
+     * peers rank us as a source by; left at zero we advertise ourselves as the
+     * slowest source on the network.
+     */
+    private final java.util.concurrent.atomic.AtomicInteger advertisedUploadSpeed =
+            new java.util.concurrent.atomic.AtomicInteger();
+
+    /**
      * Who decides what an offered file is.
      *
      * <p>The download queue, once the downloads facet installs itself. Until
@@ -424,6 +437,23 @@ final class TransferDomain implements PeerServices {
         return admission;
     }
 
+    @Override
+    public int advertisedUploadSpeed() {
+        return advertisedUploadSpeed.get();
+    }
+
+    /**
+     * Adopts the server's upload average for this account.
+     *
+     * <p>Called when a statistics response names us; the engine listens for
+     * those and routes ours here.
+     *
+     * @param bytesPerSecond the average the server reported
+     */
+    void advertisedUploadSpeed(int bytesPerSecond) {
+        advertisedUploadSpeed.set(Math.max(0, bytesPerSecond));
+    }
+
     void downloadOffers(DownloadOffers value) {
         this.downloadOffers = Objects.requireNonNull(value, "downloadOffers");
     }
@@ -563,6 +593,7 @@ final class TransferDomain implements PeerServices {
                         if (outcome instanceof TransferOutcome.Succeeded succeeded) {
                             admission.served(user, succeeded.bytes());
                             uploadRetry.succeeded(user, path);
+                            reportUploadSpeed(succeeded);
                         } else if (outcome instanceof TransferOutcome.Failed failed && failed.retryable()) {
                             // The peer was sent UploadFailed, which prompts a
                             // well-behaved client to re-queue on its own; the
@@ -582,6 +613,40 @@ final class TransferDomain implements PeerServices {
                     }
                 },
                 failure -> diagnostic.warning("Failed to serve " + path + " to " + user, failure));
+    }
+
+    /**
+     * Tells the server how fast the upload that just finished ran.
+     *
+     * <p>The server folds each report into the account's average, which is the
+     * speed peers rank us by. It does not push the refreshed average back, so
+     * our own statistics are requested right after; the response arrives as a
+     * statistics event naming us, and the engine routes it to
+     * {@link #advertisedUploadSpeed(int)}.
+     *
+     * <p>Best-effort: the upload finished, and a failure to talk about it —
+     * the server dropped between the last byte and here — must not turn a
+     * served file into a diagnostic-worthy problem for the serve path.
+     *
+     * @param succeeded how the upload ended
+     */
+    private void reportUploadSpeed(TransferOutcome.Succeeded succeeded) {
+        long nanos = succeeded.elapsed().toNanos();
+        if (succeeded.bytes() <= 0 || nanos <= 0) {
+            return;
+        }
+        long bytesPerSecond = (long) (succeeded.bytes() / (nanos / 1_000_000_000.0));
+        if (bytesPerSecond <= 0) {
+            return;
+        }
+        try {
+            server.sendUploadSpeed((int) Math.min(bytesPerSecond, Integer.MAX_VALUE));
+            server.write(
+                    new dev.slsk.internal.messaging.messages.UserStatisticsRequest(server.username()),
+                    CancellationSignal.none());
+        } catch (RuntimeException failure) {
+            diagnostic.debug("Failed to report the upload speed to the server: " + failure.getMessage());
+        }
     }
 
     /**

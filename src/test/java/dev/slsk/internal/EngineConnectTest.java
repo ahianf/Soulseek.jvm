@@ -136,6 +136,13 @@ class EngineConnectTest {
         PrivateRoomToggle toggle =
                 assertInstanceOf(PrivateRoomToggle.class, fixture.connection.outgoingMessages.get(1));
         assertEquals(fixture.options.isAcceptPrivateRoomInvitations(), toggle.isAcceptInvitations());
+        assertEquals(
+                "alice",
+                assertInstanceOf(
+                                dev.slsk.internal.messaging.messages.UserStatisticsRequest.class,
+                                fixture.connection.outgoingMessages.get(2))
+                        .getUsername(),
+                "login asks for our own statistics, which seed the advertised upload speed");
         assertEquals(1, fixture.distributed.updateCount);
         assertSame(token, fixture.distributed.updateToken);
         assertEquals(
@@ -145,10 +152,42 @@ class EngineConnectTest {
                         SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGING_IN),
                         loggedIn()),
                 states);
-        assertEquals(List.of("wait", "raw", "message", "message", "distributed"), fixture.sequence);
+        assertEquals(List.of("wait", "raw", "message", "message", "message", "distributed"), fixture.sequence);
         fixture.connection.tokens.forEach(observed -> assertSame(token, observed));
         assertSame(token, fixture.waiter.token);
         fixture.close();
+    }
+
+    @Test
+    void adoptsOurOwnStatisticsAsTheAdvertisedUploadSpeed() {
+        Fixture fixture = new Fixture();
+        fixture.connection.fireConnected = true;
+        fixture.client.connect("127.0.0.1", 2271, "alice", "secret", CancellationSignal.none());
+
+        fixture.factory.messageRead.handle(fixture.connection.proxy, new MessageEvent(statistics("bob", 999_999)));
+        assertEquals(
+                0,
+                fixture.client.transfers().advertisedUploadSpeed(),
+                "another user's statistics are not ours to advertise");
+
+        fixture.factory.messageRead.handle(fixture.connection.proxy, new MessageEvent(statistics("alice", 52_000)));
+        assertEquals(
+                52_000,
+                fixture.client.transfers().advertisedUploadSpeed(),
+                "our own statistics carry the server's upload average, which is what peers are shown");
+        fixture.close();
+    }
+
+    /** A statistics response as the server encodes one. */
+    private static byte[] statistics(String username, int averageSpeed) {
+        return new dev.slsk.internal.messaging.MessageBuilder()
+                .writeCode(MessageCode.Server.GET_USER_STATS)
+                .writeString(username)
+                .writeInteger(averageSpeed)
+                .writeLong(3)
+                .writeInteger(2)
+                .writeInteger(1)
+                .build();
     }
 
     @Test

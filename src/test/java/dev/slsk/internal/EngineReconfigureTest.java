@@ -107,9 +107,11 @@ class EngineReconfigureTest {
         boolean reconnect = fixture.client.reconfigureOptions(new SoulseekClientOptionsPatch(), token);
 
         assertFalse(reconnect);
-        assertEquals(2, fixture.server.messages.size());
+        assertEquals(3, fixture.server.messages.size());
         assertInstanceOf(SetListenPortCommand.class, fixture.server.messages.get(0));
         assertInstanceOf(PrivateRoomToggle.class, fixture.server.messages.get(1));
+        assertInstanceOf(
+                dev.slsk.internal.messaging.messages.UserStatisticsRequest.class, fixture.server.messages.get(2));
         fixture.server.tokens.forEach(observed -> assertSame(token, observed));
         assertEquals(1, fixture.distributed.updateCount);
         assertSame(token, fixture.distributed.token);

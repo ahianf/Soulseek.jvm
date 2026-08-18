@@ -48,6 +48,14 @@ public final class DefaultSearchResponder implements SearchResponder {
     private final Endpoints endpoints;
     private final Supplier<dev.slsk.spi.ShareCatalog> catalog;
     private final Supplier<String> loggedInUsername;
+
+    /**
+     * Our advertised average upload speed, in bytes per second; peers read it
+     * from the response to rank us as a source. The transfer domain owns the
+     * number — it is the server's average for this account as last heard.
+     */
+    private final java.util.function.IntSupplier advertisedUploadSpeed;
+
     private final DiagnosticSink diagnostic;
     private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<SearchResponderEventListener<SearchRequestEvent>> requestListeners =
@@ -66,8 +74,9 @@ public final class DefaultSearchResponder implements SearchResponder {
             TokenFactory tokens,
             Endpoints endpoints,
             Supplier<dev.slsk.spi.ShareCatalog> catalog,
-            Supplier<String> loggedInUsername) {
-        this(options, peers, tokens, endpoints, catalog, loggedInUsername, null);
+            Supplier<String> loggedInUsername,
+            java.util.function.IntSupplier advertisedUploadSpeed) {
+        this(options, peers, tokens, endpoints, catalog, loggedInUsername, advertisedUploadSpeed, null);
     }
 
     /** Creates a responder. */
@@ -78,6 +87,7 @@ public final class DefaultSearchResponder implements SearchResponder {
             Endpoints endpoints,
             Supplier<dev.slsk.spi.ShareCatalog> catalog,
             Supplier<String> loggedInUsername,
+            java.util.function.IntSupplier advertisedUploadSpeed,
             DiagnosticSink diagnosticFactory) {
         this.options = Objects.requireNonNull(options, "options");
         this.peers = Objects.requireNonNull(peers, "peers");
@@ -85,6 +95,7 @@ public final class DefaultSearchResponder implements SearchResponder {
         this.endpoints = Objects.requireNonNull(endpoints, "endpoints");
         this.catalog = Objects.requireNonNull(catalog, "catalog");
         this.loggedInUsername = Objects.requireNonNull(loggedInUsername, "loggedInUsername");
+        this.advertisedUploadSpeed = Objects.requireNonNull(advertisedUploadSpeed, "advertisedUploadSpeed");
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(options.get().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
@@ -169,7 +180,7 @@ public final class DefaultSearchResponder implements SearchResponder {
                     token,
                     catalog.get().search(dev.slsk.user.Username.of(username), query, MAXIMUM_MATCHES),
                     true,
-                    0,
+                    advertisedUploadSpeed.getAsInt(),
                     0);
         } catch (Throwable failure) {
             warnResolution(username, token, query, unwrap(failure));

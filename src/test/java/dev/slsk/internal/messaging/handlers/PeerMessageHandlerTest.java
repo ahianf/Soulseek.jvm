@@ -240,10 +240,12 @@ class PeerMessageHandlerTest {
     void searchRequestWritesNonemptyResponseAndSuppressesEmptyOrNull() {
         List<SearchFile> matches = List.of(new SearchFile(FILENAME, 123L, FileAttributes.none()));
         Fixture fixture = new Fixture(catalog(null, null, (requester, terms) -> matches));
+        fixture.client.advertisedUploadSpeed = 52_000;
         fixture.handler.handleMessageRead(fixture.connection.proxy, peerSearchRequest(TOKEN, "query"));
         assertArrayEquals(
-                Catalogs.searchResponse("me", TOKEN, matches, true, 0, 0).toByteArray(),
-                fixture.connection.bytes.getFirst());
+                Catalogs.searchResponse("me", TOKEN, matches, true, 52_000, 0).toByteArray(),
+                fixture.connection.bytes.getFirst(),
+                "the response advertises the upload speed the transfer domain reports");
 
         fixture = new Fixture(catalog(null, null, (requester, terms) -> List.of()));
         fixture.handler.handleMessageRead(fixture.connection.proxy, peerSearchRequest(TOKEN, "empty"));
@@ -727,6 +729,14 @@ class PeerMessageHandlerTest {
         @Override
         public dev.slsk.internal.UploadAdmission admission() {
             return admission;
+        }
+
+        /** What the search-response tests assert we advertised. */
+        private int advertisedUploadSpeed;
+
+        @Override
+        public int advertisedUploadSpeed() {
+            return advertisedUploadSpeed;
         }
 
         @Override

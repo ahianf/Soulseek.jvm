@@ -179,6 +179,84 @@ class EngineUploadTest {
     }
 
     @Test
+    void aServedUploadReportsItsSpeedToTheServer() throws InterruptedException {
+        try (Fixture fixture = new Fixture()) {
+            fixture.client.server().username("me");
+            fixture.client.setShareCatalog(resolvingCatalog(new byte[] {5, 4, 3, 2, 1}));
+
+            fixture.client.transfers().serve(dev.slsk.user.Username.of("alice"), "shared\\song.mp3");
+
+            // The serve is dispatched onto its own virtual thread, so the
+            // report is awaited rather than asserted immediately. The server
+            // also sees the peer-address lookup the upload run makes, so the
+            // report is picked out by type rather than by position.
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            while (fixture.server.messages.stream()
+                            .noneMatch(dev.slsk.internal.messaging.messages.UserStatisticsRequest.class::isInstance)
+                    && System.nanoTime() < deadline) {
+                Thread.sleep(10);
+            }
+
+            List<OutgoingMessage> reported = List.copyOf(fixture.server.messages).stream()
+                    .filter(message -> message instanceof dev.slsk.internal.messaging.messages.SendUploadSpeedCommand
+                            || message instanceof dev.slsk.internal.messaging.messages.UserStatisticsRequest)
+                    .toList();
+            assertEquals(2, reported.size(), "a served upload reports its speed and asks for the new average");
+            assertTrue(
+                    assertInstanceOf(dev.slsk.internal.messaging.messages.SendUploadSpeedCommand.class, reported.get(0))
+                                    .getSpeed()
+                            > 0,
+                    "the reported speed is the served upload's own average");
+            assertEquals(
+                    "me",
+                    assertInstanceOf(dev.slsk.internal.messaging.messages.UserStatisticsRequest.class, reported.get(1))
+                            .getUsername(),
+                    "the refreshed average is asked for, so search responses advertise the server's number");
+        }
+    }
+
+    /** A catalog that resolves every path to the given bytes. */
+    private static dev.slsk.spi.ShareCatalog resolvingCatalog(byte[] bytes) {
+        return new dev.slsk.spi.ShareCatalog() {
+            @Override
+            public dev.slsk.share.BrowseResponse browse(dev.slsk.user.Username requester) {
+                return dev.slsk.share.BrowseResponse.empty();
+            }
+
+            @Override
+            public List<dev.slsk.share.Directory> directory(dev.slsk.user.Username requester, String path) {
+                return List.of();
+            }
+
+            @Override
+            public List<dev.slsk.search.SearchFile> search(dev.slsk.user.Username requester, String terms, int limit) {
+                return List.of();
+            }
+
+            @Override
+            public java.util.Optional<dev.slsk.spi.ResolvedFile> resolve(
+                    dev.slsk.user.Username requester, String path) {
+                return java.util.Optional.of(new dev.slsk.spi.ResolvedFile() {
+                    @Override
+                    public long size() {
+                        return bytes.length;
+                    }
+
+                    @Override
+                    public java.nio.channels.ReadableByteChannel open(long offset) {
+                        return java.nio.channels.Channels.newChannel(new ByteArrayInputStream(bytes));
+                    }
+                });
+            }
+
+            @Override
+            public dev.slsk.share.ShareIndex index() {
+                return dev.slsk.share.ShareIndex.empty();
+            }
+        };
+    }
+
+    @Test
     void rejectsTokensUsedByUploadsOrDownloads() {
         try (Fixture fixture = new Fixture()) {
             fixture.client.getUploadRegistry().put(8, transfer(TransferDirection.UPLOAD, "other", "other", 8));
