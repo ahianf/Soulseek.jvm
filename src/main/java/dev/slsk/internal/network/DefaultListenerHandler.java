@@ -7,6 +7,7 @@ package dev.slsk.internal.network;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.internal.common.CacheLookupResult;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
@@ -25,7 +26,6 @@ import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
 
@@ -108,11 +108,11 @@ public final class DefaultListenerHandler implements ListenerHandler {
             System.arraycopy(body, 0, message, lengthBytes.length, body.length);
             routeInitialization(connection, message);
         } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
+            Throwable cause = failure;
             diagnostic.debug("Failed to initialize direct connection from "
                     + connection.getIpEndpoint().getAddress().getHostAddress()
                     + ":" + connection.getIpEndpoint().getPort()
-                    + ": " + message(cause));
+                    + ": " + Failures.message(cause));
             connection.disconnect(null, asException(cause));
             connection.close();
         }
@@ -250,18 +250,6 @@ public final class DefaultListenerHandler implements ListenerHandler {
             builder.append(String.format("%02X", value & 0xff));
         }
         return builder.toString();
-    }
-
-    private static Throwable unwrap(Throwable failure) {
-        Throwable current = failure;
-        while (current instanceof CompletionException && current.getCause() != null) {
-            current = current.getCause();
-        }
-        return current;
-    }
-
-    private static String message(Throwable failure) {
-        return failure.getMessage() == null ? "" : failure.getMessage();
     }
 
     private static Exception asException(Throwable failure) {

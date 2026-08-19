@@ -8,6 +8,7 @@ import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
@@ -51,7 +52,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
@@ -291,12 +291,12 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     private void report(MessageCode.Peer code, MessageConnection connection, Throwable failure) {
-        Throwable cause = unwrap(failure);
+        Throwable cause = failure;
         diagnostic.warning(
                 "Error handling peer message: " + code + " from "
                         + connection.getUsername() + " ("
                         + connection.getIpEndpoint() + "); "
-                        + message(cause),
+                        + Failures.message(cause),
                 cause);
     }
 
@@ -323,7 +323,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                     "Error handling peer message: " + code + " from "
                             + connection.getUsername() + " ("
                             + connection.getIpEndpoint() + "); "
-                            + message(failure),
+                            + Failures.message(failure),
                     failure);
         }
     }
@@ -390,12 +390,12 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                         services.advertisedUploadSpeed(),
                         0);
             } catch (Throwable failure) {
-                Throwable cause = unwrap(failure);
+                Throwable cause = failure;
                 diagnostic.warning(
                         "Error resolving search response for query '"
                                 + request.getQuery() + "' requested by "
                                 + connection.getUsername() + " with token "
-                                + request.getToken() + ": " + message(cause),
+                                + request.getToken() + ": " + Failures.message(cause),
                         cause);
                 return;
             }
@@ -415,12 +415,12 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 response =
                         Catalogs.browse(services.catalog().browse(dev.slsk.user.Username.of(connection.getUsername())));
             } catch (Throwable failure) {
-                Throwable cause = unwrap(failure);
+                Throwable cause = failure;
                 // A catalog that throws is a bug in the application, not a
                 // reason to leave a peer hanging on a read that never
                 // completes. Answer with nothing, the same as a share we
                 // decline to show them.
-                diagnostic.warning("The share catalog failed to answer a browse: " + message(cause), cause);
+                diagnostic.warning("The share catalog failed to answer a browse: " + Failures.message(cause), cause);
                 response = new BrowseResponse();
             }
             if (response instanceof RawBrowseResponse raw) {
@@ -441,8 +441,9 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 directories = Catalogs.directories(services.catalog()
                         .directory(dev.slsk.user.Username.of(connection.getUsername()), request.getDirectoryName()));
             } catch (Throwable failure) {
-                Throwable cause = unwrap(failure);
-                diagnostic.warning("The share catalog failed to answer a folder request: " + message(cause), cause);
+                Throwable cause = failure;
+                diagnostic.warning(
+                        "The share catalog failed to answer a folder request: " + Failures.message(cause), cause);
                 return;
             }
             connection.write(new FolderContentsResponse(request.getToken(), request.getDirectoryName(), directories));
@@ -565,8 +566,8 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 // carry filesystem details a stranger should not see. Silence
                 // would leave the peer hanging until its own timeout.
                 diagnostic.warning(
-                        "Failed to start serving " + filename + " to " + username + ": " + message(failure),
-                        unwrap(failure));
+                        "Failed to start serving " + filename + " to " + username + ": " + Failures.message(failure),
+                        failure);
                 return new EnqueueResult(true, "Enqueue failed due to internal error");
             }
         }
@@ -597,18 +598,6 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         } catch (IOException ignored) {
             // Source ignores stream disposal failures.
         }
-    }
-
-    private static Throwable unwrap(Throwable failure) {
-        Throwable current = failure;
-        while (current instanceof CompletionException && current.getCause() != null) {
-            current = current.getCause();
-        }
-        return current;
-    }
-
-    private static String message(Throwable failure) {
-        return failure.getMessage() == null ? "" : failure.getMessage();
     }
 
     private record EnqueueResult(boolean rejected, String message) {}

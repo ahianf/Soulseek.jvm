@@ -6,6 +6,7 @@ package dev.slsk.internal.messaging.handlers;
 
 import dev.slsk.internal.ServerLink;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.WaitKey;
@@ -30,7 +31,6 @@ import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.search.SearchResponder;
 import java.util.Base64;
 import java.util.Objects;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
 
@@ -215,12 +215,12 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                             + message.length + " bytes");
             }
         } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
+            Throwable cause = failure;
             diagnostic.warning(
                     "Error handling distributed message: " + code + " from "
                             + connection.getUsername() + " ("
                             + connection.getIpEndpoint() + "); "
-                            + message(cause),
+                            + Failures.message(cause),
                     cause);
         }
     }
@@ -247,8 +247,8 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
             DistributedSearchRequest search = DistributedSearchRequest.fromByteArray(distributed);
             broadcastAndRespond(distributed, search);
         } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
-            diagnostic.warning("Error handling embedded message: " + code + "; " + message(cause), cause);
+            Throwable cause = failure;
+            diagnostic.warning("Error handling embedded message: " + code + "; " + Failures.message(cause), cause);
         }
     }
 
@@ -284,8 +284,8 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                 () -> mesh.get().broadcastMessage(distributed),
                 failure -> diagnostic.warning(
                         "Error broadcasting search request from " + search.getUsername() + " with token "
-                                + search.getToken() + ": " + message(unwrap(failure)),
-                        unwrap(failure)));
+                                + search.getToken() + ": " + Failures.message(failure),
+                        failure));
         if (Objects.equals(search.getUsername(), server.username())) {
             return;
         }
@@ -293,17 +293,17 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                 () -> searchResponses.get().tryRespond(search.getUsername(), search.getToken(), search.getQuery()),
                 failure -> diagnostic.warning(
                         "Error responding to search request from " + search.getUsername() + " with token "
-                                + search.getToken() + ": " + message(unwrap(failure)),
-                        unwrap(failure)));
+                                + search.getToken() + ": " + Failures.message(failure),
+                        failure));
     }
 
     private void warnChild(MessageCode.Distributed code, MessageConnection connection, Throwable failure) {
-        Throwable cause = unwrap(failure);
+        Throwable cause = failure;
         diagnostic.warning(
                 "Error handling distributed child message: " + code
                         + " from " + connection.getUsername() + " ("
                         + connection.getIpEndpoint() + "); "
-                        + message(cause),
+                        + Failures.message(cause),
                 cause);
     }
 
@@ -315,17 +315,5 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
 
     private void raiseDiagnostic(DiagnosticEvent eventData) {
         diagnosticListeners.forEach(listener -> listener.handle(this, eventData));
-    }
-
-    private static Throwable unwrap(Throwable failure) {
-        Throwable current = failure;
-        while (current instanceof CompletionException && current.getCause() != null) {
-            current = current.getCause();
-        }
-        return current;
-    }
-
-    private static String message(Throwable failure) {
-        return failure.getMessage() == null ? "" : failure.getMessage();
     }
 }

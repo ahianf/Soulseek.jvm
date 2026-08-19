@@ -5,6 +5,7 @@
 package dev.slsk.internal.search;
 
 import dev.slsk.internal.common.CacheLookupResult;
+import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
@@ -19,7 +20,6 @@ import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.share.Catalogs;
 import java.net.InetSocketAddress;
 import java.util.Objects;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
 
@@ -160,7 +160,8 @@ public final class DefaultSearchResponder implements SearchResponder {
             }
         } catch (Throwable failure) {
             diagnostic.warning(
-                    "Error removing cached search response " + responseToken + ": " + message(failure), failure);
+                    "Error removing cached search response " + responseToken + ": " + Failures.message(failure),
+                    failure);
         }
         return false;
     }
@@ -183,7 +184,7 @@ public final class DefaultSearchResponder implements SearchResponder {
                     advertisedUploadSpeed.getAsInt(),
                     0);
         } catch (Throwable failure) {
-            warnResolution(username, token, query, unwrap(failure));
+            warnResolution(username, token, query, failure);
             return false;
         }
         if (response.getFileCount() + response.getLockedFileCount() <= 0) {
@@ -204,7 +205,8 @@ public final class DefaultSearchResponder implements SearchResponder {
             lookup = cache.remove(responseToken);
         } catch (Throwable failure) {
             diagnostic.warning(
-                    "Error retrieving cached search response " + responseToken + ": " + message(failure), failure);
+                    "Error retrieving cached search response " + responseToken + ": " + Failures.message(failure),
+                    failure);
             return false;
         }
         if (!lookup.found()) {
@@ -224,12 +226,12 @@ public final class DefaultSearchResponder implements SearchResponder {
             raiseResponseDelivered(record);
             return true;
         } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
+            Throwable cause = failure;
             diagnostic.debug(
                     "Failed to send cached search response " + responseToken
                             + " to " + record.username() + " for query '"
                             + record.query() + "' with token " + record.token()
-                            + ": " + message(cause),
+                            + ": " + Failures.message(cause),
                     cause);
             raiseResponseFailed(record);
             return false;
@@ -265,11 +267,11 @@ public final class DefaultSearchResponder implements SearchResponder {
             raiseResponseDelivered(new SearchResponseCacheRecord(username, token, query, response));
             return true;
         } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
+            Throwable cause = failure;
             diagnostic.debug(
                     "Failed to send search response to " + username
                             + " for query '" + query + "' with token " + token
-                            + ": " + message(cause),
+                            + ": " + Failures.message(cause),
                     cause);
             return false;
         }
@@ -342,7 +344,7 @@ public final class DefaultSearchResponder implements SearchResponder {
                     "Error caching undelivered search response "
                             + responseToken + " for query '" + query
                             + "' requested by " + username + " with token "
-                            + token + ": " + message(failure),
+                            + token + ": " + Failures.message(failure),
                     failure);
         }
     }
@@ -351,7 +353,7 @@ public final class DefaultSearchResponder implements SearchResponder {
         diagnostic.warning(
                 "Error resolving search response for query '" + query
                         + "' requested by " + username + " with token " + token
-                        + ": " + message(failure),
+                        + ": " + Failures.message(failure),
                 failure);
     }
 
@@ -380,18 +382,5 @@ public final class DefaultSearchResponder implements SearchResponder {
 
     private static int totalFiles(SearchResponse response) {
         return response.getFileCount() + response.getLockedFileCount();
-    }
-
-    private static String message(Throwable failure) {
-        return failure.getMessage() == null ? "" : failure.getMessage();
-    }
-
-    private static Throwable unwrap(Throwable failure) {
-        Throwable current = failure;
-        while ((current instanceof CompletionException || current instanceof java.util.concurrent.ExecutionException)
-                && current.getCause() != null) {
-            current = current.getCause();
-        }
-        return current;
     }
 }

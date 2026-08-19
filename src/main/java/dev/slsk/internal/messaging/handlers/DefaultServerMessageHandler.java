@@ -90,7 +90,6 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
 
@@ -399,7 +398,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 }
             }
         } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
+            Throwable cause = failure;
             diagnostic.warning("Error handling server message: " + code + "; " + failureMessage(cause), cause);
         }
     }
@@ -446,7 +445,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         // it returns, and the server has more to say meanwhile.
         NetworkExecutor.dispatch(
                 () -> distributed.get().addParentConnection(parents),
-                failure -> diagnostic.debug("Error handling NetInfo message: " + failureMessage(unwrap(failure))));
+                failure -> diagnostic.debug("Error handling NetInfo message: " + failureMessage(failure)));
     }
 
     private void handleCannotConnect(byte[] message) {
@@ -595,7 +594,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     }
 
     private void warnServerMessage(MessageCode.Server code, Throwable failure) {
-        Throwable cause = unwrap(failure);
+        Throwable cause = failure;
         diagnostic.warning("Error handling server message: " + code + "; " + failureMessage(cause), cause);
     }
 
@@ -603,15 +602,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         diagnostic.debug("Error handling ConnectToPeer response from "
                 + response.getUsername() + " ("
                 + response.getIpEndpoint() + "): "
-                + failureMessage(unwrap(failure)));
-    }
-
-    private static Throwable unwrap(Throwable failure) {
-        Throwable current = failure;
-        while (current instanceof CompletionException && current.getCause() != null) {
-            current = current.getCause();
-        }
-        return current;
+                + failureMessage(failure));
     }
 
     private static String failureMessage(Throwable failure) {
