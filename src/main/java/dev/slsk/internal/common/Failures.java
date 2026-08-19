@@ -6,7 +6,6 @@ package dev.slsk.internal.common;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -25,51 +24,6 @@ import java.util.concurrent.TimeoutException;
 public final class Failures {
 
     private Failures() {}
-
-    /**
-     * Strips the {@link CompletionException} wrappers off a failure.
-     *
-     * @param failure the failure to unwrap
-     * @return the innermost cause that is not a completion wrapper
-     */
-    public static Throwable unwrap(Throwable failure) {
-        Throwable current = failure;
-        while (current instanceof CompletionException && current.getCause() != null) {
-            current = current.getCause();
-        }
-        return current;
-    }
-
-    /**
-     * Rethrows a failure the way {@code CompletableFuture.join()} presented it.
-     *
-     * <p>Blocking internals raise the failures that used to arrive through a
-     * future, and every call site in this library was written against what
-     * {@code join()} produced: a {@link CancellationException} raw, a
-     * {@link CompletionException} passed straight through, and anything else
-     * wrapped in one. Keeping that shape is what let the future come out from
-     * under several hundred call sites without any of them changing how they
-     * read a failure — {@link #unwrap(Throwable)} and an {@code instanceof}
-     * still mean what they meant.
-     *
-     * <p>Declared to return so a caller can write {@code throw propagate(x)}
-     * and the compiler can see the path ends there. It never returns.
-     *
-     * @param failure the failure to rethrow
-     * @return never; the return type exists for definite assignment
-     */
-    public static RuntimeException propagate(Throwable failure) {
-        if (failure instanceof CancellationException cancellation) {
-            throw cancellation;
-        }
-        if (failure instanceof CompletionException completion) {
-            throw completion;
-        }
-        if (failure instanceof Error error) {
-            throw error;
-        }
-        throw new CompletionException(failure);
-    }
 
     /**
      * Returns a failure's message, never {@code null}.
@@ -137,8 +91,14 @@ public final class Failures {
      */
     @SafeVarargs
     public static RuntimeException raise(
-            Throwable failure, String prefix, Class<? extends Throwable>... preservedFailures) {
-        Throwable cause = unwrap(failure);
+            Throwable cause, String prefix, Class<? extends Throwable>... preservedFailures)
+            throws InterruptedException {
+        // An interrupt is the caller's own signal and is never rewritten:
+        // burying it under "the operation failed" is what forced the facade
+        // boundary to dig through cause chains to honor its contract.
+        if (cause instanceof InterruptedException interrupted) {
+            throw interrupted;
+        }
         // NoResponseException alongside the other two because it *is* the
         // surfaced deadline: an inner layer that has already named a timeout
         // must not have it renamed "the operation failed" by an outer one.
@@ -166,15 +126,14 @@ public final class Failures {
      * @param failure the failure to surface
      * @return never; the return type exists so a caller can write {@code throw}
      */
-    public static RuntimeException surface(Throwable failure) {
-        Throwable cause = unwrap(failure);
+    public static RuntimeException surface(Throwable cause) {
         if (cause instanceof TimeoutException) {
             throw new NoResponseException(cause.getMessage(), cause);
         }
-        throw rethrow(cause, message(cause));
+        throw asUnchecked(cause, message(cause));
     }
 
-    private static RuntimeException rethrow(Throwable cause, String message) {
+    private static RuntimeException asUnchecked(Throwable cause, String message) {
         if (cause instanceof RuntimeException runtime) {
             throw runtime;
         }

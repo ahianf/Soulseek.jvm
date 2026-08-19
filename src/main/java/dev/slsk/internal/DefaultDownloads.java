@@ -223,6 +223,11 @@ final class DefaultDownloads implements Downloads {
                     .getDownloadPlaceInQueue(
                             entry.user().value(), entry.request().path());
             return position == null ? java.util.OptionalInt.empty() : java.util.OptionalInt.of(position);
+        } catch (InterruptedException interrupted) {
+            // A poll cut short answers nothing; the position we have is still
+            // the last one the peer gave.
+            Thread.currentThread().interrupt();
+            return java.util.OptionalInt.empty();
         } catch (RuntimeException unreachable) {
             return java.util.OptionalInt.empty();
         }

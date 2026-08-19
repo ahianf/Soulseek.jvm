@@ -38,7 +38,10 @@ public final class Outcomes {
         try {
             return operation.join();
         } catch (Throwable failure) {
-            Throwable cause = Failures.unwrap(failure);
+            Throwable cause = failure;
+            while (cause instanceof java.util.concurrent.CompletionException && cause.getCause() != null) {
+                cause = cause.getCause();
+            }
             if (cause instanceof java.util.concurrent.TimeoutException) {
                 throw new dev.slsk.exceptions.NoResponseException(cause.getMessage(), cause);
             }

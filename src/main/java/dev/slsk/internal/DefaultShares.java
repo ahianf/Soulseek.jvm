@@ -80,6 +80,9 @@ final class DefaultShares implements Shares {
         }
         try {
             client.server().setSharedCounts(current.directoryCount(), current.fileCount());
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            client.getDiagnostic().warning("Interrupted announcing the share counts", interrupted);
         } catch (RuntimeException failure) {
             client.getDiagnostic().warning("Failed to announce the share counts", failure);
         }

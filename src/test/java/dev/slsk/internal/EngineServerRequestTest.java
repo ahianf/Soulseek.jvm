@@ -48,13 +48,14 @@ import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 
 class EngineServerRequestTest {
     @Test
-    void changePasswordUsesTypedCorrelationAndConfirmsResponse() {
+    void changePasswordUsesTypedCorrelationAndConfirmsResponse() throws Exception {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
         try (SoulseekEngine client = loggedInClient(connection, waiter)) {
@@ -91,7 +92,7 @@ class EngineServerRequestTest {
     }
 
     @Test
-    void getPrivilegesReturnsTypedCorrelatedResponse() {
+    void getPrivilegesReturnsTypedCorrelatedResponse() throws Exception {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
         try (SoulseekEngine client = loggedInClient(connection, waiter)) {
@@ -141,7 +142,7 @@ class EngineServerRequestTest {
     }
 
     @Test
-    void grantPrivilegesWritesWithoutWaitingForAResponse() {
+    void grantPrivilegesWritesWithoutWaitingForAResponse() throws Exception {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
         try (SoulseekEngine client = loggedInClient(connection, waiter)) {
@@ -159,7 +160,7 @@ class EngineServerRequestTest {
     }
 
     @Test
-    void userLookupsReturnTypedCorrelatedResponses() {
+    void userLookupsReturnTypedCorrelatedResponses() throws Exception {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
         try (SoulseekEngine client = loggedInClient(connection, waiter)) {
@@ -200,7 +201,7 @@ class EngineServerRequestTest {
     }
 
     @Test
-    void watchUserReturnsDataOrReportsMissingUser() {
+    void watchUserReturnsDataOrReportsMissingUser() throws Exception {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
         try (SoulseekEngine client = loggedInClient(connection, waiter)) {
@@ -221,7 +222,7 @@ class EngineServerRequestTest {
     }
 
     @Test
-    void roomListAndMembershipUseExpectedCorrelations() {
+    void roomListAndMembershipUseExpectedCorrelations() throws Exception {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
         try (SoulseekEngine client = loggedInClient(connection, waiter)) {
@@ -533,13 +534,41 @@ class EngineServerRequestTest {
      * be concurrent, and a test that wants to observe a call mid-flight is
      * exactly such a caller. The assertions around it are unchanged.
      */
-    private static <T> CompletableFuture<T> inBackground(java.util.function.Supplier<T> call) {
-        return CompletableFuture.supplyAsync(call, Executors.newVirtualThreadPerTaskExecutor());
+    private static <T> CompletableFuture<T> inBackground(BlockingCall<T> call) {
+        return CompletableFuture.supplyAsync(
+                () -> {
+                    try {
+                        return call.get();
+                    } catch (Exception checked) {
+                        throw new CompletionException(checked);
+                    }
+                },
+                Executors.newVirtualThreadPerTaskExecutor());
     }
 
     /** Void-returning variant of {@link #inBackground}. */
-    private static CompletableFuture<Void> inBackground(Runnable call) {
-        return CompletableFuture.runAsync(call, Executors.newVirtualThreadPerTaskExecutor());
+    private static CompletableFuture<Void> inBackground(VoidCall call) {
+        return CompletableFuture.runAsync(
+                () -> {
+                    try {
+                        call.run();
+                    } catch (Exception checked) {
+                        throw new CompletionException(checked);
+                    }
+                },
+                Executors.newVirtualThreadPerTaskExecutor());
+    }
+
+    /** A blocking facade call under test; checked outcomes surface via the future. */
+    @FunctionalInterface
+    private interface BlockingCall<T> {
+        T get() throws Exception;
+    }
+
+    /** Void variant of {@link BlockingCall}. */
+    @FunctionalInterface
+    private interface VoidCall {
+        void run() throws Exception;
     }
 
     /**
@@ -589,7 +618,7 @@ class EngineServerRequestTest {
     /** A blocking client call under test; void now that the API is blocking. */
     @FunctionalInterface
     private interface Operation {
-        void run();
+        void run() throws Exception;
     }
 
     private static final class ConnectionProbe {

@@ -244,8 +244,16 @@ class EnginePrivateRoomTest {
     }
 
     /** Runs a blocking call on a virtual thread so the test can observe it mid-flight. */
-    private static CompletableFuture<Void> inBackground(Runnable call) {
-        return CompletableFuture.runAsync(call, java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor());
+    private static CompletableFuture<Void> inBackground(Operation call) {
+        return CompletableFuture.runAsync(
+                () -> {
+                    try {
+                        call.run();
+                    } catch (Exception checked) {
+                        throw new java.util.concurrent.CompletionException(checked);
+                    }
+                },
+                java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor());
     }
 
     /**
@@ -290,7 +298,7 @@ class EnginePrivateRoomTest {
     /** A blocking client call under test; void now that the API is blocking. */
     @FunctionalInterface
     private interface Operation {
-        void run();
+        void run() throws Exception;
     }
 
     private record Case(Operation operation, OutgoingMessage message, WaitKey waitKey) {}

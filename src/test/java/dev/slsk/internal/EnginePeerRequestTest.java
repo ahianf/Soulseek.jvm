@@ -60,6 +60,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
@@ -68,7 +69,7 @@ class EnginePeerRequestTest {
     private static final InetSocketAddress ENDPOINT = new InetSocketAddress(InetAddress.getLoopbackAddress(), 46001);
 
     @Test
-    void connectToUserResolvesEndpointAndGetsConnection() {
+    void connectToUserResolvesEndpointAndGetsConnection() throws Exception {
         Fixture fixture = new Fixture();
         fixture.waiter.results.put(
                 UserAddressResponse.class,
@@ -91,7 +92,7 @@ class EnginePeerRequestTest {
     }
 
     @Test
-    void connectToUserInvalidatesOnRequestAndLogsOnlySuccess() {
+    void connectToUserInvalidatesOnRequestAndLogsOnlySuccess() throws Exception {
         Fixture fixture = new Fixture();
         fixture.waiter.results.put(
                 UserAddressResponse.class,
@@ -115,7 +116,7 @@ class EnginePeerRequestTest {
     }
 
     @Test
-    void getUserInfoRegistersWaitThenUsesPeerConnection() {
+    void getUserInfoRegistersWaitThenUsesPeerConnection() throws Exception {
         Fixture fixture = new Fixture();
         UserInfo expected = new UserInfo("description", 3, 4, true, new byte[] {1, 2});
         fixture.waiter.results.put(UserInfo.class, CompletableFuture.completedFuture(expected));
@@ -243,7 +244,7 @@ class EnginePeerRequestTest {
     }
 
     @Test
-    void directoryContentsUsesTokenCorrelationAndReturnsSnapshot() {
+    void directoryContentsUsesTokenCorrelationAndReturnsSnapshot() throws Exception {
         Fixture fixture = new Fixture();
         fixture.waiter.results.put(
                 UserAddressResponse.class,
@@ -270,7 +271,7 @@ class EnginePeerRequestTest {
     }
 
     @Test
-    void queuePlaceRequiresActiveDownloadAndReturnsResponse() {
+    void queuePlaceRequiresActiveDownloadAndReturnsResponse() throws Exception {
         Fixture fixture = new Fixture();
         fixture.waiter.results.put(
                 UserAddressResponse.class,
@@ -383,7 +384,7 @@ class EnginePeerRequestTest {
     }
 
     @Test
-    void browseReturnsResponseAndReportsInitialAndFinalProgress() {
+    void browseReturnsResponseAndReportsInitialAndFinalProgress() throws Exception {
         Fixture fixture = new Fixture();
         BrowseResponse response = new BrowseResponse(List.of(new Directory("shared")));
         fixture.waiter.results.put(BrowseResponse.class, CompletableFuture.completedFuture(response));
@@ -469,7 +470,7 @@ class EnginePeerRequestTest {
     }
 
     @Test
-    void browseFailsIndefiniteWaitOnSetupFailureAndDisconnect() {
+    void browseFailsIndefiniteWaitOnSetupFailureAndDisconnect() throws Exception {
         Fixture setupFixture = new Fixture();
         setupFixture.waiter.results.put(BrowseResponse.class, new CompletableFuture<>());
         setupFixture.waiter.results.put(BrowseResponseConnection.class, new CompletableFuture<>());
@@ -525,13 +526,22 @@ class EnginePeerRequestTest {
      * be concurrent, and a test that wants to observe a call mid-flight is
      * exactly such a caller. The assertions around it are unchanged.
      */
-    private static <T> CompletableFuture<T> inBackground(java.util.function.Supplier<T> call) {
-        return CompletableFuture.supplyAsync(call, Executors.newVirtualThreadPerTaskExecutor());
+    private static <T> CompletableFuture<T> inBackground(BlockingCall<T> call) {
+        return CompletableFuture.supplyAsync(
+                () -> {
+                    try {
+                        return call.get();
+                    } catch (Exception checked) {
+                        throw new CompletionException(checked);
+                    }
+                },
+                Executors.newVirtualThreadPerTaskExecutor());
     }
 
-    /** Void-returning variant of {@link #inBackground}. */
-    private static CompletableFuture<Void> inBackground(Runnable call) {
-        return CompletableFuture.runAsync(call, Executors.newVirtualThreadPerTaskExecutor());
+    /** A blocking facade call under test; checked outcomes surface via the future. */
+    @FunctionalInterface
+    private interface BlockingCall<T> {
+        T get() throws Exception;
     }
 
     /**

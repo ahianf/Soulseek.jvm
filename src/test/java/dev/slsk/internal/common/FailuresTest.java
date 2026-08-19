@@ -12,7 +12,6 @@ import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.exceptions.UserOfflineException;
 import java.io.IOException;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,20 +23,6 @@ import org.junit.jupiter.api.Test;
  * asserted a dozen times over as a side effect of testing something else.
  */
 class FailuresTest {
-
-    @Test
-    @DisplayName("nested completion wrappers are stripped down to the real cause")
-    void unwrapsNestedCompletionExceptions() {
-        IllegalArgumentException cause = new IllegalArgumentException("bad");
-        assertSame(cause, Failures.unwrap(new CompletionException(new CompletionException(cause))));
-    }
-
-    @Test
-    @DisplayName("a failure that is not a completion wrapper is returned as it stands")
-    void leavesOrdinaryFailuresAlone() {
-        IllegalStateException failure = new IllegalStateException("plain");
-        assertSame(failure, Failures.unwrap(failure));
-    }
 
     @Test
     void aMissingMessageReadsAsEmptyRatherThanNull() {

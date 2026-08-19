@@ -292,8 +292,7 @@ final class SearchDomain {
                                 + searchSemaphore.availablePermits()
                                 + " available)");
             }
-        } catch (Throwable failure) {
-            Throwable cause = Failures.unwrap(failure);
+        } catch (Throwable cause) {
             if (cause instanceof CancellationException) {
                 search.complete(SearchState.CANCELLED);
                 updateState.accept(SearchState.COMPLETED.or(SearchState.CANCELLED));

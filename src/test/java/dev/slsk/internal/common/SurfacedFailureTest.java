@@ -12,7 +12,6 @@ import dev.slsk.exceptions.RoomJoinForbiddenException;
 import dev.slsk.exceptions.SoulseekClientException;
 import java.io.IOException;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,7 +27,7 @@ import org.junit.jupiter.api.Test;
 class SurfacedFailureTest {
 
     @Test
-    @DisplayName("a runtime failure arrives as itself, not wrapped in a CompletionException")
+    @DisplayName("a runtime failure arrives as itself")
     void unwrapsRuntimeFailures() {
         IllegalStateException cause = new IllegalStateException("boom");
         assertSame(cause, assertThrows(IllegalStateException.class, () -> Failures.surface(cause)));
@@ -44,23 +43,16 @@ class SurfacedFailureTest {
     }
 
     /**
-     * Cancellation stays cancellation.
-     *
-     * <p>Two shapes reach here and both must: wrapped, which is how a
-     * cancellation travelled while the internals were future-shaped, and bare,
-     * which is how one arrives now. Both give the caller back its own
-     * exception. That is a change for the better — {@code join()} used to
-     * substitute a fresh {@code CancellationException} for the bare shape, so
-     * the identity was in the cause rather than in the exception.
+     * Cancellation stays cancellation: the caller gets back its own exception.
+     * That is a change for the better over {@code join()}, which substituted a
+     * fresh {@code CancellationException}, putting the identity in the cause
+     * rather than in the exception.
      */
     @Test
     @DisplayName("cancellation is preserved, because a caller asked for it")
     void preservesCancellation() {
         CancellationException cause = new CancellationException("cancelled");
 
-        assertSame(
-                cause,
-                assertThrows(CancellationException.class, () -> Failures.surface(new CompletionException(cause))));
         assertSame(cause, assertThrows(CancellationException.class, () -> Failures.surface(cause)));
     }
 
@@ -85,13 +77,22 @@ class SurfacedFailureTest {
     }
 
     @Test
-    @DisplayName("raise maps a deadline the same way, however deep it was wrapped")
+    @DisplayName("raise maps a deadline to NoResponseException")
     void raiseMapsTimeoutToNoResponse() {
         TimeoutException cause = new TimeoutException("timed out");
-        NoResponseException mapped = assertThrows(
-                NoResponseException.class,
-                () -> Failures.raise(new CompletionException(cause), "Failed to join chat room x: "));
+        NoResponseException mapped =
+                assertThrows(NoResponseException.class, () -> Failures.raise(cause, "Failed to join chat room x: "));
         assertSame(cause, mapped.getCause());
+    }
+
+    @Test
+    @DisplayName("raise passes an interrupt through as itself, never wrapped")
+    void raisePassesInterruptsThrough() {
+        InterruptedException interrupted = new InterruptedException("stopped");
+        assertSame(
+                interrupted,
+                assertThrows(
+                        InterruptedException.class, () -> Failures.raise(interrupted, "Failed to join chat room x: ")));
     }
 
     @Test
@@ -106,13 +107,5 @@ class SurfacedFailureTest {
     void rethrowsErrorsUntouched() {
         StackOverflowError cause = new StackOverflowError();
         assertSame(cause, assertThrows(StackOverflowError.class, () -> Failures.surface(cause)));
-    }
-
-    @Test
-    @DisplayName("nested completion wrappers are stripped down to the real cause")
-    void unwrapsNestedCompletionExceptions() {
-        IllegalArgumentException cause = new IllegalArgumentException("bad");
-        Throwable nested = new CompletionException(new CompletionException(cause));
-        assertSame(cause, assertThrows(IllegalArgumentException.class, () -> Failures.surface(nested)));
     }
 }

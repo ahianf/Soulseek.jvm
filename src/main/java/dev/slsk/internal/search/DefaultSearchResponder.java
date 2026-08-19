@@ -39,7 +39,8 @@ public final class DefaultSearchResponder implements SearchResponder {
          * @param cancellationSignal the cancellation signal
          * @return the endpoint
          */
-        java.net.InetSocketAddress resolve(String username, CancellationSignal cancellationSignal);
+        java.net.InetSocketAddress resolve(String username, CancellationSignal cancellationSignal)
+                throws InterruptedException;
     }
 
     private final Supplier<SoulseekClientOptions> options;

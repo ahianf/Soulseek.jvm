@@ -139,6 +139,10 @@ final class DefaultUsers implements Users {
         for (Username user : Set.copyOf(watches.keySet())) {
             try {
                 directory.watchUser(user.value());
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                diagnostics.warning("Interrupted re-registering watches after login", interrupted);
+                return;
             } catch (RuntimeException exception) {
                 diagnostics.warning("Failed to re-register the watch on " + user + " after login", exception);
             }
@@ -187,7 +191,7 @@ final class DefaultUsers implements Users {
         return BlockingInvocation.run(client.getScheduler(), timeout, signal -> info(user, signal));
     }
 
-    private UserInfo info(Username user, CancellationSignal signal) {
+    private UserInfo info(Username user, CancellationSignal signal) throws InterruptedException {
         Objects.requireNonNull(user, "user");
         dev.slsk.internal.user.UserInfo source = directory.getUserInfo(user.value(), signal);
         return new UserInfo(
@@ -209,7 +213,7 @@ final class DefaultUsers implements Users {
         return BlockingInvocation.run(client.getScheduler(), timeout, signal -> statistics(user, signal));
     }
 
-    private UserStatistics statistics(Username user, CancellationSignal signal) {
+    private UserStatistics statistics(Username user, CancellationSignal signal) throws InterruptedException {
         Objects.requireNonNull(user, "user");
         return statistics(directory.getUserStatistics(user.value(), signal));
     }
@@ -224,7 +228,7 @@ final class DefaultUsers implements Users {
         return BlockingInvocation.run(client.getScheduler(), timeout, signal -> status(user, signal));
     }
 
-    private UserStatus status(Username user, CancellationSignal signal) {
+    private UserStatus status(Username user, CancellationSignal signal) throws InterruptedException {
         Objects.requireNonNull(user, "user");
         return status(directory.getUserStatus(user.value(), signal));
     }
@@ -239,7 +243,7 @@ final class DefaultUsers implements Users {
         return BlockingInvocation.run(client.getScheduler(), timeout, signal -> endpoint(user, signal));
     }
 
-    private InetSocketAddress endpoint(Username user, CancellationSignal signal) {
+    private InetSocketAddress endpoint(Username user, CancellationSignal signal) throws InterruptedException {
         Objects.requireNonNull(user, "user");
         return directory.getUserEndpoint(user.value(), signal);
     }
@@ -254,7 +258,7 @@ final class DefaultUsers implements Users {
         return BlockingInvocation.run(client.getScheduler(), timeout, signal -> browse(request, signal));
     }
 
-    private Browse browse(BrowseRequest request, CancellationSignal signal) {
+    private Browse browse(BrowseRequest request, CancellationSignal signal) throws InterruptedException {
         Objects.requireNonNull(request, "request");
         BrowseOptions options = new BrowseOptions(
                 (int) request.timeout().toMillis(),
@@ -282,7 +286,8 @@ final class DefaultUsers implements Users {
         return BlockingInvocation.run(client.getScheduler(), timeout, signal -> directory(user, path, signal));
     }
 
-    private List<Directory> directory(Username user, String path, CancellationSignal signal) {
+    private List<Directory> directory(Username user, String path, CancellationSignal signal)
+            throws InterruptedException {
         Objects.requireNonNull(user, "user");
         Objects.requireNonNull(path, "path");
         return directories(directory.getDirectoryContents(user.value(), path, null, signal));
@@ -327,6 +332,15 @@ final class DefaultUsers implements Users {
                         if (data != null) {
                             registration.status = new UserStatus(user, presence(data.getStatus()), false);
                         }
+                    } catch (InterruptedException interrupted) {
+                        // watch() is a frozen no-throws signature; the interrupt
+                        // stays visible on the flag and the failure keeps the
+                        // shape this surface has always used for it.
+                        Thread.currentThread().interrupt();
+                        registration.removed = true;
+                        watches.remove(user, registration);
+                        throw new dev.slsk.exceptions.SoulseekClientException(
+                                "Failed to watch user " + user + ": interrupted", interrupted);
                     } catch (RuntimeException failure) {
                         registration.removed = true;
                         watches.remove(user, registration);
@@ -384,6 +398,9 @@ final class DefaultUsers implements Users {
                 watches.remove(user, registration);
                 try {
                     directory.unwatchUser(user.value());
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    diagnostics.warning("Interrupted releasing the watch on " + user, interrupted);
                 } catch (RuntimeException exception) {
                     diagnostics.warning("Failed to release the watch on " + user, exception);
                 }

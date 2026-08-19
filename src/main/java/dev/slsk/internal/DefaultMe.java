@@ -99,6 +99,9 @@ final class DefaultMe implements Me {
         if (event.isRequiresAcknowlegement() && event.getId() != null) {
             try {
                 server.acknowledgePrivilegeNotification(event.getId());
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                diagnostics.warning("Interrupted acknowledging privilege notification " + event.getId(), interrupted);
             } catch (RuntimeException exception) {
                 diagnostics.warning("Failed to acknowledge privilege notification " + event.getId(), exception);
             }
@@ -132,7 +135,7 @@ final class DefaultMe implements Me {
         });
     }
 
-    private void presence(UserPresence value, CancellationSignal signal) {
+    private void presence(UserPresence value, CancellationSignal signal) throws InterruptedException {
         Objects.requireNonNull(value, "presence");
         UserPresence previous = presence.getAndSet(value);
         if (previous == value) {
@@ -171,7 +174,7 @@ final class DefaultMe implements Me {
         return BlockingInvocation.run(client.getScheduler(), timeout, this::privileges);
     }
 
-    private int privileges(CancellationSignal signal) {
+    private int privileges(CancellationSignal signal) throws InterruptedException {
         Integer days = server.getPrivileges(signal);
         return days == null ? 0 : days;
     }
@@ -192,7 +195,7 @@ final class DefaultMe implements Me {
         });
     }
 
-    private void giftPrivileges(Username to, int days, CancellationSignal signal) {
+    private void giftPrivileges(Username to, int days, CancellationSignal signal) throws InterruptedException {
         Objects.requireNonNull(to, "to");
         if (days <= 0) {
             throw new IllegalArgumentException("days must be positive: " + days);
@@ -216,7 +219,7 @@ final class DefaultMe implements Me {
         });
     }
 
-    private void changePassword(String newPassword, CancellationSignal signal) {
+    private void changePassword(String newPassword, CancellationSignal signal) throws InterruptedException {
         Objects.requireNonNull(newPassword, "newPassword");
         server.changePassword(newPassword, signal);
     }

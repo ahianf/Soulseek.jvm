@@ -183,7 +183,7 @@ final class DownloadRun {
             beginQueuedDownload(transferStartRequested);
             receiveFile();
         } catch (Throwable failure) {
-            handleFailure(Failures.unwrap(failure));
+            handleFailure(failure);
         } finally {
             cleanup();
         }
@@ -284,9 +284,8 @@ final class DownloadRun {
                     + download.getUsername() + " (id: " + connection.getId()
                     + ", state: " + connection.getState() + ")");
         } else {
-            Throwable cause = Failures.unwrap(failure);
-            if (!(cause instanceof ConnectionException)) {
-                throw Failures.propagate(failure);
+            if (!(failure instanceof ConnectionException)) {
+                throw Failures.rethrow(failure);
             }
             // The remote client never initiated the transfer connection, so initiate one from
             // this end. The remote client in this scenario is most likely Nicotine+.

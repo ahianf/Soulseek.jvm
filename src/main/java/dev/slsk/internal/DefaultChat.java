@@ -89,6 +89,11 @@ final class DefaultChat implements Chat {
         }
         try {
             server.acknowledgePrivateMessage(event.getId());
+        } catch (InterruptedException interrupted) {
+            // The bus's delivery thread was asked to stop; the message stays
+            // unacknowledged and the server redelivers it at the next login.
+            Thread.currentThread().interrupt();
+            diagnostics.warning("Interrupted acknowledging private message " + event.getId(), interrupted);
         } catch (RuntimeException exception) {
             diagnostics.warning("Failed to acknowledge private message " + event.getId(), exception);
         }
@@ -110,7 +115,8 @@ final class DefaultChat implements Chat {
         });
     }
 
-    private void send(Username to, String message, dev.slsk.internal.concurrent.CancellationSignal signal) {
+    private void send(Username to, String message, dev.slsk.internal.concurrent.CancellationSignal signal)
+            throws InterruptedException {
         Objects.requireNonNull(to, "to");
         Objects.requireNonNull(message, "message");
         server.sendPrivateMessage(to.value(), message, signal);

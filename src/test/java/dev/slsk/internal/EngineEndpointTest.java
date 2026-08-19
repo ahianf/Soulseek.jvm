@@ -58,7 +58,7 @@ class EngineEndpointTest {
     }
 
     @Test
-    void returnsExpectedEndpointUsingExactCorrelationAndToken() {
+    void returnsExpectedEndpointUsingExactCorrelationAndToken() throws Exception {
         Fixture fixture = new Fixture(null);
         fixture.waiter.result = CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT));
         CancellationController source = new CancellationController();
@@ -111,7 +111,7 @@ class EngineEndpointTest {
     }
 
     @Test
-    void cacheHitReturnsWithoutNetworkAndMissUpdatesCache() {
+    void cacheHitReturnsWithoutNetworkAndMissUpdatesCache() throws Exception {
         CacheProbe cache = new CacheProbe();
         cache.value = CacheLookupResult.found(ENDPOINT);
         Fixture fixture = new Fixture(cache);
@@ -155,7 +155,7 @@ class EngineEndpointTest {
     }
 
     @Test
-    void issuesOneRequestPerUserUnderTheDefaultCache() {
+    void issuesOneRequestPerUserUnderTheDefaultCache() throws Exception {
         // Passing no cache no longer means having no cache: the options default
         // one in. Two concurrent lookups of the same user therefore serialize
         // behind the per-user semaphore and the second is answered from the
@@ -166,14 +166,12 @@ class EngineEndpointTest {
 
         java.util.concurrent.atomic.AtomicReference<InetSocketAddress> first = new AtomicReference<>();
         java.util.concurrent.atomic.AtomicReference<InetSocketAddress> second = new AtomicReference<>();
-        Thread firstCaller =
-                Thread.ofVirtual().start(() -> first.set(fixture.client.users().getUserEndpoint("alice")));
+        Thread firstCaller = Thread.ofVirtual().start(() -> first.set(endpointOf(fixture, "alice")));
 
         // The first caller must be holding the semaphore before the second
         // starts, or the second can win the race and the pairing is untestable.
         awaitValue(() -> fixture.connection.writes.get() == 1);
-        Thread secondCaller =
-                Thread.ofVirtual().start(() -> second.set(fixture.client.users().getUserEndpoint("alice")));
+        Thread secondCaller = Thread.ofVirtual().start(() -> second.set(endpointOf(fixture, "alice")));
 
         response.complete(new UserAddressResponse("alice", ENDPOINT));
         join(firstCaller);
@@ -187,7 +185,7 @@ class EngineEndpointTest {
     }
 
     @Test
-    void serializesSameUserLookupsBehindTheCacheAndSweepsIdleSemaphores() {
+    void serializesSameUserLookupsBehindTheCacheAndSweepsIdleSemaphores() throws Exception {
         CacheProbe cache = new CacheProbe();
         cache.value = CacheLookupResult.notFound();
         Fixture fixture = new Fixture(cache);
@@ -220,10 +218,11 @@ class EngineEndpointTest {
                 fixture.client.users().getUserEndpoint("alice", firstSource.getSignal());
             } catch (RuntimeException cancelled) {
                 // Expected; this caller is the one being cancelled.
+            } catch (InterruptedException unexpected) {
+                Thread.currentThread().interrupt();
             }
         });
-        Thread secondCaller = Thread.ofVirtual()
-                .start(() -> second.set(fixture.client.users().getUserEndpoint("alice", CancellationSignal.none())));
+        Thread secondCaller = Thread.ofVirtual().start(() -> second.set(endpointOf(fixture, "alice")));
 
         awaitValue(() -> fixture.waiter.registrations.get() == 2);
         firstSource.cancel();
@@ -441,6 +440,15 @@ class EngineEndpointTest {
             updatedUsername = username;
             updatedEndpoint = endpoint;
             value = CacheLookupResult.found(endpoint);
+        }
+    }
+    /** Resolves on a spawned thread; an interrupt here is a test failure. */
+    private static InetSocketAddress endpointOf(Fixture fixture, String username) {
+        try {
+            return fixture.client.users().getUserEndpoint(username);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("unexpected interrupt resolving " + username, interrupted);
         }
     }
 }

@@ -47,7 +47,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -202,7 +201,7 @@ final class UploadRun {
             updateProgress(currentStreamPosition());
             updateState(TransferState.COMPLETED.or(TransferState.SUCCEEDED));
         } catch (Throwable failure) {
-            handleFailure(Failures.unwrap(failure));
+            handleFailure(failure);
         } finally {
             cleanup();
         }
@@ -225,7 +224,7 @@ final class UploadRun {
         connection.addDisconnectedListener(disconnectedListener);
     }
 
-    private void readStartOffset() {
+    private void readStartOffset() throws InterruptedException, TimeoutException {
         try {
             byte[] bytes = connection.read(8, cancellationSignal);
             if (bytes.length != 8) {
@@ -233,13 +232,12 @@ final class UploadRun {
             }
             upload.setStartOffset(
                     ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).getLong());
-        } catch (Throwable failure) {
-            Throwable cause = Failures.unwrap(failure);
+        } catch (Throwable cause) {
             domain.diagnostic.debug("Failed to read start offset for upload of "
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + ": " + Failures.message(cause));
             if (cause instanceof CancellationException || cause instanceof TimeoutException) {
-                throw new CompletionException(cause);
+                throw Failures.rethrow(cause);
             }
             throw new MessageReadException("Failed to read transfer start offset: " + Failures.message(cause), cause);
         }
@@ -261,7 +259,7 @@ final class UploadRun {
         }
     }
 
-    private void writeAndAwaitDisconnectRace() throws InterruptedException {
+    private void writeAndAwaitDisconnectRace() throws InterruptedException, TimeoutException {
         long remaining = upload.getSize() - upload.getStartOffset();
         Settlement settlement = upload.settlement();
         if (remaining == 0) {
@@ -301,7 +299,7 @@ final class UploadRun {
 
         Throwable failure = settlement.await();
         if (failure != null) {
-            throw Failures.propagate(failure);
+            throw Failures.rethrow(failure);
         }
     }
 
@@ -313,7 +311,7 @@ final class UploadRun {
      * Nicotine+ takes its time — so this reads until the peer goes away or the
      * linger budget lapses.
      */
-    private void linger() {
+    private void linger() throws TimeoutException {
         long deadline =
                 System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(Math.max(0, transferOptions.getMaximumLingerTime()));
         try {
@@ -342,7 +340,7 @@ final class UploadRun {
                 }
                 Throwable failure = read.failure();
                 if (failure != null) {
-                    throw Failures.propagate(failure);
+                    throw Failures.rethrow(failure);
                 }
                 Thread.sleep(100);
             }
@@ -350,7 +348,7 @@ final class UploadRun {
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
         } catch (Throwable failure) {
-            if (!(Failures.unwrap(failure) instanceof ConnectionReadException)) {
+            if (!(failure instanceof ConnectionReadException)) {
                 throw failure;
             }
         }

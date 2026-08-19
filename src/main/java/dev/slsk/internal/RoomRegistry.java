@@ -49,19 +49,20 @@ final class RoomRegistry {
         this.server = Objects.requireNonNull(server, "server");
     }
 
-    RoomData joinRoom(String roomName) {
+    RoomData joinRoom(String roomName) throws InterruptedException {
         return joinRoom(roomName, false, CancellationSignal.none());
     }
 
-    RoomData joinRoom(String roomName, boolean isPrivate) {
+    RoomData joinRoom(String roomName, boolean isPrivate) throws InterruptedException {
         return joinRoom(roomName, isPrivate, CancellationSignal.none());
     }
 
-    RoomData joinRoom(String roomName, CancellationSignal cancellationSignal) {
+    RoomData joinRoom(String roomName, CancellationSignal cancellationSignal) throws InterruptedException {
         return joinRoom(roomName, false, cancellationSignal);
     }
 
-    RoomData joinRoom(String roomName, boolean isPrivate, CancellationSignal cancellationSignal) {
+    RoomData joinRoom(String roomName, boolean isPrivate, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         CommonUtils.requireText(roomName, "roomName");
         server.requireLoggedIn("join a chat room");
         CancellationSignal token = CommonUtils.token(cancellationSignal);
@@ -73,15 +74,11 @@ final class RoomRegistry {
             server.write(new JoinRoomRequest(roomName, isPrivate), token);
             try {
                 return wait.await();
-            } catch (Throwable failure) {
-                Throwable cause = Failures.unwrap(failure);
-                if (cause instanceof TimeoutException) {
-                    throw new NoResponseException("The server didn't respond to the request "
-                            + "to join chat room " + roomName
-                            + ". This probably indicates that the "
-                            + "room is already joined.");
-                }
-                throw Failures.propagate(cause);
+            } catch (TimeoutException lapsed) {
+                throw new NoResponseException("The server didn't respond to the request "
+                        + "to join chat room " + roomName
+                        + ". This probably indicates that the "
+                        + "room is already joined.");
             }
         } catch (Throwable failure) {
             throw Failures.raise(
@@ -92,11 +89,11 @@ final class RoomRegistry {
         }
     }
 
-    RoomList getRoomList() {
+    RoomList getRoomList() throws InterruptedException {
         return getRoomList(CancellationSignal.none());
     }
 
-    RoomList getRoomList(CancellationSignal cancellationSignal) {
+    RoomList getRoomList(CancellationSignal cancellationSignal) throws InterruptedException {
         server.requireLoggedIn("fetch the list of chat rooms");
         return server.request(
                 new RoomListRequest(),
@@ -106,11 +103,12 @@ final class RoomRegistry {
                 "Failed to fetch the list of chat rooms from the server: ");
     }
 
-    void addPrivateRoomMember(String roomName, String requestedUsername) {
+    void addPrivateRoomMember(String roomName, String requestedUsername) throws InterruptedException {
         addPrivateRoomMember(roomName, requestedUsername, CancellationSignal.none());
     }
 
-    void addPrivateRoomMember(String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
+    void addPrivateRoomMember(String roomName, String requestedUsername, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         CommonUtils.requireText(roomName, "roomName");
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("add members to private rooms");
@@ -121,11 +119,12 @@ final class RoomRegistry {
                 "Failed to add user " + requestedUsername + " as member of private room " + roomName + ": ");
     }
 
-    void addPrivateRoomModerator(String roomName, String requestedUsername) {
+    void addPrivateRoomModerator(String roomName, String requestedUsername) throws InterruptedException {
         addPrivateRoomModerator(roomName, requestedUsername, CancellationSignal.none());
     }
 
-    void addPrivateRoomModerator(String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
+    void addPrivateRoomModerator(String roomName, String requestedUsername, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         CommonUtils.requireText(roomName, "roomName");
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("add moderators to private rooms");
@@ -136,11 +135,11 @@ final class RoomRegistry {
                 "Failed to add user " + requestedUsername + " as moderator of private room " + roomName + ": ");
     }
 
-    void dropPrivateRoomMembership(String roomName) {
+    void dropPrivateRoomMembership(String roomName) throws InterruptedException {
         dropPrivateRoomMembership(roomName, CancellationSignal.none());
     }
 
-    void dropPrivateRoomMembership(String roomName, CancellationSignal cancellationSignal) {
+    void dropPrivateRoomMembership(String roomName, CancellationSignal cancellationSignal) throws InterruptedException {
         CommonUtils.requireText(roomName, "roomName");
         server.requireLoggedIn("drop private room membership");
         server.command(
@@ -150,11 +149,11 @@ final class RoomRegistry {
                 "Failed to drop membership of private room " + roomName + ": ");
     }
 
-    void dropPrivateRoomOwnership(String roomName) {
+    void dropPrivateRoomOwnership(String roomName) throws InterruptedException {
         dropPrivateRoomOwnership(roomName, CancellationSignal.none());
     }
 
-    void dropPrivateRoomOwnership(String roomName, CancellationSignal cancellationSignal) {
+    void dropPrivateRoomOwnership(String roomName, CancellationSignal cancellationSignal) throws InterruptedException {
         CommonUtils.requireText(roomName, "roomName");
         server.requireLoggedIn("drop private room ownership");
         server.command(
@@ -164,11 +163,11 @@ final class RoomRegistry {
                 "Failed to drop ownership of private room " + roomName + ": ");
     }
 
-    void leaveRoom(String roomName) {
+    void leaveRoom(String roomName) throws InterruptedException {
         leaveRoom(roomName, CancellationSignal.none());
     }
 
-    void leaveRoom(String roomName, CancellationSignal cancellationSignal) {
+    void leaveRoom(String roomName, CancellationSignal cancellationSignal) throws InterruptedException {
         CommonUtils.requireText(roomName, "roomName");
         server.requireLoggedIn("leave a chat room");
         CancellationSignal token = CommonUtils.token(cancellationSignal);
@@ -177,26 +176,23 @@ final class RoomRegistry {
             server.write(new LeaveRoomRequest(roomName), token);
             try {
                 wait.await();
-            } catch (Throwable failure) {
-                Throwable cause = Failures.unwrap(failure);
-                if (cause instanceof TimeoutException) {
-                    throw new NoResponseException("The server didn't respond to the request "
-                            + "to leave chat room " + roomName
-                            + ".  This probably indicates that the "
-                            + "room is not joined.");
-                }
-                throw Failures.propagate(cause);
+            } catch (TimeoutException lapsed) {
+                throw new NoResponseException("The server didn't respond to the request "
+                        + "to leave chat room " + roomName
+                        + ".  This probably indicates that the "
+                        + "room is not joined.");
             }
         } catch (Throwable failure) {
             throw Failures.raise(failure, "Failed to leave chat room " + roomName + ": ", NoResponseException.class);
         }
     }
 
-    void removePrivateRoomMember(String roomName, String requestedUsername) {
+    void removePrivateRoomMember(String roomName, String requestedUsername) throws InterruptedException {
         removePrivateRoomMember(roomName, requestedUsername, CancellationSignal.none());
     }
 
-    void removePrivateRoomMember(String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
+    void removePrivateRoomMember(String roomName, String requestedUsername, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         CommonUtils.requireText(roomName, "roomName");
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("remove users from private rooms");
@@ -207,11 +203,12 @@ final class RoomRegistry {
                 "Failed to remove user " + requestedUsername + " as member of private room " + roomName + ": ");
     }
 
-    void removePrivateRoomModerator(String roomName, String requestedUsername) {
+    void removePrivateRoomModerator(String roomName, String requestedUsername) throws InterruptedException {
         removePrivateRoomModerator(roomName, requestedUsername, CancellationSignal.none());
     }
 
-    void removePrivateRoomModerator(String roomName, String requestedUsername, CancellationSignal cancellationSignal) {
+    void removePrivateRoomModerator(String roomName, String requestedUsername, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         CommonUtils.requireText(roomName, "roomName");
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("remove moderators from private rooms");
@@ -222,11 +219,12 @@ final class RoomRegistry {
                 "Failed to remove user " + requestedUsername + " as moderator of private room " + roomName + ": ");
     }
 
-    void sendRoomMessage(String roomName, String message) {
+    void sendRoomMessage(String roomName, String message) throws InterruptedException {
         sendRoomMessage(roomName, message, CancellationSignal.none());
     }
 
-    void sendRoomMessage(String roomName, String message, CancellationSignal cancellationSignal) {
+    void sendRoomMessage(String roomName, String message, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         CommonUtils.requireText(roomName, "roomName");
         CommonUtils.requireNonEmpty(message, "message");
         server.requireLoggedIn("send a chat room message");
@@ -237,11 +235,12 @@ final class RoomRegistry {
         }
     }
 
-    void setRoomTicker(String roomName, String message) {
+    void setRoomTicker(String roomName, String message) throws InterruptedException {
         setRoomTicker(roomName, message, CancellationSignal.none());
     }
 
-    void setRoomTicker(String roomName, String message, CancellationSignal cancellationSignal) {
+    void setRoomTicker(String roomName, String message, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         CommonUtils.requireText(roomName, "roomName");
         CommonUtils.requireNonEmpty(message, "message");
         server.requireLoggedIn("set chat room tickers");

@@ -179,8 +179,8 @@ public final class ServerLink {
      * @param cancellationSignal the cancellation signal
      * @param failurePrefix prefixes any wrapped failure
      */
-    void command(
-            OutgoingMessage message, WaitKey waitKey, CancellationSignal cancellationSignal, String failurePrefix) {
+    void command(OutgoingMessage message, WaitKey waitKey, CancellationSignal cancellationSignal, String failurePrefix)
+            throws InterruptedException {
         CancellationSignal signal = CommonUtils.token(cancellationSignal);
         try {
             Wait<Void> wait = waiter.register(waitKey, null, signal);
@@ -210,7 +210,8 @@ public final class ServerLink {
             Class<T> resultType,
             CancellationSignal cancellationSignal,
             String failurePrefix,
-            Class<? extends Throwable>... preservedFailures) {
+            Class<? extends Throwable>... preservedFailures)
+            throws InterruptedException {
         CancellationSignal signal = CommonUtils.token(cancellationSignal);
         try {
             Wait<T> wait = waiter.register(waitKey, resultType, null, signal);
@@ -221,11 +222,12 @@ public final class ServerLink {
         }
     }
 
-    void acknowledgePrivateMessage(int privateMessageId) {
+    void acknowledgePrivateMessage(int privateMessageId) throws InterruptedException {
         acknowledgePrivateMessage(privateMessageId, CancellationSignal.none());
     }
 
-    public void acknowledgePrivateMessage(int privateMessageId, CancellationSignal cancellationSignal) {
+    public void acknowledgePrivateMessage(int privateMessageId, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         if (privateMessageId < 0) {
             throw new IllegalArgumentException("The private message ID must not be negative");
         }
@@ -237,11 +239,12 @@ public final class ServerLink {
         diagnostic.debug("Acknowledged private message ID " + privateMessageId);
     }
 
-    void acknowledgePrivilegeNotification(int privilegeNotificationId) {
+    void acknowledgePrivilegeNotification(int privilegeNotificationId) throws InterruptedException {
         acknowledgePrivilegeNotification(privilegeNotificationId, CancellationSignal.none());
     }
 
-    public void acknowledgePrivilegeNotification(int privilegeNotificationId, CancellationSignal cancellationSignal) {
+    public void acknowledgePrivilegeNotification(int privilegeNotificationId, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         if (privilegeNotificationId < 0) {
             throw new IllegalArgumentException("The privilege notification ID must not be negative");
         }
@@ -252,11 +255,11 @@ public final class ServerLink {
                 "Failed to acknowledge privilege notification with ID " + privilegeNotificationId + ": ");
     }
 
-    void changePassword(String password) {
+    void changePassword(String password) throws InterruptedException {
         changePassword(password, CancellationSignal.none());
     }
 
-    void changePassword(String password, CancellationSignal cancellationSignal) {
+    void changePassword(String password, CancellationSignal cancellationSignal) throws InterruptedException {
         CommonUtils.requireText(password, "password");
         requireLoggedIn("change a password");
         String response = request(
@@ -272,11 +275,11 @@ public final class ServerLink {
         }
     }
 
-    Integer getPrivileges() {
+    Integer getPrivileges() throws InterruptedException {
         return getPrivileges(CancellationSignal.none());
     }
 
-    Integer getPrivileges(CancellationSignal cancellationSignal) {
+    Integer getPrivileges(CancellationSignal cancellationSignal) throws InterruptedException {
         requireLoggedIn("check privileges");
         return request(
                 new CheckPrivilegesRequest(),
@@ -286,11 +289,11 @@ public final class ServerLink {
                 "Failed to get privileges: ");
     }
 
-    long pingServer() {
+    long pingServer() throws InterruptedException {
         return pingServer(CancellationSignal.none());
     }
 
-    long pingServer(CancellationSignal cancellationSignal) {
+    long pingServer(CancellationSignal cancellationSignal) throws InterruptedException {
         requireLoggedIn("send a ping");
         CancellationSignal token = CommonUtils.token(cancellationSignal);
         try {
@@ -304,11 +307,12 @@ public final class ServerLink {
         }
     }
 
-    void sendPrivateMessage(String requestedUsername, String message) {
+    void sendPrivateMessage(String requestedUsername, String message) throws InterruptedException {
         sendPrivateMessage(requestedUsername, message, CancellationSignal.none());
     }
 
-    void sendPrivateMessage(String requestedUsername, String message, CancellationSignal cancellationSignal) {
+    void sendPrivateMessage(String requestedUsername, String message, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         CommonUtils.requireText(requestedUsername, "username");
         CommonUtils.requireNonEmpty(message, "message");
         requireLoggedIn("send a private message");
@@ -318,11 +322,11 @@ public final class ServerLink {
                 "Failed to send private message to user " + requestedUsername + ": ");
     }
 
-    void sendUploadSpeed(int speed) {
+    void sendUploadSpeed(int speed) throws InterruptedException {
         sendUploadSpeed(speed, CancellationSignal.none());
     }
 
-    void sendUploadSpeed(int speed, CancellationSignal cancellationSignal) {
+    void sendUploadSpeed(int speed, CancellationSignal cancellationSignal) throws InterruptedException {
         requireLoggedIn("set upload speed");
         if (speed <= 0) {
             throw new IllegalArgumentException("The upload speed must be greater than zero");
@@ -330,11 +334,12 @@ public final class ServerLink {
         send(new SendUploadSpeedCommand(speed), cancellationSignal, "Failed to set upload speed: ");
     }
 
-    void setSharedCounts(int directories, int files) {
+    void setSharedCounts(int directories, int files) throws InterruptedException {
         setSharedCounts(directories, files, CancellationSignal.none());
     }
 
-    void setSharedCounts(int directories, int files, CancellationSignal cancellationSignal) {
+    void setSharedCounts(int directories, int files, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         if (directories < 0) {
             throw new IllegalArgumentException("The directory count must be equal to or greater than zero");
         }
@@ -348,35 +353,36 @@ public final class ServerLink {
                 "Failed to set shared counts to " + directories + " directories and " + files + " files: ");
     }
 
-    void setStatus(UserPresence status) {
+    void setStatus(UserPresence status) throws InterruptedException {
         setStatus(status, CancellationSignal.none());
     }
 
-    void setStatus(UserPresence status, CancellationSignal cancellationSignal) {
+    void setStatus(UserPresence status, CancellationSignal cancellationSignal) throws InterruptedException {
         requireLoggedIn("set online status");
         send(new SetOnlineStatusCommand(status), cancellationSignal, "Failed to set user status to " + status + ": ");
     }
 
-    void startPublicChat() {
+    void startPublicChat() throws InterruptedException {
         startPublicChat(CancellationSignal.none());
     }
 
-    void startPublicChat(CancellationSignal cancellationSignal) {
+    void startPublicChat(CancellationSignal cancellationSignal) throws InterruptedException {
         requireLoggedIn("start public chat");
         send(new StartPublicChatCommand(), cancellationSignal, "Failed to start public chat: ");
     }
 
-    void stopPublicChat() {
+    void stopPublicChat() throws InterruptedException {
         stopPublicChat(CancellationSignal.none());
     }
 
-    void stopPublicChat(CancellationSignal cancellationSignal) {
+    void stopPublicChat(CancellationSignal cancellationSignal) throws InterruptedException {
         requireLoggedIn("stop public chat");
         send(new StopPublicChatCommand(), cancellationSignal, "Failed to stop public chat: ");
     }
 
     /** Writes a fire-and-forget command, saying what failed if it does. */
-    private void send(OutgoingMessage message, CancellationSignal cancellationSignal, String failurePrefix) {
+    private void send(OutgoingMessage message, CancellationSignal cancellationSignal, String failurePrefix)
+            throws InterruptedException {
         try {
             write(message, CommonUtils.token(cancellationSignal));
         } catch (Throwable failure) {

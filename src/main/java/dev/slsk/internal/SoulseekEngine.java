@@ -941,8 +941,7 @@ final class SoulseekEngine implements AutoCloseable {
     }
 
     /** Classifies a connect failure and tears the connection down. */
-    private RuntimeException reportConnectFailure(Throwable failure) {
-        Throwable cause = Failures.unwrap(failure);
+    private RuntimeException reportConnectFailure(Throwable cause) {
         Throwable reported;
         if (cause instanceof TimeoutException) {
             // A lapsed deadline cannot be thrown as itself past here: the
@@ -962,35 +961,31 @@ final class SoulseekEngine implements AutoCloseable {
             InetSocketAddress requestedEndpoint,
             String requestedUsername,
             String password,
-            CancellationSignal cancellationSignal) {
-        try {
-            changeState(SoulseekClientState.CONNECTING, "Connecting", null);
+            CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
+        changeState(SoulseekClientState.CONNECTING, "Connecting", null);
 
-            if (options.isEnableListener()) {
-                listener = clientListenerFactory.create(
-                        options.getListenIpAddress(), options.getListenPort(), options.getIncomingConnectionOptions());
-                listener.addAcceptedListener(listenerHandler::handleConnection);
-                listener.start();
-            }
-
-            MessageConnection connection = connectionFactory.getServerConnection(
-                    requestedEndpoint,
-                    (sender, eventData) ->
-                            changeState(SoulseekClientState.CONNECTED, "Connected to " + ipEndpoint, null),
-                    (sender, eventData) -> disconnect(eventData.getMessage(), eventData.getException()),
-                    serverMessageHandler::handleMessageRead,
-                    serverMessageHandler::handleMessageWritten,
-                    options.getServerConnectionOptions());
-
-            server.connection(connection);
-            connection.connect(cancellationSignal);
-            address = requestedAddress;
-            ipEndpoint = requestedEndpoint;
-            changeState(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGING_IN), "Logging in", null);
-            login(requestedUsername, password, cancellationSignal);
-        } catch (Throwable failure) {
-            throw Failures.propagate(failure);
+        if (options.isEnableListener()) {
+            listener = clientListenerFactory.create(
+                    options.getListenIpAddress(), options.getListenPort(), options.getIncomingConnectionOptions());
+            listener.addAcceptedListener(listenerHandler::handleConnection);
+            listener.start();
         }
+
+        MessageConnection connection = connectionFactory.getServerConnection(
+                requestedEndpoint,
+                (sender, eventData) -> changeState(SoulseekClientState.CONNECTED, "Connected to " + ipEndpoint, null),
+                (sender, eventData) -> disconnect(eventData.getMessage(), eventData.getException()),
+                serverMessageHandler::handleMessageRead,
+                serverMessageHandler::handleMessageWritten,
+                options.getServerConnectionOptions());
+
+        server.connection(connection);
+        connection.connect(cancellationSignal);
+        address = requestedAddress;
+        ipEndpoint = requestedEndpoint;
+        changeState(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGING_IN), "Logging in", null);
+        login(requestedUsername, password, cancellationSignal);
     }
 
     private void login(String requestedUsername, String password, CancellationSignal cancellationSignal)
@@ -1131,8 +1126,7 @@ final class SoulseekEngine implements AutoCloseable {
     }
 
     /** Classifies a reconfiguration failure, which is never rolled back. */
-    private RuntimeException reportReconfigureFailure(Throwable failure) {
-        Throwable cause = Failures.unwrap(failure);
+    private RuntimeException reportReconfigureFailure(Throwable cause) {
         if (cause instanceof CancellationException || cause instanceof TimeoutException) {
             throw Failures.surface(cause);
         }

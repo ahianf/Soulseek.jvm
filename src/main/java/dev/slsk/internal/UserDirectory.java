@@ -81,11 +81,11 @@ final class UserDirectory {
         this.server = Objects.requireNonNull(server, "server");
     }
 
-    UserInfo getUserInfo(String requestedUsername) {
+    UserInfo getUserInfo(String requestedUsername) throws InterruptedException {
         return getUserInfo(requestedUsername, CancellationSignal.none());
     }
 
-    UserInfo getUserInfo(String requestedUsername, CancellationSignal cancellationSignal) {
+    UserInfo getUserInfo(String requestedUsername, CancellationSignal cancellationSignal) throws InterruptedException {
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("fetch user information");
         CancellationSignal token = CommonUtils.token(cancellationSignal);
@@ -109,11 +109,12 @@ final class UserDirectory {
         }
     }
 
-    Boolean getUserPrivileged(String requestedUsername) {
+    Boolean getUserPrivileged(String requestedUsername) throws InterruptedException {
         return getUserPrivileged(requestedUsername, CancellationSignal.none());
     }
 
-    Boolean getUserPrivileged(String requestedUsername, CancellationSignal cancellationSignal) {
+    Boolean getUserPrivileged(String requestedUsername, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("check user privileges");
         return server.request(
@@ -125,11 +126,12 @@ final class UserDirectory {
                 UserOfflineException.class);
     }
 
-    UserStatistics getUserStatistics(String requestedUsername) {
+    UserStatistics getUserStatistics(String requestedUsername) throws InterruptedException {
         return getUserStatistics(requestedUsername, CancellationSignal.none());
     }
 
-    UserStatistics getUserStatistics(String requestedUsername, CancellationSignal cancellationSignal) {
+    UserStatistics getUserStatistics(String requestedUsername, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("fetch user statistics");
         return server.request(
@@ -140,11 +142,12 @@ final class UserDirectory {
                 "Failed to retrieve statistics for user " + requestedUsername + ": ");
     }
 
-    UserStatus getUserStatus(String requestedUsername) {
+    UserStatus getUserStatus(String requestedUsername) throws InterruptedException {
         return getUserStatus(requestedUsername, CancellationSignal.none());
     }
 
-    UserStatus getUserStatus(String requestedUsername, CancellationSignal cancellationSignal) {
+    UserStatus getUserStatus(String requestedUsername, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("fetch user status");
         return server.request(
@@ -156,11 +159,11 @@ final class UserDirectory {
                 UserOfflineException.class);
     }
 
-    UserData watchUser(String requestedUsername) {
+    UserData watchUser(String requestedUsername) throws InterruptedException {
         return watchUser(requestedUsername, CancellationSignal.none());
     }
 
-    UserData watchUser(String requestedUsername, CancellationSignal cancellationSignal) {
+    UserData watchUser(String requestedUsername, CancellationSignal cancellationSignal) throws InterruptedException {
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("add users");
         WatchUserResponse response = server.request(
@@ -176,11 +179,11 @@ final class UserDirectory {
         return response.getUserData();
     }
 
-    void unwatchUser(String requestedUsername) {
+    void unwatchUser(String requestedUsername) throws InterruptedException {
         unwatchUser(requestedUsername, CancellationSignal.none());
     }
 
-    void unwatchUser(String requestedUsername, CancellationSignal cancellationSignal) {
+    void unwatchUser(String requestedUsername, CancellationSignal cancellationSignal) throws InterruptedException {
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("add users");
         try {
@@ -190,11 +193,12 @@ final class UserDirectory {
         }
     }
 
-    void grantUserPrivileges(String requestedUsername, int days) {
+    void grantUserPrivileges(String requestedUsername, int days) throws InterruptedException {
         grantUserPrivileges(requestedUsername, days, CancellationSignal.none());
     }
 
-    void grantUserPrivileges(String requestedUsername, int days, CancellationSignal cancellationSignal) {
+    void grantUserPrivileges(String requestedUsername, int days, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         CommonUtils.requireText(requestedUsername, "username");
         if (days <= 0) {
             throw new IllegalArgumentException("The number of days granted must be greater than zero");
@@ -208,20 +212,20 @@ final class UserDirectory {
         }
     }
 
-    BrowseResponse browse(String requestedUsername) {
+    BrowseResponse browse(String requestedUsername) throws InterruptedException {
         return browse(requestedUsername, null, CancellationSignal.none());
     }
 
-    BrowseResponse browse(String requestedUsername, BrowseOptions browseOptions) {
+    BrowseResponse browse(String requestedUsername, BrowseOptions browseOptions) throws InterruptedException {
         return browse(requestedUsername, browseOptions, CancellationSignal.none());
     }
 
-    BrowseResponse browse(String requestedUsername, CancellationSignal cancellationSignal) {
+    BrowseResponse browse(String requestedUsername, CancellationSignal cancellationSignal) throws InterruptedException {
         return browse(requestedUsername, null, cancellationSignal);
     }
 
-    BrowseResponse browse(
-            String requestedUsername, BrowseOptions browseOptions, CancellationSignal cancellationSignal) {
+    BrowseResponse browse(String requestedUsername, BrowseOptions browseOptions, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("browse");
         BrowseOptions operationOptions = browseOptions == null ? new BrowseOptions() : browseOptions;
@@ -247,9 +251,8 @@ final class UserDirectory {
             } catch (Throwable failure) {
                 // The browse wait has no deadline, so nothing else would ever
                 // release it if getting to the peer failed.
-                Throwable cause = Failures.unwrap(failure);
-                context.getWaiter().fail(browseWaitKey, cause);
-                throw Failures.propagate(cause);
+                context.getWaiter().fail(browseWaitKey, failure);
+                throw Failures.rethrow(failure);
             }
 
             MessageConnection connection = responseConnection.connection();
@@ -283,19 +286,20 @@ final class UserDirectory {
         }
     }
 
-    void connectToUser(String requestedUsername) {
+    void connectToUser(String requestedUsername) throws InterruptedException {
         connectToUser(requestedUsername, false, CancellationSignal.none());
     }
 
-    void connectToUser(String requestedUsername, boolean invalidateCache) {
+    void connectToUser(String requestedUsername, boolean invalidateCache) throws InterruptedException {
         connectToUser(requestedUsername, invalidateCache, CancellationSignal.none());
     }
 
-    void connectToUser(String requestedUsername, CancellationSignal cancellationSignal) {
+    void connectToUser(String requestedUsername, CancellationSignal cancellationSignal) throws InterruptedException {
         connectToUser(requestedUsername, false, cancellationSignal);
     }
 
-    void connectToUser(String requestedUsername, boolean invalidateCache, CancellationSignal cancellationSignal) {
+    void connectToUser(String requestedUsername, boolean invalidateCache, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("connect to other users");
         CancellationSignal token = CommonUtils.token(cancellationSignal);
@@ -312,11 +316,12 @@ final class UserDirectory {
         }
     }
 
-    InetSocketAddress getUserEndpoint(String requestedUsername) {
+    InetSocketAddress getUserEndpoint(String requestedUsername) throws InterruptedException {
         return getUserEndpoint(requestedUsername, CancellationSignal.none());
     }
 
-    InetSocketAddress getUserEndpoint(String requestedUsername, CancellationSignal cancellationSignal) {
+    InetSocketAddress getUserEndpoint(String requestedUsername, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("fetch user endpoint");
         CancellationSignal token = CommonUtils.token(cancellationSignal);
@@ -368,7 +373,8 @@ final class UserDirectory {
     }
 
     InetSocketAddress retrieveUserEndpoint(
-            String requestedUsername, CancellationSignal cancellationSignal, UserEndpointCache cache) {
+            String requestedUsername, CancellationSignal cancellationSignal, UserEndpointCache cache)
+            throws InterruptedException {
         try {
             Wait<UserAddressResponse> wait = context.getWaiter()
                     .register(
@@ -399,16 +405,18 @@ final class UserDirectory {
         }
     }
 
-    List<Directory> getDirectoryContents(String requestedUsername, String directoryName) {
+    List<Directory> getDirectoryContents(String requestedUsername, String directoryName) throws InterruptedException {
         return getDirectoryContents(requestedUsername, directoryName, null, CancellationSignal.none());
     }
 
-    List<Directory> getDirectoryContents(String requestedUsername, String directoryName, int operationToken) {
+    List<Directory> getDirectoryContents(String requestedUsername, String directoryName, int operationToken)
+            throws InterruptedException {
         return getDirectoryContents(requestedUsername, directoryName, operationToken, CancellationSignal.none());
     }
 
     List<Directory> getDirectoryContents(
-            String requestedUsername, String directoryName, CancellationSignal cancellationSignal) {
+            String requestedUsername, String directoryName, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         return getDirectoryContents(requestedUsername, directoryName, null, cancellationSignal);
     }
 
@@ -416,7 +424,8 @@ final class UserDirectory {
             String requestedUsername,
             String directoryName,
             Integer operationToken,
-            CancellationSignal cancellationSignal) {
+            CancellationSignal cancellationSignal)
+            throws InterruptedException {
         CommonUtils.requireText(requestedUsername, "username");
         CommonUtils.requireText(directoryName, "directoryName");
         server.requireLoggedIn("fetch directory contents");
@@ -443,8 +452,11 @@ final class UserDirectory {
         }
     }
 
-    static RuntimeException raiseUserEndpointFailure(Throwable failure, String requestedUsername) {
-        Throwable cause = Failures.unwrap(failure);
+    static RuntimeException raiseUserEndpointFailure(Throwable cause, String requestedUsername)
+            throws InterruptedException {
+        if (cause instanceof InterruptedException interrupted) {
+            throw interrupted;
+        }
         if (cause instanceof UserOfflineException
                 || cause instanceof UserEndpointCacheException
                 || cause instanceof CancellationException

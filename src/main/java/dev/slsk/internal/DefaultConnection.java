@@ -384,7 +384,7 @@ final class DefaultConnection implements Connection {
         return BlockingInvocation.run(client.getScheduler(), timeout, signal -> ping(signal));
     }
 
-    private Duration ping(CancellationSignal signal) {
+    private Duration ping(CancellationSignal signal) throws InterruptedException {
         Long milliseconds = server.pingServer(signal);
         return Duration.ofMillis(milliseconds == null ? 0L : milliseconds);
     }

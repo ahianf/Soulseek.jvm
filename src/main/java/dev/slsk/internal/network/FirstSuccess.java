@@ -83,9 +83,8 @@ final class FirstSuccess {
         } catch (Throwable failure) {
             // The race is lost only once both arms have failed, and the failure
             // the caller sees is the one that ended it.
-            Throwable cause = Failures.unwrap(failure);
-            if (lostArm.getAndSet(cause) != null) {
-                handoff.offer(new Outcome<>(null, cause));
+            if (lostArm.getAndSet(failure) != null) {
+                handoff.offer(new Outcome<>(null, failure));
             }
             return;
         }

@@ -196,7 +196,7 @@ final class TransferDomain implements PeerServices {
     /** Resolves a peer's address. Owned by {@code UserDirectory}; see I5 in the goal. */
     @FunctionalInterface
     interface EndpointResolver {
-        InetSocketAddress resolve(String username, CancellationSignal cancellationSignal);
+        InetSocketAddress resolve(String username, CancellationSignal cancellationSignal) throws InterruptedException;
     }
 
     /** Answers a peer's unsolicited offer of a file. */
@@ -266,7 +266,7 @@ final class TransferDomain implements PeerServices {
         return peers.get();
     }
 
-    InetSocketAddress endpoint(String username, CancellationSignal cancellationSignal) {
+    InetSocketAddress endpoint(String username, CancellationSignal cancellationSignal) throws InterruptedException {
         return endpoints.resolve(username, cancellationSignal);
     }
 
@@ -997,7 +997,7 @@ final class TransferDomain implements PeerServices {
      * @param filename the file
      * @return the peer's place-in-queue
      */
-    Integer getDownloadPlaceInQueue(String requestedUsername, String filename) {
+    Integer getDownloadPlaceInQueue(String requestedUsername, String filename) throws InterruptedException {
         return getDownloadPlaceInQueue(requestedUsername, filename, CancellationSignal.none());
     }
 
@@ -1009,7 +1009,8 @@ final class TransferDomain implements PeerServices {
      * @param cancellationSignal stops the request
      * @return the peer's place-in-queue
      */
-    Integer getDownloadPlaceInQueue(String requestedUsername, String filename, CancellationSignal cancellationSignal) {
+    Integer getDownloadPlaceInQueue(String requestedUsername, String filename, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         CommonUtils.requireText(requestedUsername, "username");
         CommonUtils.requireText(filename, "filename");
         server.requireLoggedIn("check download queue position");

@@ -335,7 +335,7 @@ final class DefaultRooms implements Rooms {
         return BlockingInvocation.run(client.getScheduler(), timeout, signal -> join(name, signal));
     }
 
-    private Room join(String name, CancellationSignal signal) {
+    private Room join(String name, CancellationSignal signal) throws InterruptedException {
         Objects.requireNonNull(name, "room");
         Room joined = room(registry.joinRoom(name, signal));
         events.mutateAndPublish(() -> {
@@ -361,7 +361,7 @@ final class DefaultRooms implements Rooms {
         });
     }
 
-    private void leave(String name, CancellationSignal signal) {
+    private void leave(String name, CancellationSignal signal) throws InterruptedException {
         Objects.requireNonNull(name, "room");
         if (rooms.containsKey(name)) {
             registry.leaveRoom(name, signal);
@@ -388,7 +388,7 @@ final class DefaultRooms implements Rooms {
         });
     }
 
-    private void say(String name, String message, CancellationSignal signal) {
+    private void say(String name, String message, CancellationSignal signal) throws InterruptedException {
         Objects.requireNonNull(name, "room");
         Objects.requireNonNull(message, "message");
         registry.sendRoomMessage(name, message, signal);
@@ -410,7 +410,7 @@ final class DefaultRooms implements Rooms {
         });
     }
 
-    private void setTicker(String name, String message, CancellationSignal signal) {
+    private void setTicker(String name, String message, CancellationSignal signal) throws InterruptedException {
         Objects.requireNonNull(name, "room");
         Objects.requireNonNull(message, "message");
         registry.setRoomTicker(name, message, signal);
@@ -561,19 +561,24 @@ final class DefaultRooms implements Rooms {
             run(timeout, signal -> registry.dropPrivateRoomOwnership(require(room), signal));
         }
 
-        private void run(java.util.function.Consumer<CancellationSignal> operation) throws InterruptedException {
+        private void run(RoomAction operation) throws InterruptedException {
             BlockingInvocation.run(signal -> {
-                operation.accept(signal);
+                operation.run(signal);
                 return null;
             });
         }
 
-        private void run(Duration timeout, java.util.function.Consumer<CancellationSignal> operation)
-                throws InterruptedException, TimeoutException {
+        private void run(Duration timeout, RoomAction operation) throws InterruptedException, TimeoutException {
             BlockingInvocation.run(scheduler, timeout, signal -> {
-                operation.accept(signal);
+                operation.run(signal);
                 return null;
             });
+        }
+
+        /** One private-room registry call under a facade signal. */
+        @FunctionalInterface
+        private interface RoomAction {
+            void run(CancellationSignal signal) throws InterruptedException;
         }
 
         private static <T> T require(T value) {

@@ -156,20 +156,20 @@ public final class BlockingInvocation {
         }
     }
 
-    /** Finds an interrupt preserved under the internal unchecked fault taxonomy. */
+    /**
+     * Finds an interrupt preserved under the internal unchecked fault taxonomy.
+     *
+     * <p>Failures travel unwrapped now, so an interrupt is either the failure
+     * itself or sits one cause deep — under the single domain exception a
+     * boundary like {@code InterruptedOperationException} names it with. The
+     * depth-32 cause walk this replaces existed only to dig interrupts out
+     * from under the deleted {@code CompletionException} layers.
+     */
     public static InterruptedException interruption(Throwable failure) {
-        Throwable current = failure;
-        for (int depth = 0; current != null && depth < 32; depth++) {
-            if (current instanceof InterruptedException interrupted) {
-                return interrupted;
-            }
-            Throwable next = current.getCause();
-            if (next == current) {
-                return null;
-            }
-            current = next;
+        if (failure instanceof InterruptedException interrupted) {
+            return interrupted;
         }
-        return null;
+        return failure != null && failure.getCause() instanceof InterruptedException interrupted ? interrupted : null;
     }
 
     private enum Outcome {

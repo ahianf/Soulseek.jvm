@@ -40,7 +40,7 @@ import org.junit.jupiter.api.Test;
 
 class EngineCommandTest {
     @Test
-    void sendsExpectedCommandsAndForwardsCancellationSignal() {
+    void sendsExpectedCommandsAndForwardsCancellationSignal() throws Exception {
         ConnectionProbe connection = new ConnectionProbe();
         try (SoulseekEngine client = loggedInClient(connection)) {
             CancellationController source = new CancellationController();
@@ -89,7 +89,7 @@ class EngineCommandTest {
     }
 
     @Test
-    void validatesTextRangeAndStateInSourceOrder() {
+    void validatesTextRangeAndStateInSourceOrder() throws Exception {
         ConnectionProbe connection = new ConnectionProbe();
         try (SoulseekEngine client = loggedInClient(connection)) {
             assertThrows(IllegalArgumentException.class, () -> client.server().sendPrivateMessage(" ", "message"));
@@ -154,7 +154,7 @@ class EngineCommandTest {
     }
 
     @Test
-    void acknowledgementCommandsAlsoUseGuardedWritePath() {
+    void acknowledgementCommandsAlsoUseGuardedWritePath() throws Exception {
         ConnectionProbe connection = new ConnectionProbe();
         try (SoulseekEngine client = loggedInClient(connection)) {
             client.server().acknowledgePrivateMessage(123);
@@ -250,7 +250,7 @@ class EngineCommandTest {
     /** A blocking client call under test; void now that the API is blocking. */
     @FunctionalInterface
     private interface Operation {
-        void run();
+        void run() throws Exception;
     }
 
     private static final class ConnectionProbe {

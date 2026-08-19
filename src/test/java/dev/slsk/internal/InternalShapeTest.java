@@ -75,6 +75,27 @@ class InternalShapeTest {
     }
 
     @Test
+    @DisplayName("no CompletionException anywhere in src/main/java")
+    void failuresTravelUnwrapped() {
+        List<String> violations = new ArrayList<>();
+        for (Path file : mainSources()) {
+            String source = stripCommentsAndLiterals(readString(file));
+            int at = source.indexOf("CompletionException");
+            while (at >= 0) {
+                violations.add(file + ": CompletionException at offset " + at);
+                at = source.indexOf("CompletionException", at + 1);
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            fail("Failures travel as themselves. The join() presentation protocol — wrap in a "
+                    + "CompletionException, unwrap at the call site — died with the futures; a "
+                    + "failure that must cross a settle boundary goes through Failures.rethrow.\n  "
+                    + String.join("\n  ", violations));
+        }
+    }
+
+    @Test
     @DisplayName("the scan reads code and ignores prose about it")
     void theScanIgnoresJavadoc() {
         String prose = "/** This replaced a {@code CompletableFuture.allOf} over the arms. */\n"

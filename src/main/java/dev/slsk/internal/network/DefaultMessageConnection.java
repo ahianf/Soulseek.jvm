@@ -6,7 +6,6 @@ package dev.slsk.internal.network;
 
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.internal.common.CommonUtils;
-import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
@@ -171,10 +170,9 @@ public final class DefaultMessageConnection extends SocketConnection implements 
                 if (isDisposed()) {
                     return;
                 }
-                Throwable actual = Failures.unwrap(failure);
-                Exception reported = actual instanceof Exception exception
+                Exception reported = failure instanceof Exception exception
                         ? exception
-                        : new MessageException(actual.toString(), actual);
+                        : new MessageException(failure.toString(), failure);
                 disconnect("Read loop failed: " + reported.getMessage(), reported);
             }
         });
