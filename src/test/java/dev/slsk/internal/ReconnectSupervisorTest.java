@@ -203,6 +203,52 @@ class ReconnectSupervisorTest {
     }
 
     @Test
+    @DisplayName("a cancelled loop cannot ride a later arm: one loop at a time")
+    void cancelledLoopDoesNotRideALaterArm() throws Exception {
+        CountDownLatch firstEntered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger calls = new AtomicInteger();
+        java.util.Set<Thread> loopsAfterRelease = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+        try (ReconnectSupervisor supervisor = supervisor(
+                () -> {
+                    if (calls.getAndIncrement() == 0) {
+                        firstEntered.countDown();
+                        // Swallow the cancel's interrupt, the way a connector
+                        // built on non-interruptible I/O can: the loop survives
+                        // its own cancel and must still not outlive it.
+                        boolean waiting = true;
+                        while (waiting) {
+                            try {
+                                release.await();
+                                waiting = false;
+                            } catch (InterruptedException swallowed) {
+                                // Deliberately not restored.
+                            }
+                        }
+                        throw new ConnectionException("released");
+                    }
+                    loopsAfterRelease.add(Thread.currentThread());
+                    throw new ConnectionException("still down");
+                },
+                () -> {})) {
+
+            supervisor.arm(new ConnectionException("dropped"));
+            assertTrue(firstEntered.await(5, TimeUnit.SECONDS), "first loop never attempted");
+
+            supervisor.cancel();
+            supervisor.arm(new ConnectionException("dropped again"));
+            release.countDown();
+
+            // Long enough for the stale loop, were it still riding the flag,
+            // to sleep its 10 ms delay and call the connector several times.
+            Thread.sleep(300);
+            assertEquals(1, loopsAfterRelease.size(), "a cancelled loop kept retrying beside the armed one");
+            assertTrue(supervisor.retrying(), "the armed loop was stopped by the stale one's exit");
+        }
+    }
+
+    @Test
     @DisplayName("close stops the retry loop and leaves nothing running")
     void closeStopsTheThread() throws Exception {
         AtomicInteger attempts = new AtomicInteger();

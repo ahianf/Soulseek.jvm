@@ -11,8 +11,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Gets the server connection back after it drops, without the consumer asking.
@@ -83,13 +81,20 @@ final class ReconnectSupervisor implements AutoCloseable {
     private final Duration maxDelay;
     private final Duration minDelay;
 
-    /** Set while a retry thread is alive, so arming twice does not race two in. */
-    private final AtomicBoolean running = new AtomicBoolean();
+    /**
+     * Guards every field below. One monitor rather than one atomic per field:
+     * arm and cancel each read and write several of them, and a cancel landing
+     * between an arm's writes used to leave a live loop no one could stop.
+     */
+    private final Object lock = new Object();
 
-    private final AtomicBoolean closed = new AtomicBoolean();
+    /** Set while a retry thread is alive, so arming twice does not race two in. */
+    private boolean running;
+
+    private boolean closed;
 
     /** The retry thread, held so {@link #close()} can stop it. */
-    private final AtomicReference<Thread> worker = new AtomicReference<>();
+    private Thread worker;
 
     /**
      * The state to report while waiting, or {@code null} when not waiting.
@@ -98,10 +103,10 @@ final class ReconnectSupervisor implements AutoCloseable {
      * and the engine has no bit for "waiting to try again". This is the overlay
      * that supplies the one state the engine cannot describe.
      */
-    private final AtomicReference<ConnectionState.Reconnecting> pending = new AtomicReference<>();
+    private ConnectionState.Reconnecting pending;
 
     /** Which attempt is in flight, so a {@code Connecting} can carry its number. */
-    private volatile int attempt = 1;
+    private int attempt = 1;
 
     ReconnectSupervisor(Connector connector, Runnable onStateChanged, DiagnosticSink diagnostics) {
         this(connector, onStateChanged, diagnostics, INITIAL_DELAY, MAX_DELAY, MIN_DELAY);
@@ -136,11 +141,15 @@ final class ReconnectSupervisor implements AutoCloseable {
      * @param cause why the connection was lost
      */
     void arm(Throwable cause) {
-        if (closed.get() || !running.compareAndSet(false, true)) {
-            return;
+        synchronized (lock) {
+            if (closed || running) {
+                return;
+            }
+            running = true;
+            // Started under the lock: the loop's first act is to take it, so
+            // the thread cannot observe anything before worker is assigned.
+            worker = Thread.ofVirtual().name("soulseek-reconnect").start(() -> retryUntilOnline(cause));
         }
-        Thread thread = Thread.ofVirtual().name("soulseek-reconnect").start(() -> retryUntilOnline(cause));
-        worker.set(thread);
     }
 
     /**
@@ -151,15 +160,22 @@ final class ReconnectSupervisor implements AutoCloseable {
      * instead.
      */
     void cancel() {
-        running.set(false);
-        Thread thread = worker.getAndSet(null);
+        Thread thread;
+        boolean wasWaiting;
+        synchronized (lock) {
+            running = false;
+            thread = worker;
+            worker = null;
+            wasWaiting = pending != null;
+            pending = null;
+            attempt = 1;
+        }
         if (thread != null) {
             thread.interrupt();
         }
-        if (pending.getAndSet(null) != null) {
+        if (wasWaiting) {
             onStateChanged.run();
         }
-        attempt = 1;
     }
 
     /**
@@ -168,7 +184,9 @@ final class ReconnectSupervisor implements AutoCloseable {
      * @return the pending {@code Reconnecting}, or {@code null} when not waiting
      */
     ConnectionState.Reconnecting pending() {
-        return pending.get();
+        synchronized (lock) {
+            return pending;
+        }
     }
 
     /**
@@ -177,7 +195,9 @@ final class ReconnectSupervisor implements AutoCloseable {
      * @return the attempt number, counting from one
      */
     int attempt() {
-        return attempt;
+        synchronized (lock) {
+            return attempt;
+        }
     }
 
     /**
@@ -186,33 +206,42 @@ final class ReconnectSupervisor implements AutoCloseable {
      * @return {@code true} while retrying
      */
     boolean retrying() {
-        return running.get();
+        synchronized (lock) {
+            return running;
+        }
     }
 
     private void retryUntilOnline(Throwable initialCause) {
         Throwable cause = initialCause;
         int number = 1;
         try {
-            while (running.get() && !closed.get()) {
-                number++;
-                attempt = number;
-                Duration delay = delayFor(number);
-                ConnectionState.Reconnecting waiting =
-                        new ConnectionState.Reconnecting(number, Instant.now().plus(delay), cause);
-                pending.set(waiting);
+            while (true) {
+                Duration delay;
+                synchronized (lock) {
+                    if (stale()) {
+                        return;
+                    }
+                    number++;
+                    attempt = number;
+                    delay = delayFor(number);
+                    pending = new ConnectionState.Reconnecting(
+                            number, Instant.now().plus(delay), cause);
+                }
                 onStateChanged.run();
                 diagnostics.info("Reconnecting to the server in " + delay.toMillis() + " ms (attempt " + number + "): "
                         + Failures.message(cause));
 
                 Thread.sleep(delay);
 
-                if (!running.get() || closed.get()) {
-                    return;
+                synchronized (lock) {
+                    if (stale()) {
+                        return;
+                    }
+                    // Cleared before the attempt, not after: the engine publishes
+                    // CONNECTING from inside connect(), and a stale overlay would
+                    // report Reconnecting over the top of it.
+                    pending = null;
                 }
-                // Cleared before the attempt, not after: the engine publishes
-                // CONNECTING from inside connect(), and a stale overlay would
-                // report Reconnecting over the top of it.
-                pending.set(null);
                 try {
                     connector.connect();
                     diagnostics.info("Reconnected to the server on attempt " + number);
@@ -234,12 +263,32 @@ final class ReconnectSupervisor implements AutoCloseable {
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
         } finally {
-            running.set(false);
-            worker.compareAndSet(Thread.currentThread(), null);
-            if (pending.getAndSet(null) != null) {
+            boolean wasWaiting = false;
+            synchronized (lock) {
+                // A stale loop owns nothing: cancel or close already reset the
+                // fields, and a later arm may have handed them to a new loop.
+                if (worker == Thread.currentThread()) {
+                    running = false;
+                    worker = null;
+                    wasWaiting = pending != null;
+                    pending = null;
+                }
+            }
+            if (wasWaiting) {
                 onStateChanged.run();
             }
         }
+    }
+
+    /**
+     * Returns whether this loop should stop: cancelled, closed, or displaced.
+     *
+     * <p>Callers hold {@link #lock}. The identity check is the one that matters:
+     * a loop that survived its own cancel (a connector can swallow the
+     * interrupt) must not ride a later arm's {@code running = true}.
+     */
+    private boolean stale() {
+        return !running || closed || worker != Thread.currentThread();
     }
 
     /**
@@ -264,11 +313,17 @@ final class ReconnectSupervisor implements AutoCloseable {
 
     @Override
     public void close() {
-        if (!closed.compareAndSet(false, true)) {
-            return;
+        Thread thread;
+        synchronized (lock) {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            running = false;
+            thread = worker;
+            worker = null;
+            pending = null;
         }
-        running.set(false);
-        Thread thread = worker.getAndSet(null);
         if (thread != null) {
             thread.interrupt();
             try {
@@ -280,6 +335,5 @@ final class ReconnectSupervisor implements AutoCloseable {
                 Thread.currentThread().interrupt();
             }
         }
-        pending.set(null);
     }
 }
