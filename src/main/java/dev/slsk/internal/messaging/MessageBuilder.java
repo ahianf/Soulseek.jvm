@@ -11,7 +11,6 @@ import dev.slsk.internal.share.FileAttribute;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.CharBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
@@ -39,12 +38,11 @@ public final class MessageBuilder {
         }
 
         byte[] payloadBytes = payload.toByteArray();
-        ByteBuffer result =
-                ByteBuffer.allocate(4 + codeBytes.length + payloadBytes.length).order(ByteOrder.LITTLE_ENDIAN);
-        result.putInt(codeBytes.length + payloadBytes.length);
-        result.put(codeBytes);
-        result.put(payloadBytes);
-        return result.array();
+        byte[] result = new byte[4 + codeBytes.length + payloadBytes.length];
+        putIntLittleEndian(result, 0, codeBytes.length + payloadBytes.length);
+        System.arraycopy(codeBytes, 0, result, 4, codeBytes.length);
+        System.arraycopy(payloadBytes, 0, result, 4 + codeBytes.length, payloadBytes.length);
+        return result;
     }
 
     /**
@@ -82,7 +80,9 @@ public final class MessageBuilder {
      * @return this builder
      */
     public MessageBuilder writeByte(int value) {
-        return writeBytes(new byte[] {(byte) value});
+        requireWritable();
+        payload.write(value);
+        return this;
     }
 
     /**
@@ -92,9 +92,7 @@ public final class MessageBuilder {
      * @return this builder
      */
     public MessageBuilder writeBytes(byte[] bytes) {
-        if (compressed) {
-            throw new IllegalStateException("Unable to write data after message compression");
-        }
+        requireWritable();
         Objects.requireNonNull(bytes, "bytes");
         payload.writeBytes(bytes);
         return this;
@@ -122,17 +120,23 @@ public final class MessageBuilder {
      * Writes a 32-bit little-endian integer.
      */
     public MessageBuilder writeInteger(int value) {
-        return writeBytes(littleEndianInteger(value));
+        requireWritable();
+        payload.write(value);
+        payload.write(value >>> 8);
+        payload.write(value >>> 16);
+        payload.write(value >>> 24);
+        return this;
     }
 
     /**
      * Writes a 64-bit little-endian integer.
      */
     public MessageBuilder writeLong(long value) {
-        return writeBytes(ByteBuffer.allocate(Long.BYTES)
-                .order(ByteOrder.LITTLE_ENDIAN)
-                .putLong(value)
-                .array());
+        requireWritable();
+        for (int shift = 0; shift < Long.SIZE; shift += 8) {
+            payload.write((int) (value >>> shift));
+        }
+        return this;
     }
 
     /**
@@ -218,9 +222,21 @@ public final class MessageBuilder {
     }
 
     private static byte[] littleEndianInteger(int value) {
-        return ByteBuffer.allocate(Integer.BYTES)
-                .order(ByteOrder.LITTLE_ENDIAN)
-                .putInt(value)
-                .array();
+        byte[] result = new byte[Integer.BYTES];
+        putIntLittleEndian(result, 0, value);
+        return result;
+    }
+
+    private static void putIntLittleEndian(byte[] destination, int offset, int value) {
+        destination[offset] = (byte) value;
+        destination[offset + 1] = (byte) (value >>> 8);
+        destination[offset + 2] = (byte) (value >>> 16);
+        destination[offset + 3] = (byte) (value >>> 24);
+    }
+
+    private void requireWritable() {
+        if (compressed) {
+            throw new IllegalStateException("Unable to write data after message compression");
+        }
     }
 }
