@@ -82,6 +82,40 @@ public final class Failures {
     }
 
     /**
+     * Rethrows a stored failure as itself.
+     *
+     * <p>For the settle-once cells: a failure that was caught on one thread and
+     * is being raised on another arrives statically as {@link Throwable}, and
+     * this is the one place that turns it back into what it is. Nothing is
+     * wrapped — an unchecked failure, an interruption and a lapsed deadline all
+     * come back as themselves, which is why every caller declares the two
+     * checked outcomes. A checked exception outside those two cannot legally
+     * cross the settle boundary; the closing wrap names it rather than losing
+     * it, and seeing that wrap in the wild means a settle site is storing
+     * something it should have translated.
+     *
+     * @param failure the stored failure
+     * @return never; the return type exists so a caller can write {@code throw}
+     * @throws InterruptedException the stored failure, when it is one
+     * @throws TimeoutException the stored failure, when it is one
+     */
+    public static RuntimeException rethrow(Throwable failure) throws InterruptedException, TimeoutException {
+        if (failure instanceof RuntimeException runtime) {
+            throw runtime;
+        }
+        if (failure instanceof Error error) {
+            throw error;
+        }
+        if (failure instanceof InterruptedException interrupted) {
+            throw interrupted;
+        }
+        if (failure instanceof TimeoutException timeout) {
+            throw timeout;
+        }
+        throw new SoulseekClientException(message(failure), failure);
+    }
+
+    /**
      * Rethrows a failed operation's real failure, in this library's terms.
      *
      * <p>The blocking replacement for the deleted {@code map} composed with the

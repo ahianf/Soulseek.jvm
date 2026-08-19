@@ -348,7 +348,7 @@ public final class DefaultWaiter implements Waiter {
         }
 
         @Override
-        public T await() throws InterruptedException {
+        public T await() throws InterruptedException, TimeoutException {
             try {
                 settled.await();
             } catch (InterruptedException interrupted) {
@@ -364,11 +364,8 @@ public final class DefaultWaiter implements Waiter {
                 Thread.currentThread().interrupt();
             }
             Outcome<T> settledOutcome = outcome.get();
-            if (settledOutcome.failure() instanceof InterruptedException interrupted) {
-                throw interrupted;
-            }
             if (settledOutcome.failure() != null) {
-                throw Failures.propagate(settledOutcome.failure());
+                throw Failures.rethrow(settledOutcome.failure());
             }
             return settledOutcome.result();
         }

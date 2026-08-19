@@ -994,7 +994,7 @@ final class SoulseekEngine implements AutoCloseable {
     }
 
     private void login(String requestedUsername, String password, CancellationSignal cancellationSignal)
-            throws InterruptedException {
+            throws InterruptedException, TimeoutException {
         // Registered before the login bytes go out: the server answers a login
         // as fast as anything on this protocol.
         Wait<LoginResponse> loginWait =

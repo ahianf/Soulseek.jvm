@@ -19,7 +19,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -130,8 +129,7 @@ class WaiterTest {
 
             waiter.timeout(key);
 
-            CompletionException exception = assertThrows(CompletionException.class, wait::await);
-            assertTrue(exception.getCause() instanceof TimeoutException);
+            assertThrows(TimeoutException.class, wait::await);
             assertFalse(waiter.hasWait(key));
         }
     }
@@ -144,9 +142,7 @@ class WaiterTest {
             Wait<String> first = waiter.register(key, String.class, null, null);
             waiter.register(key, String.class, 30_000, null);
 
-            CompletionException exception = assertThrows(CompletionException.class, first::await);
-
-            assertTrue(exception.getCause() instanceof TimeoutException);
+            assertThrows(TimeoutException.class, first::await);
             assertEquals(1, waiter.getWaitCount(key));
         }
     }
@@ -219,8 +215,8 @@ class WaiterTest {
 
             waiter.fail(key, failure);
 
-            CompletionException thrown = assertThrows(CompletionException.class, wait::await);
-            assertSame(failure, thrown.getCause());
+            RuntimeException thrown = assertThrows(RuntimeException.class, wait::await);
+            assertSame(failure, thrown);
         }
     }
 
@@ -292,11 +288,10 @@ class WaiterTest {
         waiter.close();
 
         assertThrows(CancellationException.class, pending::await);
-        CompletionException exception = assertThrows(
-                CompletionException.class,
+        assertThrows(
+                IllegalStateException.class,
                 () -> waiter.register(new WaitKey("new"), String.class, null, null)
                         .await());
-        assertTrue(exception.getCause() instanceof IllegalStateException);
     }
 
     @Test

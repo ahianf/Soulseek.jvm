@@ -218,7 +218,8 @@ final class DownloadRun {
         connection.disconnect("Transfer complete");
     }
 
-    private void beginQueuedDownload(Wait<TransferRequest> transferStartRequested) throws InterruptedException {
+    private void beginQueuedDownload(Wait<TransferRequest> transferStartRequested)
+            throws InterruptedException, TimeoutException {
         updateState(TransferState.QUEUED.or(TransferState.REMOTELY));
         TransferRequest request = transferStartRequested.await();
 

@@ -3,6 +3,8 @@
 
 package dev.slsk.internal.common;
 
+import java.util.concurrent.TimeoutException;
+
 /**
  * A registered correlation wait, and the handoff of its answer.
  *
@@ -24,8 +26,13 @@ public interface Wait<T> {
     /**
      * Waits for this wait's answer.
      *
+     * <p>A failure settles the wait and is raised here as itself: a lapsed
+     * deadline is the checked {@link TimeoutException}, everything else is
+     * unchecked. Nothing arrives wrapped.
+     *
      * @return the answer, or {@code null} for a wait with no value
      * @throws InterruptedException if the waiting thread is interrupted
+     * @throws TimeoutException if the wait's deadline lapsed
      */
-    T await() throws InterruptedException;
+    T await() throws InterruptedException, TimeoutException;
 }
