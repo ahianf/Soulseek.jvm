@@ -11,16 +11,14 @@ import dev.slsk.internal.common.Settlement;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.concurrent.CancellationSubscription;
 import dev.slsk.internal.options.SearchOptions;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -38,16 +36,16 @@ public final class SearchInternal implements AutoCloseable {
      * what makes registering and reading the state under the same lock enough
      * to close the gap between them.
      */
-    private final Set<Settlement> waiters = ConcurrentHashMap.newKeySet();
+    private final Set<Settlement> waiters = new HashSet<>();
 
-    private volatile Boolean terminal;
+    private Boolean terminal;
     private final AtomicBoolean disposed = new AtomicBoolean();
-    private final AtomicInteger fileCount = new AtomicInteger();
-    private final AtomicInteger lockedFileCount = new AtomicInteger();
+    private int fileCount;
+    private int lockedFileCount;
     private final SearchOptions options;
     private final SearchQuery query;
-    private final AtomicInteger responseCount = new AtomicInteger();
-    private final ReentrantReadWriteLock stateLock = new ReentrantReadWriteLock();
+    private int responseCount;
+    private final Object stateLock = new Object();
     private final SearchScope scope;
     private final Scheduler timerExecutor;
     private final boolean ownsScheduler;
@@ -57,14 +55,7 @@ public final class SearchInternal implements AutoCloseable {
     private volatile ScheduledFuture<?> timeoutTask;
     private volatile SearchState state = SearchState.NONE;
 
-    /**
-     * Serializes {@link #resetTimeout} and {@link #stopTimeout}. Responses
-     * arrive concurrently — the reset runs under the state read lock, which
-     * many threads hold at once — and an unsynchronized stop-then-schedule can
-     * leave a scheduled task no field references. That orphan fires at its
-     * original deadline and ends a productive search as TIMED_OUT while
-     * responses are still arriving.
-     */
+    /** Serializes timeout replacement with scheduler callbacks. */
     private final Object timeoutLock = new Object();
 
     /** Creates a search using default options. */
@@ -100,12 +91,16 @@ public final class SearchInternal implements AutoCloseable {
 
     /** Returns the total received file count. */
     public int getFileCount() {
-        return fileCount.get();
+        synchronized (stateLock) {
+            return fileCount;
+        }
     }
 
     /** Returns the total received locked-file count. */
     public int getLockedFileCount() {
-        return lockedFileCount.get();
+        synchronized (stateLock) {
+            return lockedFileCount;
+        }
     }
 
     /** Returns this search's options. */
@@ -120,7 +115,9 @@ public final class SearchInternal implements AutoCloseable {
 
     /** Returns the accepted response count. */
     public int getResponseCount() {
-        return responseCount.get();
+        synchronized (stateLock) {
+            return responseCount;
+        }
     }
 
     /** Returns the search scope. */
@@ -130,7 +127,9 @@ public final class SearchInternal implements AutoCloseable {
 
     /** Returns the current state. */
     public SearchState getState() {
-        return state;
+        synchronized (stateLock) {
+            return state;
+        }
     }
 
     /** Returns the search token. */
@@ -158,41 +157,32 @@ public final class SearchInternal implements AutoCloseable {
 
     /** Cancels the search. */
     public void cancel() {
-        stateLock.writeLock().lock();
-        try {
+        synchronized (stateLock) {
             stopTimeout();
             state = SearchState.COMPLETED.or(SearchState.CANCELLED);
             settleWaiters(false);
-        } finally {
-            stateLock.writeLock().unlock();
         }
     }
 
     /** Completes the search with a terminal detail state. */
     public void complete(SearchState terminalState) {
         Objects.requireNonNull(terminalState, "terminalState");
-        stateLock.writeLock().lock();
-        try {
+        synchronized (stateLock) {
             stopTimeout();
             state = SearchState.COMPLETED.or(terminalState);
             settleWaiters(true);
-        } finally {
-            stateLock.writeLock().unlock();
         }
     }
 
     /** Sets the current search state. */
     public void setState(SearchState newState) {
         Objects.requireNonNull(newState, "newState");
-        stateLock.writeLock().lock();
-        try {
+        synchronized (stateLock) {
             SearchState previousState = state;
             state = newState;
             if (!previousState.equals(SearchState.IN_PROGRESS) && newState.equals(SearchState.IN_PROGRESS)) {
                 resetTimeout();
             }
-        } finally {
-            stateLock.writeLock().unlock();
         }
     }
 
@@ -214,8 +204,7 @@ public final class SearchInternal implements AutoCloseable {
 
         SearchResponse response = initialResponse;
         try {
-            stateLock.readLock().lock();
-            try {
+            synchronized (stateLock) {
                 if (!state.contains(SearchState.IN_PROGRESS) || !responseMeetsOptionCriteria(response)) {
                     return;
                 }
@@ -249,23 +238,20 @@ public final class SearchInternal implements AutoCloseable {
                     }
                 }
 
-                responseCount.incrementAndGet();
-                fileCount.addAndGet(response.getFileCount());
-                lockedFileCount.addAndGet(response.getLockedFileCount());
+                responseCount++;
+                fileCount += response.getFileCount();
+                lockedFileCount += response.getLockedFileCount();
 
                 Consumer<SearchResponse> callback = responseReceived;
                 if (callback != null) {
                     callback.accept(response);
                 }
                 resetTimeout();
-            } finally {
-                stateLock.readLock().unlock();
-            }
-
-            if (responseCount.get() >= options.getResponseLimit()) {
-                complete(SearchState.RESPONSE_LIMIT_REACHED);
-            } else if (fileCount.get() >= options.getFileLimit()) {
-                complete(SearchState.FILE_LIMIT_REACHED);
+                if (responseCount >= options.getResponseLimit()) {
+                    complete(SearchState.RESPONSE_LIMIT_REACHED);
+                } else if (fileCount >= options.getFileLimit()) {
+                    complete(SearchState.FILE_LIMIT_REACHED);
+                }
             }
         } catch (IllegalStateException ignored) {
             // Java adaptation of the source's late ObjectDisposedException.
@@ -293,12 +279,9 @@ public final class SearchInternal implements AutoCloseable {
         // Registered and the terminal state read under the same lock the
         // terminal transition takes, so a search that ends between the two is
         // not waited on forever.
-        stateLock.writeLock().lock();
-        try {
+        synchronized (stateLock) {
             waiters.add(wait);
             settle(wait, terminal);
-        } finally {
-            stateLock.writeLock().unlock();
         }
 
         CancellationSubscription registration =
@@ -310,7 +293,9 @@ public final class SearchInternal implements AutoCloseable {
             }
         } finally {
             registration.close();
-            waiters.remove(wait);
+            synchronized (stateLock) {
+                waiters.remove(wait);
+            }
         }
     }
 
@@ -321,7 +306,9 @@ public final class SearchInternal implements AutoCloseable {
 
     /** Creates the public immutable snapshot of this search. */
     public Search toSearch() {
-        return new Search(query, scope, token, state, responseCount.get(), fileCount.get(), lockedFileCount.get());
+        synchronized (stateLock) {
+            return new Search(query, scope, token, state, responseCount, fileCount, lockedFileCount);
+        }
     }
 
     /** Releases the timeout task and executor. */
