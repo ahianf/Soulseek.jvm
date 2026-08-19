@@ -340,7 +340,6 @@ final class UploadRun {
                 if (failure != null) {
                     throw Failures.rethrow(failure);
                 }
-                Thread.sleep(100);
             }
             cancellationSignal.throwIfCancellationRequested();
         } catch (InterruptedException interrupted) {
@@ -525,10 +524,7 @@ final class UploadRun {
                     + upload.getUsername() + " released");
             if (transferOptions.getSlotReleased() != null) {
                 try {
-                    Thread.sleep(10);
                     transferOptions.getSlotReleased().onSlotReleased(upload.toTransfer());
-                } catch (InterruptedException failure) {
-                    Thread.currentThread().interrupt();
                 } catch (Throwable ignored) {
                     // Slot-release callbacks cannot block cleanup.
                 }
