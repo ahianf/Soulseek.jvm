@@ -393,7 +393,7 @@ public class SocketConnection implements Connection {
         // disconnected event still follows transport teardown below, but an
         // exceptional send never returns while the state says transitioning.
         state = ConnectionState.DISCONNECTED;
-        stopFrameWriter(frameWriteTeardownFailure(reason, exception));
+        stopFrameWriter(() -> frameWriteTeardownFailure(reason, exception));
         closeTransport();
 
         publishStateChanged(ConnectionState.DISCONNECTING, ConnectionState.DISCONNECTED, reason, exception);
@@ -402,7 +402,7 @@ public class SocketConnection implements Connection {
 
     @Override
     public TcpClient handoffTcpClient() {
-        stopFrameWriter(new ConnectionWriteException("Write aborted because the transport was handed off"));
+        stopFrameWriter(() -> new ConnectionWriteException("Write aborted because the transport was handed off"));
         TcpClient result = tcpClient;
         tcpClient = null;
         stream = null;
@@ -931,8 +931,16 @@ public class SocketConnection implements Connection {
         write.raiseOutcome();
     }
 
-    /** Stops acceptance and settles every active or queued frame exactly once. */
-    private void stopFrameWriter(Exception failure) {
+    /**
+     * Stops acceptance and settles every active or queued frame exactly once.
+     *
+     * <p>The failure is supplied, not passed: most teardowns find nothing
+     * active and nothing queued, and constructing an exception for every one
+     * of them was the second-largest exception source in the JFR baseline.
+     * The supplier runs at most once, so every settled frame still shares the
+     * one instance they always did.
+     */
+    private void stopFrameWriter(java.util.function.Supplier<Exception> failure) {
         if (!frameWriterStarted.get()) {
             return;
         }
@@ -942,13 +950,18 @@ public class SocketConnection implements Connection {
                 return;
             }
             frameWritesAccepted = false;
+            Exception settled = null;
             FrameWrite active = activeFrameWrite;
             if (active != null) {
-                active.fail(failure);
+                settled = failure.get();
+                active.fail(settled);
             }
             for (FrameWrite pending; (pending = frameWrites.poll()) != null; ) {
                 if (pending != FrameWrite.STOP) {
-                    pending.fail(failure);
+                    if (settled == null) {
+                        settled = failure.get();
+                    }
+                    pending.fail(settled);
                 }
             }
             // The drain above guarantees room. Producers that passed their
