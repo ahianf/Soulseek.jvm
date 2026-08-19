@@ -17,6 +17,7 @@ import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationController;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.concurrent.CancellationSubscription;
+import dev.slsk.internal.concurrent.InterruptedOperationException;
 import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;
@@ -529,39 +530,67 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     /**
      * Writes a message to every child, blocking until all of them have settled.
      *
-     * <p>One virtual thread per child, joined at the end. This replaced a
-     * {@code CompletableFuture.allOf} over per-child continuation chains; the
-     * shape is identical but there is no chain to read, and each child's write
-     * is a plain blocking call.
+     * <p>An established child takes the two-phase path: the frame is enqueued
+     * here and written by that connection's own writer, so delivery to every
+     * child proceeds in parallel without a thread per child per message. The
+     * JFR baseline put the old per-child virtual threads at 4% of the client's
+     * total allocation pressure — this runs for every search request forwarded
+     * down the branch. Only a child still completing its handshake gets a
+     * thread of its own, to wait for its cell without holding up the rest.
      *
      * <p>A failing child is disconnected and does not affect the others, which
      * is what the per-child {@code exceptionally} used to guarantee.
-     *
-     * <p>This is the shape {@code StructuredTaskScope} exists for. It is
-     * deliberately not used: still a preview API in Java 25, and a library
-     * cannot force {@code --enable-preview} onto its consumers. Revisit when it
-     * is final.
      */
     @Override
     public void broadcastMessage(byte[] bytes, CancellationSignal cancellationSignal) {
         long started = System.nanoTime();
         CancellationSignal effectiveToken = token(cancellationSignal);
-        ExecutorService executor = NetworkExecutor.executor();
 
-        List<Future<?>> writes = new ArrayList<>(childConnections.size());
-        for (ConnectionCell pending : childConnections.values()) {
-            writes.add(executor.submit(() -> writeToChild(pending, bytes, effectiveToken)));
+        List<PendingChildWrite> pending = new ArrayList<>(childConnections.size());
+        List<Future<?>> establishing = null;
+        for (ConnectionCell cell : childConnections.values()) {
+            MessageConnection connection = cell.peek();
+            if (connection == null) {
+                if (establishing == null) {
+                    establishing = new ArrayList<>();
+                }
+                establishing.add(NetworkExecutor.executor().submit(() -> writeToChild(cell, bytes, effectiveToken)));
+                continue;
+            }
+            if (connection.getState() != ConnectionState.CONNECTED) {
+                continue;
+            }
+            try {
+                pending.add(new PendingChildWrite(connection, connection.beginWrite(bytes, effectiveToken)));
+            } catch (Exception failure) {
+                connection.disconnect("Broadcast failure: " + message(unwrap(failure)));
+            }
         }
 
-        for (Future<?> write : writes) {
+        for (PendingChildWrite write : pending) {
             try {
-                write.get();
-            } catch (InterruptedException interrupted) {
+                write.pending().await();
+            } catch (InterruptedOperationException interrupted) {
+                // The per-child future wait used to return on the broadcast
+                // caller's interrupt; keep that.
                 Thread.currentThread().interrupt();
                 return;
-            } catch (ExecutionException failure) {
-                // Already handled per child in writeToChild; one child must not
-                // abort the broadcast to the rest.
+            } catch (Exception failure) {
+                write.connection().disconnect("Broadcast failure: " + message(unwrap(failure)));
+            }
+        }
+
+        if (establishing != null) {
+            for (Future<?> write : establishing) {
+                try {
+                    write.get();
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    return;
+                } catch (ExecutionException failure) {
+                    // Already handled per child in writeToChild; one child must
+                    // not abort the broadcast to the rest.
+                }
             }
         }
 
@@ -569,6 +598,8 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         Double current = averageBroadcastLatency;
         averageBroadcastLatency = current == null ? elapsed : ((elapsed - current) * LATENCY_ALPHA) + current;
     }
+
+    private record PendingChildWrite(MessageConnection connection, Connection.PendingWrite pending) {}
 
     private void writeToChild(ConnectionCell pending, byte[] bytes, CancellationSignal cancellationSignal) {
         // The child may still be completing its handshake; one that failed it

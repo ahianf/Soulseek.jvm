@@ -167,6 +167,40 @@ public interface Connection extends AutoCloseable {
         write(bytes, CancellationSignal.none());
     }
 
+    /** The settled half of a two-phase framed write; see {@link #beginWrite}. */
+    @FunctionalInterface
+    interface PendingWrite {
+        /**
+         * Waits for the frame's outcome.
+         *
+         * <p>Failures arrive with the same shapes {@link #write(byte[],
+         * CancellationSignal)} raises them in.
+         */
+        void await();
+    }
+
+    /**
+     * Enqueues a framed write and returns the wait for its outcome.
+     *
+     * <p>The two halves of {@link #write(byte[], CancellationSignal)}, split so
+     * one caller can put a frame on several connections before waiting on any
+     * of them — the broadcast fan-out — without a thread per connection whose
+     * only purpose is to be waited on. The array is adopted exactly as it is
+     * by {@code write}.
+     *
+     * <p>This default writes synchronously and returns an already-settled
+     * wait, which preserves the blocking contract for implementations that
+     * have no queue to split against.
+     *
+     * @param bytes the bytes to write
+     * @param cancellationSignal the cancellation signal
+     * @return the wait for the frame's outcome
+     */
+    default PendingWrite beginWrite(byte[] bytes, CancellationSignal cancellationSignal) {
+        write(bytes, cancellationSignal);
+        return () -> {};
+    }
+
     /** Writes an exact byte count from a stream. */
     void write(
             long length,

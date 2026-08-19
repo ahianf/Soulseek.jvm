@@ -901,6 +901,19 @@ class DistributedNetworkTest {
                     Outcomes.raise(writeFuture);
                     yield null;
                 }
+                // The probe has no queue to split against, so the two-phase
+                // write behaves like the interface default: the configured
+                // outcome raises at begin time and the wait is already settled.
+                case "beginWrite" -> {
+                    if (arguments[0] instanceof byte[] bytes) {
+                        byteWrites.add(Arrays.copyOf(bytes, bytes.length));
+                        if (onByteWrite != null) {
+                            onByteWrite.run();
+                        }
+                    }
+                    Outcomes.raise(writeFuture);
+                    yield (Connection.PendingWrite) () -> {};
+                }
                 case "handoffTcpClient" -> {
                     handoffCount++;
                     yield tcpClient;

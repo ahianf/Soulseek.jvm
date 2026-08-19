@@ -486,22 +486,32 @@ public class SocketConnection implements Connection {
 
     @Override
     public void write(byte[] bytes, CancellationSignal cancellationSignal) {
+        beginWrite(bytes, cancellationSignal).await();
+    }
+
+    @Override
+    public PendingWrite beginWrite(byte[] bytes, CancellationSignal cancellationSignal) {
         if (bytes == null || bytes.length == 0) {
             throw new IllegalArgumentException("Invalid attempt to send empty data");
         }
         validateConnected();
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
+        // The array is adopted, not copied: every caller hands over a freshly
+        // built message and none reads or reuses it afterwards. The defensive
+        // clone this replaces was one full copy of every frame ever sent.
+        FrameWrite write = new FrameWrite(bytes);
         try {
-            // The array is adopted, not copied: every caller hands over a
-            // freshly built message and none reads or reuses it afterwards.
-            // The defensive clone this replaces was one full copy of every
-            // frame the client ever sent.
-            FrameWrite write = new FrameWrite(bytes);
             enqueueFrameWrite(write, token);
-            awaitFrameWrite(write, token);
         } catch (Exception exception) {
             throw Failures.propagate(exception);
         }
+        return () -> {
+            try {
+                awaitFrameWrite(write, token);
+            } catch (Exception exception) {
+                throw Failures.propagate(exception);
+            }
+        };
     }
 
     @Override
