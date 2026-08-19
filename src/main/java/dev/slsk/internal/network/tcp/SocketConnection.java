@@ -492,7 +492,11 @@ public class SocketConnection implements Connection {
         validateConnected();
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         try {
-            FrameWrite write = new FrameWrite(bytes.clone());
+            // The array is adopted, not copied: every caller hands over a
+            // freshly built message and none reads or reuses it afterwards.
+            // The defensive clone this replaces was one full copy of every
+            // frame the client ever sent.
+            FrameWrite write = new FrameWrite(bytes);
             enqueueFrameWrite(write, token);
             awaitFrameWrite(write, token);
         } catch (Exception exception) {
@@ -847,31 +851,45 @@ public class SocketConnection implements Connection {
             return;
         }
 
-        Thread caller = Thread.currentThread();
-        Object interruptGate = new Object();
-        AtomicBoolean waiting = new AtomicBoolean(true);
-        CancellationSubscription registration = cancellationSignal.register(() -> {
-            synchronized (interruptGate) {
-                if (waiting.get()) {
-                    caller.interrupt();
-                }
-            }
-        });
         boolean offered = false;
         InterruptedException callerInterruption = null;
-        try {
-            int timeout = options.getWriteQueueTimeout();
-            offered =
-                    timeout <= 0 ? frameWrites.offer(write) : frameWrites.offer(write, timeout, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException exception) {
-            callerInterruption = exception;
-        } finally {
-            synchronized (interruptGate) {
-                waiting.set(false);
+        if (cancellationSignal == CancellationSignal.none()) {
+            // Nothing can fire the signal, so the interrupt bridge below has
+            // nothing to bridge. Most frames — every status, broadcast and
+            // handshake write — take this arm, and the bridge was three
+            // allocations per frame.
+            try {
+                offered = offerFrame(write);
+            } catch (InterruptedException exception) {
+                callerInterruption = exception;
+            } finally {
+                if (Thread.interrupted() && callerInterruption == null) {
+                    callerInterruption = new InterruptedException("The frame enqueue was interrupted");
+                }
             }
-            registration.close();
-            if (Thread.interrupted() && callerInterruption == null) {
-                callerInterruption = new InterruptedException("The frame enqueue was interrupted");
+        } else {
+            Thread caller = Thread.currentThread();
+            Object interruptGate = new Object();
+            AtomicBoolean waiting = new AtomicBoolean(true);
+            CancellationSubscription registration = cancellationSignal.register(() -> {
+                synchronized (interruptGate) {
+                    if (waiting.get()) {
+                        caller.interrupt();
+                    }
+                }
+            });
+            try {
+                offered = offerFrame(write);
+            } catch (InterruptedException exception) {
+                callerInterruption = exception;
+            } finally {
+                synchronized (interruptGate) {
+                    waiting.set(false);
+                }
+                registration.close();
+                if (Thread.interrupted() && callerInterruption == null) {
+                    callerInterruption = new InterruptedException("The frame enqueue was interrupted");
+                }
             }
         }
 
@@ -900,6 +918,12 @@ public class SocketConnection implements Connection {
         }
     }
 
+    /** Offers a frame within the configured backpressure window. */
+    private boolean offerFrame(FrameWrite write) throws InterruptedException {
+        int timeout = options.getWriteQueueTimeout();
+        return timeout <= 0 ? frameWrites.offer(write) : frameWrites.offer(write, timeout, TimeUnit.MILLISECONDS);
+    }
+
     private void dropFrameWrite(FrameWrite write) {
         writeQueueFull = true;
         ConnectionWriteDroppedException dropped =
@@ -913,7 +937,11 @@ public class SocketConnection implements Connection {
 
     /** Waits only on the request completion; the writer owns all socket I/O. */
     private void awaitFrameWrite(FrameWrite write, CancellationSignal cancellationSignal) throws Exception {
-        CancellationSubscription registration = cancellationSignal.register(() -> write.cancel(frameWrites));
+        // The signal that can never fire needs no listener; skipping it spares
+        // the capturing lambda on the common non-cancellable frame.
+        CancellationSubscription registration = cancellationSignal == CancellationSignal.none()
+                ? null
+                : cancellationSignal.register(() -> write.cancel(frameWrites));
         try {
             try {
                 write.await();
@@ -926,7 +954,9 @@ public class SocketConnection implements Connection {
                 Thread.currentThread().interrupt();
             }
         } finally {
-            registration.close();
+            if (registration != null) {
+                registration.close();
+            }
         }
         write.raiseOutcome();
     }

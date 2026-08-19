@@ -154,6 +154,9 @@ public interface Connection extends AutoCloseable {
      * but once writing starts the writer finishes the complete frame so a
      * shared protocol stream is never corrupted by caller cancellation.
      *
+     * <p>The array is adopted: the connection keeps it until the frame is
+     * written, so the caller must not mutate it after this is invoked.
+     *
      * @param bytes the bytes to write
      * @param cancellationSignal the cancellation signal
      */
