@@ -15,7 +15,7 @@ import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.DefaultWaiter;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.IOAdapter;
-import dev.slsk.internal.common.Permits;
+import dev.slsk.internal.common.Locks;
 import dev.slsk.internal.common.Scheduler;
 import dev.slsk.internal.common.TokenBucket;
 import dev.slsk.internal.common.TokenFactory;
@@ -80,6 +80,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * What runs underneath the facets.
@@ -111,7 +112,7 @@ final class SoulseekEngine implements AutoCloseable {
     private final int minorVersion;
     final Waiter waiter;
     private final TokenFactory tokenFactory;
-    final Semaphore stateSemaphore = new Semaphore(1);
+    private final ReentrantLock stateLock = new ReentrantLock();
     private final IOAdapter ioAdapter;
     final TokenBucket uploadTokenBucket;
     final TokenBucket downloadTokenBucket;
@@ -921,9 +922,9 @@ final class SoulseekEngine implements AutoCloseable {
             String password,
             CancellationSignal cancellationSignal) {
         try {
-            // The permit is never held on the failing path, so there is nothing
-            // to release; the acquire stays outside the try for that reason.
-            Permits.acquire(stateSemaphore, cancellationSignal);
+            // The lock is never held on the failing path, so there is nothing
+            // to unlock; acquisition stays outside the try for that reason.
+            Locks.acquire(stateLock, cancellationSignal);
         } catch (InterruptedException interrupted) {
             throw new InterruptedOperationException("The connect invocation was interrupted", interrupted);
         } catch (RuntimeException failure) {
@@ -937,7 +938,7 @@ final class SoulseekEngine implements AutoCloseable {
         } catch (Throwable failure) {
             throw reportConnectFailure(failure);
         } finally {
-            stateSemaphore.release();
+            stateLock.unlock();
         }
     }
 
@@ -1110,8 +1111,8 @@ final class SoulseekEngine implements AutoCloseable {
     private boolean reconfigureOptionsInternal(
             SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
         try {
-            // Never held on the failing path, so nothing to release.
-            Permits.acquire(stateSemaphore, cancellationSignal);
+            // Never held on the failing path, so nothing to unlock.
+            Locks.acquire(stateLock, cancellationSignal);
         } catch (InterruptedException interrupted) {
             throw new InterruptedOperationException("The reconfiguration invocation was interrupted", interrupted);
         } catch (RuntimeException failure) {
@@ -1122,7 +1123,7 @@ final class SoulseekEngine implements AutoCloseable {
         } catch (Throwable failure) {
             throw reportReconfigureFailure(failure);
         } finally {
-            stateSemaphore.release();
+            stateLock.unlock();
         }
     }
 

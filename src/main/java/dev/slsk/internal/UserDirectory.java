@@ -44,11 +44,14 @@ import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Everything the client knows about other users: info, statistics, presence,
@@ -71,10 +74,9 @@ final class UserDirectory {
      * the same peer issue one request rather than several. Owned here now that
      * endpoint resolution lives here.
      */
-    private final java.util.Map<String, java.util.concurrent.Semaphore> userEndpointSemaphores =
-            new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Semaphore> endpointLocks = new ConcurrentHashMap<>();
 
-    private final java.util.concurrent.Semaphore userEndpointSemaphoreSyncRoot = new java.util.concurrent.Semaphore(1);
+    private final Map<String, AtomicInteger> endpointLockLeases = new ConcurrentHashMap<>();
 
     UserDirectory(SoulseekEngine context, ServerLink server) {
         this.context = Objects.requireNonNull(context, "context");
@@ -340,24 +342,23 @@ final class UserDirectory {
         // caller populates it and the rest read it back. Each caller still issues its own request
         // under its own cancellation signal; sharing one in-flight request would let one caller's
         // cancellation or failure surface in another's.
-        Semaphore semaphore;
-        try {
-            Permits.acquire(userEndpointSemaphoreSyncRoot, token);
-        } catch (InterruptedException interrupted) {
-            throw new InterruptedOperationException("The endpoint-cache lookup was interrupted", interrupted);
-        }
-        try {
-            semaphore = userEndpointSemaphores.computeIfAbsent(requestedUsername, ignored -> new Semaphore(1));
-        } finally {
-            userEndpointSemaphoreSyncRoot.release();
-        }
+        Semaphore endpointLock = endpointLocks.compute(requestedUsername, (username, current) -> {
+            endpointLockLeases
+                    .computeIfAbsent(username, ignored -> new AtomicInteger())
+                    .incrementAndGet();
+            return current == null ? new Semaphore(1) : current;
+        });
 
         // The permit is released only on the path that acquired it; a cancelled acquisition must
         // not release a permit it never held, which is why the acquire is outside the try.
         try {
-            Permits.acquire(semaphore, token);
+            Permits.acquire(endpointLock, token);
         } catch (InterruptedException interrupted) {
+            releaseEndpointLockLease(requestedUsername);
             throw new InterruptedOperationException("The endpoint lookup was interrupted", interrupted);
+        } catch (RuntimeException failure) {
+            releaseEndpointLockLease(requestedUsername);
+            throw failure;
         }
 
         try {
@@ -368,7 +369,8 @@ final class UserDirectory {
             }
             return retrieveUserEndpoint(requestedUsername, token, cache);
         } finally {
-            semaphore.release();
+            endpointLock.release();
+            releaseEndpointLockLease(requestedUsername);
         }
     }
 
@@ -484,36 +486,34 @@ final class UserDirectory {
      *
      */
     void cleanupUserEndpointSemaphores() {
-        if (!userEndpointSemaphoreSyncRoot.tryAcquire()) {
-            return;
-        }
-        try {
-            for (java.util.Map.Entry<String, java.util.concurrent.Semaphore> entry :
-                    userEndpointSemaphores.entrySet()) {
-                java.util.concurrent.Semaphore semaphore = entry.getValue();
-                if (!semaphore.tryAcquire()) {
-                    continue;
+        for (String username : endpointLocks.keySet()) {
+            boolean[] removed = {false};
+            endpointLocks.computeIfPresent(username, (key, endpointLock) -> {
+                AtomicInteger leases = endpointLockLeases.get(key);
+                if (endpointLock.availablePermits() != 1 || leases != null && leases.get() > 0) {
+                    return endpointLock;
                 }
-                if (userEndpointSemaphores.remove(entry.getKey(), semaphore)) {
-                    // Released even though it just left the map: a caller that
-                    // fetched this semaphore before the removal may be about
-                    // to block on it, and a removed semaphore nobody releases
-                    // would strand that caller forever. The cost is one
-                    // unserialized duplicate lookup in a tiny window; the
-                    // alternative was an unbounded hang.
-                    semaphore.release();
-                    context.getDiagnostic().debug("Cleaned up user endpoint semaphore for " + entry.getKey());
-                } else {
-                    semaphore.release();
+                if (leases != null) {
+                    endpointLockLeases.remove(key, leases);
                 }
+                removed[0] = true;
+                return null;
+            });
+            if (removed[0]) {
+                context.getDiagnostic().debug("Cleaned up user endpoint semaphore for " + username);
             }
-        } finally {
-            userEndpointSemaphoreSyncRoot.release();
+        }
+    }
+
+    private void releaseEndpointLockLease(String username) {
+        AtomicInteger leases = endpointLockLeases.get(username);
+        if (leases != null) {
+            leases.decrementAndGet();
         }
     }
 
     /** Exposes the per-user endpoint semaphores for the client's test accessor. */
-    java.util.Map<String, java.util.concurrent.Semaphore> getUserEndpointSemaphores() {
-        return userEndpointSemaphores;
+    Map<String, Semaphore> getUserEndpointSemaphores() {
+        return endpointLocks;
     }
 }

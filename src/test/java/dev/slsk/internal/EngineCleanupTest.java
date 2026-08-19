@@ -18,24 +18,6 @@ import org.junit.jupiter.api.Test;
 
 class EngineCleanupTest {
     @Test
-    void exitsWhenUploadSynchronizationRootIsHeld() {
-        try (Fixture fixture = new Fixture()) {
-            Semaphore syncRoot = fixture.client.transfers().uploadSemaphoreSyncRootForTest();
-            syncRoot.acquireUninterruptibly();
-            Semaphore user = new Semaphore(1);
-            fixture.client.transfers().uploadSemaphoresForTest().put("alice", user);
-            try {
-                fixture.client.transfers().cleanupUploadSemaphores();
-                assertSame(
-                        user,
-                        fixture.client.transfers().uploadSemaphoresForTest().get("alice"));
-            } finally {
-                syncRoot.release();
-            }
-        }
-    }
-
-    @Test
     void removesAvailableUploadSemaphoreAndEmitsDiagnostic() {
         try (Fixture fixture = new Fixture()) {
             fixture.client.transfers().uploadSemaphoresForTest().put("alice", new Semaphore(1));
@@ -60,8 +42,7 @@ class EngineCleanupTest {
     void theSweepReachesTheSemaphoresAnUploadActuallyTakes() throws Exception {
         try (Fixture fixture = new Fixture()) {
             TransferDomain transfers = fixture.client.transfers();
-            Semaphore taken =
-                    transfers.uploadSemaphoreFor("alice", dev.slsk.internal.concurrent.CancellationSignal.none());
+            Semaphore taken = transfers.uploadSemaphoreFor("alice");
             assertSame(taken, transfers.uploadSemaphoresForTest().get("alice"));
 
             taken.acquireUninterruptibly();

@@ -104,7 +104,7 @@ final class UploadRun {
      */
     Transfer execute() {
         try {
-            perUserSemaphore = domain.uploadSemaphoreFor(upload.getUsername(), cancellationSignal);
+            perUserSemaphore = domain.uploadSemaphoreFor(upload.getUsername());
 
             // Announced before the wait rather than during it. The wait used to
             // be started inside the sync root and awaited after, which is the

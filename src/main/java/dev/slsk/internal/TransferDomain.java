@@ -128,14 +128,12 @@ final class TransferDomain implements PeerServices {
 
     private final Semaphore globalUploadSemaphore;
 
-    /** Per-user upload limits, and the lock guarding their creation. */
+    /** Per-user upload limits. */
     private final Map<String, Semaphore> uploadSemaphores = new ConcurrentHashMap<>();
 
     /** How many runs hold a reference to each user's semaphore; see {@link #uploadSemaphoreFor}. */
     private final Map<String, java.util.concurrent.atomic.AtomicInteger> uploadSemaphoreLeases =
             new ConcurrentHashMap<>();
-
-    private final Semaphore uploadSemaphoreSyncRoot = new Semaphore(1);
 
     /** Duplicate-transfer keys; owned here, since this is what detects duplicates. */
     private final Set<String> uniqueKeys = ConcurrentHashMap.newKeySet();
@@ -316,29 +314,19 @@ final class TransferDomain implements PeerServices {
      * cap is enforced here whatever a consumer's policy says.
      *
      * @param username the peer
-     * @param cancellationSignal stops the wait for the sync root
      * @return the peer's semaphore
      */
-    Semaphore uploadSemaphoreFor(String username, CancellationSignal cancellationSignal) throws InterruptedException {
-        dev.slsk.internal.common.Permits.acquire(uploadSemaphoreSyncRoot, cancellationSignal);
-        try {
-            // The lease is what makes the sweep safe. The C# source starts the
-            // semaphore wait inside this sync root, so its sweep can never see
-            // a fetched-but-unwaited semaphore; the blocking shape acquires
-            // later, on the caller's own thread, and between fetch and acquire
-            // the semaphore sits at full permits — exactly what the sweep
-            // removes. Removing it hands the next upload to the same user a
-            // fresh semaphore, and two uploads run concurrently against one
-            // peer, which Soulseek NS cannot handle. The lease says "a run
-            // holds a reference", permits or not.
+    Semaphore uploadSemaphoreFor(String username) {
+        return uploadSemaphores.compute(username, (key, current) -> {
+            // Claim the lease in the same per-key map operation that returns
+            // the semaphore. A cleanup compute for this user therefore sees
+            // either both values or neither; no process-wide sync root is
+            // needed around ConcurrentHashMap's already-atomic operation.
             uploadSemaphoreLeases
                     .computeIfAbsent(username, ignored -> new java.util.concurrent.atomic.AtomicInteger())
                     .incrementAndGet();
-            return uploadSemaphores.computeIfAbsent(
-                    username, ignored -> new Semaphore(clientOptions().getMaximumConcurrentUploadsPerUser()));
-        } finally {
-            uploadSemaphoreSyncRoot.release();
-        }
+            return current == null ? new Semaphore(clientOptions().getMaximumConcurrentUploadsPerUser()) : current;
+        });
     }
 
     /** Returns a run's lease on its per-user semaphore; the sweep may then reclaim it. */
@@ -351,26 +339,25 @@ final class TransferDomain implements PeerServices {
 
     /** Drops the per-user upload semaphores nothing is holding or about to. */
     void cleanupUploadSemaphores() {
-        if (!uploadSemaphoreSyncRoot.tryAcquire()) {
-            return;
-        }
-        try {
-            for (Map.Entry<String, Semaphore> entry : uploadSemaphores.entrySet()) {
-                Semaphore semaphore = entry.getValue();
+        for (String username : uploadSemaphores.keySet()) {
+            boolean[] removed = {false};
+            uploadSemaphores.computeIfPresent(username, (key, semaphore) -> {
                 if (semaphore.availablePermits() != clientOptions().getMaximumConcurrentUploadsPerUser()) {
-                    continue;
+                    return semaphore;
                 }
-                java.util.concurrent.atomic.AtomicInteger leases = uploadSemaphoreLeases.get(entry.getKey());
+                java.util.concurrent.atomic.AtomicInteger leases = uploadSemaphoreLeases.get(key);
                 if (leases != null && leases.get() > 0) {
-                    continue;
+                    return semaphore;
                 }
-                if (uploadSemaphores.remove(entry.getKey(), semaphore)) {
-                    uploadSemaphoreLeases.remove(entry.getKey());
-                    diagnostic.debug("Cleaned up upload semaphore for " + entry.getKey());
+                if (leases != null) {
+                    uploadSemaphoreLeases.remove(key, leases);
                 }
+                removed[0] = true;
+                return null;
+            });
+            if (removed[0]) {
+                diagnostic.debug("Cleaned up upload semaphore for " + username);
             }
-        } finally {
-            uploadSemaphoreSyncRoot.release();
         }
     }
 
@@ -401,10 +388,6 @@ final class TransferDomain implements PeerServices {
 
     Map<String, Semaphore> uploadSemaphoresForTest() {
         return uploadSemaphores;
-    }
-
-    Semaphore uploadSemaphoreSyncRootForTest() {
-        return uploadSemaphoreSyncRoot;
     }
 
     // --- what a peer can ask of us ------------------------------------------
