@@ -16,7 +16,12 @@ and shared control contracts stay in `dev.slsk`; requests and snapshots are
 grouped by the capability that owns them.
 
 All source links and examples use the current `dev.slsk` namespace. The former
-`tenine` package names are not part of the 1.0 API.
+`tenine` package names are not part of the API.
+
+This document describes the 2.0 surface. The one change from 1.x is the
+cancellation model: blocking methods no longer take a `CancellationSignal` —
+they respond to thread interruption and offer a `Duration` deadline overload
+instead (see [3.2](#32-blocking-calls-virtual-threads-interruption)).
 
 ---
 
@@ -50,7 +55,7 @@ All source links and examples use the current `dev.slsk` namespace. The former
 
 | Fact | Value |
 |---|---|
-| Maven coordinates | `dev.slsk:slsk-jvm:1.0.0` |
+| Maven coordinates | `dev.slsk:slsk-jvm:2.0.0` |
 | Distribution | Local Maven repository only. Run `mvn install` in the library checkout. Not published to Maven Central. |
 | Java version | 25 or later |
 | JPMS module | `dev.slsk.soulseek` |
@@ -64,7 +69,7 @@ The module exports these architectural packages:
 
 | Package | Rule |
 |---|---|
-| [`dev.slsk`](../src/main/java/dev/slsk/package-info.java) | What you call. The root type, ten facets, cancellation, subscriptions, and attachments. |
+| [`dev.slsk`](../src/main/java/dev/slsk/package-info.java) | What you call. The root type, ten facets, subscriptions, and attachments. |
 | [`dev.slsk.connection`](../src/main/java/dev/slsk/connection/package-info.java) | Server addresses, metadata, and connection state. |
 | [`dev.slsk.diagnostics`](../src/main/java/dev/slsk/diagnostics/package-info.java) | Diagnostic levels, metrics, and distributed-mesh snapshots. |
 | [`dev.slsk.download`](../src/main/java/dev/slsk/download/package-info.java) | Download requests, policies, and snapshots. |
@@ -97,7 +102,6 @@ file, and prints the outcome.
 ```java
 import java.nio.file.Path;
 import java.util.Comparator;
-import dev.slsk.CancellationSignal;
 import dev.slsk.Soulseek;
 import dev.slsk.download.Download;
 import dev.slsk.download.DownloadRequest;
@@ -117,12 +121,12 @@ public class Quickstart {
                 .build()) {
 
             // 1. Connect to the public server and log in. Blocks until online.
-            slsk.connection().connect(CancellationSignal.none());
+            slsk.connection().connect();
 
             // 2. Search. Blocks until the search completes (about 15 seconds,
             //    or sooner when responses stop arriving).
             SearchResult result = slsk.search()
-                    .run(SearchQuery.of("some artist some album"), CancellationSignal.none());
+                    .run(SearchQuery.of("some artist some album"));
 
             if (result.isEmpty()) {
                 System.out.println("Nobody answered.");
@@ -141,7 +145,7 @@ public class Quickstart {
                     DownloadRequest.of(source.user(), file, Path.of("downloads", file.name())));
 
             // 5. Wait for it to finish, then read the outcome.
-            Download done = slsk.downloads().await(id, CancellationSignal.none());
+            Download done = slsk.downloads().await(id);
             if (done.state() instanceof TransferState.Finished(TransferOutcome outcome)) {
                 System.out.println(switch (outcome) {
                     case TransferOutcome.Succeeded s -> "Done: " + s.bytes() + " bytes";
@@ -202,41 +206,70 @@ searching.
 `close()` is idempotent and never throws. It closes every connection, listener,
 timer, and transfer the client owns.
 
-### 3.2 Blocking calls, virtual threads
+### 3.2 Blocking calls, virtual threads, interruption
 
-Every operation blocks until it has an answer, and every operation that can take
-time accepts a `CancellationSignal`. There are no futures, callbacks for
-results, or async variants. Run concurrent work on virtual threads:
-
-```java
-Thread.startVirtualThread(() -> slsk.search().run(query, signal));
-```
-
-Cancellation is cooperative and explicit:
+Every operation blocks until it has an answer. There are no futures, callbacks
+for results, async variants, or library-specific cancellation types. Run
+concurrent work on virtual threads:
 
 ```java
-try (var controller = new CancellationController()) {
-    Thread.startVirtualThread(() -> slsk.connection().connect(controller.getSignal()));
-    // later, from any thread:
-    controller.cancel();
-}
+Thread.startVirtualThread(() -> slsk.search().run(query));
 ```
 
-| Type | Role |
-|---|---|
-| `CancellationSignal` | Immutable observation handle. Passed into blocking calls. |
-| `CancellationSignal.none()` | A signal that can never fire. Pass it to let a call run to completion. |
-| `CancellationController` | Creates and fires a signal. `getSignal()`, `cancel()`, `close()`. |
-| `CancellationSubscription` | Handle returned by `signal.register(Runnable)`. Close it to remove the listener. |
+**Cancellation is thread interruption** — the same contract as
+`BlockingQueue.take()`. Every blocking method declares
+`throws InterruptedException`; interrupting the calling thread cancels that
+invocation. Because it is the platform's own contract, everything the JDK
+gives you composes for free:
 
-`cancel()` is idempotent. Listeners registered on a signal run synchronously,
-in reverse registration order. If cancellation was already requested,
-`register` runs the listener before it returns. `signal.throwIfCancellationRequested()`
-throws `java.util.concurrent.CancellationException`.
+```java
+ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+Future<SearchResult> search = executor.submit(() -> slsk.search().run(query));
+// later, from any thread:
+search.cancel(true);        // interrupts the runner; run() stops the search and throws
+// or: executor.shutdownNow()  // cancels every in-flight operation at once
+```
 
-Do not interrupt threads blocked in library calls. Interrupting a virtual
-thread blocked in a socket read closes the socket. The signal is the supported
-mechanism.
+**Deadlines are built in.** Every blocking method has exactly one sibling
+overload taking a `java.time.Duration`, which throws
+`java.util.concurrent.TimeoutException` when the deadline expires:
+
+```java
+SearchResult result = slsk.search().run(query, Duration.ofSeconds(20));
+Download done = slsk.downloads().await(id, Duration.ofMinutes(10));
+```
+
+The deadline covers the whole invocation from method entry, on a monotonic
+clock. It is distinct from the configured domain timeouts (section 4):
+whichever fires first wins, and each throws its own exception, so "my
+deadline expired" and "the server never answered" stay distinguishable.
+
+Four rules make the semantics predictable:
+
+- **Interruption cancels the invocation, never independently owned work.**
+  Interrupting `downloads().await(id)` stops the wait; the download keeps
+  running (`cancel(id)` cancels it). Interrupting `search().await(id)` stops
+  the wait; the search keeps running (`stop(id)` stops it). Interrupting
+  `search().run(query)` stops the search too — that invocation created and
+  owns it.
+- **A result committed before cancellation wins.** The call returns normally
+  and the interrupt is left on the thread's flag for your own code to
+  observe. The library consumes an interrupt only when it reports it as an
+  `InterruptedException`, and never re-asserts one it reports.
+- **Cancellation is prompt and bounded.** Cleanup on the cancellation path
+  has a budget; a second interrupt during cleanup exits immediately.
+- **Cancelling a send never kills a shared connection.** For methods that
+  deliver a message (`chat().send`, `rooms().say`, ...), an interrupt before
+  the message reaches the socket withdraws it — nothing is sent. Once the
+  frame write has started, the connection is preserved and the frame
+  completes; the caller gets its `InterruptedException` and delivery is
+  indeterminate. A normal return means the complete message was handed to
+  the local socket — not that the peer received it.
+
+Your own threads never do socket I/O: the library keeps all socket reads and
+writes on threads it owns, which is what makes interruption safe here. Do not
+try to cancel library work by any other means (closing streams, reflection on
+internals); interrupt the thread or use the id-based commands.
 
 ### 3.3 Ids and snapshots
 
@@ -323,9 +356,12 @@ exception.
 
 Exceptions mean **faults**: not connected, protocol violation, I/O failure,
 invalid argument. All library exceptions are unchecked and extend
-`SoulseekClientException` (see [section 8](#8-exceptions)). Two standard
+`SoulseekClientException` (see [section 8](#8-exceptions)). Three standard
 exceptions also appear: `IllegalArgumentException` for a bad argument or an
-unknown id, and `CancellationException` when a signal fires.
+unknown id, and the two checked cancellation exceptions from
+[3.2](#32-blocking-calls-virtual-threads-interruption) —
+`InterruptedException` on every blocking method and `TimeoutException` on
+`Duration` overloads.
 
 ---
 
@@ -378,10 +414,14 @@ required settings make `build()` throw `IllegalStateException`.
 
 Conventions used below:
 
-- **Blocks** means the method waits for a network answer and accepts a
-  `CancellationSignal`. Cancelling throws `CancellationException` from the
-  call.
-- **Cheap** means the method returns from memory, synchronously.
+- **Blocks** means the method can wait — for a remote answer, or for a
+  message it sends to be handed to the socket. It declares
+  `throws InterruptedException`, and it has one sibling overload with a
+  trailing `Duration` deadline that additionally throws `TimeoutException`.
+  The tables list the no-deadline form; the `Duration` form always exists
+  and is never listed separately.
+- **Cheap** means the method returns from memory, synchronously, and has no
+  `Duration` overload.
 - All value types are immutable records unless stated otherwise.
 
 ### 5.1 `connection()`
@@ -392,12 +432,12 @@ underneath. The application never rebuilds the client to reconnect.
 
 | Method | Kind | Behaviour |
 |---|---|---|
-| `connect(CancellationSignal)` | Blocks | Connects to the public server (`vps.slsknet.org:2271`) and logs in. Returns when online. Throws on failure (`ConnectionException`, `LoginRejectedException`, ...). A transient failure also arms the automatic reconnect, so a failed startup connect recovers on its own. |
-| `connect(ServerAddress, CancellationSignal)` | Blocks | Same, against a named server. |
+| `connect()` | Blocks | Connects to the public server (`vps.slsknet.org:2271`) and logs in. Returns when online. Throws on failure (`ConnectionException`, `LoginRejectedException`, ...). A transient failure also arms the automatic reconnect, so a failed startup connect recovers on its own. The `Duration` form races the caller's deadline against the configured connect timeout; whichever fires first wins, each with its own exception. |
+| `connect(ServerAddress)` | Blocks | Same, against a named server. |
 | `disconnect(String reason)` | Cheap | Disconnects and stops reconnecting. Idempotent. The reason is recorded in diagnostics. |
 | `state()` | Cheap | The current `ConnectionState`. |
 | `server()` | Cheap | `Optional<ServerInfo>` — what the server has said about itself. Empty when not logged in. |
-| `ping(CancellationSignal)` | Blocks | Measures the round trip to the server. Returns a `Duration`. |
+| `ping()` | Blocks | Measures the round trip to the server. Returns a `Duration`. |
 | `events()` | Cheap | `EventStream<ConnectionEvent>`. |
 | `attach(Consumer<ConnectionEvent>)` | Cheap | `Attachment<ConnectionState>`: the state and a subscription, taken atomically. |
 
@@ -450,9 +490,9 @@ different things:
 | Method | Kind | Behaviour |
 |---|---|---|
 | `start(SearchQuery)` | Cheap | Starts a search. Returns a `SearchId` immediately. |
-| `run(SearchQuery, CancellationSignal)` | Blocks | Starts and waits. Returns a `SearchResult`. The common case. |
-| `await(SearchId, CancellationSignal)` | Blocks | Waits for a running search to stop. Cancelling stops the search too. |
-| `stop(SearchId)` | Cheap | Stops a search early. Idempotent. |
+| `run(SearchQuery)` | Blocks | Starts and waits. Returns a `SearchResult`. The common case. Interrupting stops the search this call owns, then throws — partial results are discarded with the exception. |
+| `await(SearchId)` | Blocks | Waits for a running search to stop. Interrupting stops **only the wait** — the search keeps running. (Changed from 1.x, where cancelling the wait stopped the search.) |
+| `stop(SearchId)` | Cheap | Stops a search early. Idempotent. To stop early *and keep what arrived*: `stop(id)`, then `await(id)` — the wait returns normally because the search ended. |
 | `get(SearchId)` | Cheap | The `SearchSnapshot` as it stands. Throws `IllegalArgumentException` for an unknown id. |
 | `active()` | Cheap | Every search still running. |
 | `events()` | Cheap | `EventStream<SearchEvent>`. |
@@ -529,7 +569,7 @@ is retried.
 | `cancel(TransferId)` | Cheap | Cancels. Idempotent, no-op on a finished one. |
 | `forget(TransferId)` | Cheap | Drops a finished download from the list. Throws `IllegalStateException` if it has not finished. |
 | `prioritize(TransferId, Priority)` | Cheap | Moves a download within **our own** queue. Says nothing to the peer. |
-| `await(TransferId, CancellationSignal)` | Blocks | Waits for a terminal state. Returns the final `Download`. Cancelling the signal stops the wait, not the download. |
+| `await(TransferId)` | Blocks | Waits for a terminal state. Returns the final `Download`. Interrupting stops the wait, not the download — `cancel(id)` cancels the download. |
 | `get(TransferId)` | Cheap | The `Download` snapshot. Throws `IllegalArgumentException` for an unknown id. |
 | `find(TransferId)` | Cheap | `Optional<Download>`. |
 | `all()` | Cheap | Every download the library holds. |
@@ -701,12 +741,12 @@ return values. Offline is an answer, not an exception. Nothing that changes
 
 | Method | Kind | Behaviour |
 |---|---|---|
-| `info(Username, CancellationSignal)` | Blocks | Asks the user to describe themselves. Returns `UserInfo`. |
-| `statistics(Username, CancellationSignal)` | Blocks | Asks the server for sharing figures. Returns `UserStatistics`. |
-| `status(Username, CancellationSignal)` | Blocks | Asks the server whether the user is around. Returns `UserStatus`. |
-| `endpoint(Username, CancellationSignal)` | Blocks | Resolves the address to connect to a user on. Cached by the library, so usually free. Returns `InetSocketAddress`. |
+| `info(Username)` | Blocks | Asks the user to describe themselves. Returns `UserInfo`. |
+| `statistics(Username)` | Blocks | Asks the server for sharing figures. Returns `UserStatistics`. |
+| `status(Username)` | Blocks | Asks the server whether the user is around. Returns `UserStatus`. |
+| `endpoint(Username)` | Blocks | Resolves the address to connect to a user on. Cached by the library, so usually free. Returns `InetSocketAddress`. |
 | `browse(BrowseRequest)` | Blocks | Reads everything a user shares. Returns `Browse`. |
-| `directory(Username, String path, CancellationSignal)` | Blocks | Reads one directory of a user's share. Returns `List<Directory>` — the protocol answers with a list, and a peer may include subdirectories. Empty if none. |
+| `directory(Username, String path)` | Blocks | Reads one directory of a user's share. Returns `List<Directory>` — the protocol answers with a list, and a peer may include subdirectories. Empty if none. |
 | `watch(Username)` | Cheap | Opens a status subscription. Returns a `Watch`. |
 | `watched()` | Cheap | `Set<Username>` currently watched. |
 | `events()` | Cheap | `EventStream<UserEvent>`. |
@@ -719,13 +759,12 @@ carries an optional progress callback:
 Browse browse = slsk.users().browse(
         BrowseRequest.of(user)
                 .timeout(Duration.ofSeconds(120))
-                .onProgress(p -> bar.set(p.fraction()))
-                .cancelledBy(signal));
+                .onProgress(p -> bar.set(p.fraction())));
 ```
 
 | Type | Fields / methods | Notes |
 |---|---|---|
-| `BrowseRequest` | `user`, `timeout` (default 60 s — the wait for the peer to *start* responding), `onProgress` (`Optional<Consumer<BrowseProgress>>`), `signal`. Factory `of(user)`; wither per field. | |
+| `BrowseRequest` | `user`, `timeout` (default 60 s — the wait for the peer to *start* responding), `onProgress` (`Optional<Consumer<BrowseProgress>>`). Factory `of(user)`; wither per field. | The request carries no cancellation handle — a request is a reusable value, and cancellation concerns one execution: interrupt the calling thread, or use `browse(request, Duration)` for a whole-call deadline. The request's `timeout` is the domain wait for the peer to start responding; the two compose. |
 | `BrowseProgress` | `user`, `transferred`, `total`. Helper `fraction()`. | The peer declares the total up front. |
 | `Browse` | `user`, `at`, `directories`, `lockedDirectories`. Helpers `directoryCount()`, `fileCount()`, `totalBytes()`, `at(path)` (`Optional<Directory>`), `files()` (lazy `Stream<SearchFile>`). | **Flat, not a tree.** The protocol has no directory tree: a browse is a flat list of directories, each carrying its full backslash-joined path. Build the tree your own display needs. `files()` is lazy so scanning for one extension does not materialize everything. |
 | `Directory` | `name` (full remote path), `files` (`List<SearchFile>`). Helpers `fileCount()`, `simpleName()`. Factory `of(name)`. | |
@@ -764,14 +803,14 @@ messages).
 
 | Method | Kind | Behaviour |
 |---|---|---|
-| `list(CancellationSignal)` | Blocks | The server's room directory. Returns `RoomList`. |
-| `join(String room, CancellationSignal)` | Blocks | Joins. Idempotent: joining a room we are in returns its current state. Returns `Room`. Throws `RoomJoinForbiddenException` when refused. |
-| `leave(String room)` | Cheap | Leaves. Idempotent. |
-| `say(String room, String message)` | Cheap | Says something in a room. |
-| `setTicker(String room, String message)` | Cheap | Pins our ticker, replacing whatever we pinned before. |
+| `list()` | Blocks | The server's room directory. Returns `RoomList`. |
+| `join(String room)` | Blocks | Joins. Idempotent: joining a room we are in returns its current state. Returns `Room`. Throws `RoomJoinForbiddenException` when refused. |
+| `leave(String room)` | Blocks | Leaves. Idempotent. Returns when the message is handed to the socket. |
+| `say(String room, String message)` | Blocks | Says something in a room. Returns when the message is handed to the socket. |
+| `setTicker(String room, String message)` | Blocks | Pins our ticker, replacing whatever we pinned before. Returns when handed to the socket. |
 | `get(String room)` | Cheap | A room we are in. Throws `IllegalArgumentException` if we are not in it. |
 | `joined()` | Cheap | Every room we are in. |
-| `startPublicChat()` / `stopPublicChat()` | Cheap | Starts / stops the all-rooms message firehose. Idempotent. |
+| `startPublicChat()` / `stopPublicChat()` | Blocks | Starts / stops the all-rooms message firehose. Idempotent. Returns when handed to the socket. |
 | `privateRooms()` | Cheap | The private-room administration facet. |
 | `events()` | Cheap | `EventStream<RoomEvent>`. |
 | `attach(Consumer<RoomEvent>)` | Cheap | `Attachment<List<Room>>`. |
@@ -785,17 +824,17 @@ messages).
 | `RoomUser` | `user`, `status` (`UserPresence`), `statistics`, `freeUploadSlots` (`OptionalInt`), `countryCode` (`Optional<String>`) | The server sends everyone's figures on join, so no per-user lookups are needed. |
 
 **`PrivateRooms`** — administration of rooms we own or moderate. Every method
-blocks briefly, takes a `CancellationSignal`, and is an idempotent intent
-(adding an existing member does nothing):
+blocks briefly (each has the standard `Duration` overload) and is an
+idempotent intent (adding an existing member does nothing):
 
 | Method | Behaviour |
 |---|---|
-| `addMember(room, user, signal)` | Adds a member to a room we own. |
-| `removeMember(room, user, signal)` | Removes a member. |
-| `addOperator(room, user, signal)` | Makes a member a moderator. |
-| `removeOperator(room, user, signal)` | Removes a moderator. |
-| `dropMembership(room, signal)` | Gives up our membership. |
-| `dropOwnership(room, signal)` | Gives up our ownership. |
+| `addMember(room, user)` | Adds a member to a room we own. |
+| `removeMember(room, user)` | Removes a member. |
+| `addOperator(room, user)` | Makes a member a moderator. |
+| `removeOperator(room, user)` | Removes a moderator. |
+| `dropMembership(room)` | Gives up our membership. |
+| `dropOwnership(room)` | Gives up our ownership. |
 
 **`RoomEvent`** (sealed):
 
@@ -821,7 +860,7 @@ receive them.
 
 | Method | Kind | Behaviour |
 |---|---|---|
-| `send(Username to, String message, CancellationSignal)` | Blocks | Sends a private message. |
+| `send(Username to, String message)` | Blocks | Sends a private message. Returns when the message is handed to the socket. Interrupting before the write starts withdraws the message; after, delivery is indeterminate and the connection is unaffected. |
 | `events()` | Cheap | `EventStream<ChatEvent>`. |
 
 There is no scrollback and no way to ask for it. A message is history the
@@ -849,7 +888,7 @@ What we offer to the network.
 |---|---|---|
 | `configure(List<SharedFolder>)` | Cheap | Sets the folders to share, replacing whatever was set. Does not scan. |
 | `configured()` | Cheap | The folders currently configured. |
-| `rescan(CancellationSignal)` | Blocks | Rebuilds the index and announces the counts to the server. Reports progress through `events()`. Returns the rebuilt `ShareIndex`. |
+| `rescan()` | Blocks | Rebuilds the index and announces the counts to the server. Reports progress through `events()`. Returns the rebuilt `ShareIndex`. |
 | `index()` | Cheap | The current `ShareIndex`. |
 | `catalog(ShareCatalog)` | Cheap | Replaces the built-in index entirely. See [6.3](#63-sharecatalog-and-resolvedfile). |
 | `events()` | Cheap | `EventStream<ShareEvent>`. |
@@ -885,12 +924,12 @@ This account: who we are, and the things only we can change about ourselves.
 |---|---|---|
 | `username()` | Cheap | The account we are logged in as. |
 | `presence()` | Cheap | The presence we last published. |
-| `presence(UserPresence)` | Cheap | Publishes our presence (`ONLINE` / `AWAY`). Idempotent. |
+| `presence(UserPresence)` | Blocks | Publishes our presence (`ONLINE` / `AWAY`). Idempotent. Returns when handed to the socket. |
 | `profile()` | Cheap | What peers see when they ask about this account. |
-| `profile(UserProfile)` | Cheap | Sets it. Set once, served to every peer who asks. |
-| `privileges(CancellationSignal)` | Blocks | Days of privileges remaining, or zero. |
-| `giftPrivileges(Username to, int days, CancellationSignal)` | Blocks | Gives some of our privilege days to another user. |
-| `changePassword(String, CancellationSignal)` | Blocks | Changes this account's password. |
+| `profile(UserProfile)` | Cheap | Sets it. Set once, served to every peer who asks. Local: the profile is served on request, never pushed. |
+| `privileges()` | Blocks | Days of privileges remaining, or zero. |
+| `giftPrivileges(Username to, int days)` | Blocks | Gives some of our privilege days to another user. Returns when handed to the socket. |
+| `changePassword(String)` | Blocks | Changes this account's password. Returns when the server has answered. |
 | `events()` | Cheap | `EventStream<MeEvent>`. |
 
 **`UserProfile`** — `description`, `picture` (`Optional<byte[]>`),
@@ -1183,9 +1222,17 @@ subtype or `UserOfflineException`, and so on. Catch
 
 Also thrown, from the JDK: `IllegalArgumentException` (bad argument, unknown
 id in `get`), `IllegalStateException` (`forget` on an unfinished transfer,
-builder misuse), `NullPointerException` (null arguments),
-`java.util.concurrent.CancellationException` (a signal fired during a blocking
-call).
+builder misuse), `NullPointerException` (null arguments).
+
+Two **checked** JDK exceptions carry cancellation, and only cancellation:
+
+- `InterruptedException` — the calling thread was interrupted during a
+  blocking method. The invocation was cancelled; the interrupt is consumed.
+- `java.util.concurrent.TimeoutException` — the caller's own `Duration`
+  deadline expired. Distinct from the configured domain timeouts, which
+  throw `NoResponseException` / `ConnectionException` subtypes as listed
+  above: "I gave up" and "the network gave up" are different facts and keep
+  different exceptions.
 
 ---
 
@@ -1295,8 +1342,8 @@ Soulseek slsk = Soulseek.builder()
         .uploads(UploadPolicy.standard(2, 1))
         .profile(UserProfile.of("Sharing 12k files. Be nice."))
         .build();
-slsk.connection().connect(CancellationSignal.none());
-slsk.shares().rescan(CancellationSignal.none()); // index + announce counts
+slsk.connection().connect();
+slsk.shares().rescan(); // index + announce counts
 ```
 
 Peers check your share counts before serving you. A client that shares nothing
@@ -1376,9 +1423,6 @@ capability models live in the package listed in [section 1](#1-the-library-at-a-
 | `Shares` | facet | Configure, rescan, and replace what we share. |
 | `Me` | facet | This account: presence, profile, privileges, password. |
 | `Diagnostics` | facet | Log stream, metrics, mesh state, protocol trace. |
-| `CancellationSignal` | final class | Immutable cancellation handle; `none()` never fires. |
-| `CancellationController` | final class | Creates and fires a signal. |
-| `CancellationSubscription` | interface | Removes a cancellation listener. |
 | `EventStream<T>` | interface | Subscribe to a facet's events, whole stream or one type. |
 | `Subscription` | interface | Unregisters a listener. Idempotent close. |
 | `Attachment<S>` | record | A snapshot and a subscription, taken atomically. |
@@ -1411,7 +1455,7 @@ capability models live in the package listed in [section 1](#1-the-library-at-a-
 | `DownloadPolicy` | record | Concurrency, per-peer cap, speed limit, poll interval, retry. |
 | `RetryPolicy` | record | Attempts, backoff, which rejections are worth retrying. |
 | `Bandwidth` | record | A rate limit with a named unit; 0 = unlimited. |
-| `BrowseRequest` | record | Whose share to read, timeout, progress callback, signal. |
+| `BrowseRequest` | record | Whose share to read, timeout, progress callback. |
 | `Browse` | record | One user's whole share, flat, with lazy `files()`. |
 | `BrowseProgress` | record | Bytes received of a browse in flight. |
 | `BrowseResponse` | record | What we hand a peer who browses us (SPI-facing). |
