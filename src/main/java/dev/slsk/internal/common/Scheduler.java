@@ -41,7 +41,19 @@ public final class Scheduler implements AutoCloseable {
      * @param name the timer thread name
      */
     public Scheduler(String name) {
+        this(name, NetworkExecutor.executor());
+    }
+
+    /**
+     * Creates a scheduler dispatching to the given worker, for tests that need
+     * to control how the worker fails.
+     *
+     * @param name the timer thread name
+     * @param worker the executor dispatched tasks run on
+     */
+    Scheduler(String name, ExecutorService worker) {
         Objects.requireNonNull(name, "name");
+        this.worker = Objects.requireNonNull(worker, "worker");
         // Constructed directly rather than through
         // Executors.newSingleThreadScheduledExecutor, which hands back a
         // DelegatedScheduledExecutorService wrapper. The instanceof guard that
@@ -54,7 +66,6 @@ public final class Scheduler implements AutoCloseable {
             return thread;
         });
         timer.setRemoveOnCancelPolicy(true);
-        worker = NetworkExecutor.executor();
     }
 
     /**
@@ -106,7 +117,14 @@ public final class Scheduler implements AutoCloseable {
                         if (!running.compareAndSet(false, true)) {
                             return;
                         }
-                        worker.execute(dispatch);
+                        try {
+                            worker.execute(dispatch);
+                        } catch (RejectedExecutionException closing) {
+                            // Only dispatch resets the flag, so a rejection —
+                            // the worker closing under a live timer — must
+                            // reset it here or every later tick no-ops.
+                            running.set(false);
+                        }
                     },
                     initialDelay,
                     period,
