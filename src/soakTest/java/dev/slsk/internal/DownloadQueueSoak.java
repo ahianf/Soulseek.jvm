@@ -28,6 +28,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.DisplayName;
@@ -36,28 +38,23 @@ import org.junit.jupiter.api.Test;
 /**
  * Scenario: the managed download queue under load, and under refusal.
  *
- * <p>No network, and deliberately so. The queue's whole job is deciding what
- * runs and when; the two ways that job goes wrong at scale are a per-user cap
- * that leaks under contention and a retry loop that will not drain, and neither
- * involves a socket.
+ * <p>No network, and deliberately so. The queue's whole job is announcing what
+ * we want to peers and retaining it until it settles; the two ways that job goes
+ * wrong at scale are serialising an album behind transfer caps that do not apply
+ * yet and a retry loop that will not drain, and neither involves a socket.
  *
- * <p>Driving the queue directly, with a runner that takes time, is what makes
- * the concurrency real enough to count. Going through the facet would be more
- * end-to-end and would assert nothing: offline, every attempt fails instantly,
- * so the queue drains before a sampler can observe two of anything at once.
- *
- * <p>The interesting failure is the first. Counting slots with a semaphore per
- * user plus a global one looks right and is not: acquiring two in sequence is
- * not atomic, and under two hundred concurrent enqueues the pair ends up held by
- * two transfers that each got one. That defect is invisible at three downloads
- * and reliable at two hundred, which is what this is for.
+ * <p>Driving the queue directly, with every runner held at one gate, makes the
+ * concurrency exact rather than sampled. Transfer caps are acquired later by
+ * {@code DownloadRun}, when a peer actually offers the file and a transfer
+ * connection exists; applying them here would put every track after the first
+ * at the back of the peer's queue.
  */
 class DownloadQueueSoak {
 
     private static final int DOWNLOADS = 200;
     private static final int PEERS = 20;
-    private static final int MAX_CONCURRENT = 8;
-    private static final int MAX_PER_USER = 2;
+    private static final int TRANSFER_MAX_CONCURRENT = 8;
+    private static final int TRANSFER_MAX_PER_USER = 2;
 
     /** A sink that goes nowhere. This scenario is about scheduling, not bytes. */
     private static final class NullSink implements TransferSink {
@@ -77,10 +74,9 @@ class DownloadQueueSoak {
      * Assigns downloads to peers in blocks rather than round-robin.
      *
      * <p>Ten consecutive tracks from one peer is what queueing an album looks
-     * like, and it is also the only arrangement that reliably contends the
-     * per-user cap: round-robin spreads the running set across twenty peers, so
-     * two downloads from the same one rarely coincide and the cap is never
-     * actually tested.
+     * like. All ten must be announced together; serialising them behind the
+     * transfer-stage per-user cap would make each rejoin the back of the peer's
+     * queue after the previous track completed.
      */
     private static DownloadRequest request(int index, int total, int peers) {
         int peer = Math.min(peers - 1, index / Math.max(1, total / peers));
@@ -112,12 +108,11 @@ class DownloadQueueSoak {
     }
 
     /**
-     * Two hundred downloads across twenty peers, with a per-user cap of two.
+     * Two hundred downloads across twenty peers are all announced at once.
      *
-     * <p>The caps are counted inside the runner, which is the only place the
-     * answer is not a guess: a sampler outside sees whatever the scheduler
-     * happened to be doing when it looked, and a cap that leaks for a
-     * microsecond has leaked.
+     * <p>The configured transfer caps are deliberately much smaller. They do
+     * not apply while the files are merely taking places in remote queues; the
+     * transfer stage enforces them after a peer offers a file.
      */
     @Test
     @DisplayName("Queue under sustained load")
@@ -129,6 +124,8 @@ class DownloadQueueSoak {
         Map<Username, AtomicInteger> perUser = new ConcurrentHashMap<>();
         Map<Username, AtomicInteger> peakPerUser = new ConcurrentHashMap<>();
         AtomicLong runs = new AtomicLong();
+        CountDownLatch allStarted = new CountDownLatch(DOWNLOADS);
+        CountDownLatch release = new CountDownLatch(1);
 
         Scheduler scheduler = new Scheduler("download-queue-soak");
         DownloadQueue queue = new DownloadQueue(
@@ -139,10 +136,9 @@ class DownloadQueueSoak {
                     peakPerUser
                             .computeIfAbsent(entry.user(), user -> new AtomicInteger())
                             .accumulateAndGet(mine.incrementAndGet(), Math::max);
+                    allStarted.countDown();
                     try {
-                        // Long enough that the caps are contended rather than
-                        // trivially satisfied by everything finishing first.
-                        Thread.sleep(2);
+                        release.await();
                     } catch (InterruptedException interrupted) {
                         Thread.currentThread().interrupt();
                     } finally {
@@ -155,8 +151,8 @@ class DownloadQueueSoak {
                 TransferStore.inMemory(),
                 (entry, previous) -> {});
         queue.policy(DownloadPolicy.defaults()
-                .maxConcurrent(MAX_CONCURRENT)
-                .maxConcurrentPerUser(MAX_PER_USER)
+                .maxConcurrent(TRANSFER_MAX_CONCURRENT)
+                .maxConcurrentPerUser(TRANSFER_MAX_PER_USER)
                 .retry(RetryPolicy.none()));
 
         try {
@@ -167,6 +163,8 @@ class DownloadQueueSoak {
                 queue.enqueue(id, request(index, DOWNLOADS, PEERS));
             }
 
+            assertTrue(allStarted.await(30, TimeUnit.SECONDS), "not every queued file was announced");
+            release.countDown();
             awaitDrained(queue, ids, Duration.ofSeconds(120));
 
             int worstPerUser = peakPerUser.values().stream()
@@ -176,22 +174,21 @@ class DownloadQueueSoak {
             SoakReport.record("download-queue", "downloads", DOWNLOADS);
             SoakReport.record("download-queue", "peers", PEERS);
             SoakReport.record("download-queue", "attempts run", runs.get());
-            SoakReport.record("download-queue", "peak concurrent overall", peakConcurrent.get());
-            SoakReport.record("download-queue", "peak concurrent per peer", worstPerUser);
+            SoakReport.record("download-queue", "peak queue requests overall", peakConcurrent.get());
+            SoakReport.record("download-queue", "peak queue requests per peer", worstPerUser);
 
-            assertTrue(
-                    peakConcurrent.get() > 1,
-                    "nothing ran concurrently, so the caps were never contended and prove nothing");
             assertEquals(
-                    MAX_PER_USER,
+                    DOWNLOADS,
+                    peakConcurrent.get(),
+                    "every queued file should be announced without waiting for a transfer slot");
+            assertEquals(
+                    DOWNLOADS / PEERS,
                     worstPerUser,
-                    "the per-user cap was either exceeded or never contended; neither proves it holds");
-            assertTrue(
-                    peakConcurrent.get() <= MAX_CONCURRENT,
-                    "the queue ran " + peakConcurrent.get() + " at once; the cap is " + MAX_CONCURRENT);
+                    "every track from one peer should take its remote queue place together");
             assertEquals(DOWNLOADS, runs.get(), "every download ran exactly once");
             assertEquals(DOWNLOADS, queue.all().size(), "nothing was lost");
         } finally {
+            release.countDown();
             queue.close();
             scheduler.close();
         }
