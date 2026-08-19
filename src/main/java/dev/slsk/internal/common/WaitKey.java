@@ -48,13 +48,7 @@ public final class WaitKey {
 
     @Override
     public boolean equals(Object object) {
-        if (object == null) {
-            throw new NullPointerException("other");
-        }
-        if (!(object instanceof WaitKey other)) {
-            return false;
-        }
-        return token.equals(other.token);
+        return object instanceof WaitKey other && token.equals(other.token);
     }
 
     @Override

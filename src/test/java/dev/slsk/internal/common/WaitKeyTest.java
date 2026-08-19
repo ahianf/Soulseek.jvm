@@ -91,11 +91,14 @@ class WaitKeyTest {
     }
 
     @Test
-    @DisplayName("Null equality preserves the source exception")
-    void nullEqualityPreservesSourceException() {
+    @DisplayName("Null equality returns false, per the Object.equals contract")
+    void nullEqualityReturnsFalse() {
         WaitKey key = new WaitKey("test");
 
-        assertThrows(NullPointerException.class, () -> key.equals(null));
+        assertFalse(key.equals(null));
+        // The contract matters operationally: a collection operation that
+        // compares the key against a null element must not die doing it.
+        assertFalse(java.util.Arrays.asList(new WaitKey[] {null}).contains(key));
     }
 
     @Test
