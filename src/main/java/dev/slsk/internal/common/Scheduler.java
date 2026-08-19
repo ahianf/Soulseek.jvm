@@ -90,19 +90,23 @@ public final class Scheduler implements AutoCloseable {
     public ScheduledFuture<?> scheduleAtFixedRate(Runnable task, long initialDelay, long period, TimeUnit unit) {
         Objects.requireNonNull(task, "task");
         AtomicBoolean running = new AtomicBoolean();
+        // Built once here rather than inside the tick: at the 250 ms monitor
+        // cadence the per-tick capture was a steady allocation for a lambda
+        // that never changes.
+        Runnable dispatch = () -> {
+            try {
+                task.run();
+            } finally {
+                running.set(false);
+            }
+        };
         try {
             return timer.scheduleAtFixedRate(
                     () -> {
                         if (!running.compareAndSet(false, true)) {
                             return;
                         }
-                        worker.execute(() -> {
-                            try {
-                                task.run();
-                            } finally {
-                                running.set(false);
-                            }
-                        });
+                        worker.execute(dispatch);
                     },
                     initialDelay,
                     period,
