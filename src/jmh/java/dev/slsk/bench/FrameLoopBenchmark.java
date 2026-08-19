@@ -24,6 +24,7 @@ import org.openjdk.jmh.annotations.OutputTimeUnit;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
@@ -63,16 +64,23 @@ public class FrameLoopBenchmark {
     private static final int PAYLOAD_SIZE = 32;
 
     private ExecutorService executor;
+    private NetworkExecutor networkExecutor;
     private byte[] frame;
 
     @Setup
     public void setUp() {
-        executor = NetworkExecutor.executor();
+        networkExecutor = new NetworkExecutor();
+        executor = networkExecutor.executor();
         frame = new byte[4 + CODE_LENGTH + PAYLOAD_SIZE];
         ByteBuffer.wrap(frame)
                 .order(ByteOrder.LITTLE_ENDIAN)
                 .putInt(CODE_LENGTH + PAYLOAD_SIZE)
                 .putInt(1);
+    }
+
+    @TearDown
+    public void tearDown() {
+        networkExecutor.close();
     }
 
     /** The floor, and what the framed read loop does: read straight off the stream. */

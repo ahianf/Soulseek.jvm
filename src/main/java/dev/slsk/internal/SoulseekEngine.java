@@ -16,6 +16,7 @@ import dev.slsk.internal.common.DefaultWaiter;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.IOAdapter;
 import dev.slsk.internal.common.Locks;
+import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Scheduler;
 import dev.slsk.internal.common.TokenBucket;
 import dev.slsk.internal.common.TokenFactory;
@@ -152,6 +153,7 @@ final class SoulseekEngine implements AutoCloseable {
     private volatile java.util.Set<String> privilegedUsers = java.util.Set.of();
 
     private final AtomicBoolean closed = new AtomicBoolean();
+    private final NetworkExecutor networkExecutor;
     /**
      * The client's single timer thread. Every component that needs delayed or
      * periodic work shares it: the waiter, both token buckets, the distributed
@@ -239,7 +241,8 @@ final class SoulseekEngine implements AutoCloseable {
         this.listener = listener;
         // Constructed before every component that schedules, since they all
         // share it.
-        this.scheduler = new Scheduler("soulseek-client-timer");
+        this.networkExecutor = new NetworkExecutor();
+        this.scheduler = new Scheduler("soulseek-client-timer", networkExecutor.executor());
         this.waiter = waiter == null ? new DefaultWaiter(this.options.getMessageTimeout(), scheduler) : waiter;
         // Before every component that writes to the server, because they are
         // built with it rather than reaching back through the engine for it.
@@ -278,12 +281,14 @@ final class SoulseekEngine implements AutoCloseable {
                 this::catalog,
                 this::profile,
                 this::isPrivileged,
-                scheduler);
+                scheduler,
+                networkExecutor);
         this.connectionMonitor = new ConnectionMonitor(scheduler);
         this.clientListenerFactory = (address, port, connectionOptions) ->
-                new SocketListener(address, port, connectionOptions, connectionMonitor);
-        this.connectionFactory =
-                connectionFactory == null ? new DefaultConnectionFactory(connectionMonitor) : connectionFactory;
+                new SocketListener(address, port, connectionOptions, connectionMonitor, networkExecutor.executor());
+        this.connectionFactory = connectionFactory == null
+                ? new DefaultConnectionFactory(connectionMonitor, networkExecutor.executor())
+                : connectionFactory;
 
         this.listenerHandler = listenerHandler == null
                 ? new DefaultListenerHandler(
@@ -311,7 +316,9 @@ final class SoulseekEngine implements AutoCloseable {
                         searchDomain::registry,
                         this::getDownloadRegistry,
                         server::username,
-                        this.transfers)
+                        this.transfers,
+                        null,
+                        networkExecutor.executor())
                 : peerMessageHandler;
         this.distributedMessageHandler = distributedMessageHandler == null
                 ? new DefaultDistributedMessageHandler(
@@ -320,7 +327,9 @@ final class SoulseekEngine implements AutoCloseable {
                         this.tokenFactory,
                         this.waiter,
                         this::getDistributedConnectionManager,
-                        this::getSearchResponder)
+                        this::getSearchResponder,
+                        null,
+                        networkExecutor)
                 : distributedMessageHandler;
         this.peerConnectionManager = peerConnectionManager == null
                 ? new PeerNetwork(
@@ -330,7 +339,8 @@ final class SoulseekEngine implements AutoCloseable {
                         this.tokenFactory,
                         this.peerMessageHandler,
                         this.connectionFactory,
-                        null)
+                        null,
+                        scheduler)
                 : peerConnectionManager;
         this.distributedConnectionManager = distributedConnectionManager == null
                 ? new DistributedNetwork(
@@ -353,7 +363,9 @@ final class SoulseekEngine implements AutoCloseable {
                         this::getPeerConnectionManager,
                         this::getDistributedConnectionManager,
                         this::getDistributedMessageHandler,
-                        this::getSearchResponder)
+                        this::getSearchResponder,
+                        null,
+                        networkExecutor)
                 : serverMessageHandler;
 
         bindEvents();
@@ -698,6 +710,7 @@ final class SoulseekEngine implements AutoCloseable {
         }
         connectionMonitor.close();
         scheduler.close();
+        networkExecutor.close();
     }
 
     final Waiter getWaiter() {
@@ -1213,6 +1226,10 @@ final class SoulseekEngine implements AutoCloseable {
 
     Scheduler getScheduler() {
         return scheduler;
+    }
+
+    NetworkExecutor getNetworkExecutor() {
+        return networkExecutor;
     }
 
     <T> void raiseEvent(EngineEvents.Kind kind, T eventData) {

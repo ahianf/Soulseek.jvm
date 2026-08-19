@@ -9,7 +9,6 @@ import dev.slsk.exceptions.ConnectionReadException;
 import dev.slsk.exceptions.ConnectionWriteDroppedException;
 import dev.slsk.exceptions.ConnectionWriteException;
 import dev.slsk.internal.common.Failures;
-import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.concurrent.CancellationSubscription;
 import dev.slsk.internal.concurrent.InterruptedOperationException;
@@ -30,6 +29,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -38,10 +38,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /** Provides client connections for TCP network services. */
 public class SocketConnection implements Connection {
-    // Blocking socket reads/writes are dispatched on virtual threads so a parked
-    // read unmounts its carrier instead of pinning a bounded pool worker; see
-    // NetworkExecutor for why the common pool is unusable here.
-    private static final ExecutorService IO_EXECUTOR = NetworkExecutor.executor();
 
     /** Fastest monitor tick, so a very short inactivity timeout stays precise. */
     private static final int MIN_MONITOR_INTERVAL_MILLIS = 10;
@@ -121,10 +117,18 @@ public class SocketConnection implements Connection {
      */
     private final ConnectionMonitor monitor;
 
+    private final ExecutorService ioExecutor;
+    private final boolean ownsExecutor;
+
     protected InetSocketAddress ipEndpoint;
     protected final ConnectionOptions options;
     protected volatile NetworkStream stream;
     protected volatile TcpClient tcpClient;
+
+    /** Executor shared by this connection's read and write loops. */
+    protected final ExecutorService ioExecutor() {
+        return ioExecutor;
+    }
 
     /**
      * Creates a connection over an optional existing TCP client.
@@ -138,7 +142,37 @@ public class SocketConnection implements Connection {
      */
     public SocketConnection(
             InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient, ConnectionMonitor monitor) {
+        this(
+                ipEndpoint,
+                options,
+                tcpClient,
+                monitor,
+                Executors.newThreadPerTaskExecutor(Thread.ofVirtual()
+                        .name("soulseek-standalone-connection-", 0)
+                        .factory()),
+                true);
+    }
+
+    /** Creates a connection sharing its client's I/O executor. */
+    public SocketConnection(
+            InetSocketAddress ipEndpoint,
+            ConnectionOptions options,
+            TcpClient tcpClient,
+            ConnectionMonitor monitor,
+            ExecutorService ioExecutor) {
+        this(ipEndpoint, options, tcpClient, monitor, ioExecutor, false);
+    }
+
+    private SocketConnection(
+            InetSocketAddress ipEndpoint,
+            ConnectionOptions options,
+            TcpClient tcpClient,
+            ConnectionMonitor monitor,
+            ExecutorService ioExecutor,
+            boolean ownsExecutor) {
         this.monitor = Objects.requireNonNull(monitor, "monitor");
+        this.ioExecutor = Objects.requireNonNull(ioExecutor, "ioExecutor");
+        this.ownsExecutor = ownsExecutor;
         this.ipEndpoint = ipEndpoint;
         this.options = options == null ? new ConnectionOptions() : options;
         this.tcpClient = tcpClient == null ? new TcpClientAdapter() : tcpClient;
@@ -316,7 +350,7 @@ public class SocketConnection implements Connection {
     private void awaitTransportConnect(CancellationSignal token, int timeout) throws Exception {
         ArrayBlockingQueue<Object> gate = new ArrayBlockingQueue<>(1);
         Object connected = new Object();
-        IO_EXECUTOR.execute(() -> {
+        ioExecutor.execute(() -> {
             try {
                 ProxyOptions proxy = options.getProxyOptions();
                 if (proxy != null) {
@@ -534,6 +568,9 @@ public class SocketConnection implements Connection {
         stopTimers();
         closeTransport();
         disposed = true;
+        if (ownsExecutor) {
+            ioExecutor.shutdown();
+        }
     }
 
     /**
@@ -764,7 +801,7 @@ public class SocketConnection implements Connection {
             }
             frameWritesAccepted = true;
             frameWriterStarted.set(true);
-            IO_EXECUTOR.execute(this::runFrameWriter);
+            ioExecutor.execute(this::runFrameWriter);
         }
     }
 

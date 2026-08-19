@@ -4,13 +4,13 @@
 
 package dev.slsk.internal.network.tcp;
 
-import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.options.ConnectionOptions;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
 
 /** Listens for client connections for TCP network services. */
 public final class SocketListener implements Listener {
@@ -20,12 +20,23 @@ public final class SocketListener implements Listener {
     private final ConnectionOptions connectionOptions;
     private final TcpListener tcpListener;
     private final ConnectionMonitor monitor;
+    private final ExecutorService executor;
     private volatile boolean listening;
 
     /** Creates a listener with a socket adapter. */
     public SocketListener(
             InetAddress ipAddress, int port, ConnectionOptions connectionOptions, ConnectionMonitor monitor) {
-        this(ipAddress, port, connectionOptions, monitor, null);
+        this(ipAddress, port, connectionOptions, monitor, null, null);
+    }
+
+    /** Creates a listener sharing its client's I/O executor. */
+    public SocketListener(
+            InetAddress ipAddress,
+            int port,
+            ConnectionOptions connectionOptions,
+            ConnectionMonitor monitor,
+            ExecutorService executor) {
+        this(ipAddress, port, connectionOptions, monitor, null, executor);
     }
 
     /**
@@ -44,7 +55,19 @@ public final class SocketListener implements Listener {
             ConnectionOptions connectionOptions,
             ConnectionMonitor monitor,
             TcpListener tcpListener) {
+        this(ipAddress, port, connectionOptions, monitor, tcpListener, null);
+    }
+
+    /** Creates a listener over an adapter and a caller-owned executor. */
+    public SocketListener(
+            InetAddress ipAddress,
+            int port,
+            ConnectionOptions connectionOptions,
+            ConnectionMonitor monitor,
+            TcpListener tcpListener,
+            ExecutorService executor) {
         this.monitor = Objects.requireNonNull(monitor, "monitor");
+        this.executor = executor;
         this.ipAddress = ipAddress;
         this.port = port;
         this.connectionOptions = connectionOptions == null ? new ConnectionOptions() : connectionOptions;
@@ -131,14 +154,19 @@ public final class SocketListener implements Listener {
      * reaches the thread's uncaught exception handler, which is the JVM's
      * standard place for exactly this and is never silent.
      */
-    private static void runInBackground(Runnable task) {
-        NetworkExecutor.executor().execute(task);
+    private void runInBackground(Runnable task) {
+        if (executor == null) {
+            Thread.ofVirtual().name("soulseek-standalone-listener").start(task);
+        } else {
+            executor.execute(task);
+        }
     }
 
     private void raiseAccepted(Socket client) {
         InetSocketAddress endpoint = (InetSocketAddress) client.getRemoteSocketAddress();
-        Connection connection =
-                new SocketConnection(endpoint, connectionOptions, new TcpClientAdapter(client), monitor);
+        Connection connection = executor == null
+                ? new SocketConnection(endpoint, connectionOptions, new TcpClientAdapter(client), monitor)
+                : new SocketConnection(endpoint, connectionOptions, new TcpClientAdapter(client), monitor, executor);
         for (ListenerAcceptedEventListener listener : acceptedListeners) {
             listener.handle(this, connection);
         }

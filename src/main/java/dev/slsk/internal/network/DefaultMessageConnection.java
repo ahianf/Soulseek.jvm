@@ -6,7 +6,6 @@ package dev.slsk.internal.network;
 
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.internal.common.CommonUtils;
-import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.network.tcp.ConnectionDataEvent;
@@ -22,6 +21,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
 
 /** Provides framed client connections to the Soulseek network. */
 public final class DefaultMessageConnection extends SocketConnection implements MessageConnection {
@@ -52,6 +52,20 @@ public final class DefaultMessageConnection extends SocketConnection implements 
         bindConnectedReadLoop();
     }
 
+    /** Creates a server connection sharing its client's I/O executor. */
+    public DefaultMessageConnection(
+            InetSocketAddress ipEndpoint,
+            ConnectionOptions options,
+            int codeLength,
+            TcpClient tcpClient,
+            ConnectionMonitor monitor,
+            ExecutorService ioExecutor) {
+        super(ipEndpoint, options, tcpClient, monitor, ioExecutor);
+        this.codeLength = codeLength;
+        username = "";
+        bindConnectedReadLoop();
+    }
+
     /** Creates a peer connection. */
     public DefaultMessageConnection(
             String username,
@@ -61,6 +75,25 @@ public final class DefaultMessageConnection extends SocketConnection implements 
             TcpClient tcpClient,
             ConnectionMonitor monitor) {
         super(ipEndpoint, options, tcpClient, monitor);
+        this.codeLength = codeLength;
+        if (isNullOrWhiteSpace(username)) {
+            throw new IllegalArgumentException(
+                    "The username must not be a null or empty string, " + "or one consisting only of whitespace");
+        }
+        this.username = username;
+        bindConnectedReadLoop();
+    }
+
+    /** Creates a peer connection sharing its client's I/O executor. */
+    public DefaultMessageConnection(
+            String username,
+            InetSocketAddress ipEndpoint,
+            ConnectionOptions options,
+            int codeLength,
+            TcpClient tcpClient,
+            ConnectionMonitor monitor,
+            ExecutorService ioExecutor) {
+        super(ipEndpoint, options, tcpClient, monitor, ioExecutor);
         this.codeLength = codeLength;
         if (isNullOrWhiteSpace(username)) {
             throw new IllegalArgumentException(
@@ -163,7 +196,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
      * future it used to return existed only to carry the failure back here.
      */
     private void startReadLoop() {
-        NetworkExecutor.executor().execute(() -> {
+        ioExecutor().execute(() -> {
             try {
                 readContinuously();
             } catch (Throwable failure) {

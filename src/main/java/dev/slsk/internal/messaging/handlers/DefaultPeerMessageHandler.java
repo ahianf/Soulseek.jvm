@@ -9,7 +9,6 @@ import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Failures;
-import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
@@ -112,11 +111,11 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 loggedInUsername,
                 services,
                 diagnosticFactory,
-                NetworkExecutor.executor());
+                command -> Thread.ofVirtual().name("soulseek-peer-response").start(command));
     }
 
     /** Creates a handler that answers peers on the supplied executor. */
-    DefaultPeerMessageHandler(
+    public DefaultPeerMessageHandler(
             Supplier<SoulseekClientOptions> options,
             Waiter waiter,
             Supplier<Map<Integer, SearchInternal>> searches,

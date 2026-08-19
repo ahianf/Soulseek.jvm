@@ -6,11 +6,13 @@ package dev.slsk.internal.common;
 import java.util.Objects;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 /**
  * A timer wheel backed by one platform thread.
@@ -34,6 +36,7 @@ public final class Scheduler implements AutoCloseable {
 
     private final ScheduledThreadPoolExecutor timer;
     private final ExecutorService worker;
+    private final boolean ownsWorker;
 
     /**
      * Creates a scheduler.
@@ -41,7 +44,11 @@ public final class Scheduler implements AutoCloseable {
      * @param name the timer thread name
      */
     public Scheduler(String name) {
-        this(name, NetworkExecutor.executor());
+        this(
+                name,
+                Executors.newThreadPerTaskExecutor(
+                        Thread.ofVirtual().name(name + "-worker-", 0).factory()),
+                true);
     }
 
     /**
@@ -51,9 +58,14 @@ public final class Scheduler implements AutoCloseable {
      * @param name the timer thread name
      * @param worker the executor dispatched tasks run on
      */
-    Scheduler(String name, ExecutorService worker) {
+    public Scheduler(String name, ExecutorService worker) {
+        this(name, worker, false);
+    }
+
+    private Scheduler(String name, ExecutorService worker, boolean ownsWorker) {
         Objects.requireNonNull(name, "name");
         this.worker = Objects.requireNonNull(worker, "worker");
+        this.ownsWorker = ownsWorker;
         // Constructed directly rather than through
         // Executors.newSingleThreadScheduledExecutor, which hands back a
         // DelegatedScheduledExecutorService wrapper. The instanceof guard that
@@ -134,6 +146,22 @@ public final class Scheduler implements AutoCloseable {
         }
     }
 
+    /** Returns the worker shared by immediate and scheduled client work. */
+    public ExecutorService executor() {
+        return worker;
+    }
+
+    /** Runs immediate work on the shared worker and contains any failure. */
+    public void dispatch(NetworkExecutor.IoTask task, Consumer<Throwable> onFailure) {
+        worker.execute(() -> {
+            try {
+                task.run();
+            } catch (Throwable failure) {
+                onFailure.accept(failure);
+            }
+        });
+    }
+
     /** Returns how many tasks sit in the delay queue, for tests. */
     int pendingTasksForTest() {
         return timer.getQueue().size();
@@ -143,6 +171,9 @@ public final class Scheduler implements AutoCloseable {
     @Override
     public void close() {
         timer.shutdownNow();
+        if (ownsWorker) {
+            worker.shutdown();
+        }
     }
 
     /**

@@ -3,7 +3,6 @@
 
 package dev.slsk.internal.concurrent;
 
-import dev.slsk.internal.common.NetworkExecutor;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -42,7 +41,7 @@ public final class BoundedCleanup {
     private static void run(Runnable cleanup, Throwable primary) {
         CountDownLatch finished = new CountDownLatch(1);
         AtomicReference<Throwable> failure = new AtomicReference<>();
-        NetworkExecutor.executor().execute(() -> {
+        Thread.ofVirtual().name("soulseek-cleanup").start(() -> {
             try {
                 cleanup.run();
             } catch (Throwable thrown) {

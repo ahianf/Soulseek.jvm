@@ -15,7 +15,6 @@ import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferStreamException;
 import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Failures;
-import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.common.Settlement;
 import dev.slsk.internal.common.Wait;
@@ -269,7 +268,7 @@ final class UploadRun {
             // A thread of its own because the write is raced against the
             // connection dropping; racing is work blocking code cannot do. Both
             // settle the one cell, so the first to arrive is the answer.
-            NetworkExecutor.executor().execute(() -> {
+            domain.networkExecutor().executor().execute(() -> {
                 try {
                     connection.write(
                             remaining,
@@ -325,7 +324,7 @@ final class UploadRun {
                 // is still parked: a peer that says nothing is the ordinary case
                 // here, and giving up on it is the point.
                 Settlement read = new Settlement();
-                NetworkExecutor.executor().execute(() -> {
+                domain.networkExecutor().executor().execute(() -> {
                     try {
                         connection.read(1, cancellationSignal);
                         read.succeed();

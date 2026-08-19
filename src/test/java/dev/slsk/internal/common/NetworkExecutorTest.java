@@ -13,32 +13,31 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 /**
- * Guards the property that lets {@link NetworkExecutor} stay static.
+ * Guards the properties of one client-owned {@link NetworkExecutor}.
  *
- * <p>The executor is shared by every client in the process, and that is safe
- * only while it is thread-per-task over virtual threads: no workers, no queue,
- * no bounded parallelism, so two clients have nothing to contend over. If it is
- * ever changed to a bounded executor, one client's saturated connections would
- * starve another's — the exact failure its own javadoc was written about. These
- * tests fail loudly, by name, at the moment someone makes that change.
- *
- * <p>None of them shuts the executor down. It is a JVM-wide singleton, and
- * closing it here would poison every test that runs after this one — which is
- * itself the harmful side of static sharing, exercised in reverse.
+ * <p>Each instance remains thread-per-task over virtual threads, while its
+ * lifecycle is isolated from every other client in the JVM.
  */
 @Timeout(value = 10, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
 class NetworkExecutorTest {
+    private final NetworkExecutor networkExecutor = new NetworkExecutor();
+
+    @AfterEach
+    void closeExecutor() {
+        networkExecutor.close();
+    }
 
     @Test
     void runsEveryTaskOnAFreshNamedVirtualThread() throws Exception {
         AtomicReference<Thread> observed = new AtomicReference<>();
         CountDownLatch done = new CountDownLatch(1);
 
-        NetworkExecutor.dispatch(
+        networkExecutor.dispatch(
                 () -> {
                     observed.set(Thread.currentThread());
                     done.countDown();
@@ -63,7 +62,7 @@ class NetworkExecutorTest {
 
         try {
             for (int i = 0; i < tasks; i++) {
-                NetworkExecutor.executor().execute(() -> {
+                networkExecutor.executor().execute(() -> {
                     threads.add(Thread.currentThread());
                     allStarted.countDown();
                     try {
@@ -75,9 +74,7 @@ class NetworkExecutorTest {
             }
             assertTrue(
                     allStarted.await(5, TimeUnit.SECONDS),
-                    "NetworkExecutor could not run " + tasks + " blocked tasks concurrently: it has "
-                            + "become a bounded executor, and static sharing across clients is now "
-                            + "harmful (see the D15 amendment). Make it per-client before bounding it.");
+                    "NetworkExecutor could not run " + tasks + " blocked tasks concurrently");
             assertEquals(tasks, threads.size(), "expected one fresh thread per task");
         } finally {
             release.countDown();
@@ -97,7 +94,7 @@ class NetworkExecutorTest {
         AtomicReference<Throwable> reported = new AtomicReference<>();
         CountDownLatch done = new CountDownLatch(1);
 
-        NetworkExecutor.dispatch(
+        networkExecutor.dispatch(
                 () -> {
                     throw thrown;
                 },
@@ -110,10 +107,23 @@ class NetworkExecutorTest {
         assertSame(thrown, reported.get());
     }
 
-    private static Thread runOneTask() throws Exception {
+    @Test
+    void closingOneClientExecutorDoesNotPoisonAnother() throws Exception {
+        NetworkExecutor other = new NetworkExecutor();
+        try {
+            networkExecutor.close();
+            CountDownLatch ran = new CountDownLatch(1);
+            other.executor().execute(ran::countDown);
+            assertTrue(ran.await(5, TimeUnit.SECONDS));
+        } finally {
+            other.close();
+        }
+    }
+
+    private Thread runOneTask() throws Exception {
         AtomicReference<Thread> observed = new AtomicReference<>();
         CountDownLatch done = new CountDownLatch(1);
-        NetworkExecutor.executor().execute(() -> {
+        networkExecutor.executor().execute(() -> {
             observed.set(Thread.currentThread());
             done.countDown();
         });

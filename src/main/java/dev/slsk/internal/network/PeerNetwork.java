@@ -8,7 +8,7 @@ import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.internal.ServerLink;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Failures;
-import dev.slsk.internal.common.NetworkExecutor;
+import dev.slsk.internal.common.Scheduler;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
@@ -85,6 +85,8 @@ public final class PeerNetwork implements PeerConnectionManager {
     private final PeerMessageHandler peerMessages;
     private final ConnectionFactory connectionFactory;
     private final DiagnosticSink diagnostic;
+    private final Scheduler scheduler;
+    private final boolean ownsScheduler;
     private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
     private final ConcurrentHashMap<String, ConnectionCell> messageConnections = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, CancellationController> pendingInboundIndirectConnections =
@@ -116,12 +118,27 @@ public final class PeerNetwork implements PeerConnectionManager {
             PeerMessageHandler peerMessages,
             ConnectionFactory connectionFactory,
             DiagnosticSink diagnosticFactory) {
+        this(options, server, waiter, tokens, peerMessages, connectionFactory, diagnosticFactory, null);
+    }
+
+    /** Creates a peer network sharing a caller-owned scheduler. */
+    public PeerNetwork(
+            Supplier<SoulseekClientOptions> options,
+            ServerLink server,
+            Waiter waiter,
+            TokenFactory tokens,
+            PeerMessageHandler peerMessages,
+            ConnectionFactory connectionFactory,
+            DiagnosticSink diagnosticFactory,
+            Scheduler scheduler) {
         this.options = Objects.requireNonNull(options, "options");
         this.server = Objects.requireNonNull(server, "server");
         this.waiter = Objects.requireNonNull(waiter, "waiter");
         this.tokens = Objects.requireNonNull(tokens, "tokens");
         this.peerMessages = Objects.requireNonNull(peerMessages, "peerMessages");
         this.connectionFactory = Objects.requireNonNull(connectionFactory, "connectionFactory");
+        ownsScheduler = scheduler == null;
+        this.scheduler = scheduler == null ? new Scheduler("soulseek-peer-network") : scheduler;
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(options.get().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
@@ -227,7 +244,7 @@ public final class PeerNetwork implements PeerConnectionManager {
         // which.
         FirstSuccess.Winner<Connection> winner;
         try {
-            winner = FirstSuccess.race(directWait::await, indirectWait::await);
+            winner = FirstSuccess.race(scheduler.executor(), directWait::await, indirectWait::await);
         } catch (Throwable failure) {
             directCancellation.close();
             indirectCancellation.close();
@@ -394,6 +411,7 @@ public final class PeerNetwork implements PeerConnectionManager {
         FirstSuccess.Winner<Connection> winner;
         try {
             winner = FirstSuccess.race(
+                    scheduler.executor(),
                     () -> establishOutboundDirectTransferConnection(ipEndpoint, token, directCancellation.token()),
                     () -> establishOutboundIndirectTransferConnection(username, token, indirectCancellation.token()));
         } catch (Throwable failure) {
@@ -545,6 +563,9 @@ public final class PeerNetwork implements PeerConnectionManager {
     public void close() {
         if (disposed.compareAndSet(false, true)) {
             removeAndDisposeAll();
+            if (ownsScheduler) {
+                scheduler.close();
+            }
         }
     }
 
@@ -645,6 +666,7 @@ public final class PeerNetwork implements PeerConnectionManager {
         FirstSuccess.Winner<MessageConnection> winner;
         try {
             winner = FirstSuccess.race(
+                    scheduler.executor(),
                     () -> establishOutboundDirectMessageConnection(username, ipEndpoint, directCancellation.token()),
                     () -> establishOutboundIndirectMessageConnection(
                             username, solicitationToken, indirectCancellation.token()));
@@ -797,15 +819,10 @@ public final class PeerNetwork implements PeerConnectionManager {
      */
     private void retainSolicitationForLateAnswer(int solicitationToken, String username) {
         try {
-            NetworkExecutor.executor().execute(() -> {
-                try {
-                    Thread.sleep(LATE_SOLICITATION_GRACE_MILLIS);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                } finally {
-                    pendingSolicitations.remove(solicitationToken, username);
-                }
-            });
+            scheduler.schedule(
+                    () -> pendingSolicitations.remove(solicitationToken, username),
+                    LATE_SOLICITATION_GRACE_MILLIS,
+                    java.util.concurrent.TimeUnit.MILLISECONDS);
         } catch (Throwable dispatchFailed) {
             // This is called from a finally. Throwing here would replace the
             // failure that finally is unwinding, and a grace window is not

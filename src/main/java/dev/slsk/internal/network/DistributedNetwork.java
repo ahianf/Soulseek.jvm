@@ -8,7 +8,6 @@ import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.internal.ServerLink;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Failures;
-import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Scheduler;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.Wait;
@@ -439,7 +438,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
      */
     private List<ParentCandidate> attemptCandidates(
             List<PeerEndpoint> snapshot, CancellationSignal cancellationSignal) {
-        ExecutorService executor = NetworkExecutor.executor();
+        ExecutorService executor = scheduler.executor();
         List<Future<ParentCandidate>> attempts = new ArrayList<>(snapshot.size());
         for (PeerEndpoint candidate : snapshot) {
             attempts.add(executor.submit(() ->
@@ -553,7 +552,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 if (establishing == null) {
                     establishing = new ArrayList<>();
                 }
-                establishing.add(NetworkExecutor.executor().submit(() -> writeToChild(cell, bytes, effectiveToken)));
+                establishing.add(scheduler.executor().submit(() -> writeToChild(cell, bytes, effectiveToken)));
                 continue;
             }
             if (connection.getState() != ConnectionState.CONNECTED) {
@@ -980,6 +979,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         FirstSuccess.Winner<MessageConnection> winner;
         try {
             winner = FirstSuccess.race(
+                    scheduler.executor(),
                     () -> getParentCandidateConnectionDirect(username, ipEndpoint, directCancellation.token()),
                     () -> getParentCandidateConnectionIndirect(username, indirectCancellation.token()));
         } catch (Throwable failure) {
@@ -1218,7 +1218,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         // disconnect handler, and re-parenting negotiates with every remaining
         // candidate before it returns.
         List<PeerEndpoint> candidates = parentCandidates;
-        NetworkExecutor.executor().execute(() -> {
+        scheduler.executor().execute(() -> {
             try {
                 addParentConnection(candidates);
             } catch (Throwable failure) {
@@ -1236,7 +1236,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             // blocking server write. The C# source fires and forgets the same
             // call; inline, a stalled server socket blocked the loop carrying
             // every inbound distributed search.
-            NetworkExecutor.dispatch(
+            scheduler.dispatch(
                     this::updateStatus,
                     failure -> diagnostic.debug(
                             "Failed to force a distributed status update: " + Failures.message(failure)));

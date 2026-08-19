@@ -104,6 +104,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     private final Supplier<DistributedConnectionManager> distributed;
     private final Supplier<DistributedMessageHandler> distributedMessages;
     private final Supplier<SearchResponder> searchResponses;
+    private final NetworkExecutor networkExecutor;
     private final DiagnosticSink diagnostic;
     private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
     private final Map<ServerMessageEvent, CopyOnWriteArrayList<ServerMessageHandlerEventListener<?>>> listeners =
@@ -145,6 +146,33 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
             Supplier<DistributedMessageHandler> distributedMessages,
             Supplier<SearchResponder> searchResponses,
             DiagnosticSink diagnosticFactory) {
+        this(
+                options,
+                server,
+                waiter,
+                searches,
+                downloads,
+                peers,
+                distributed,
+                distributedMessages,
+                searchResponses,
+                diagnosticFactory,
+                new NetworkExecutor());
+    }
+
+    /** Creates a handler sharing its client's network executor. */
+    public DefaultServerMessageHandler(
+            Supplier<SoulseekClientOptions> options,
+            ServerLink server,
+            Waiter waiter,
+            Supplier<Map<Integer, SearchInternal>> searches,
+            Supplier<Map<Integer, TransferInternal>> downloads,
+            Supplier<PeerConnectionManager> peers,
+            Supplier<DistributedConnectionManager> distributed,
+            Supplier<DistributedMessageHandler> distributedMessages,
+            Supplier<SearchResponder> searchResponses,
+            DiagnosticSink diagnosticFactory,
+            NetworkExecutor networkExecutor) {
         this.options = Objects.requireNonNull(options, "options");
         this.server = Objects.requireNonNull(server, "server");
         this.waiter = Objects.requireNonNull(waiter, "waiter");
@@ -154,6 +182,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         this.distributed = Objects.requireNonNull(distributed, "distributed");
         this.distributedMessages = Objects.requireNonNull(distributedMessages, "distributedMessages");
         this.searchResponses = Objects.requireNonNull(searchResponses, "searchResponses");
+        this.networkExecutor = Objects.requireNonNull(networkExecutor, "networkExecutor");
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(options.get().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
@@ -418,7 +447,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
             return;
         }
         // Off the server read loop: acknowledging writes back to the server.
-        NetworkExecutor.dispatch(
+        networkExecutor.dispatch(
                 () -> server.acknowledgePrivilegeNotification(notification.getId(), CancellationSignal.none()),
                 failure -> warnServerMessage(MessageCode.Server.NOTIFY_PRIVILEGES, failure));
     }
@@ -430,7 +459,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
             return;
         }
         // Off the server read loop: acknowledging writes back to the server.
-        NetworkExecutor.dispatch(
+        networkExecutor.dispatch(
                 () -> server.acknowledgePrivateMessage(notification.getId(), CancellationSignal.none()),
                 failure -> warnServerMessage(MessageCode.Server.PRIVATE_MESSAGE, failure));
     }
@@ -443,7 +472,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 .toList();
         // Off the server read loop: this negotiates with every candidate before
         // it returns, and the server has more to say meanwhile.
-        NetworkExecutor.dispatch(
+        networkExecutor.dispatch(
                 () -> distributed.get().addParentConnection(parents),
                 failure -> diagnostic.debug("Error handling NetInfo message: " + failureMessage(failure)));
     }
@@ -474,7 +503,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                     // Off the server read loop: establishing this connects to
                     // a peer and writes to it, and the server has more to say
                     // meanwhile.
-                    NetworkExecutor.dispatch(
+                    networkExecutor.dispatch(
                             () -> peers.get().getOrAddMessageConnection(response),
                             failure -> debugConnectToPeer(response, failure));
                 }
@@ -483,7 +512,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                             + response.getUsername() + " ("
                             + response.getIpEndpoint() + ")");
                     // Off the server read loop, as above.
-                    NetworkExecutor.dispatch(
+                    networkExecutor.dispatch(
                             () -> distributed.get().getOrAddChildConnection(response),
                             failure -> debugConnectToPeer(response, failure));
                 }
@@ -509,7 +538,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                     + response.getIpEndpoint() + "); Ignored");
         }
         // Off the server read loop, as above.
-        NetworkExecutor.dispatch(
+        networkExecutor.dispatch(
                 () -> correlateTransferConnection(response, peers.get().getTransferConnection(response)),
                 failure -> debugConnectToPeer(response, failure));
     }
@@ -556,7 +585,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         }
         // Off the server read loop: answering asks the share catalog, connects
         // to the searcher and writes to them.
-        NetworkExecutor.dispatch(
+        networkExecutor.dispatch(
                 () -> searchResponses.get().tryRespond(request.getUsername(), request.getToken(), request.getQuery()),
                 failure -> warnServerMessage(MessageCode.Server.FILE_SEARCH, failure));
     }

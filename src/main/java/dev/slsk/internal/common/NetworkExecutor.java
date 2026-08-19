@@ -10,7 +10,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.function.Consumer;
 
 /**
- * Shared virtual-thread executor for blocking network I/O.
+ * One client's virtual-thread executor for blocking network I/O.
  *
  * <p>The C# source performs socket reads and writes with genuinely
  * non-blocking overlapped I/O ({@code NetworkStream.ReadAsync}), so an idle
@@ -28,20 +28,24 @@ import java.util.function.Consumer;
  * thread unmounts its carrier while it waits, so thousands of idle connections
  * cost almost nothing. All blocking socket accept/connect/read/write work and
  * the per-connection read loop are dispatched here instead of on the common
- * pool.
+ * pool. Each engine owns and closes its own instance, so one client's shutdown
+ * or saturated workload cannot affect another client in the same JVM.
  */
-public final class NetworkExecutor {
-    private static final ExecutorService EXECUTOR = Executors.newThreadPerTaskExecutor(virtualThreadFactory());
+public final class NetworkExecutor implements AutoCloseable {
+    private final ExecutorService executor;
 
-    private NetworkExecutor() {}
+    /** Creates one client-owned virtual-thread executor. */
+    public NetworkExecutor() {
+        executor = Executors.newThreadPerTaskExecutor(virtualThreadFactory());
+    }
 
     /**
-     * Returns the shared virtual-thread executor used for blocking network I/O.
+     * Returns this client's virtual-thread executor used for blocking network I/O.
      *
      * @return the executor
      */
-    public static ExecutorService executor() {
-        return EXECUTOR;
+    public ExecutorService executor() {
+        return executor;
     }
 
     /**
@@ -57,8 +61,8 @@ public final class NetworkExecutor {
      * @param task the task to run
      * @param onFailure what to do with anything it throws
      */
-    public static void dispatch(IoTask task, Consumer<Throwable> onFailure) {
-        EXECUTOR.execute(() -> {
+    public void dispatch(IoTask task, Consumer<Throwable> onFailure) {
+        executor.execute(() -> {
             try {
                 task.run();
             } catch (Throwable failure) {
@@ -71,6 +75,12 @@ public final class NetworkExecutor {
     @FunctionalInterface
     public interface IoTask {
         void run() throws Exception;
+    }
+
+    /** Stops accepting work and lets already-started virtual threads finish. */
+    @Override
+    public void close() {
+        executor.shutdown();
     }
 
     private static ThreadFactory virtualThreadFactory() {

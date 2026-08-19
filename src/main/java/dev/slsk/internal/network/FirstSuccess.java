@@ -4,10 +4,10 @@
 package dev.slsk.internal.network;
 
 import dev.slsk.internal.common.Failures;
-import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.network.tcp.Connection;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -55,14 +55,21 @@ final class FirstSuccess {
      */
     static <T extends Connection> Winner<T> race(Attempt<T> first, Attempt<T> second)
             throws InterruptedException, TimeoutException {
+        return race(
+                command -> Thread.ofVirtual().name("soulseek-standalone-race").start(command), first, second);
+    }
+
+    /** Runs both attempts on the supplied client executor. */
+    static <T extends Connection> Winner<T> race(Executor executor, Attempt<T> first, Attempt<T> second)
+            throws InterruptedException, TimeoutException {
         // One slot, because exactly one outcome is ever offered: the first arm
         // to succeed, or the second arm to fail.
         BlockingQueue<Outcome<T>> handoff = new ArrayBlockingQueue<>(1);
         AtomicReference<Throwable> lostArm = new AtomicReference<>();
         AtomicBoolean won = new AtomicBoolean();
 
-        NetworkExecutor.executor().execute(() -> attempt(first, true, handoff, lostArm, won));
-        NetworkExecutor.executor().execute(() -> attempt(second, false, handoff, lostArm, won));
+        executor.execute(() -> attempt(first, true, handoff, lostArm, won));
+        executor.execute(() -> attempt(second, false, handoff, lostArm, won));
 
         Outcome<T> outcome = take(handoff);
         if (outcome.failure() != null) {

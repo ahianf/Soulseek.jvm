@@ -5,7 +5,6 @@
 package dev.slsk.internal.search;
 
 import dev.slsk.internal.common.Failures;
-import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Scheduler;
 import dev.slsk.internal.common.Settlement;
 import dev.slsk.internal.concurrent.CancellationSignal;
@@ -356,9 +355,7 @@ public final class SearchInternal implements AutoCloseable {
             // event and the caller's stateChanged callback) on a virtual thread so a blocking
             // callback cannot stall this timer thread.
             timeoutTask = timerExecutor.schedule(
-                    () -> NetworkExecutor.executor().execute(() -> complete(SearchState.TIMED_OUT)),
-                    options.getSearchTimeout(),
-                    TimeUnit.MILLISECONDS);
+                    () -> complete(SearchState.TIMED_OUT), options.getSearchTimeout(), TimeUnit.MILLISECONDS);
         }
     }
 

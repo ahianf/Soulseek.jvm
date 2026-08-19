@@ -13,7 +13,6 @@ import dev.slsk.exceptions.TransferSizeMismatchException;
 import dev.slsk.exceptions.TransferStreamException;
 import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Failures;
-import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.common.Settlement;
 import dev.slsk.internal.common.Wait;
@@ -259,7 +258,7 @@ final class DownloadRun {
         // happens, and neither can wait for the other.
         AtomicReference<Connection> incoming = new AtomicReference<>();
         Settlement established = new Settlement();
-        NetworkExecutor.executor().execute(() -> {
+        domain.networkExecutor().executor().execute(() -> {
             try {
                 incoming.set(domain.peers()
                         .awaitTransferConnection(
@@ -365,7 +364,7 @@ final class DownloadRun {
             // blocking code cannot do. All three settle the one cell, so the
             // first to arrive is the answer and the rest are no-ops.
             Settlement settlement = download.settlement();
-            NetworkExecutor.executor().execute(() -> {
+            domain.networkExecutor().executor().execute(() -> {
                 try {
                     connection.read(
                             download.getSize() - download.getStartOffset(),

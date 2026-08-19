@@ -6,7 +6,6 @@ package dev.slsk.internal;
 import dev.slsk.download.Download;
 import dev.slsk.download.DownloadPolicy;
 import dev.slsk.download.DownloadRequest;
-import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Scheduler;
 import dev.slsk.internal.concurrent.CancellationController;
 import dev.slsk.spi.TransferStore;
@@ -379,7 +378,7 @@ final class DownloadQueue {
         onStateChanged.accept(promoted, new TransferState.Queued(0));
         save(promoted);
         Entry starting = promoted;
-        NetworkExecutor.executor().execute(() -> attempt(starting));
+        scheduler.executor().execute(() -> attempt(starting));
         return Optional.of(promoted.id());
     }
 
@@ -502,7 +501,7 @@ final class DownloadQueue {
         java.util.concurrent.atomic.AtomicInteger outstanding =
                 new java.util.concurrent.atomic.AtomicInteger(byPeer.size());
         for (List<Entry> peerEntries : byPeer.values()) {
-            NetworkExecutor.executor().execute(() -> {
+            scheduler.executor().execute(() -> {
                 try {
                     for (Entry entry : peerEntries) {
                         if (closed.get()) {
@@ -788,7 +787,7 @@ final class DownloadQueue {
             entry.attempt++;
             onStateChanged.accept(entry, new TransferState.Queued(0));
             save(entry);
-            NetworkExecutor.executor().execute(() -> attempt(entry));
+            scheduler.executor().execute(() -> attempt(entry));
         }
     }
 

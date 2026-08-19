@@ -47,6 +47,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     private final Waiter waiter;
     private final Supplier<DistributedConnectionManager> mesh;
     private final Supplier<SearchResponder> searchResponses;
+    private final NetworkExecutor networkExecutor;
     private final DiagnosticSink diagnostic;
     private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
     private volatile String deduplicationHash;
@@ -71,12 +72,26 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
             Supplier<DistributedConnectionManager> mesh,
             Supplier<SearchResponder> searchResponses,
             DiagnosticSink diagnosticFactory) {
+        this(options, server, tokens, waiter, mesh, searchResponses, diagnosticFactory, new NetworkExecutor());
+    }
+
+    /** Creates a handler sharing its client's network executor. */
+    public DefaultDistributedMessageHandler(
+            Supplier<SoulseekClientOptions> options,
+            ServerLink server,
+            TokenFactory tokens,
+            Waiter waiter,
+            Supplier<DistributedConnectionManager> mesh,
+            Supplier<SearchResponder> searchResponses,
+            DiagnosticSink diagnosticFactory,
+            NetworkExecutor networkExecutor) {
         this.options = Objects.requireNonNull(options, "options");
         this.server = Objects.requireNonNull(server, "server");
         this.tokens = Objects.requireNonNull(tokens, "tokens");
         this.waiter = Objects.requireNonNull(waiter, "waiter");
         this.mesh = Objects.requireNonNull(mesh, "mesh");
         this.searchResponses = Objects.requireNonNull(searchResponses, "searchResponses");
+        this.networkExecutor = Objects.requireNonNull(networkExecutor, "networkExecutor");
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(options.get().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
@@ -124,7 +139,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                 // replaces was: a ping answered in front of the next search
                 // request delays every child behind this one.
                 case PING ->
-                    NetworkExecutor.dispatch(
+                    networkExecutor.dispatch(
                             () -> connection.write(new DistributedPingResponse(tokens.nextToken())),
                             failure -> warnChild(code, connection, failure));
                 default ->
@@ -280,7 +295,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
      * discarded future that used to carry it back is gone.
      */
     private void broadcastAndRespond(byte[] distributed, DistributedSearchRequest search) {
-        NetworkExecutor.dispatch(
+        networkExecutor.dispatch(
                 () -> mesh.get().broadcastMessage(distributed),
                 failure -> diagnostic.warning(
                         "Error broadcasting search request from " + search.getUsername() + " with token "
@@ -289,7 +304,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
         if (Objects.equals(search.getUsername(), server.username())) {
             return;
         }
-        NetworkExecutor.dispatch(
+        networkExecutor.dispatch(
                 () -> searchResponses.get().tryRespond(search.getUsername(), search.getToken(), search.getQuery()),
                 failure -> diagnostic.warning(
                         "Error responding to search request from " + search.getUsername() + " with token "

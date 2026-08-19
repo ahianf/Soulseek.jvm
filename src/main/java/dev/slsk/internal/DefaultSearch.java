@@ -9,7 +9,6 @@ import dev.slsk.Search;
 import dev.slsk.events.SearchEvent;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Failures;
-import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Usernames;
 import dev.slsk.internal.concurrent.BlockingInvocation;
 import dev.slsk.internal.concurrent.CancellationController;
@@ -245,7 +244,7 @@ final class DefaultSearch implements Search {
         // Returns the id, not the result: the search runs on a virtual thread of
         // its own and its responses reach the caller as events. `execute` never
         // throws, so nothing here can reach the thread's uncaught handler.
-        NetworkExecutor.executor().execute(() -> {
+        client.getNetworkExecutor().executor().execute(() -> {
             try {
                 execute(state);
             } catch (InterruptedException interrupted) {

@@ -96,6 +96,7 @@ final class TransferDomain implements PeerServices {
     private final IOAdapter io;
     final TokenBucket downloadTokenBucket;
     final TokenBucket uploadTokenBucket;
+    private final NetworkExecutor networkExecutor;
     private final Supplier<ShareCatalog> catalog;
     private final Supplier<UserProfile> profile;
 
@@ -224,7 +225,8 @@ final class TransferDomain implements PeerServices {
             Supplier<ShareCatalog> catalog,
             Supplier<UserProfile> profile,
             Predicate<String> privileged,
-            Scheduler scheduler) {
+            Scheduler scheduler,
+            NetworkExecutor networkExecutor) {
         this.options = Objects.requireNonNull(options, "options");
         this.diagnostic = Objects.requireNonNull(diagnostic, "diagnostic");
         this.waiter = Objects.requireNonNull(waiter, "waiter");
@@ -235,6 +237,7 @@ final class TransferDomain implements PeerServices {
         this.io = Objects.requireNonNull(io, "io");
         this.downloadTokenBucket = Objects.requireNonNull(downloadTokenBucket, "downloadTokenBucket");
         this.uploadTokenBucket = Objects.requireNonNull(uploadTokenBucket, "uploadTokenBucket");
+        this.networkExecutor = Objects.requireNonNull(networkExecutor, "networkExecutor");
         this.catalog = Objects.requireNonNull(catalog, "catalog");
         this.profile = Objects.requireNonNull(profile, "profile");
         this.globalDownloadSemaphore = new java.util.concurrent.atomic.AtomicReference<>(
@@ -263,6 +266,10 @@ final class TransferDomain implements PeerServices {
 
     PeerConnectionManager peers() {
         return peers.get();
+    }
+
+    NetworkExecutor networkExecutor() {
+        return networkExecutor;
     }
 
     InetSocketAddress endpoint(String username, CancellationSignal cancellationSignal) throws InterruptedException {
@@ -532,7 +539,7 @@ final class TransferDomain implements PeerServices {
      * @param reserved the token reserved while the request waited, if it waited
      */
     private void serve(Username user, String path, java.util.OptionalInt reserved) {
-        NetworkExecutor.dispatch(
+        networkExecutor.dispatch(
                 () -> {
                     java.util.Optional<ResolvedFile> resolved;
                     try {
