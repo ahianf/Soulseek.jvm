@@ -54,6 +54,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -415,7 +416,7 @@ class EnginePeerRequestTest {
                         new WaitKey(dev.slsk.internal.common.Constants.WaitKey.BROWSE_RESPONSE_CONNECTION, "alice"),
                         new WaitKey(MessageCode.Server.GET_PEER_ADDRESS, "alice")),
                 fixture.waiter.keys);
-        assertEquals(1234, fixture.waiter.lastTimeout);
+        assertEquals(Duration.ofMillis(1234), fixture.waiter.lastTimeout);
         assertEquals(2, events.size());
         assertEquals(0.0, events.get(0).getPercentComplete());
         assertEquals(100.0, events.get(1).getPercentComplete());
@@ -675,7 +676,7 @@ class EnginePeerRequestTest {
         private final Map<Class<?>, CompletableFuture<?>> results = new HashMap<>();
         private final List<WaitKey> keys = new ArrayList<>();
         private final List<CancellationSignal> tokens = new ArrayList<>();
-        private Integer lastTimeout;
+        private Duration lastTimeout;
         private WaitKey failedKey;
         private final Waiter proxy = (Waiter)
                 Proxy.newProxyInstance(Waiter.class.getClassLoader(), new Class<?>[] {Waiter.class}, this::invoke);
@@ -685,7 +686,7 @@ class EnginePeerRequestTest {
                 keys.add((WaitKey) arguments[0]);
                 Class<?> resultType = (Class<?>) arguments[1];
                 if (arguments[2] != null) {
-                    lastTimeout = (Integer) arguments[2];
+                    lastTimeout = (Duration) arguments[2];
                 }
                 tokens.add((CancellationSignal) arguments[3]);
                 CompletableFuture<?> configured = results.getOrDefault(resultType, new CompletableFuture<>());

@@ -67,6 +67,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -755,8 +756,8 @@ class PeerMessageHandlerTest {
         private final Map<WaitKey, Throwable> failures = new HashMap<>();
 
         @Override
-        public int getDefaultTimeout() {
-            return 5_000;
+        public Duration getDefaultTimeout() {
+            return Duration.ofSeconds(5);
         }
 
         @Override
@@ -790,7 +791,7 @@ class PeerMessageHandlerTest {
 
         @Override
         public <T> Wait<T> register(
-                WaitKey key, Class<T> resultType, Integer timeout, CancellationSignal cancellationSignal) {
+                WaitKey key, Class<T> resultType, Duration timeout, CancellationSignal cancellationSignal) {
             // These tests drive completions, never waits.
             return () -> null;
         }

@@ -56,6 +56,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -639,8 +640,8 @@ class EngineTest {
 
     private static final class RecordingWaiter implements Waiter {
         @Override
-        public int getDefaultTimeout() {
-            return 5_000;
+        public Duration getDefaultTimeout() {
+            return Duration.ofSeconds(5);
         }
 
         @Override
@@ -670,7 +671,7 @@ class EngineTest {
         public <T> dev.slsk.internal.common.Wait<T> register(
                 dev.slsk.internal.common.WaitKey key,
                 Class<T> resultType,
-                Integer timeout,
+                Duration timeout,
                 CancellationSignal cancellationSignal) {
             // Answers at once with nothing. No test here provokes a correlated
             // request; a wait that never settles would hang one that did.

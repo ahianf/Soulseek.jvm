@@ -730,8 +730,8 @@ class PeerNetworkTest {
         }
 
         @Override
-        public int getDefaultTimeout() {
-            return 5_000;
+        public Duration getDefaultTimeout() {
+            return Duration.ofSeconds(5);
         }
 
         @Override
@@ -782,7 +782,7 @@ class PeerNetworkTest {
         @SuppressWarnings("unchecked")
         @Override
         public <T> Wait<T> register(
-                WaitKey key, Class<T> resultType, Integer timeout, CancellationSignal cancellationSignal) {
+                WaitKey key, Class<T> resultType, Duration timeout, CancellationSignal cancellationSignal) {
             CompletableFuture<T> configured = (CompletableFuture<T>) futures.getOrDefault(key, defaultFuture);
             // The future is how a test says what the answer will be; Outcomes
             // turns it into what a real wait raises.

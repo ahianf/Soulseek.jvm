@@ -69,8 +69,11 @@ final class RoomRegistry {
         try {
             // Registered before the write, because the server can answer
             // before the write call returns.
-            Wait<RoomData> wait =
-                    waiter.register(new WaitKey(MessageCode.Server.JOIN_ROOM, roomName), RoomData.class, null, token);
+            Wait<RoomData> wait = waiter.register(
+                    new WaitKey(MessageCode.Server.JOIN_ROOM, roomName),
+                    RoomData.class,
+                    waiter.getDefaultTimeout(),
+                    token);
             server.write(new JoinRoomRequest(roomName, isPrivate), token);
             try {
                 return wait.await();
@@ -172,7 +175,8 @@ final class RoomRegistry {
         server.requireLoggedIn("leave a chat room");
         CancellationSignal token = CommonUtils.token(cancellationSignal);
         try {
-            Wait<Void> wait = waiter.register(new WaitKey(MessageCode.Server.LEAVE_ROOM, roomName), null, token);
+            Wait<Void> wait = waiter.register(
+                    new WaitKey(MessageCode.Server.LEAVE_ROOM, roomName), waiter.getDefaultTimeout(), token);
             server.write(new LeaveRoomRequest(roomName), token);
             try {
                 wait.await();

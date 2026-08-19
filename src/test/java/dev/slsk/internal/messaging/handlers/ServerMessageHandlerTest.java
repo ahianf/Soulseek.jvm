@@ -69,6 +69,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -881,8 +882,8 @@ class ServerMessageHandlerTest {
         private final Map<WaitKey, Throwable> failures = Collections.synchronizedMap(new HashMap<>());
 
         @Override
-        public int getDefaultTimeout() {
-            return 5_000;
+        public Duration getDefaultTimeout() {
+            return Duration.ofSeconds(5);
         }
 
         @Override
@@ -916,7 +917,7 @@ class ServerMessageHandlerTest {
 
         @Override
         public <T> Wait<T> register(
-                WaitKey key, Class<T> resultType, Integer timeout, CancellationSignal cancellationSignal) {
+                WaitKey key, Class<T> resultType, Duration timeout, CancellationSignal cancellationSignal) {
             // These tests drive completions, never waits.
             return () -> null;
         }

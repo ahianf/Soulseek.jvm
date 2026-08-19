@@ -15,6 +15,7 @@ import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
+import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.concurrent.InterruptedOperationException;
 import dev.slsk.internal.messaging.MessageCode;
@@ -41,6 +42,7 @@ import dev.slsk.internal.user.UserInfo;
 import dev.slsk.internal.user.UserStatistics;
 import dev.slsk.internal.user.UserStatus;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -92,12 +94,12 @@ final class UserDirectory {
         server.requireLoggedIn("fetch user information");
         CancellationSignal token = CommonUtils.token(cancellationSignal);
         try {
-            Wait<UserInfo> infoWait = context.getWaiter()
-                    .register(
-                            new WaitKey(MessageCode.Peer.INFO_RESPONSE, requestedUsername),
-                            UserInfo.class,
-                            null,
-                            token);
+            Waiter waiter = context.getWaiter();
+            Wait<UserInfo> infoWait = waiter.register(
+                    new WaitKey(MessageCode.Peer.INFO_RESPONSE, requestedUsername),
+                    UserInfo.class,
+                    waiter.getDefaultTimeout(),
+                    token);
             InetSocketAddress endpoint = getUserEndpoint(requestedUsername, token);
             MessageConnection connection =
                     context.getPeerConnectionManager().getOrAddMessageConnection(requestedUsername, endpoint, token);
@@ -240,7 +242,7 @@ final class UserDirectory {
                     .register(
                             new WaitKey(Constants.WaitKey.BROWSE_RESPONSE_CONNECTION, requestedUsername),
                             BrowseResponseConnection.class,
-                            operationOptions.getResponseTimeout(),
+                            Duration.ofMillis(operationOptions.getResponseTimeout()),
                             token);
 
             BrowseResponseConnection responseConnection;
@@ -378,13 +380,12 @@ final class UserDirectory {
             String requestedUsername, CancellationSignal cancellationSignal, UserEndpointCache cache)
             throws InterruptedException {
         try {
-            Wait<UserAddressResponse> wait = context.getWaiter()
-                    .register(
-                            new dev.slsk.internal.common.WaitKey(
-                                    MessageCode.Server.GET_PEER_ADDRESS, requestedUsername),
-                            UserAddressResponse.class,
-                            null,
-                            cancellationSignal);
+            Waiter waiter = context.getWaiter();
+            Wait<UserAddressResponse> wait = waiter.register(
+                    new dev.slsk.internal.common.WaitKey(MessageCode.Server.GET_PEER_ADDRESS, requestedUsername),
+                    UserAddressResponse.class,
+                    waiter.getDefaultTimeout(),
+                    cancellationSignal);
             server.write(new UserAddressRequest(requestedUsername), cancellationSignal);
             UserAddressResponse response = wait.await();
             if (response.getIpAddress().isAnyLocalAddress()) {
@@ -435,12 +436,12 @@ final class UserDirectory {
         CancellationSignal token = CommonUtils.token(cancellationSignal);
         try {
             @SuppressWarnings("unchecked")
-            Wait<List<Directory>> contentsWait = (Wait<List<Directory>>) (Wait<?>) context.getWaiter()
-                    .register(
-                            new WaitKey(MessageCode.Peer.FOLDER_CONTENTS_RESPONSE, requestedUsername, tokenValue),
-                            List.class,
-                            null,
-                            token);
+            Waiter waiter = context.getWaiter();
+            Wait<List<Directory>> contentsWait = (Wait<List<Directory>>) (Wait<?>) waiter.register(
+                    new WaitKey(MessageCode.Peer.FOLDER_CONTENTS_RESPONSE, requestedUsername, tokenValue),
+                    List.class,
+                    waiter.getDefaultTimeout(),
+                    token);
             InetSocketAddress endpoint = getUserEndpoint(requestedUsername, token);
             MessageConnection connection =
                     context.getPeerConnectionManager().getOrAddMessageConnection(requestedUsername, endpoint, token);

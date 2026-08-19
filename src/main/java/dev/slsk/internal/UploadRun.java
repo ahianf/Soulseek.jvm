@@ -44,6 +44,7 @@ import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Semaphore;
@@ -143,7 +144,8 @@ final class UploadRun {
             Wait<TransferResponse> transferRequestAcknowledged = domain.waiter.register(
                     new WaitKey(MessageCode.Peer.TRANSFER_RESPONSE, upload.getUsername(), upload.getToken()),
                     TransferResponse.class,
-                    domain.clientOptions().getPeerConnectionOptions().getInactivityTimeout(),
+                    Duration.ofMillis(
+                            domain.clientOptions().getPeerConnectionOptions().getInactivityTimeout()),
                     cancellationSignal);
             messageConnection.write(
                     new TransferRequest(

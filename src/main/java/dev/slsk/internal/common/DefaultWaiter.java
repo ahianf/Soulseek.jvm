@@ -8,6 +8,7 @@ import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.internal.concurrent.BoundedCleanup;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.concurrent.CancellationSubscription;
+import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -23,9 +24,9 @@ import java.util.concurrent.TimeoutException;
  * Correlates asynchronous responses with FIFO waits.
  */
 public final class DefaultWaiter implements Waiter {
-    static final int DEFAULT_TIMEOUT = 5_000;
+    static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(5);
 
-    private final int defaultTimeout;
+    private final Duration defaultTimeout;
     private final Scheduler scheduler;
     private final boolean ownsScheduler;
     private final Map<WaitKey, ArrayDeque<PendingWait<?>>> waits = new HashMap<>();
@@ -41,10 +42,10 @@ public final class DefaultWaiter implements Waiter {
     /**
      * Creates a waiter that owns its scheduler.
      *
-     * @param defaultTimeout the default timeout in milliseconds
+     * @param defaultTimeout the default timeout
      */
-    public DefaultWaiter(int defaultTimeout) {
-        this.defaultTimeout = defaultTimeout;
+    public DefaultWaiter(Duration defaultTimeout) {
+        this.defaultTimeout = requireValidTimeout(defaultTimeout);
         this.scheduler = new Scheduler("soulseek-waiter-timeouts");
         this.ownsScheduler = true;
     }
@@ -52,11 +53,11 @@ public final class DefaultWaiter implements Waiter {
     /**
      * Creates a waiter sharing a caller-owned scheduler.
      *
-     * @param defaultTimeout the default timeout in milliseconds
+     * @param defaultTimeout the default timeout
      * @param scheduler the shared scheduler; not closed by this waiter
      */
-    public DefaultWaiter(int defaultTimeout, Scheduler scheduler) {
-        this.defaultTimeout = defaultTimeout;
+    public DefaultWaiter(Duration defaultTimeout, Scheduler scheduler) {
+        this.defaultTimeout = requireValidTimeout(defaultTimeout);
         this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
         this.ownsScheduler = false;
     }
@@ -64,9 +65,9 @@ public final class DefaultWaiter implements Waiter {
     /**
      * Returns the default timeout.
      *
-     * @return the timeout in milliseconds
+     * @return the timeout
      */
-    public int getDefaultTimeout() {
+    public Duration getDefaultTimeout() {
         return defaultTimeout;
     }
 
@@ -103,7 +104,7 @@ public final class DefaultWaiter implements Waiter {
 
     /** Times out one specific wait — the one whose timer fired. */
     private void timeout(WaitKey key, PendingWait<?> wait) {
-        if (wait.trySettle(null, new TimeoutException("The wait timed out after " + wait.timeout + " milliseconds"))) {
+        if (wait.trySettle(null, new TimeoutException("The wait timed out after " + wait.timeout))) {
             remove(key, wait);
             wait.close();
             wait.publish();
@@ -214,7 +215,7 @@ public final class DefaultWaiter implements Waiter {
         PendingWait<?> wait = dequeue(key);
         if (wait != null) {
             wait.close();
-            wait.settle(null, new TimeoutException("The wait timed out after " + wait.timeout + " milliseconds"));
+            wait.settle(null, new TimeoutException("The wait timed out after " + wait.timeout));
         }
     }
 
@@ -222,13 +223,10 @@ public final class DefaultWaiter implements Waiter {
      * Registers a wait.
      */
     public <T> Wait<T> register(
-            WaitKey key, Class<T> resultType, Integer timeout, CancellationSignal cancellationSignal) {
+            WaitKey key, Class<T> resultType, Duration timeout, CancellationSignal cancellationSignal) {
         Objects.requireNonNull(key, "key");
         Objects.requireNonNull(resultType, "resultType");
-        int effectiveTimeout = timeout == null ? defaultTimeout : timeout;
-        if (effectiveTimeout < -1) {
-            throw new IllegalArgumentException("timeout must be greater than or equal to -1");
-        }
+        Duration effectiveTimeout = timeout == null ? null : requireValidTimeout(timeout);
         CancellationSignal effectiveToken = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         PendingWait<T> wait = new PendingWait<>(resultType, effectiveTimeout, effectiveToken);
         // The actions name the wait itself, not the key's queue head: another
@@ -252,6 +250,14 @@ public final class DefaultWaiter implements Waiter {
 
         wait.register(scheduler);
         return wait;
+    }
+
+    private static Duration requireValidTimeout(Duration timeout) {
+        Objects.requireNonNull(timeout, "timeout");
+        if (timeout.isNegative()) {
+            throw new IllegalArgumentException("timeout must not be negative: " + timeout);
+        }
+        return timeout;
     }
 
     /**
@@ -319,7 +325,7 @@ public final class DefaultWaiter implements Waiter {
         private final CancellationSignal cancellationSignal;
         private final Settlement<T> settlement = new Settlement<>();
         private final Class<T> resultType;
-        private final int timeout;
+        private final Duration timeout;
         private Runnable cancelAction;
         private Runnable timeoutAction;
         private CancellationSubscription cancellationSubscription;
@@ -327,7 +333,7 @@ public final class DefaultWaiter implements Waiter {
         private boolean closed;
         private ScheduledFuture<?> timeoutTask;
 
-        PendingWait(Class<T> resultType, int timeout, CancellationSignal cancellationSignal) {
+        PendingWait(Class<T> resultType, Duration timeout, CancellationSignal cancellationSignal) {
             this.resultType = Objects.requireNonNull(resultType, "resultType");
             this.timeout = timeout;
             this.cancellationSignal = Objects.requireNonNull(cancellationSignal, "cancellationSignal");
@@ -385,9 +391,9 @@ public final class DefaultWaiter implements Waiter {
         }
 
         /**
-         * Returns the timeout in milliseconds.
+         * Returns the timeout, or {@code null} when this wait is indefinite.
          */
-        int getTimeout() {
+        Duration getTimeout() {
             return timeout;
         }
 
@@ -405,14 +411,14 @@ public final class DefaultWaiter implements Waiter {
                 cancellationSubscription = registration;
             }
 
-            if (timeout == -1) {
+            if (timeout == null) {
                 return;
             }
 
             // Scheduler dispatches every task onto a virtual thread, so a
             // waiter released by the timeout cannot stall the timer thread and
             // every other wait behind it.
-            ScheduledFuture<?> task = scheduler.schedule(timeoutAction, timeout, TimeUnit.MILLISECONDS);
+            ScheduledFuture<?> task = scheduler.schedule(timeoutAction, timeout.toNanos(), TimeUnit.NANOSECONDS);
             synchronized (this) {
                 if (closed) {
                     task.cancel(false);

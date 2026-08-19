@@ -99,9 +99,15 @@ class DistributedMessageHandlerTest {
         Fixture fixture = new Fixture(true);
         ConnectionProbe connection = new ConnectionProbe(USERNAME, ENDPOINT);
         Wait<Integer> depth = fixture.waiter.register(
-                new WaitKey(Constants.WaitKey.CHILD_DEPTH_MESSAGE, connection.key), Integer.class, null, null);
+                new WaitKey(Constants.WaitKey.CHILD_DEPTH_MESSAGE, connection.key),
+                Integer.class,
+                fixture.waiter.getDefaultTimeout(),
+                null);
         Wait<DistributedPingResponse> ping = fixture.waiter.register(
-                new WaitKey(MessageCode.Distributed.PING, USERNAME), DistributedPingResponse.class, null, null);
+                new WaitKey(MessageCode.Distributed.PING, USERNAME),
+                DistributedPingResponse.class,
+                fixture.waiter.getDefaultTimeout(),
+                null);
 
         fixture.handler.handleMessageRead(connection.proxy, new DistributedChildDepth(7).toByteArray());
         fixture.handler.handleMessageRead(connection.proxy, new DistributedPingResponse(TOKEN).toByteArray());
@@ -344,8 +350,8 @@ class DistributedMessageHandlerTest {
         private final Map<WaitKey, CompletableFuture<?>> waits = new HashMap<>();
 
         @Override
-        public int getDefaultTimeout() {
-            return 5_000;
+        public Duration getDefaultTimeout() {
+            return Duration.ofSeconds(5);
         }
 
         @Override
@@ -397,7 +403,7 @@ class DistributedMessageHandlerTest {
         @SuppressWarnings("unchecked")
         @Override
         public <T> Wait<T> register(
-                WaitKey key, Class<T> resultType, Integer timeout, CancellationSignal cancellationSignal) {
+                WaitKey key, Class<T> resultType, Duration timeout, CancellationSignal cancellationSignal) {
             CompletableFuture<T> wait =
                     (CompletableFuture<T>) waits.computeIfAbsent(key, ignored -> new CompletableFuture<>());
             // The future is how a test says what the answer will be; Outcomes

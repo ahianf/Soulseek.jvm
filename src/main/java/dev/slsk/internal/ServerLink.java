@@ -183,7 +183,7 @@ public final class ServerLink {
             throws InterruptedException {
         CancellationSignal signal = CommonUtils.token(cancellationSignal);
         try {
-            Wait<Void> wait = waiter.register(waitKey, null, signal);
+            Wait<Void> wait = waiter.register(waitKey, waiter.getDefaultTimeout(), signal);
             write(message, signal);
             wait.await();
         } catch (Throwable failure) {
@@ -214,7 +214,7 @@ public final class ServerLink {
             throws InterruptedException {
         CancellationSignal signal = CommonUtils.token(cancellationSignal);
         try {
-            Wait<T> wait = waiter.register(waitKey, resultType, null, signal);
+            Wait<T> wait = waiter.register(waitKey, resultType, waiter.getDefaultTimeout(), signal);
             write(message, signal);
             return wait.await();
         } catch (Throwable failure) {
@@ -297,7 +297,7 @@ public final class ServerLink {
         requireLoggedIn("send a ping");
         CancellationSignal token = CommonUtils.token(cancellationSignal);
         try {
-            Wait<Void> wait = waiter.register(new WaitKey(MessageCode.Server.PING), null, token);
+            Wait<Void> wait = waiter.register(new WaitKey(MessageCode.Server.PING), waiter.getDefaultTimeout(), token);
             long started = System.nanoTime();
             write(new ServerPing(), token);
             wait.await();

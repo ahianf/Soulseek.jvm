@@ -1014,7 +1014,7 @@ final class TransferDomain implements PeerServices {
             Wait<PlaceInQueueResponse> responseWait = waiter.register(
                     new WaitKey(MessageCode.Peer.PLACE_IN_QUEUE_RESPONSE, requestedUsername, filename),
                     PlaceInQueueResponse.class,
-                    null,
+                    waiter.getDefaultTimeout(),
                     token);
             InetSocketAddress endpoint = endpoints.resolve(requestedUsername, token);
             MessageConnection connection = peers.get().getOrAddMessageConnection(requestedUsername, endpoint, token);

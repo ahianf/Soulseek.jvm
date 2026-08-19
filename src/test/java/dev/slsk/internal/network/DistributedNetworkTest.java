@@ -384,11 +384,19 @@ class DistributedNetworkTest {
         Fixture fixture = fixture();
         ConnectionProbe parent = ConnectionProbe.message(USERNAME, ENDPOINT);
         Wait<Integer> level = fixture.waiter.register(
-                new WaitKey(Constants.WaitKey.BRANCH_LEVEL_MESSAGE, parent.id), Integer.class, null, null);
+                new WaitKey(Constants.WaitKey.BRANCH_LEVEL_MESSAGE, parent.id),
+                Integer.class,
+                fixture.waiter.getDefaultTimeout(),
+                null);
         Wait<String> root = fixture.waiter.register(
-                new WaitKey(Constants.WaitKey.BRANCH_ROOT_MESSAGE, parent.id), String.class, null, null);
-        Wait<Void> search =
-                fixture.waiter.register(new WaitKey(Constants.WaitKey.SEARCH_REQUEST_MESSAGE, parent.id), null, null);
+                new WaitKey(Constants.WaitKey.BRANCH_ROOT_MESSAGE, parent.id),
+                String.class,
+                fixture.waiter.getDefaultTimeout(),
+                null);
+        Wait<Void> search = fixture.waiter.register(
+                new WaitKey(Constants.WaitKey.SEARCH_REQUEST_MESSAGE, parent.id),
+                fixture.waiter.getDefaultTimeout(),
+                null);
 
         fixture.manager.handleParentCandidateMessage(
                 parent.messageConnection(), new MessageEvent(new DistributedBranchLevel(3).toByteArray()));
@@ -674,8 +682,8 @@ class DistributedNetworkTest {
                 CompletableFuture.failedFuture(new IllegalStateException("No solicitation configured"));
 
         @Override
-        public int getDefaultTimeout() {
-            return 5_000;
+        public Duration getDefaultTimeout() {
+            return Duration.ofSeconds(5);
         }
 
         @Override
@@ -727,7 +735,7 @@ class DistributedNetworkTest {
         @SuppressWarnings("unchecked")
         @Override
         public <T> Wait<T> register(
-                WaitKey key, Class<T> resultType, Integer timeout, CancellationSignal cancellationSignal) {
+                WaitKey key, Class<T> resultType, Duration timeout, CancellationSignal cancellationSignal) {
             CompletableFuture<T> configured =
                     key.getToken().startsWith(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION)
                             ? (CompletableFuture<T>) solicitationFuture

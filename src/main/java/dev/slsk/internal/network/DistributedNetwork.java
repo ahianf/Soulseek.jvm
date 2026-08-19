@@ -46,6 +46,7 @@ import dev.slsk.internal.network.tcp.ConnectionTypes;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import java.io.ByteArrayOutputStream;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -1075,7 +1076,8 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             Wait<Connection> wait = waiter.register(
                     new WaitKey(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION, username, solicitationToken),
                     Connection.class,
-                    options.get().getDistributedConnectionOptions().getConnectTimeout(),
+                    Duration.ofMillis(
+                            options.get().getDistributedConnectionOptions().getConnectTimeout()),
                     cancellationSignal);
             server.write(
                     new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.DISTRIBUTED),
@@ -1122,16 +1124,16 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         Wait<Integer> branchLevel = waiter.register(
                 new WaitKey(Constants.WaitKey.BRANCH_LEVEL_MESSAGE, connection.getId()),
                 Integer.class,
-                null,
+                waiter.getDefaultTimeout(),
                 token(cancellationSignal));
         Wait<String> branchRoot = waiter.register(
                 new WaitKey(Constants.WaitKey.BRANCH_ROOT_MESSAGE, connection.getId()),
                 String.class,
-                null,
+                waiter.getDefaultTimeout(),
                 token(cancellationSignal));
         Wait<Void> search = waiter.register(
                 new WaitKey(Constants.WaitKey.SEARCH_REQUEST_MESSAGE, connection.getId()),
-                null,
+                waiter.getDefaultTimeout(),
                 token(cancellationSignal));
         // The three waits are live from here; awaiting them is the caller's,
         // after it has written whatever provokes the candidate into answering.

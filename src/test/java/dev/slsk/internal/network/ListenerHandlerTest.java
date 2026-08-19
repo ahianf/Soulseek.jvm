@@ -97,7 +97,7 @@ class ListenerHandlerTest {
             Connection transferConnection = ConnectionProbe.message(new byte[] {1}).proxy;
             fixture.peer.transferResult = new TransferConnectionResult(transferConnection, 24);
             WaitKey key = new WaitKey(Constants.WaitKey.DIRECT_TRANSFER, "alice", 24);
-            Wait<Connection> wait = fixture.waiter.register(key, Connection.class, -1, null);
+            Wait<Connection> wait = fixture.waiter.registerIndefinitely(key, Connection.class, null);
             ConnectionProbe incoming =
                     ConnectionProbe.message(new PeerInit("alice", Constants.ConnectionType.TRANSFER, 7).toByteArray());
 
@@ -128,7 +128,7 @@ class ListenerHandlerTest {
         try (Fixture fixture = fixture(null)) {
             fixture.peer.pending = Map.of(8, "alice");
             WaitKey peerKey = new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, "alice", 8);
-            Wait<Connection> peerWait = fixture.waiter.register(peerKey, Connection.class, -1, null);
+            Wait<Connection> peerWait = fixture.waiter.registerIndefinitely(peerKey, Connection.class, null);
             ConnectionProbe peer = ConnectionProbe.message(new PierceFirewall(8).toByteArray());
             fixture.handler.handleConnection(null, peer.proxy);
             assertSame(peer.proxy, peerWait.await());
@@ -136,7 +136,8 @@ class ListenerHandlerTest {
             fixture.peer.pending = Map.of();
             fixture.distributed.pending = Map.of(9, "bob");
             WaitKey distributedKey = new WaitKey(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION, "bob", 9);
-            Wait<Connection> distributedWait = fixture.waiter.register(distributedKey, Connection.class, -1, null);
+            Wait<Connection> distributedWait =
+                    fixture.waiter.registerIndefinitely(distributedKey, Connection.class, null);
             ConnectionProbe distributed = ConnectionProbe.message(new PierceFirewall(9).toByteArray());
             fixture.handler.handleConnection(null, distributed.proxy);
             assertSame(distributed.proxy, distributedWait.await());

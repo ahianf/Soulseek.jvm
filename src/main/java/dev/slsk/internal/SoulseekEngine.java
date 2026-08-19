@@ -73,6 +73,7 @@ import java.io.ByteArrayOutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -243,7 +244,9 @@ final class SoulseekEngine implements AutoCloseable {
         // share it.
         this.networkExecutor = new NetworkExecutor();
         this.scheduler = new Scheduler("soulseek-client-timer", networkExecutor.executor());
-        this.waiter = waiter == null ? new DefaultWaiter(this.options.getMessageTimeout(), scheduler) : waiter;
+        this.waiter = waiter == null
+                ? new DefaultWaiter(Duration.ofMillis(this.options.getMessageTimeout()), scheduler)
+                : waiter;
         // Before every component that writes to the server, because they are
         // built with it rather than reaching back through the engine for it.
         diagnostic = diagnosticFactory == null
@@ -1007,8 +1010,11 @@ final class SoulseekEngine implements AutoCloseable {
             throws InterruptedException, TimeoutException {
         // Registered before the login bytes go out: the server answers a login
         // as fast as anything on this protocol.
-        Wait<LoginResponse> loginWait =
-                waiter.register(new WaitKey(MessageCode.Server.LOGIN), LoginResponse.class, null, cancellationSignal);
+        Wait<LoginResponse> loginWait = waiter.register(
+                new WaitKey(MessageCode.Server.LOGIN),
+                LoginResponse.class,
+                waiter.getDefaultTimeout(),
+                cancellationSignal);
 
         ByteArrayOutputStream loginMessages = new ByteArrayOutputStream();
         loginMessages.writeBytes(new LoginRequest(minorVersion, requestedUsername, password).toByteArray());

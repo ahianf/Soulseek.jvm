@@ -60,6 +60,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -1087,7 +1088,7 @@ class EngineDownloadTest {
                 return null;
             }
             if (method.getName().equals("getDefaultTimeout")) {
-                return 5_000;
+                return Duration.ofSeconds(5);
             }
             return defaultValue(method.getReturnType());
         }

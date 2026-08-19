@@ -46,6 +46,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
@@ -486,10 +487,13 @@ class EngineConnectTest {
             if (method.getName().equals("register") && arguments.length == 4) {
                 assertEquals(new WaitKey(MessageCode.Server.LOGIN), arguments[0]);
                 assertSame(LoginResponse.class, arguments[1]);
-                assertNull(arguments[2]);
+                assertEquals(Duration.ofSeconds(5), arguments[2]);
                 token = (CancellationSignal) arguments[3];
                 sequence.add("wait");
                 return (Wait<Object>) () -> response;
+            }
+            if (method.getName().equals("getDefaultTimeout")) {
+                return Duration.ofSeconds(5);
             }
             return defaultValue(method.getReturnType());
         }

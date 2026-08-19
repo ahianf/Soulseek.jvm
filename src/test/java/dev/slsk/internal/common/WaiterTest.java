@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.internal.concurrent.CancellationController;
 import dev.slsk.internal.concurrent.CancellationSignal;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -28,13 +29,15 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class WaiterTest {
+    private static final Duration LONG_TIMEOUT = Duration.ofSeconds(30);
+
     @Test
     @DisplayName("Constructors retain default timeouts")
     void constructorsRetainDefaultTimeouts() {
         try (DefaultWaiter defaultWaiter = new DefaultWaiter();
-                DefaultWaiter customWaiter = new DefaultWaiter(42)) {
+                DefaultWaiter customWaiter = new DefaultWaiter(Duration.ofMillis(42))) {
             assertEquals(DefaultWaiter.DEFAULT_TIMEOUT, defaultWaiter.getDefaultTimeout());
-            assertEquals(42, customWaiter.getDefaultTimeout());
+            assertEquals(Duration.ofMillis(42), customWaiter.getDefaultTimeout());
         }
     }
 
@@ -43,8 +46,8 @@ class WaiterTest {
     void completeDequeuesAndCompletesOldestWait() throws Exception {
         try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("login");
-            Wait<String> first = waiter.register(key, String.class, null, null);
-            Wait<String> second = waiter.register(key, String.class, null, null);
+            Wait<String> first = waiter.register(key, String.class, waiter.getDefaultTimeout(), null);
+            Wait<String> second = waiter.register(key, String.class, waiter.getDefaultTimeout(), null);
 
             waiter.complete(key, "first");
 
@@ -65,7 +68,7 @@ class WaiterTest {
     void nonGenericCompleteReturnsNull() throws Exception {
         try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("room-list");
-            Wait<Void> wait = waiter.register(key, null, null);
+            Wait<Void> wait = waiter.register(key, waiter.getDefaultTimeout(), null);
 
             waiter.complete(key);
 
@@ -91,7 +94,7 @@ class WaiterTest {
     void cancelDequeuesAndCancelsOldestWait() {
         try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("login");
-            Wait<Void> wait = waiter.register(key, null, null);
+            Wait<Void> wait = waiter.register(key, waiter.getDefaultTimeout(), null);
 
             waiter.cancel(key);
 
@@ -108,8 +111,8 @@ class WaiterTest {
         // to survive it.
         try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("login");
-            Wait<String> first = waiter.register(key, String.class, 30_000, null);
-            Wait<String> second = waiter.register(key, String.class, 30_000, null);
+            Wait<String> first = waiter.register(key, String.class, LONG_TIMEOUT, null);
+            Wait<String> second = waiter.register(key, String.class, LONG_TIMEOUT, null);
 
             waiter.cancel(key);
 
@@ -125,7 +128,7 @@ class WaiterTest {
     void manualTimeoutDequeuesWithTimeoutException() {
         try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("login");
-            Wait<Void> wait = waiter.register(key, null, null);
+            Wait<Void> wait = waiter.register(key, waiter.getDefaultTimeout(), null);
 
             waiter.timeout(key);
 
@@ -137,10 +140,10 @@ class WaiterTest {
     @Test
     @DisplayName("Automatic timeout dequeues only its oldest wait")
     void automaticTimeoutDequeuesOnlyOldestWait() {
-        try (DefaultWaiter waiter = new DefaultWaiter(0)) {
+        try (DefaultWaiter waiter = new DefaultWaiter(Duration.ZERO)) {
             WaitKey key = new WaitKey("login");
-            Wait<String> first = waiter.register(key, String.class, null, null);
-            waiter.register(key, String.class, 30_000, null);
+            Wait<String> first = waiter.register(key, String.class, waiter.getDefaultTimeout(), null);
+            waiter.register(key, String.class, LONG_TIMEOUT, null);
 
             assertThrows(TimeoutException.class, first::await);
             assertEquals(1, waiter.getWaitCount(key));
@@ -153,7 +156,7 @@ class WaiterTest {
         try (DefaultWaiter waiter = new DefaultWaiter();
                 CancellationController source = new CancellationController()) {
             WaitKey key = new WaitKey("login");
-            Wait<String> wait = waiter.register(key, String.class, 30_000, source.getSignal());
+            Wait<String> wait = waiter.register(key, String.class, LONG_TIMEOUT, source.getSignal());
 
             source.cancel();
 
@@ -170,7 +173,7 @@ class WaiterTest {
             source.cancel();
             WaitKey key = new WaitKey("login");
 
-            Wait<String> wait = waiter.register(key, String.class, 30_000, source.getSignal());
+            Wait<String> wait = waiter.register(key, String.class, LONG_TIMEOUT, source.getSignal());
 
             assertThrows(CancellationException.class, wait::await);
             assertFalse(waiter.hasWait(key));
@@ -191,8 +194,8 @@ class WaiterTest {
         try (DefaultWaiter waiter = new DefaultWaiter();
                 CancellationController secondSource = new CancellationController()) {
             WaitKey key = new WaitKey("login");
-            Wait<String> first = waiter.register(key, String.class, 30_000, null);
-            Wait<String> second = waiter.register(key, String.class, 30_000, secondSource.getSignal());
+            Wait<String> first = waiter.register(key, String.class, LONG_TIMEOUT, null);
+            Wait<String> second = waiter.register(key, String.class, LONG_TIMEOUT, secondSource.getSignal());
 
             secondSource.cancel();
 
@@ -210,7 +213,7 @@ class WaiterTest {
     void failPreservesSuppliedException() {
         try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("login");
-            Wait<String> wait = waiter.register(key, String.class, null, null);
+            Wait<String> wait = waiter.register(key, String.class, waiter.getDefaultTimeout(), null);
             RuntimeException failure = new RuntimeException("failure");
 
             waiter.fail(key, failure);
@@ -225,7 +228,7 @@ class WaiterTest {
     void typeMismatchThrowsSoulseekClientException() {
         try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("login");
-            waiter.register(key, String.class, null, null);
+            waiter.register(key, String.class, waiter.getDefaultTimeout(), null);
 
             SoulseekClientException exception =
                     assertThrows(SoulseekClientException.class, () -> waiter.complete(key, 42));
@@ -239,7 +242,7 @@ class WaiterTest {
     @DisplayName("registerIndefinitely never times out and parks no timer")
     void registerIndefinitelySchedulesNothing() {
         try (Scheduler scheduler = new Scheduler("waiter-test");
-                DefaultWaiter waiter = new DefaultWaiter(5_000, scheduler)) {
+                DefaultWaiter waiter = new DefaultWaiter(Duration.ofSeconds(5), scheduler)) {
             WaitKey key = new WaitKey("transfer");
             Wait<String> wait = waiter.registerIndefinitely(key, String.class, null);
 
@@ -251,14 +254,16 @@ class WaiterTest {
     }
 
     @Test
-    @DisplayName("Minus one timeout does not schedule expiration")
-    void minusOneTimeoutDoesNotScheduleExpiration() {
+    @DisplayName("Null timeout does not schedule expiration")
+    void nullTimeoutDoesNotScheduleExpiration() {
         try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("transfer");
-            Wait<String> wait = waiter.register(key, String.class, -1, null);
+            Wait<String> wait = waiter.register(key, String.class, null, null);
 
             assertFalse(settles(wait));
-            assertThrows(IllegalArgumentException.class, () -> waiter.register(key, String.class, -2, null));
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> waiter.register(key, String.class, Duration.ofMillis(-2), null));
         }
     }
 
@@ -267,8 +272,8 @@ class WaiterTest {
     void cancelAllCancelsDuplicateKeyWaits() {
         try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("login");
-            Wait<String> first = waiter.register(key, String.class, 30_000, null);
-            Wait<String> second = waiter.register(key, String.class, 30_000, null);
+            Wait<String> first = waiter.register(key, String.class, LONG_TIMEOUT, null);
+            Wait<String> second = waiter.register(key, String.class, LONG_TIMEOUT, null);
 
             waiter.cancelAll();
 
@@ -282,7 +287,7 @@ class WaiterTest {
     @DisplayName("Close is idempotent, releases waits, and rejects new waits")
     void closeReleasesWaitsAndRejectsNewWaits() {
         DefaultWaiter waiter = new DefaultWaiter();
-        Wait<String> pending = waiter.register(new WaitKey("login"), String.class, 30_000, null);
+        Wait<String> pending = waiter.register(new WaitKey("login"), String.class, LONG_TIMEOUT, null);
 
         waiter.close();
         waiter.close();
@@ -290,7 +295,7 @@ class WaiterTest {
         assertThrows(CancellationException.class, pending::await);
         assertThrows(
                 IllegalStateException.class,
-                () -> waiter.register(new WaitKey("new"), String.class, null, null)
+                () -> waiter.register(new WaitKey("new"), String.class, waiter.getDefaultTimeout(), null)
                         .await());
     }
 
@@ -299,10 +304,10 @@ class WaiterTest {
     void pendingWaitCloseWorksBeforeAndAfterRegistration() {
         try (Scheduler scheduler = new Scheduler("waiter-test-timer")) {
             DefaultWaiter.PendingWait<String> unregistered =
-                    new DefaultWaiter.PendingWait<>(String.class, 30_000, CancellationSignal.none());
+                    new DefaultWaiter.PendingWait<>(String.class, LONG_TIMEOUT, CancellationSignal.none());
             unregistered.actions(() -> {}, () -> {}, () -> {});
             DefaultWaiter.PendingWait<String> registered =
-                    new DefaultWaiter.PendingWait<>(String.class, 30_000, CancellationSignal.none());
+                    new DefaultWaiter.PendingWait<>(String.class, LONG_TIMEOUT, CancellationSignal.none());
             registered.actions(() -> {}, () -> {}, () -> {});
 
             assertDoesNotThrow(unregistered::close);
@@ -345,7 +350,7 @@ class WaiterTest {
     @DisplayName("A committed result wins a later interrupt and leaves its flag set")
     void committedResultWinsAndPreservesLaterInterrupt() throws Exception {
         DefaultWaiter.PendingWait<String> wait =
-                new DefaultWaiter.PendingWait<>(String.class, 30_000, CancellationSignal.none());
+                new DefaultWaiter.PendingWait<>(String.class, LONG_TIMEOUT, CancellationSignal.none());
         wait.actions(() -> {}, () -> {}, () -> {});
         AtomicReference<String> result = new AtomicReference<>();
         AtomicReference<Throwable> failure = new AtomicReference<>();
@@ -377,7 +382,7 @@ class WaiterTest {
     @DisplayName("An interrupt that commits first cannot be overwritten by a later result")
     void interruptionWinnerDiscardsLaterResult() throws Exception {
         DefaultWaiter.PendingWait<String> wait =
-                new DefaultWaiter.PendingWait<>(String.class, 30_000, CancellationSignal.none());
+                new DefaultWaiter.PendingWait<>(String.class, LONG_TIMEOUT, CancellationSignal.none());
         CountDownLatch cleanupEntered = new CountDownLatch(1);
         CountDownLatch releaseCleanup = new CountDownLatch(1);
         wait.actions(() -> {}, () -> {}, () -> {
