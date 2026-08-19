@@ -101,6 +101,36 @@ class EngineSearchTest {
     }
 
     @Test
+    void tokenCollisionAtInsertionThrowsInsteadOfBeingDiscarded() {
+        Fixture fixture = new Fixture();
+        SearchInternal existing = new SearchInternal(SearchQuery.fromText("existing"), SearchScope.getNetwork(), 42);
+        // A registry whose containsKey lies, simulating a competing search
+        // claiming the token between the validate-time check and the insert:
+        // the insert is the authoritative claim and must refuse the loser.
+        java.util.concurrent.ConcurrentHashMap<Integer, SearchInternal> registry =
+                new java.util.concurrent.ConcurrentHashMap<>() {
+                    @Override
+                    public boolean containsKey(Object key) {
+                        return false;
+                    }
+                };
+        registry.put(42, existing);
+        fixture.client.setSearchesForTest(registry);
+
+        assertThrows(
+                DuplicateTokenException.class,
+                () -> fixture.client
+                        .searches()
+                        .search(SearchRequest.of(SearchQuery.fromText("valid"))
+                                .token(42)
+                                .options(options(40, 250, true))
+                                .build()));
+        assertSame(existing, registry.get(42), "the collision evicted the search that owns the token");
+        existing.close();
+        fixture.close();
+    }
+
+    @Test
     void disablingSingleCharacterRemovalSendsSearch() {
         Fixture fixture = new Fixture();
         SearchOptions options = options(40, 250, false);

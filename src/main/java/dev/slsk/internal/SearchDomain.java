@@ -241,7 +241,12 @@ final class SearchDomain {
         };
 
         try {
-            searches.putIfAbsent(search.getToken(), search);
+            // The validate-time containsKey check races concurrent callers;
+            // this insertion is the authoritative claim on the token.
+            if (searches.putIfAbsent(search.getToken(), search) != null) {
+                throw new DuplicateTokenException(
+                        "An active search with token " + search.getToken() + " is already in progress");
+            }
             updateState.accept(SearchState.REQUESTED);
             context.getDiagnostic()
                     .debug("Attempting to acquire search semaphore for search '"
@@ -296,7 +301,7 @@ final class SearchDomain {
             }
             search.complete(SearchState.ERRORED);
             updateState.accept(SearchState.COMPLETED.or(SearchState.ERRORED));
-            if (cause instanceof TimeoutException) {
+            if (cause instanceof TimeoutException || cause instanceof DuplicateTokenException) {
                 throw Failures.surface(cause);
             }
             throw new SoulseekClientException(
