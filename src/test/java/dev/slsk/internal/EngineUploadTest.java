@@ -766,7 +766,10 @@ class EngineUploadTest {
             assertFalse(fixture.client.getUploadRegistry().containsKey(47));
 
             fixture.transfer.offsetBytes = null;
-            fixture.transfer.writeFailure = new IOException("write failed");
+            // What the transport raises for a failed streaming write: the
+            // classified domain exception, not the raw IOException under it.
+            fixture.transfer.writeFailure =
+                    new dev.slsk.exceptions.ConnectionWriteException("write failed", new IOException("broken pipe"));
             TransferOutcome write = fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "other", 1, offset -> completedStream(new byte[] {1}))
@@ -985,7 +988,7 @@ class EngineUploadTest {
         private final Waiter proxy = (Waiter)
                 Proxy.newProxyInstance(Waiter.class.getClassLoader(), new Class<?>[] {Waiter.class}, this::invoke);
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().startsWith("register")) {
                 if (arguments != null && arguments.length > 0 && arguments[0] instanceof WaitKey key) {
                     keys.add(key);
@@ -1035,7 +1038,7 @@ class EngineUploadTest {
             this.transferConnection = transferConnection;
         }
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("getCachedMessageConnection")) {
                 return messageConnectionCached ? messageConnection : null;
             }
@@ -1063,7 +1066,7 @@ class EngineUploadTest {
         private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("write")
                     && arguments != null
                     && arguments.length == 2
@@ -1100,7 +1103,7 @@ class EngineUploadTest {
         private final Connection proxy = (Connection) Proxy.newProxyInstance(
                 Connection.class.getClassLoader(), new Class<?>[] {Connection.class}, this::invoke);
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) throws IOException {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("read")
                     && arguments != null
                     && arguments.length == 2

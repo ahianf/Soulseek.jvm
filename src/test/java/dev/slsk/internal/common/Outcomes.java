@@ -15,9 +15,8 @@ import java.util.concurrent.CompletableFuture;
  * rethrow a {@link java.util.concurrent.CancellationException}, it throws a new
  * one, so a probe that joins loses the very identity the test asserts on.
  *
- * <p>This delivers the configured failure itself, through the same
- * {@link Failures#propagate} the transport uses, so a probe raises exactly what
- * a real connection raises.
+ * <p>This delivers the configured failure itself, unwrapped, so a probe
+ * raises exactly what a real connection raises.
  */
 public final class Outcomes {
 
@@ -60,12 +59,13 @@ public final class Outcomes {
      * @param <T> the result type
      * @return the outcome's value
      */
-    public static <T> T raise(CompletableFuture<T> outcome) {
+    public static <T> T raise(CompletableFuture<T> outcome)
+            throws InterruptedException, java.util.concurrent.TimeoutException {
         // handle() sees the failure as it was recorded, before join() gets the
         // chance to substitute its own.
         Throwable failure = outcome.handle((value, error) -> error).join();
         if (failure != null) {
-            throw Failures.propagate(failure);
+            throw Failures.rethrow(failure);
         }
         return outcome.getNow(null);
     }

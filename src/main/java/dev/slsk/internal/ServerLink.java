@@ -28,6 +28,7 @@ import dev.slsk.internal.messaging.messages.StopPublicChatCommand;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.user.UserPresence;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 
 /**
@@ -151,7 +152,8 @@ public final class ServerLink {
      * @param message the message to send
      * @param cancellationSignal the cancellation signal
      */
-    public void write(OutgoingMessage message, CancellationSignal cancellationSignal) {
+    public void write(OutgoingMessage message, CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
         connection.write(message, CommonUtils.token(cancellationSignal));
     }
 
@@ -164,7 +166,8 @@ public final class ServerLink {
      * @param message the encoded message
      * @param cancellationSignal the cancellation signal
      */
-    public void writeBytes(byte[] message, CancellationSignal cancellationSignal) {
+    public void writeBytes(byte[] message, CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
         connection.write(message, CommonUtils.token(cancellationSignal));
     }
 

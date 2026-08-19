@@ -27,10 +27,8 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -281,7 +279,7 @@ public class SocketConnection implements Connection {
      * deadline on.
      */
     @Override
-    public void connect(CancellationSignal cancellationSignal) {
+    public void connect(CancellationSignal cancellationSignal) throws InterruptedException, TimeoutException {
         if (state != ConnectionState.PENDING && state != ConnectionState.DISCONNECTED) {
             throw new IllegalStateException("Invalid attempt to connect a connected or "
                     + "transitioning connection (current state: "
@@ -303,7 +301,7 @@ public class SocketConnection implements Connection {
             startFrameWriter();
             changeState(ConnectionState.CONNECTED, "Connected to " + formatEndpoint(ipEndpoint), null);
         } catch (Exception exception) {
-            throw Failures.propagate(handleConnectFailure(exception));
+            throw Failures.rethrow(handleConnectFailure(exception));
         }
     }
 
@@ -354,7 +352,7 @@ public class SocketConnection implements Connection {
             throw new TimeoutException("Operation timed out after " + timeout + " milliseconds");
         }
         if (outcome instanceof Throwable failure) {
-            throw asException(unwrap(failure));
+            throw asException(failure);
         }
     }
 
@@ -410,7 +408,8 @@ public class SocketConnection implements Connection {
     }
 
     @Override
-    public byte[] read(long length, CancellationSignal cancellationSignal) {
+    public byte[] read(long length, CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
         return read(length, null, cancellationSignal);
     }
 
@@ -432,15 +431,12 @@ public class SocketConnection implements Connection {
     protected final byte[] read(
             long length,
             ConnectionEventListener<ConnectionDataEvent> scopedProgress,
-            CancellationSignal cancellationSignal) {
+            CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
         validateRead(length);
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        try {
-            readInternal(length, output, SocketConnection::grantAll, null, scopedProgress, token);
-        } catch (Exception exception) {
-            throw Failures.propagate(exception);
-        }
+        readInternal(length, output, SocketConnection::grantAll, null, scopedProgress, token);
         return output.toByteArray();
     }
 
@@ -450,7 +446,8 @@ public class SocketConnection implements Connection {
             OutputStream outputStream,
             ConnectionGovernor governor,
             ConnectionReporter reporter,
-            CancellationSignal cancellationSignal) {
+            CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
         if (length < 0) {
             throw new IllegalArgumentException("length must be greater than or equal to zero: " + length);
         }
@@ -458,15 +455,11 @@ public class SocketConnection implements Connection {
         validateConnected();
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         ConnectionGovernor effectiveGovernor = governor == null ? SocketConnection::grantAll : governor;
-        try {
-            readInternal(length, outputStream, effectiveGovernor, reporter, null, token);
-        } catch (Exception exception) {
-            throw Failures.propagate(exception);
-        }
+        readInternal(length, outputStream, effectiveGovernor, reporter, null, token);
     }
 
     @Override
-    public String awaitDisconnect(CancellationSignal cancellationSignal) throws InterruptedException {
+    public String awaitDisconnect(CancellationSignal cancellationSignal) throws InterruptedException, TimeoutException {
         if (cancellationSignal != null) {
             cancellationSignal.register(() -> disconnect(null, new CancellationException("Operation cancelled")));
         }
@@ -479,18 +472,20 @@ public class SocketConnection implements Connection {
             Thread.currentThread().interrupt();
         }
         if (disconnectFailure != null) {
-            throw Failures.propagate(disconnectFailure);
+            throw Failures.rethrow(disconnectFailure);
         }
         return disconnectMessage;
     }
 
     @Override
-    public void write(byte[] bytes, CancellationSignal cancellationSignal) {
+    public void write(byte[] bytes, CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
         beginWrite(bytes, cancellationSignal).await();
     }
 
     @Override
-    public PendingWrite beginWrite(byte[] bytes, CancellationSignal cancellationSignal) {
+    public PendingWrite beginWrite(byte[] bytes, CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
         if (bytes == null || bytes.length == 0) {
             throw new IllegalArgumentException("Invalid attempt to send empty data");
         }
@@ -500,18 +495,8 @@ public class SocketConnection implements Connection {
         // built message and none reads or reuses it afterwards. The defensive
         // clone this replaces was one full copy of every frame ever sent.
         FrameWrite write = new FrameWrite(bytes);
-        try {
-            enqueueFrameWrite(write, token);
-        } catch (Exception exception) {
-            throw Failures.propagate(exception);
-        }
-        return () -> {
-            try {
-                awaitFrameWrite(write, token);
-            } catch (Exception exception) {
-                throw Failures.propagate(exception);
-            }
-        };
+        enqueueFrameWrite(write, token);
+        return () -> awaitFrameWrite(write, token);
     }
 
     @Override
@@ -520,7 +505,8 @@ public class SocketConnection implements Connection {
             InputStream inputStream,
             ConnectionGovernor governor,
             ConnectionReporter reporter,
-            CancellationSignal cancellationSignal) {
+            CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
         // Zero is rejected, not just negatives: a streaming write exists to
         // move transfer bytes, and a zero-length one is a caller bug.
         if (length <= 0) {
@@ -530,11 +516,7 @@ public class SocketConnection implements Connection {
         validateConnected();
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         ConnectionGovernor effectiveGovernor = governor == null ? SocketConnection::grantAll : governor;
-        try {
-            writeStreamingInternal(length, inputStream, effectiveGovernor, reporter, token);
-        } catch (Exception exception) {
-            throw Failures.propagate(exception);
-        }
+        writeStreamingInternal(length, inputStream, effectiveGovernor, reporter, token);
     }
 
     @Override
@@ -648,9 +630,8 @@ public class SocketConnection implements Connection {
             ConnectionReporter reporter,
             ConnectionEventListener<ConnectionDataEvent> scopedProgress,
             CancellationSignal cancellationSignal)
-            throws Exception {
+            throws InterruptedException, TimeoutException {
         resetInactivityTime();
-        applyReadTimeout(cancellationSignal);
         // Sized to the request, not to the configured maximum. The framed read
         // loop asks for 4 bytes, then the code, then the payload; a full
         // read-buffer allocation for each of those was 48 KiB of garbage per
@@ -659,6 +640,7 @@ public class SocketConnection implements Connection {
         long totalBytesRead = 0;
 
         try {
+            applyReadTimeout(cancellationSignal);
             while (!disposed && totalBytesRead < length) {
                 cancellationSignal.throwIfCancellationRequested();
                 long bytesRemaining = length - totalBytesRead;
@@ -698,11 +680,13 @@ public class SocketConnection implements Connection {
             }
             cancellationSignal.throwIfCancellationRequested();
             outputStream.flush();
-        } catch (Exception exception) {
-            Exception actual = asException(unwrap(exception));
+        } catch (Exception actual) {
             disconnect("Read error: " + actual.getMessage(), actual);
-            if (actual instanceof TimeoutException || actual instanceof CancellationException) {
-                throw actual;
+            if (actual instanceof TimeoutException timeout) {
+                throw timeout;
+            }
+            if (actual instanceof CancellationException cancelled) {
+                throw cancelled;
             }
             throw new ConnectionReadException(
                     "Failed to read " + length + " bytes from "
@@ -727,7 +711,7 @@ public class SocketConnection implements Connection {
             ConnectionGovernor governor,
             ConnectionReporter reporter,
             CancellationSignal cancellationSignal)
-            throws Exception {
+            throws InterruptedException, TimeoutException {
         try {
             resetInactivityTime();
             byte[] buffer = new byte[(int) Math.min(options.getWriteBufferSize(), Math.max(1L, length))];
@@ -756,11 +740,13 @@ public class SocketConnection implements Connection {
                 emitProgress(dataWrittenListeners, null, totalBytesWritten, length, cancellationSignal);
                 resetInactivityTime();
             }
-        } catch (Exception exception) {
-            Exception actual = asException(unwrap(exception));
+        } catch (Exception actual) {
             disconnect("Write error: " + actual.getMessage(), actual);
-            if (actual instanceof TimeoutException || actual instanceof CancellationException) {
-                throw actual;
+            if (actual instanceof TimeoutException timeout) {
+                throw timeout;
+            }
+            if (actual instanceof CancellationException cancelled) {
+                throw cancelled;
             }
             throw new ConnectionWriteException(
                     "Failed to write " + length + " bytes to "
@@ -832,8 +818,7 @@ public class SocketConnection implements Connection {
         resetInactivityTime();
     }
 
-    private Exception mapFrameWriteFailure(int length, Exception exception) {
-        Exception actual = asException(unwrap(exception));
+    private Exception mapFrameWriteFailure(int length, Exception actual) {
         if (actual instanceof TimeoutException || actual instanceof CancellationException) {
             return actual;
         }
@@ -948,7 +933,8 @@ public class SocketConnection implements Connection {
     }
 
     /** Waits only on the request completion; the writer owns all socket I/O. */
-    private void awaitFrameWrite(FrameWrite write, CancellationSignal cancellationSignal) throws Exception {
+    private void awaitFrameWrite(FrameWrite write, CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
         // The signal that can never fire needs no listener; skipping it spares
         // the capturing lambda on the common non-cancellable frame.
         CancellationSubscription registration = cancellationSignal == CancellationSignal.none()
@@ -1145,8 +1131,7 @@ public class SocketConnection implements Connection {
         }
     }
 
-    private Exception handleConnectFailure(Exception exception) {
-        Exception actual = asException(unwrap(exception));
+    private Exception handleConnectFailure(Exception actual) {
         disconnect("SocketConnection Error: " + actual.getMessage(), actual);
         if (actual instanceof TimeoutException || actual instanceof CancellationException) {
             return actual;
@@ -1253,12 +1238,12 @@ public class SocketConnection implements Connection {
             settled.await();
         }
 
-        private void raiseOutcome() throws Exception {
+        private void raiseOutcome() throws InterruptedException, TimeoutException {
             switch (waitState.get()) {
                 case SUCCEEDED -> {
                     return;
                 }
-                case FAILED -> throw failure;
+                case FAILED -> throw Failures.rethrow(failure);
                 case CANCELLED -> throw new CancellationException("Operation cancelled");
                 case WAITING -> throw new IllegalStateException("Framed write wait returned before settling");
             }
@@ -1285,15 +1270,6 @@ public class SocketConnection implements Connection {
         SUCCEEDED,
         FAILED,
         CANCELLED
-    }
-
-    private static Throwable unwrap(Throwable exception) {
-        Throwable current = exception;
-        while ((current instanceof CompletionException || current instanceof ExecutionException)
-                && current.getCause() != null) {
-            current = current.getCause();
-        }
-        return current;
     }
 
     private static Exception asException(Throwable throwable) {

@@ -199,7 +199,7 @@ final class DownloadRun {
      * keeping it in one place is what stops the offered path drifting into a
      * second, less-tested copy of the download.
      */
-    private void receiveFile() throws IOException, InterruptedException {
+    private void receiveFile() throws IOException, InterruptedException, TimeoutException {
         bindConnectionEvents();
         outputStream = Objects.requireNonNull(outputStreamFactory.get(), "outputStreamFactory result");
         positionOutputStream();
@@ -345,7 +345,7 @@ final class DownloadRun {
         }
     }
 
-    private void readTransfer() throws InterruptedException {
+    private void readTransfer() throws InterruptedException, TimeoutException {
         try (CancellationController linkedController = new CancellationController();
                 CancellationSubscription registration = cancellationSignal.register(linkedController::cancel)) {
             CancellationSignal linkedToken = linkedController.getSignal();
@@ -402,7 +402,7 @@ final class DownloadRun {
             // controller is for.
             linkedController.cancel();
             if (failure != null) {
-                throw Failures.propagate(failure);
+                throw Failures.rethrow(failure);
             }
         }
     }

@@ -42,10 +42,11 @@ public interface MessageConnection extends Connection {
     void startReadingContinuously();
 
     /** Writes an outgoing message, blocking until it lands. */
-    void write(OutgoingMessage message, CancellationSignal cancellationSignal);
+    void write(OutgoingMessage message, CancellationSignal cancellationSignal)
+            throws InterruptedException, java.util.concurrent.TimeoutException;
 
     /** Writes an outgoing message without a cancellable token. */
-    default void write(OutgoingMessage message) {
+    default void write(OutgoingMessage message) throws InterruptedException, java.util.concurrent.TimeoutException {
         write(message, CancellationSignal.none());
     }
 }

@@ -31,7 +31,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -178,8 +177,9 @@ class MessageConnectionTest {
 
         connection.startReadingContinuously();
 
-        CompletionException thrown = assertThrows(CompletionException.class, () -> connection.awaitDisconnect(null));
-        assertSame(injected, thrown.getCause());
+        IllegalStateException thrown =
+                assertThrows(IllegalStateException.class, () -> connection.awaitDisconnect(null));
+        assertSame(injected, thrown);
         connection.close();
     }
 
@@ -255,11 +255,10 @@ class MessageConnectionTest {
         DefaultMessageConnection connection =
                 new DefaultMessageConnection(ENDPOINT, OPTIONS, 4, new FakeTcpClient(stream, true), Monitors.shared());
 
-        CompletionException failure =
-                assertThrows(CompletionException.class, () -> connection.write(() -> new byte[] {1}));
+        ConnectionWriteException failure =
+                assertThrows(ConnectionWriteException.class, () -> connection.write(() -> new byte[] {1}));
 
-        assertTrue(failure.getCause() instanceof ConnectionWriteException);
-        assertSame(cause, failure.getCause().getCause());
+        assertSame(cause, failure.getCause());
         connection.close();
     }
 

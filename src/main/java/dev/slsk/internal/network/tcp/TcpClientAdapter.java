@@ -14,7 +14,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.CompletionException;
 
 /**
  * Pass-through implementation of {@link TcpClient} over a socket.
@@ -65,14 +64,10 @@ final class TcpClientAdapter implements TcpClient {
     }
 
     @Override
-    public void connect(InetAddress address, int port) {
+    public void connect(InetAddress address, int port) throws IOException {
         Objects.requireNonNull(address, "address");
         validatePort(port, "port");
-        try {
-            socket.connect(new InetSocketAddress(address, port));
-        } catch (IOException exception) {
-            throw new CompletionException(exception);
-        }
+        socket.connect(new InetSocketAddress(address, port));
     }
 
     @Override
@@ -257,8 +252,7 @@ final class TcpClientAdapter implements TcpClient {
             return new ProxyEndpoint(boundAddress, boundPort);
         } catch (ProxyException exception) {
             throw exception;
-        } catch (Exception exception) {
-            Throwable cause = unwrap(exception);
+        } catch (Exception cause) {
             throw new ProxyException("Failed to connect to proxy: " + cause.getMessage(), cause);
         }
     }
@@ -308,14 +302,6 @@ final class TcpClientAdapter implements TcpClient {
 
     private static int unsigned(byte value) {
         return Byte.toUnsignedInt(value);
-    }
-
-    private static Throwable unwrap(Throwable exception) {
-        Throwable current = exception;
-        while ((current instanceof CompletionException) && current.getCause() != null) {
-            current = current.getCause();
-        }
-        return current;
     }
 
     private static void validatePort(int port, String name) {

@@ -429,7 +429,7 @@ class EngineReconfigureTest {
         private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("write")
                     && arguments.length == 2
                     && arguments[0] instanceof OutgoingMessage outgoing) {
@@ -455,7 +455,7 @@ class EngineReconfigureTest {
                 new Class<?>[] {DistributedConnectionManager.class},
                 this::invoke);
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("updateStatus") && arguments != null) {
                 updateCount++;
                 token = (CancellationSignal) arguments[0];
@@ -499,7 +499,7 @@ class EngineReconfigureTest {
         private final Listener proxy = (Listener)
                 Proxy.newProxyInstance(Listener.class.getClassLoader(), new Class<?>[] {Listener.class}, this::invoke);
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             return switch (method.getName()) {
                 case "getIpAddress" -> ipAddress;
                 case "getPort" -> port;

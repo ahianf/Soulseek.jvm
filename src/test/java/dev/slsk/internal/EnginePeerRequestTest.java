@@ -624,7 +624,7 @@ class EnginePeerRequestTest {
         private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("write")
                     && arguments.length == 2
                     && arguments[0] instanceof OutgoingMessage outgoing) {
@@ -670,7 +670,7 @@ class EnginePeerRequestTest {
         private final Waiter proxy = (Waiter)
                 Proxy.newProxyInstance(Waiter.class.getClassLoader(), new Class<?>[] {Waiter.class}, this::invoke);
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("register") && arguments.length == 4) {
                 keys.add((WaitKey) arguments[0]);
                 Class<?> resultType = (Class<?>) arguments[1];
@@ -723,7 +723,7 @@ class EnginePeerRequestTest {
             this.connection = connection;
         }
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("tryInvalidateMessageConnectionCache")) {
                 invalidations++;
                 return invalidationResult;
@@ -746,7 +746,7 @@ class EnginePeerRequestTest {
         private final DiagnosticSink proxy = (DiagnosticSink) Proxy.newProxyInstance(
                 DiagnosticSink.class.getClassLoader(), new Class<?>[] {DiagnosticSink.class}, this::invoke);
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("debug") && arguments.length == 1) {
                 debugMessages.add((String) arguments[0]);
             }

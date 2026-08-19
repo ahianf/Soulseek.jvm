@@ -401,7 +401,7 @@ class EngineConnectTest {
             this.sequence = sequence;
         }
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("connect")) {
                 connectCount++;
                 connectToken = (CancellationSignal) arguments[0];
@@ -411,8 +411,7 @@ class EngineConnectTest {
                 if (fireConnected && factory.connected != null) {
                     factory.connected.handle(proxy, null);
                 }
-                // join() keeps the configured outcome's shape: a cancellation
-                // raw, everything else in a CompletionException, which is what
+                // The configured outcome is raised as itself, which is what
                 // the blocking transport raises now.
                 Outcomes.raise(connectResult);
                 return null;
@@ -458,7 +457,7 @@ class EngineConnectTest {
         }
 
         @SuppressWarnings("unchecked")
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("getServerConnection")) {
                 endpoint = (InetSocketAddress) arguments[0];
                 connected = (ConnectionEventListener<Void>) arguments[1];
@@ -483,7 +482,7 @@ class EngineConnectTest {
             this.sequence = sequence;
         }
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("register") && arguments.length == 4) {
                 assertEquals(new WaitKey(MessageCode.Server.LOGIN), arguments[0]);
                 assertSame(LoginResponse.class, arguments[1]);
@@ -509,7 +508,7 @@ class EngineConnectTest {
             this.sequence = sequence;
         }
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("updateStatus") && arguments != null) {
                 updateCount++;
                 updateToken = (CancellationSignal) arguments[0];

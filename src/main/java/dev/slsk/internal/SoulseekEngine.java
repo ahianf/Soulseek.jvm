@@ -1016,7 +1016,8 @@ final class SoulseekEngine implements AutoCloseable {
         sendConfigurationMessages(cancellationSignal);
     }
 
-    void sendConfigurationMessages(CancellationSignal cancellationSignal) {
+    void sendConfigurationMessages(CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
         server.write(new SetListenPortCommand(options.getListenPort()), cancellationSignal);
         server.write(new PrivateRoomToggle(options.isAcceptPrivateRoomInvitations()), cancellationSignal);
         // Our own statistics, for the upload average the server keeps for this
@@ -1040,7 +1041,8 @@ final class SoulseekEngine implements AutoCloseable {
     // No facet exposes this: options are set at build time. It stays because it
     // is the machinery a runtime speed limit needs, and Downloads.policy will.
 
-    private boolean performReconfigureOptions(SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
+    private boolean performReconfigureOptions(SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
         boolean connected = isConnectedAndLoggedIn();
         boolean enableDistributedNetworkChanged = patch.getEnableDistributedNetwork() != null
                 && patch.getEnableDistributedNetwork() != options.isEnableDistributedNetwork();

@@ -57,8 +57,7 @@ class WriteContentionSoak {
                     // A blocking write needs a thread apiece to contend, which
                     // is what a producer is: these were futures only because
                     // the write was.
-                    writes.add(CompletableFuture.runAsync(
-                            () -> connection.write(payload, CancellationSignal.none()), WRITER_THREADS));
+                    writes.add(CompletableFuture.runAsync(() -> writeQuietly(connection, payload), WRITER_THREADS));
                 }
 
                 // Let the first write stall against the unread socket, so the
@@ -110,8 +109,7 @@ class WriteContentionSoak {
 
                 byte[] payload = new byte[PAYLOAD_BYTES];
                 for (int index = 0; index < WRITERS; index++) {
-                    CompletableFuture.runAsync(
-                            () -> connection.write(payload, CancellationSignal.none()), WRITER_THREADS);
+                    CompletableFuture.runAsync(() -> writeQuietly(connection, payload), WRITER_THREADS);
                 }
                 Thread.sleep(500);
 
@@ -127,6 +125,14 @@ class WriteContentionSoak {
             } finally {
                 connection.close();
             }
+        }
+    }
+
+    private static void writeQuietly(SocketConnection connection, byte[] payload) {
+        try {
+            connection.write(payload, CancellationSignal.none());
+        } catch (Exception checked) {
+            throw new java.util.concurrent.CompletionException(checked);
         }
     }
 }

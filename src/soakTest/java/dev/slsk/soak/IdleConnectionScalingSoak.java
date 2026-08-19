@@ -124,7 +124,7 @@ class IdleConnectionScalingSoak {
         }
     }
 
-    private static List<SocketConnection> openConnections(LoopbackPeer peer, int count) {
+    private static List<SocketConnection> openConnections(LoopbackPeer peer, int count) throws Exception {
         // Timers left at source defaults: the point of the scenario is to
         // measure what the defaults cost per connection.
         ConnectionOptions options = new ConnectionOptions();

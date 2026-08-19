@@ -274,7 +274,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
      * @param connection the peer being answered
      * @param work the answer
      */
-    private void answer(MessageCode.Peer code, MessageConnection connection, Runnable work) {
+    private void answer(MessageCode.Peer code, MessageConnection connection, Answer work) {
         responses.execute(() -> {
             try {
                 work.run();
@@ -282,6 +282,12 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 report(code, connection, failure);
             }
         });
+    }
+
+    /** One dispatched reply to a peer; checked write failures go to report. */
+    @FunctionalInterface
+    private interface Answer {
+        void run() throws Exception;
     }
 
     private void report(MessageCode.Peer code, MessageConnection connection, Throwable failure) {
@@ -574,7 +580,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
      * resolve: a peer that is not waiting gets no answer, which is what a peer
      * asking about a file we are not holding for them should get.
      */
-    private void trySendPlaceInQueue(MessageConnection connection, String filename) {
+    private void trySendPlaceInQueue(MessageConnection connection, String filename) throws Exception {
         Integer place = services.admission().place(dev.slsk.user.Username.of(connection.getUsername()), filename);
         if (place != null) {
             connection.write(new PlaceInQueueResponse(filename, place));

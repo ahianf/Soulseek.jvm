@@ -375,15 +375,15 @@ class ConnectionTest {
         // because the write was.
         Executor writers = task -> Thread.ofVirtual().start(task);
         CompletableFuture<Void> first =
-                CompletableFuture.runAsync(() -> connection.write(new byte[] {1}, null), writers);
+                CompletableFuture.runAsync(() -> writeOrWrap(connection, new byte[] {1}, null), writers);
         awaitCondition(() -> connection.getWriteQueueDepth() == 1);
         CompletableFuture<Void> second =
-                CompletableFuture.runAsync(() -> connection.write(new byte[] {2}, null), writers);
+                CompletableFuture.runAsync(() -> writeOrWrap(connection, new byte[] {2}, null), writers);
         awaitCondition(() -> connection.getWriteQueueDepth() == 2);
         CompletableFuture<Void> third =
-                CompletableFuture.runAsync(() -> connection.write(new byte[] {3}, null), writers);
+                CompletableFuture.runAsync(() -> writeOrWrap(connection, new byte[] {3}, null), writers);
         awaitCondition(() -> connection.getWriteQueueDepth() == 3);
-        Throwable dropped = failureOf(() -> connection.write(new byte[] {4}, null));
+        Throwable dropped = failureOf(() -> writeOrWrap(connection, new byte[] {4}, null));
 
         assertTrue(dropped instanceof ConnectionWriteDroppedException);
         assertEquals(ConnectionState.DISCONNECTED, connection.getState());
@@ -395,7 +395,7 @@ class ConnectionTest {
 
     @Test
     @DisplayName("Framed socket I/O runs only on the connection-owned writer")
-    void framedWritesRunOnOwnedWriter() {
+    void framedWritesRunOnOwnedWriter() throws Exception {
         FakeStream stream = new FakeStream();
         SocketConnection connection =
                 new SocketConnection(ENDPOINT, noTimers(), new FakeTcpClient(stream, true), Monitors.shared());
@@ -419,12 +419,12 @@ class ConnectionTest {
                 ENDPOINT, options(8, 8, 3, 100, -1, null, null), new FakeTcpClient(stream, true), Monitors.shared());
         Executor writers = task -> Thread.ofVirtual().start(task);
         CompletableFuture<Void> first =
-                CompletableFuture.runAsync(() -> connection.write(new byte[] {1}, null), writers);
+                CompletableFuture.runAsync(() -> writeOrWrap(connection, new byte[] {1}, null), writers);
         awaitCondition(() -> connection.getWriteQueueDepth() == 1);
 
         try (CancellationController source = new CancellationController()) {
-            CompletableFuture<Void> cancelled =
-                    CompletableFuture.runAsync(() -> connection.write(new byte[] {2}, source.getSignal()), writers);
+            CompletableFuture<Void> cancelled = CompletableFuture.runAsync(
+                    () -> writeOrWrap(connection, new byte[] {2}, source.getSignal()), writers);
             awaitCondition(() -> connection.getWriteQueueDepth() == 2);
             source.cancel();
 
@@ -452,8 +452,8 @@ class ConnectionTest {
         Executor writers = task -> Thread.ofVirtual().start(task);
 
         try (CancellationController source = new CancellationController()) {
-            CompletableFuture<Void> cancelled =
-                    CompletableFuture.runAsync(() -> connection.write(new byte[] {1}, source.getSignal()), writers);
+            CompletableFuture<Void> cancelled = CompletableFuture.runAsync(
+                    () -> writeOrWrap(connection, new byte[] {1}, source.getSignal()), writers);
             awaitCondition(() -> !stream.writes.isEmpty());
             source.cancel();
 
@@ -480,7 +480,7 @@ class ConnectionTest {
         List<CompletableFuture<Void>> calls = new ArrayList<>();
         for (int value = 0; value < 6; value++) {
             byte frame = (byte) value;
-            calls.add(CompletableFuture.runAsync(() -> connection.write(new byte[] {frame}, null), writers));
+            calls.add(CompletableFuture.runAsync(() -> writeOrWrap(connection, new byte[] {frame}, null), writers));
         }
         awaitCondition(() -> connection.getWriteQueueDepth() == calls.size());
 
@@ -524,7 +524,7 @@ class ConnectionTest {
         assertThrows(IllegalStateException.class, () -> connection.connect(null));
         connection.disconnect();
         assertThrows(IllegalStateException.class, () -> connection.read(1, null));
-        assertThrows(IllegalStateException.class, () -> connection.write(new byte[] {1}, null));
+        assertThrows(IllegalStateException.class, () -> writeOrWrap(connection, new byte[] {1}, null));
         connection.close();
     }
 
@@ -594,7 +594,7 @@ class ConnectionTest {
         stream.writeFailure = cause;
         SocketConnection connection =
                 new SocketConnection(ENDPOINT, noTimers(), new FakeTcpClient(stream, true), Monitors.shared());
-        Throwable failure = failureOf(() -> connection.write(new byte[] {1}, null));
+        Throwable failure = failureOf(() -> writeOrWrap(connection, new byte[] {1}, null));
         assertTrue(expected.isInstance(failure));
         if (failure instanceof ConnectionWriteException) {
             assertSame(cause, failure.getCause());
@@ -724,15 +724,35 @@ class ConnectionTest {
         }
 
         @Override
-        public void connect(InetAddress address, int port) {
+        public void connect(InetAddress address, int port) throws IOException {
             connectCalls++;
             if (connectAction != null) {
                 connectAction.run();
             }
             if (connectFuture != null) {
                 // Blocks the way a real connect does, so a test can stall one
-                // and watch the caller give up on it.
-                dev.slsk.internal.common.Outcomes.raise(connectFuture);
+                // and watch the caller give up on it. The configured failure is
+                // raised the way the real adapter raises it: an IOException as
+                // itself, everything else unchecked.
+                Throwable failure =
+                        connectFuture.handle((value, error) -> error).join();
+                if (failure instanceof IOException io) {
+                    throw io;
+                }
+                if (failure instanceof RuntimeException unchecked) {
+                    throw unchecked;
+                }
+                if (failure != null) {
+                    throw new AssertionError("unexpected configured connect failure", failure);
+                }
+            }
+        }
+
+        private static void raiseUnchecked(java.util.concurrent.CompletableFuture<Void> outcome) {
+            try {
+                dev.slsk.internal.common.Outcomes.raise(outcome);
+            } catch (InterruptedException | java.util.concurrent.TimeoutException checked) {
+                throw new AssertionError("this probe is only ever configured with unchecked failures", checked);
             }
         }
 
@@ -756,7 +776,7 @@ class ConnectionTest {
                 connectAction.run();
             }
             if (connectFuture != null) {
-                dev.slsk.internal.common.Outcomes.raise(connectFuture);
+                raiseUnchecked(connectFuture);
             }
             return new ProxyEndpoint("127.0.0.1", proxyPort);
         }
@@ -867,6 +887,14 @@ class ConnectionTest {
             for (CompletableFuture<Void> pending : writeFutures) {
                 pending.completeExceptionally(closed);
             }
+        }
+    }
+    /** Writes on a spawned thread, surfacing checked outcomes through the future. */
+    private static void writeOrWrap(SocketConnection connection, byte[] bytes, CancellationSignal signal) {
+        try {
+            connection.write(bytes, signal);
+        } catch (InterruptedException | TimeoutException checked) {
+            throw new CompletionException(checked);
         }
     }
 }

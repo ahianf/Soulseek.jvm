@@ -309,7 +309,7 @@ class EnginePrivateRoomTest {
             this.sequence = sequence;
         }
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("write")
                     && arguments.length == 2
                     && arguments[0] instanceof OutgoingMessage outgoing) {
@@ -340,7 +340,7 @@ class EnginePrivateRoomTest {
             this.sequence = sequence;
         }
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("register") && arguments.length == 3) {
                 sequence.add("wait");
                 key = (WaitKey) arguments[0];

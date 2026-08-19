@@ -275,7 +275,7 @@ public final class DefaultSearchResponder implements SearchResponder {
         }
     }
 
-    private void writeResponse(MessageConnection connection, SearchResponse response) {
+    private void writeResponse(MessageConnection connection, SearchResponse response) throws Exception {
         if (response instanceof RawSearchResponse raw) {
             connection.write(raw.getLength(), raw.getStream());
             try {

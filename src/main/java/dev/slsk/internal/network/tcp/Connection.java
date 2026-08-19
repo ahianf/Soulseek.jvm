@@ -11,7 +11,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.UUID;
-import java.util.concurrent.CompletionException;
+import java.util.concurrent.TimeoutException;
 
 /** Provides client connections for TCP network services. */
 public interface Connection extends AutoCloseable {
@@ -81,18 +81,18 @@ public interface Connection extends AutoCloseable {
     /**
      * Connects to the configured endpoint, blocking until it lands.
      *
-     * <p>Failures arrive the way {@link java.util.concurrent.CompletableFuture#join()}
-     * presented them: a {@link java.util.concurrent.CancellationException} raw,
-     * everything else wrapped in a {@link CompletionException}. Every caller in
-     * this library already unwraps, so the shape of a failure did not have to
-     * change when the thread hop that produced it went away.
+     * <p>A failure is raised as itself: a lapsed deadline is the checked
+     * {@link TimeoutException}, a caller's cancellation is a raw
+     * {@link java.util.concurrent.CancellationException}, and everything else
+     * is a domain exception. Nothing arrives wrapped.
      *
      * @param cancellationSignal the cancellation signal
+     * @throws TimeoutException if the connect deadline lapsed
      */
-    void connect(CancellationSignal cancellationSignal);
+    void connect(CancellationSignal cancellationSignal) throws InterruptedException, TimeoutException;
 
     /** Connects without a cancellable token. */
-    default void connect() {
+    default void connect() throws InterruptedException, TimeoutException {
         connect(CancellationSignal.none());
     }
 
@@ -113,10 +113,10 @@ public interface Connection extends AutoCloseable {
     TcpClient handoffTcpClient();
 
     /** Reads an exact byte count into a new array. */
-    byte[] read(long length, CancellationSignal cancellationSignal);
+    byte[] read(long length, CancellationSignal cancellationSignal) throws InterruptedException, TimeoutException;
 
     /** Reads an exact byte count without a cancellable token. */
-    default byte[] read(long length) {
+    default byte[] read(long length) throws InterruptedException, TimeoutException {
         return read(length, CancellationSignal.none());
     }
 
@@ -126,10 +126,12 @@ public interface Connection extends AutoCloseable {
             OutputStream outputStream,
             ConnectionGovernor governor,
             ConnectionReporter reporter,
-            CancellationSignal cancellationSignal);
+            CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException;
 
     /** Reads to a stream using source defaults. */
-    default void read(long length, OutputStream outputStream, ConnectionGovernor governor) {
+    default void read(long length, OutputStream outputStream, ConnectionGovernor governor)
+            throws InterruptedException, TimeoutException {
         read(length, outputStream, governor, null, CancellationSignal.none());
     }
 
@@ -139,10 +141,10 @@ public interface Connection extends AutoCloseable {
      * @param cancellationSignal disconnects the connection when signalled
      * @return the disconnect message
      */
-    String awaitDisconnect(CancellationSignal cancellationSignal) throws InterruptedException;
+    String awaitDisconnect(CancellationSignal cancellationSignal) throws InterruptedException, TimeoutException;
 
     /** Waits without a cancellable token. */
-    default String awaitDisconnect() throws InterruptedException {
+    default String awaitDisconnect() throws InterruptedException, TimeoutException {
         return awaitDisconnect(CancellationSignal.none());
     }
 
@@ -160,10 +162,10 @@ public interface Connection extends AutoCloseable {
      * @param bytes the bytes to write
      * @param cancellationSignal the cancellation signal
      */
-    void write(byte[] bytes, CancellationSignal cancellationSignal);
+    void write(byte[] bytes, CancellationSignal cancellationSignal) throws InterruptedException, TimeoutException;
 
     /** Writes an array without a cancellable token. */
-    default void write(byte[] bytes) {
+    default void write(byte[] bytes) throws InterruptedException, TimeoutException {
         write(bytes, CancellationSignal.none());
     }
 
@@ -176,7 +178,7 @@ public interface Connection extends AutoCloseable {
          * <p>Failures arrive with the same shapes {@link #write(byte[],
          * CancellationSignal)} raises them in.
          */
-        void await();
+        void await() throws InterruptedException, TimeoutException;
     }
 
     /**
@@ -196,7 +198,8 @@ public interface Connection extends AutoCloseable {
      * @param cancellationSignal the cancellation signal
      * @return the wait for the frame's outcome
      */
-    default PendingWrite beginWrite(byte[] bytes, CancellationSignal cancellationSignal) {
+    default PendingWrite beginWrite(byte[] bytes, CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
         write(bytes, cancellationSignal);
         return () -> {};
     }
@@ -207,15 +210,17 @@ public interface Connection extends AutoCloseable {
             InputStream inputStream,
             ConnectionGovernor governor,
             ConnectionReporter reporter,
-            CancellationSignal cancellationSignal);
+            CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException;
 
     /** Writes from a stream using source defaults. */
-    default void write(long length, InputStream inputStream) {
+    default void write(long length, InputStream inputStream) throws InterruptedException, TimeoutException {
         write(length, inputStream, null, null, CancellationSignal.none());
     }
 
     /** Writes from a stream using a governor. */
-    default void write(long length, InputStream inputStream, ConnectionGovernor governor) {
+    default void write(long length, InputStream inputStream, ConnectionGovernor governor)
+            throws InterruptedException, TimeoutException {
         write(length, inputStream, governor, null, CancellationSignal.none());
     }
 

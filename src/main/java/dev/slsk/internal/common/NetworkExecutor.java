@@ -57,7 +57,7 @@ public final class NetworkExecutor {
      * @param task the task to run
      * @param onFailure what to do with anything it throws
      */
-    public static void dispatch(Runnable task, Consumer<Throwable> onFailure) {
+    public static void dispatch(IoTask task, Consumer<Throwable> onFailure) {
         EXECUTOR.execute(() -> {
             try {
                 task.run();
@@ -65,6 +65,12 @@ public final class NetworkExecutor {
                 onFailure.accept(failure);
             }
         });
+    }
+
+    /** A dispatched blocking task; checked failures go to the dispatch handler. */
+    @FunctionalInterface
+    public interface IoTask {
+        void run() throws Exception;
     }
 
     private static ThreadFactory virtualThreadFactory() {

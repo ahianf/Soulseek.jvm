@@ -862,7 +862,7 @@ class DistributedNetworkTest {
         }
 
         @Override
-        public Object invoke(Object ignored, Method method, Object[] arguments) {
+        public Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             return switch (method.getName()) {
                 case "getId" -> id;
                 case "getInactiveTime" -> Duration.ZERO;

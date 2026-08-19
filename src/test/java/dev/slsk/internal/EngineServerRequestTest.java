@@ -601,7 +601,7 @@ class EngineServerRequestTest {
         private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("write")
                     && arguments.length == 2
                     && arguments[0] instanceof dev.slsk.internal.messaging.messages.OutgoingMessage outgoing) {
@@ -629,7 +629,7 @@ class EngineServerRequestTest {
         private final Waiter proxy = (Waiter)
                 Proxy.newProxyInstance(Waiter.class.getClassLoader(), new Class<?>[] {Waiter.class}, this::invoke);
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("register") && (arguments.length == 3 || arguments.length == 4)) {
                 registrations++;
                 argumentCount = arguments.length;

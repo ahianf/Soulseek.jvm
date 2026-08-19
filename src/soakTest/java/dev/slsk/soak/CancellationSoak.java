@@ -45,8 +45,22 @@ class CancellationSoak {
     private static final java.util.concurrent.Executor READERS =
             task -> Thread.ofVirtual().start(task);
 
-    private static CompletableFuture<Void> reader(Runnable read) {
-        return CompletableFuture.runAsync(read, READERS);
+    private static CompletableFuture<Void> reader(Read read) {
+        return CompletableFuture.runAsync(
+                () -> {
+                    try {
+                        read.run();
+                    } catch (Exception checked) {
+                        throw new java.util.concurrent.CompletionException(checked);
+                    }
+                },
+                READERS);
+    }
+
+    /** A blocking read under soak; checked outcomes surface through the future. */
+    @FunctionalInterface
+    private interface Read {
+        void run() throws Exception;
     }
 
     private static final long TRANSFER_BYTES = 4L * 1024 * 1024 * 1024;
@@ -152,7 +166,14 @@ class CancellationSoak {
                 CompletableFuture<Void> doomed = reader(() -> cancelled.read(
                         TRANSFER_BYTES, OutputStream.nullOutputStream(), null, null, controller.getSignal()));
                 CompletableFuture<byte[]> survivor = CompletableFuture.supplyAsync(
-                        () -> bystander.read(64, dev.slsk.internal.concurrent.CancellationSignal.none()), READERS);
+                        () -> {
+                            try {
+                                return bystander.read(64, dev.slsk.internal.concurrent.CancellationSignal.none());
+                            } catch (Exception checked) {
+                                throw new java.util.concurrent.CompletionException(checked);
+                            }
+                        },
+                        READERS);
 
                 Thread.sleep(250);
                 controller.cancel();

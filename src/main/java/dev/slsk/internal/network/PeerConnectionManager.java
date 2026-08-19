@@ -11,6 +11,7 @@ import dev.slsk.internal.network.tcp.Connection;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 
 /** Manages peer message and transfer connections. */
 public interface PeerConnectionManager extends AutoCloseable, DiagnosticSource {
@@ -38,13 +39,12 @@ public interface PeerConnectionManager extends AutoCloseable, DiagnosticSource {
     MessageConnection getOrAddMessageConnection(ConnectToPeerResponse connectToPeerResponse);
 
     MessageConnection getOrAddMessageConnection(
-            String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal);
+            String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException;
 
     MessageConnection getOrAddMessageConnection(
-            String username,
-            InetSocketAddress ipEndpoint,
-            int solicitationToken,
-            CancellationSignal cancellationSignal);
+            String username, InetSocketAddress ipEndpoint, int solicitationToken, CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException;
 
     TransferConnectionResult getTransferConnection(String username, int token, Connection incomingConnection);
 

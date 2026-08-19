@@ -7,6 +7,7 @@ package dev.slsk.internal.network;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.internal.ServerLink;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.Wait;
@@ -37,9 +38,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
@@ -184,19 +185,18 @@ public final class PeerNetwork implements PeerConnectionManager {
             cell.settle(established);
             guardOpen(username, cell);
             evictIfDeadOnArrival(username, cell, established);
-        } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
+        } catch (Throwable cause) {
             cell.fail(cause);
             String message = "Failed to establish an inbound message connection to "
                     + username + " (" + incomingConnection.getIpEndpoint()
-                    + "): " + message(cause);
+                    + "): " + Failures.message(cause);
             diagnostic.debug(
                     message + " (type: " + incomingConnection.getType() + ", id: " + incomingConnection.getId() + ")");
             diagnostic.debug("Purging message connection cache of failed connection "
                     + "to " + username + " ("
                     + incomingConnection.getIpEndpoint() + ").");
             messageConnections.remove(username, cell);
-            throw new CompletionException(new ConnectionException(message, cause));
+            throw new ConnectionException(message, cause);
         }
     }
 
@@ -237,7 +237,7 @@ public final class PeerNetwork implements PeerConnectionManager {
             // collapsing the two here made cancelling a waiting download dial
             // a pointless second-chance with an already-cancelled signal and
             // end ERRORED instead of CANCELLED.
-            if (unwrap(failure) instanceof CancellationException cancelled) {
+            if (failure instanceof CancellationException cancelled) {
                 throw cancelled;
             }
             String message = "Failed to establish a direct or indirect transfer "
@@ -245,7 +245,7 @@ public final class PeerNetwork implements PeerConnectionManager {
                     + " with remote token " + remoteToken + " for "
                     + filename;
             diagnostic.debug(message);
-            throw new CompletionException(new ConnectionException(message));
+            throw new ConnectionException(message);
         }
 
         boolean directWon = winner.first();
@@ -280,7 +280,7 @@ public final class PeerNetwork implements PeerConnectionManager {
             connection = cell.await();
         } catch (Throwable failure) {
             diagnostic.debug(
-                    "Failed to retrieve cached message connection to " + username + ": " + message(unwrap(failure)));
+                    "Failed to retrieve cached message connection to " + username + ": " + Failures.message(failure));
             return null;
         }
         diagnostic.debug("Retrieved cached message connection to "
@@ -314,12 +314,11 @@ public final class PeerNetwork implements PeerConnectionManager {
             guardOpen(username, entry);
             evictIfDeadOnArrival(username, entry, connection);
             return connection;
-        } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
+        } catch (Throwable cause) {
             entry.fail(cause);
             String message = "Failed to establish an inbound indirect message "
                     + "connection to " + username + " ("
-                    + connectToPeerResponse.getIpEndpoint() + "): " + message(cause);
+                    + connectToPeerResponse.getIpEndpoint() + "): " + Failures.message(cause);
             diagnostic.debug(message);
             if (!(cause instanceof CancellationException)) {
                 diagnostic.debug("Purging message connection cache of failed connection "
@@ -331,13 +330,14 @@ public final class PeerNetwork implements PeerConnectionManager {
                 // afterwards and undo.
                 messageConnections.remove(username, entry);
             }
-            throw new CompletionException(new ConnectionException(message, cause));
+            throw new ConnectionException(message, cause);
         }
     }
 
     @Override
     public MessageConnection getOrAddMessageConnection(
-            String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal) {
+            String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
         return getOrAddMessageConnection(username, ipEndpoint, tokens.nextToken(), cancellationSignal);
     }
 
@@ -352,10 +352,8 @@ public final class PeerNetwork implements PeerConnectionManager {
      */
     @Override
     public MessageConnection getOrAddMessageConnection(
-            String username,
-            InetSocketAddress ipEndpoint,
-            int solicitationToken,
-            CancellationSignal cancellationSignal) {
+            String username, InetSocketAddress ipEndpoint, int solicitationToken, CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
         ConnectionCell claim = new ConnectionCell();
         ConnectionCell cached = messageConnections.putIfAbsent(username, claim);
         ConnectionCell entry = cached == null ? claim : cached;
@@ -377,12 +375,11 @@ public final class PeerNetwork implements PeerConnectionManager {
             evictIfDeadOnArrival(username, entry, connection);
             return connection;
         } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
-            entry.fail(cause);
+            entry.fail(failure);
             diagnostic.debug("Purging message connection cache of failed connection " + "to " + username + " ("
                     + ipEndpoint + ").");
             messageConnections.remove(username, entry);
-            throw new CompletionException(cause);
+            throw Failures.rethrow(failure);
         }
     }
 
@@ -404,14 +401,14 @@ public final class PeerNetwork implements PeerConnectionManager {
             indirectCancellation.close();
             // As above: cancellation is the caller's, not the connection's,
             // and must classify as itself.
-            if (unwrap(failure) instanceof CancellationException cancelled) {
+            if (failure instanceof CancellationException cancelled) {
                 throw cancelled;
             }
             String message = "Failed to establish a direct or indirect transfer "
                     + "connection to " + username + " (" + ipEndpoint
                     + ")";
             diagnostic.debug(message);
-            throw new CompletionException(new ConnectionException(message));
+            throw new ConnectionException(message);
         }
 
         boolean directWon = winner.first();
@@ -428,14 +425,13 @@ public final class PeerNetwork implements PeerConnectionManager {
                         token(cancellationSignal));
             }
             connection.write(littleEndianBytes(token), token(cancellationSignal));
-        } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
+        } catch (Throwable cause) {
             String message = "Failed to negotiate transfer connection to "
                     + username + " (" + ipEndpoint + "): "
-                    + message(cause);
+                    + Failures.message(cause);
             diagnostic.debug(message + " (type: " + connection.getType() + ", id: " + connection.getId() + ")");
             connection.close();
-            throw new CompletionException(new ConnectionException(message, cause));
+            throw new ConnectionException(message, cause);
         } finally {
             directCancellation.close();
             indirectCancellation.close();
@@ -472,15 +468,14 @@ public final class PeerNetwork implements PeerConnectionManager {
         byte[] bytes;
         try {
             bytes = connection.read(4);
-        } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
+        } catch (Throwable cause) {
             String message = "Failed to establish an inbound transfer connection to "
                     + username + " ("
                     + incomingConnection.getIpEndpoint()
-                    + ") for token " + token + ": " + message(cause);
+                    + ") for token " + token + ": " + Failures.message(cause);
             diagnostic.debug(message + " (type: " + connection.getType() + ", id: " + connection.getId() + ")");
             connection.close();
-            throw new CompletionException(new ConnectionException(message, cause));
+            throw new ConnectionException(message, cause);
         }
         int remoteToken = littleEndianInteger(bytes);
         diagnostic.debug("Transfer connection to " + username + " ("
@@ -512,15 +507,14 @@ public final class PeerNetwork implements PeerConnectionManager {
             connection.connect();
             connection.write(new PierceFirewall(response.getToken()).toByteArray());
             bytes = connection.read(4);
-        } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
+        } catch (Throwable cause) {
             String message = "Failed to establish an inbound indirect transfer "
                     + "connection to " + response.getUsername() + " ("
                     + response.getIpEndpoint() + "): "
-                    + message(cause);
+                    + Failures.message(cause);
             diagnostic.debug(message);
             connection.close();
-            throw new CompletionException(new ConnectionException(message, cause));
+            throw new ConnectionException(message, cause);
         }
         int remoteToken = littleEndianInteger(bytes);
         diagnostic.debug("Transfer connection to " + response.getUsername() + " ("
@@ -608,7 +602,8 @@ public final class PeerNetwork implements PeerConnectionManager {
         return connection;
     }
 
-    private MessageConnection establishInboundIndirectMessageConnection(ConnectToPeerResponse response) {
+    private MessageConnection establishInboundIndirectMessageConnection(ConnectToPeerResponse response)
+            throws InterruptedException, TimeoutException {
         diagnostic.debug("Attempting inbound indirect message connection to "
                 + response.getUsername() + " (" + response.getIpEndpoint()
                 + ") for token " + response.getToken());
@@ -624,7 +619,7 @@ public final class PeerNetwork implements PeerConnectionManager {
             connection.write(new PierceFirewall(response.getToken()).toByteArray(), cancellation.getSignal());
         } catch (Throwable failure) {
             connection.close();
-            throw new CompletionException(unwrap(failure));
+            throw Failures.rethrow(failure);
         } finally {
             pendingInboundIndirectConnections.remove(response.getUsername(), cancellation);
             cancellation.close();
@@ -656,15 +651,14 @@ public final class PeerNetwork implements PeerConnectionManager {
         } catch (Throwable failure) {
             directCancellation.close();
             indirectCancellation.close();
-            Throwable cause = unwrap(failure);
-            if (cause instanceof ConnectionException) {
-                throw new CompletionException(cause);
+            if (failure instanceof ConnectionException connectionFailure) {
+                throw connectionFailure;
             }
             String message = "Failed to establish a direct or indirect message "
                     + "connection to " + username + " (" + ipEndpoint
                     + ")";
             diagnostic.debug(message);
-            throw new CompletionException(new ConnectionException(message));
+            throw new ConnectionException(message);
         }
 
         MessageConnection connection = winner.value();
@@ -686,14 +680,13 @@ public final class PeerNetwork implements PeerConnectionManager {
             } else {
                 connection.startReadingContinuously();
             }
-        } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
+        } catch (Throwable cause) {
             String message = "Failed to negotiate message connection to "
                     + username + " (" + ipEndpoint + "): "
-                    + message(cause);
+                    + Failures.message(cause);
             diagnostic.debug(message + " (type: " + connection.getType() + ", id: " + connection.getId() + ")");
             connection.close();
-            throw new CompletionException(new ConnectionException(message, cause));
+            throw new ConnectionException(message, cause);
         } finally {
             directCancellation.close();
             indirectCancellation.close();
@@ -705,7 +698,8 @@ public final class PeerNetwork implements PeerConnectionManager {
     }
 
     private MessageConnection establishOutboundDirectMessageConnection(
-            String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal) {
+            String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
         diagnostic.debug("Attempting direct message connection to " + username + " (" + ipEndpoint + ")");
         MessageConnection connection = connectionFactory.getMessageConnection(
                 username, ipEndpoint, options.get().getPeerConnectionOptions());
@@ -717,9 +711,9 @@ public final class PeerNetwork implements PeerConnectionManager {
         } catch (Throwable failure) {
             diagnostic.debug("Failed to establish a direct message connection to "
                     + username + " (" + ipEndpoint + "): "
-                    + message(unwrap(failure)));
+                    + Failures.message(failure));
             connection.close();
-            throw new CompletionException(unwrap(failure));
+            throw Failures.rethrow(failure);
         }
         diagnostic.debug("Direct message connection to " + username + " ("
                 + ipEndpoint + ") established. (type: "
@@ -729,7 +723,8 @@ public final class PeerNetwork implements PeerConnectionManager {
     }
 
     private MessageConnection establishOutboundIndirectMessageConnection(
-            String username, int solicitationToken, CancellationSignal cancellationSignal) {
+            String username, int solicitationToken, CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
         diagnostic.debug("Soliciting indirect message connection to " + username + " with token " + solicitationToken);
         pendingSolicitations.putIfAbsent(solicitationToken, username);
         boolean answered = false;
@@ -770,8 +765,8 @@ public final class PeerNetwork implements PeerConnectionManager {
         } catch (Throwable failure) {
             diagnostic.debug("Failed to establish an indirect message connection to "
                     + username + " with token " + solicitationToken
-                    + ": " + message(unwrap(failure)));
-            throw new CompletionException(unwrap(failure));
+                    + ": " + Failures.message(failure));
+            throw Failures.rethrow(failure);
         } finally {
             if (answered) {
                 pendingSolicitations.remove(solicitationToken, username);
@@ -820,7 +815,8 @@ public final class PeerNetwork implements PeerConnectionManager {
     }
 
     private Connection establishOutboundDirectTransferConnection(
-            InetSocketAddress ipEndpoint, int token, CancellationSignal cancellationSignal) {
+            InetSocketAddress ipEndpoint, int token, CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
         diagnostic.debug("Attempting direct transfer connection for token " + token + " to " + ipEndpoint);
         Connection connection = connectionFactory.getTransferConnection(
                 ipEndpoint, options.get().getTransferConnectionOptions());
@@ -836,9 +832,9 @@ public final class PeerNetwork implements PeerConnectionManager {
         } catch (Throwable failure) {
             diagnostic.debug("Failed to establish a direct transfer connection "
                     + "for token " + token + " to (" + ipEndpoint
-                    + "): " + message(unwrap(failure)));
+                    + "): " + Failures.message(failure));
             connection.close();
-            throw new CompletionException(unwrap(failure));
+            throw Failures.rethrow(failure);
         }
         diagnostic.debug("Direct transfer connection for " + token + " to "
                 + connection.getIpEndpoint()
@@ -848,7 +844,8 @@ public final class PeerNetwork implements PeerConnectionManager {
     }
 
     private Connection establishOutboundIndirectTransferConnection(
-            String username, int token, CancellationSignal cancellationSignal) {
+            String username, int token, CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
         diagnostic.debug("Soliciting indirect transfer connection to " + username + " with token " + token);
         int solicitationToken = tokens.nextToken();
         pendingSolicitations.putIfAbsent(solicitationToken, username);
@@ -891,8 +888,8 @@ public final class PeerNetwork implements PeerConnectionManager {
         } catch (Throwable failure) {
             diagnostic.debug("Failed to establish an indirect transfer "
                     + "connection to " + username + " with token "
-                    + token + ": " + message(unwrap(failure)));
-            throw new CompletionException(unwrap(failure));
+                    + token + ": " + Failures.message(failure));
+            throw Failures.rethrow(failure);
         } finally {
             pendingSolicitations.remove(solicitationToken, username);
         }
@@ -918,7 +915,7 @@ public final class PeerNetwork implements PeerConnectionManager {
         if (disposed.get()) {
             messageConnections.remove(username, entry);
             entry.closeWhenSettled();
-            throw new CompletionException(new ConnectionException("The peer network is closed"));
+            throw new ConnectionException("The peer network is closed");
         }
     }
 
@@ -985,22 +982,9 @@ public final class PeerNetwork implements PeerConnectionManager {
         return token == null ? CancellationSignal.none() : token;
     }
 
-    private static Throwable unwrap(Throwable failure) {
-        Throwable current = failure;
-        while ((current instanceof CompletionException || current instanceof java.util.concurrent.ExecutionException)
-                && current.getCause() != null) {
-            current = current.getCause();
-        }
-        return current;
-    }
-
-    private static String message(Throwable failure) {
-        return failure.getMessage() == null ? "" : failure.getMessage();
-    }
-
     private static String disconnectMessage(ConnectionDisconnectedEvent eventData) {
         if (eventData.getException() != null) {
-            return message(eventData.getException());
+            return Failures.message(eventData.getException());
         }
         return eventData.getMessage();
     }

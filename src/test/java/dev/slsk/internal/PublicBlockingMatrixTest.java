@@ -440,7 +440,11 @@ class PublicBlockingMatrixTest {
         private final List<Path> temporaryPaths = new ArrayList<>();
 
         private FacetFixture() {
-            server.connect(CancellationSignal.none());
+            try {
+                server.connect(CancellationSignal.none());
+            } catch (Exception impossible) {
+                throw new AssertionError("the controlled transport connects synchronously", impossible);
+            }
             engine = new SoulseekEngine(
                     9999,
                     new SoulseekClientOptions(false),

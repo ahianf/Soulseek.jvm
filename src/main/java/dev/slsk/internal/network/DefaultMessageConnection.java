@@ -181,7 +181,8 @@ public final class DefaultMessageConnection extends SocketConnection implements 
     }
 
     @Override
-    public void write(OutgoingMessage message, CancellationSignal cancellationSignal) {
+    public void write(OutgoingMessage message, CancellationSignal cancellationSignal)
+            throws InterruptedException, java.util.concurrent.TimeoutException {
         if (message == null) {
             throw new IllegalArgumentException("The specified message is null");
         }
@@ -196,7 +197,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
         raiseMessageWritten(bytes, token);
     }
 
-    void readContinuously() {
+    void readContinuously() throws InterruptedException, java.util.concurrent.TimeoutException {
         synchronized (this) {
             if (readingContinuously) {
                 return;

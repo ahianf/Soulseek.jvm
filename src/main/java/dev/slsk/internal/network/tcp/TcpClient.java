@@ -25,7 +25,7 @@ public interface TcpClient extends AutoCloseable {
     InetSocketAddress getRemoteEndpoint();
 
     /** Connects the client to a remote endpoint, blocking until it lands. */
-    void connect(InetAddress address, int port);
+    void connect(InetAddress address, int port) throws IOException;
 
     /** Connects to a destination through a SOCKS5 proxy, blocking throughout. */
     ProxyEndpoint connectThroughProxy(

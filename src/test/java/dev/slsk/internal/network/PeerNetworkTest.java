@@ -150,14 +150,13 @@ class PeerNetworkTest {
         message.startFailure = expected;
         fixture.factory.messageHandoff = message;
 
-        CompletionException thrown = assertThrows(
-                CompletionException.class,
+        ConnectionException mapped = assertThrows(
+                ConnectionException.class,
                 () -> fixture.manager()
                         .addOrUpdateMessageConnection(
                                 USERNAME,
                                 ConnectionProbe.connection(DIRECT_ENDPOINT).connection()));
 
-        ConnectionException mapped = assertInstanceOf(ConnectionException.class, thrown.getCause());
         assertSame(expected, mapped.getCause());
         assertEquals(1, message.closeCount);
         assertNull(fixture.manager().getCachedMessageConnection(USERNAME));
@@ -188,15 +187,14 @@ class PeerNetworkTest {
         transfer.readFuture = CompletableFuture.failedFuture(expected);
         fixture.factory.transferHandoff = transfer;
 
-        CompletionException thrown = assertThrows(
-                CompletionException.class,
+        ConnectionException mapped = assertThrows(
+                ConnectionException.class,
                 () -> fixture.manager()
                         .getTransferConnection(
                                 USERNAME,
                                 TOKEN,
                                 ConnectionProbe.connection(DIRECT_ENDPOINT).connection()));
 
-        ConnectionException mapped = assertInstanceOf(ConnectionException.class, thrown.getCause());
         assertSame(expected, mapped.getCause());
         assertEquals(1, transfer.closeCount);
     }
@@ -227,13 +225,12 @@ class PeerNetworkTest {
         transfer.connectFuture = CompletableFuture.failedFuture(expected);
         fixture.factory.transferDirect = transfer;
 
-        CompletionException thrown = assertThrows(
-                CompletionException.class,
+        ConnectionException mapped = assertThrows(
+                ConnectionException.class,
                 () -> fixture.manager()
                         .getTransferConnection(new ConnectToPeerResponse(
                                 USERNAME, Constants.ConnectionType.TRANSFER, INDIRECT_ENDPOINT, TOKEN, false)));
 
-        ConnectionException mapped = assertInstanceOf(ConnectionException.class, thrown.getCause());
         assertSame(expected, mapped.getCause());
         assertEquals(1, transfer.closeCount);
     }
@@ -292,14 +289,12 @@ class PeerNetworkTest {
         fixture.factory.transferDirect = direct;
         fixture.waiter.defaultFuture = CompletableFuture.failedFuture(new RuntimeException("indirect"));
 
-        CompletionException thrown = assertThrows(
-                CompletionException.class,
+        ConnectionException thrown = assertThrows(
+                ConnectionException.class,
                 () -> fixture.manager()
                         .getTransferConnection(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none()));
 
-        assertTrue(assertInstanceOf(ConnectionException.class, thrown.getCause())
-                .getMessage()
-                .contains("direct or indirect transfer connection"));
+        assertTrue(thrown.getMessage().contains("direct or indirect transfer connection"));
     }
 
     @Test
@@ -328,20 +323,19 @@ class PeerNetworkTest {
         message.connectFuture = CompletableFuture.failedFuture(expected);
         fixture.factory.messageDirect = message;
 
-        CompletionException thrown = assertThrows(
-                CompletionException.class,
+        ConnectionException mapped = assertThrows(
+                ConnectionException.class,
                 () -> fixture.manager()
                         .getOrAddMessageConnection(new ConnectToPeerResponse(
                                 USERNAME, Constants.ConnectionType.PEER, INDIRECT_ENDPOINT, TOKEN, false)));
 
-        ConnectionException mapped = assertInstanceOf(ConnectionException.class, thrown.getCause());
         assertSame(expected, mapped.getCause());
         assertEquals(1, message.closeCount);
         assertNull(fixture.manager().getCachedMessageConnection(USERNAME));
     }
 
     @Test
-    void outboundMessageUsesDirectWinnerAndWritesPeerInit() {
+    void outboundMessageUsesDirectWinnerAndWritesPeerInit() throws Exception {
         Fixture fixture = new Fixture();
         ConnectionProbe direct = ConnectionProbe.message(USERNAME, DIRECT_ENDPOINT);
         fixture.factory.messageDirect = direct;
@@ -359,7 +353,7 @@ class PeerNetworkTest {
     }
 
     @Test
-    void outboundMessageUsesIndirectWinnerAndStartsReading() {
+    void outboundMessageUsesIndirectWinnerAndStartsReading() throws Exception {
         Fixture fixture = new Fixture();
         ConnectionProbe direct = ConnectionProbe.message(USERNAME, DIRECT_ENDPOINT);
         direct.connectFuture = CompletableFuture.failedFuture(new RuntimeException("direct"));
@@ -391,12 +385,11 @@ class PeerNetworkTest {
         fixture.factory.messageDirect = direct;
         fixture.waiter.defaultFuture = CompletableFuture.failedFuture(new RuntimeException("indirect"));
 
-        CompletionException thrown = assertThrows(
-                CompletionException.class,
+        assertThrows(
+                ConnectionException.class,
                 () -> fixture.manager()
                         .getOrAddMessageConnection(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none()));
 
-        assertInstanceOf(ConnectionException.class, thrown.getCause());
         assertNull(fixture.manager().getCachedMessageConnection(USERNAME));
         assertTrue(fixture.diagnostic.contains("Purging message connection cache"));
     }
@@ -410,12 +403,11 @@ class PeerNetworkTest {
         fixture.factory.messageDirect = direct;
         fixture.waiter.defaultFuture = CompletableFuture.failedFuture(new RuntimeException("indirect"));
 
-        CompletionException thrown = assertThrows(
-                CompletionException.class,
+        ConnectionException mapped = assertThrows(
+                ConnectionException.class,
                 () -> fixture.manager()
                         .getOrAddMessageConnection(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none()));
 
-        ConnectionException mapped = assertInstanceOf(ConnectionException.class, thrown.getCause());
         assertSame(expected, mapped.getCause());
         assertEquals(1, direct.closeCount);
     }
@@ -471,6 +463,7 @@ class PeerNetworkTest {
             CompletionException thrown = assertThrows(CompletionException.class, caller::join);
             assertInstanceOf(ConnectionException.class, unwrap(thrown));
         }
+
         assertEquals(1, fixture.factory.messageDirectCount);
         assertNull(fixture.manager().getCachedMessageConnection(USERNAME));
     }
@@ -481,9 +474,15 @@ class PeerNetworkTest {
         for (int caller = 0; caller < callers; caller++) {
             int solicitationToken = TOKEN + caller;
             requests.add(CompletableFuture.supplyAsync(
-                    () -> fixture.manager()
-                            .getOrAddMessageConnection(
-                                    USERNAME, DIRECT_ENDPOINT, solicitationToken, CancellationSignal.none()),
+                    () -> {
+                        try {
+                            return fixture.manager()
+                                    .getOrAddMessageConnection(
+                                            USERNAME, DIRECT_ENDPOINT, solicitationToken, CancellationSignal.none());
+                        } catch (Exception checked) {
+                            throw new CompletionException(checked);
+                        }
+                    },
                     threads));
         }
         return requests;
@@ -525,12 +524,11 @@ class PeerNetworkTest {
 
         Fixture failedFixture = new Fixture();
         failedFixture.waiter.defaultFuture = CompletableFuture.failedFuture(new RuntimeException());
-        CompletionException thrown = assertThrows(
-                CompletionException.class,
+        assertThrows(
+                ConnectionException.class,
                 () -> failedFixture
                         .manager()
                         .awaitTransferConnection(USERNAME, "file", TOKEN, CancellationSignal.none()));
-        assertInstanceOf(ConnectionException.class, thrown.getCause());
     }
 
     @Test
@@ -902,7 +900,7 @@ class PeerNetworkTest {
         }
 
         @Override
-        public Object invoke(Object ignored, Method method, Object[] arguments) {
+        public Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             String name = method.getName();
             return switch (name) {
                 case "getId" -> id;

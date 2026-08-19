@@ -644,7 +644,10 @@ final class TransferDomain implements PeerServices {
             server.write(
                     new dev.slsk.internal.messaging.messages.UserStatisticsRequest(server.username()),
                     CancellationSignal.none());
-        } catch (RuntimeException failure) {
+        } catch (RuntimeException | InterruptedException | java.util.concurrent.TimeoutException failure) {
+            if (failure instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             diagnostic.debug("Failed to report the upload speed to the server: " + failure.getMessage());
         }
     }

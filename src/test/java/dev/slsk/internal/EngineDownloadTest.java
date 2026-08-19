@@ -1067,7 +1067,7 @@ class EngineDownloadTest {
         private final Waiter proxy = (Waiter)
                 Proxy.newProxyInstance(Waiter.class.getClassLoader(), new Class<?>[] {Waiter.class}, this::invoke);
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().startsWith("register") && arguments != null) {
                 for (Object argument : arguments) {
                     if (argument == TransferRequest.class) {
@@ -1111,7 +1111,7 @@ class EngineDownloadTest {
             awaitResult = CompletableFuture.completedFuture(transfer);
         }
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("getOrAddMessageConnection")
                     && arguments != null
                     && arguments.length == 3
@@ -1141,7 +1141,7 @@ class EngineDownloadTest {
         private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("write")
                     && arguments != null
                     && arguments.length == 2
@@ -1374,7 +1374,7 @@ class EngineDownloadTest {
         private final DiagnosticSink proxy = (DiagnosticSink) Proxy.newProxyInstance(
                 DiagnosticSink.class.getClassLoader(), new Class<?>[] {DiagnosticSink.class}, this::invoke);
 
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
+        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("warning")) {
                 warnings.add((String) arguments[0]);
             }

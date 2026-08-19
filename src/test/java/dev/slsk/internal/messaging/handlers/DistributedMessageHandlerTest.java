@@ -299,7 +299,7 @@ class DistributedMessageHandlerTest {
         private int promotions;
 
         @Override
-        public Object invoke(Object ignored, Method method, Object[] arguments) {
+        public Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             return switch (method.getName()) {
                 case "getParent" -> parent;
                 case "setParentBranchLevel" -> {
@@ -331,7 +331,7 @@ class DistributedMessageHandlerTest {
         private final List<SearchCall> calls = new CopyOnWriteArrayList<>();
 
         @Override
-        public Object invoke(Object ignored, Method method, Object[] arguments) {
+        public Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("tryRespond") && arguments.length == 3) {
                 calls.add(new SearchCall((String) arguments[0], (Integer) arguments[1], (String) arguments[2]));
                 return true;
@@ -429,7 +429,7 @@ class DistributedMessageHandlerTest {
         }
 
         @Override
-        public Object invoke(Object ignored, Method method, Object[] arguments) {
+        public Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             return switch (method.getName()) {
                 case "getUsername" -> username;
                 case "getIpEndpoint" -> endpoint;
