@@ -528,9 +528,11 @@ public class SocketConnection implements Connection {
         if (!closeStarted.compareAndSet(false, true)) {
             return;
         }
+        // Stackless: disposal is a decision, not a fault, and this runs once
+        // per connection at the churn rate of the whole peer mesh.
         disconnect(
                 "SocketConnection is being disposed",
-                new IllegalStateException(getClass().getSimpleName() + " has been disposed"));
+                Failures.stacklessIllegalState(getClass().getSimpleName() + " has been disposed"));
         stopTimers();
         closeTransport();
         disposed = true;

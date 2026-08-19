@@ -8,6 +8,7 @@ import dev.slsk.EventStream;
 import dev.slsk.Search;
 import dev.slsk.events.SearchEvent;
 import dev.slsk.internal.EngineEvents.Kind;
+import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Usernames;
 import dev.slsk.internal.concurrent.BlockingInvocation;
@@ -163,10 +164,14 @@ final class DefaultSearch implements Search {
         client.events().on(Kind.SEARCH_RESPONSE_DELIVERY_FAILED, (SearchRequestResponseEvent event) -> {
             Username requester = event == null ? null : Usernames.fromWire(event.getUsername());
             if (requester != null) {
+                // Stackless: the internal event carries no cause, so this
+                // exception is a message in the shape the public event wants.
+                // Peers that vanish before delivery are routine, and a trace
+                // here would point at this wiring, not at the failure.
                 events.publish(new SearchEvent.ResponseDeliveryFailed(
                         requester,
                         event.getToken(),
-                        new IllegalStateException("could not deliver a search response to " + event.getUsername()),
+                        Failures.stacklessIllegalState("could not deliver a search response to " + event.getUsername()),
                         Instant.now()));
             }
         });

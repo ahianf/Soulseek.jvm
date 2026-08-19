@@ -149,4 +149,33 @@ public final class Failures {
         }
         throw new SoulseekClientException(message, cause);
     }
+
+    /**
+     * An {@link IllegalStateException} that skips its stack-trace capture.
+     *
+     * <p>For a routine outcome that is reported as an exception because that is
+     * the shape of the field carrying it — a connection disposed on purpose, a
+     * delivery that failed because a peer went away. Such an exception is
+     * constructed on the reporting path, so the trace it would capture points
+     * at the reporter, not at anything that went wrong; filling it in is pure
+     * cost. A JFR baseline measured 91,000 of these traces captured in eleven
+     * hours, every one discarded unread.
+     *
+     * @param message the message
+     * @return the exception, with an empty stack trace
+     */
+    public static IllegalStateException stacklessIllegalState(String message) {
+        return new StacklessIllegalStateException(message);
+    }
+
+    private static final class StacklessIllegalStateException extends IllegalStateException {
+        StacklessIllegalStateException(String message) {
+            super(message);
+        }
+
+        @Override
+        public synchronized Throwable fillInStackTrace() {
+            return this;
+        }
+    }
 }
