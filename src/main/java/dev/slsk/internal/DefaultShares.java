@@ -170,8 +170,12 @@ final class DefaultShares implements Shares {
         // throwing here after the scan succeeded threw away the index and left
         // ScanStarted forever unanswered. The counts are re-sent at login.
         try {
-            client.server().setSharedCounts(scanned.directoryCount(), scanned.fileCount());
+            client.server().setSharedCounts(scanned.directoryCount(), scanned.fileCount(), signal);
         } catch (RuntimeException failure) {
+            InterruptedException interrupted = BlockingInvocation.interruption(failure);
+            if (interrupted != null) {
+                throw interrupted;
+            }
             client.getDiagnostic().warning("Failed to announce the share counts", failure);
         }
         events.publish(new ShareEvent.ScanCompleted(scanned, Instant.now()));

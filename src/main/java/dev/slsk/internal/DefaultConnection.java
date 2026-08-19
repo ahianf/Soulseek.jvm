@@ -51,6 +51,7 @@ final class DefaultConnection implements Connection {
     private final ServerLink server;
     private final Credentials credentials;
     private final EventBus<ConnectionEvent> events;
+    private final ServerAddress defaultAddress;
 
     /** Gets the connection back after it drops. */
     private final ReconnectSupervisor reconnects;
@@ -84,10 +85,20 @@ final class DefaultConnection implements Connection {
     private final AtomicBoolean disconnected = new AtomicBoolean();
 
     DefaultConnection(SoulseekEngine client, Credentials credentials, EventBus<ConnectionEvent> events) {
+        this(client, credentials, events, ServerAddress.soulseek());
+    }
+
+    /** Test seam for exercising the no-address form without public DNS. */
+    DefaultConnection(
+            SoulseekEngine client,
+            Credentials credentials,
+            EventBus<ConnectionEvent> events,
+            ServerAddress defaultAddress) {
         this.client = Objects.requireNonNull(client, "client");
         this.server = client.server();
         this.credentials = Objects.requireNonNull(credentials, "credentials");
         this.events = Objects.requireNonNull(events, "events");
+        this.defaultAddress = Objects.requireNonNull(defaultAddress, "defaultAddress");
         this.reconnects = new ReconnectSupervisor(this::connectOnce, this::onStateChanged, client.getDiagnostic());
         wire();
     }
@@ -252,7 +263,7 @@ final class DefaultConnection implements Connection {
      * process that is offline until someone restarts it into one that comes back
      * on its own.
      */
-    private void consumerConnect(ServerAddress address, Runnable attempt) {
+    private void consumerConnect(ServerAddress address, CancellationSignal signal, Runnable attempt) {
         reconnects.cancel();
         target.set(address);
         disconnected.set(false);
@@ -260,7 +271,10 @@ final class DefaultConnection implements Connection {
         try {
             attempt.run();
         } catch (RuntimeException failure) {
-            if (retryable(failure) && !(failure instanceof IllegalStateException)) {
+            if (!signal.isCancellationRequested()
+                    && BlockingInvocation.interruption(failure) == null
+                    && retryable(failure)
+                    && !(failure instanceof IllegalStateException)) {
                 reconnects.arm(failure);
             }
             throw failure;
@@ -288,7 +302,15 @@ final class DefaultConnection implements Connection {
     @Override
     public void connect() throws InterruptedException {
         BlockingInvocation.run(signal -> {
-            consumerConnect(null, () -> client.connect(credentials.username(), credentials.password(), signal));
+            consumerConnect(
+                    defaultAddress,
+                    signal,
+                    () -> client.connect(
+                            defaultAddress.host(),
+                            defaultAddress.port(),
+                            credentials.username(),
+                            credentials.password(),
+                            signal));
             return null;
         });
     }
@@ -296,7 +318,15 @@ final class DefaultConnection implements Connection {
     @Override
     public void connect(Duration timeout) throws InterruptedException, TimeoutException {
         BlockingInvocation.run(client.getScheduler(), timeout, signal -> {
-            consumerConnect(null, () -> client.connect(credentials.username(), credentials.password(), signal));
+            consumerConnect(
+                    defaultAddress,
+                    signal,
+                    () -> client.connect(
+                            defaultAddress.host(),
+                            defaultAddress.port(),
+                            credentials.username(),
+                            credentials.password(),
+                            signal));
             return null;
         });
     }
@@ -307,6 +337,7 @@ final class DefaultConnection implements Connection {
             Objects.requireNonNull(address, "address");
             consumerConnect(
                     address,
+                    signal,
                     () -> client.connect(
                             address.host(), address.port(), credentials.username(), credentials.password(), signal));
             return null;
@@ -319,6 +350,7 @@ final class DefaultConnection implements Connection {
             Objects.requireNonNull(address, "address");
             consumerConnect(
                     address,
+                    signal,
                     () -> client.connect(
                             address.host(), address.port(), credentials.username(), credentials.password(), signal));
             return null;
