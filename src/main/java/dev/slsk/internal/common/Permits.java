@@ -3,11 +3,10 @@
 
 package dev.slsk.internal.common;
 
+import dev.slsk.internal.concurrent.CancellationInterrupts;
 import dev.slsk.internal.concurrent.CancellationSignal;
-import dev.slsk.internal.concurrent.CancellationSubscription;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Acquiring a semaphore permit without burning a core waiting for it.
@@ -50,35 +49,12 @@ public final class Permits {
             return;
         }
 
-        Thread waiter = Thread.currentThread();
-        AtomicReference<Outcome> outcome = new AtomicReference<>(Outcome.WAITING);
-        try (CancellationSubscription registration = cancellationSignal.register(() -> {
-            if (outcome.compareAndSet(Outcome.WAITING, Outcome.CANCELLED)) {
-                waiter.interrupt();
-            }
-        })) {
-            semaphore.acquire();
-            if (!outcome.compareAndSet(Outcome.WAITING, Outcome.ACQUIRED)) {
-                semaphore.release();
-                throw new CancellationException("The operation was cancelled");
-            }
-        } catch (InterruptedException interrupted) {
-            if (outcome.compareAndSet(Outcome.WAITING, Outcome.INTERRUPTED)) {
-                throw interrupted;
-            }
-            if (outcome.get() == Outcome.CANCELLED) {
-                throw new CancellationException("The operation was cancelled");
-            }
-            // Acquisition committed first. Preserve the later interrupt for
-            // the caller's enclosing work instead of consuming it here.
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    private enum Outcome {
-        WAITING,
-        ACQUIRED,
-        CANCELLED,
-        INTERRUPTED
+        CancellationInterrupts.interruptOnCancel(
+                cancellationSignal,
+                () -> {
+                    semaphore.acquire();
+                    return semaphore;
+                },
+                Semaphore::release);
     }
 }

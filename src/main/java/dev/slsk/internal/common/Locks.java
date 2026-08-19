@@ -3,11 +3,9 @@
 
 package dev.slsk.internal.common;
 
+import dev.slsk.internal.concurrent.CancellationInterrupts;
 import dev.slsk.internal.concurrent.CancellationSignal;
-import dev.slsk.internal.concurrent.CancellationSubscription;
 import java.util.Objects;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 
 /** Cancellation-aware acquisition of an interruptible JDK lock. */
@@ -27,33 +25,12 @@ public final class Locks {
             return;
         }
 
-        Thread waiter = Thread.currentThread();
-        AtomicReference<Outcome> outcome = new AtomicReference<>(Outcome.WAITING);
-        try (CancellationSubscription registration = cancellationSignal.register(() -> {
-            if (outcome.compareAndSet(Outcome.WAITING, Outcome.CANCELLED)) {
-                waiter.interrupt();
-            }
-        })) {
-            lock.lockInterruptibly();
-            if (!outcome.compareAndSet(Outcome.WAITING, Outcome.ACQUIRED)) {
-                lock.unlock();
-                throw new CancellationException("The operation was cancelled");
-            }
-        } catch (InterruptedException interrupted) {
-            if (outcome.compareAndSet(Outcome.WAITING, Outcome.INTERRUPTED)) {
-                throw interrupted;
-            }
-            if (outcome.get() == Outcome.CANCELLED) {
-                throw new CancellationException("The operation was cancelled");
-            }
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    private enum Outcome {
-        WAITING,
-        ACQUIRED,
-        CANCELLED,
-        INTERRUPTED
+        CancellationInterrupts.interruptOnCancel(
+                cancellationSignal,
+                () -> {
+                    lock.lockInterruptibly();
+                    return lock;
+                },
+                ReentrantLock::unlock);
     }
 }

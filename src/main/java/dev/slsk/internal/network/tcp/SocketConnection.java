@@ -9,6 +9,7 @@ import dev.slsk.exceptions.ConnectionReadException;
 import dev.slsk.exceptions.ConnectionWriteDroppedException;
 import dev.slsk.exceptions.ConnectionWriteException;
 import dev.slsk.internal.common.Failures;
+import dev.slsk.internal.concurrent.CancellationInterrupts;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.concurrent.CancellationSubscription;
 import dev.slsk.internal.concurrent.InterruptedOperationException;
@@ -885,56 +886,16 @@ public class SocketConnection implements Connection {
             return;
         }
 
-        boolean offered = false;
-        InterruptedException callerInterruption = null;
-        if (cancellationSignal == CancellationSignal.none()) {
-            // Nothing can fire the signal, so the interrupt bridge below has
-            // nothing to bridge. Most frames — every status, broadcast and
-            // handshake write — take this arm, and the bridge was three
-            // allocations per frame.
-            try {
-                offered = offerFrame(write);
-            } catch (InterruptedException exception) {
-                callerInterruption = exception;
-            } finally {
-                if (Thread.interrupted() && callerInterruption == null) {
-                    callerInterruption = new InterruptedException("The frame enqueue was interrupted");
-                }
-            }
-        } else {
-            Thread caller = Thread.currentThread();
-            Object interruptGate = new Object();
-            AtomicBoolean waiting = new AtomicBoolean(true);
-            CancellationSubscription registration = cancellationSignal.register(() -> {
-                synchronized (interruptGate) {
-                    if (waiting.get()) {
-                        caller.interrupt();
-                    }
-                }
-            });
-            try {
-                offered = offerFrame(write);
-            } catch (InterruptedException exception) {
-                callerInterruption = exception;
-            } finally {
-                synchronized (interruptGate) {
-                    waiting.set(false);
-                }
-                registration.close();
-                if (Thread.interrupted() && callerInterruption == null) {
-                    callerInterruption = new InterruptedException("The frame enqueue was interrupted");
-                }
-            }
-        }
-
-        if (callerInterruption != null || cancellationSignal.isCancellationRequested()) {
-            if (offered) {
-                write.cancel(frameWrites);
-            }
-            if (callerInterruption != null && !cancellationSignal.isCancellationRequested()) {
-                throw new InterruptedOperationException("Operation cancelled", callerInterruption);
-            }
-            throw new CancellationException("Operation cancelled");
+        boolean offered;
+        try {
+            offered =
+                    CancellationInterrupts.interruptOnCancel(cancellationSignal, () -> offerFrame(write), accepted -> {
+                        if (accepted) {
+                            write.cancel(frameWrites);
+                        }
+                    });
+        } catch (InterruptedException interrupted) {
+            throw new InterruptedOperationException("Operation cancelled", interrupted);
         }
         if (!offered) {
             dropFrameWrite(write);
