@@ -215,6 +215,45 @@ class DefaultSharesTest {
         }
     }
 
+    @Test
+    @DisplayName("a scan probes audio headers, so search results carry attributes")
+    void aScannedAudioFileCarriesItsAttributes(@TempDir Path root) throws IOException {
+        Path music = root.resolve("Music");
+        Files.createDirectories(music);
+        Files.write(music.resolve("real.flac"), flacHeader(44100, 16, 44100L * 90));
+        try (Soulseek slsk = client()) {
+            slsk.shares().configure(List.of(SharedFolder.of(music)));
+            scan(slsk);
+
+            SearchFile file = catalogOf(slsk).search(PEER, "real.flac", 10).getFirst();
+            assertEquals(
+                    java.time.Duration.ofSeconds(90),
+                    file.attributes().duration().orElseThrow());
+            assertEquals(44100, file.attributes().sampleRate().orElseThrow());
+            assertEquals(16, file.attributes().bitDepth().orElseThrow());
+        }
+    }
+
+    /** A minimal FLAC: the magic and a last-block STREAMINFO. */
+    private static byte[] flacHeader(int sampleRate, int bitDepth, long totalSamples) {
+        byte[] bytes = new byte[42];
+        bytes[0] = 'f';
+        bytes[1] = 'L';
+        bytes[2] = 'a';
+        bytes[3] = 'C';
+        bytes[4] = (byte) 0x80;
+        bytes[7] = 34;
+        bytes[18] = (byte) (sampleRate >> 12);
+        bytes[19] = (byte) (sampleRate >> 4);
+        bytes[20] = (byte) (((sampleRate & 0xF) << 4) | (1 << 1) | ((bitDepth - 1) >> 4));
+        bytes[21] = (byte) (((bitDepth - 1) << 4) | (int) ((totalSamples >> 32) & 0xF));
+        bytes[22] = (byte) (totalSamples >> 24);
+        bytes[23] = (byte) (totalSamples >> 16);
+        bytes[24] = (byte) (totalSamples >> 8);
+        bytes[25] = (byte) totalSamples;
+        return bytes;
+    }
+
     private static String read(ResolvedFile file, long offset) throws IOException {
         try (ReadableByteChannel channel = file.open(offset)) {
             ByteBuffer buffer = ByteBuffer.allocate((int) file.size());

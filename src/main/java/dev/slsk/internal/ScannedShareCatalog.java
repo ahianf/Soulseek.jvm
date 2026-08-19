@@ -114,7 +114,9 @@ final class ScannedShareCatalog implements ShareCatalog {
             }
             byDirectory
                     .computeIfAbsent(RemotePath.parent(remote), key -> new ArrayList<>())
-                    .add(new SearchFile(remote, size, FileAttributes.none()));
+                    // Probed here, once per scan, so a search or browse never
+                    // touches the filesystem for what a peer is shown.
+                    .add(new SearchFile(remote, size, FileAttributes.probe(file)));
             bytes += size;
         }
 

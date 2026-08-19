@@ -497,7 +497,7 @@ SearchQuery query = SearchQuery.of("miles davis kind of blue")
 | `SearchStatus` | `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `TIMED_OUT`. Helper `isTerminal()`. | Every terminal status is library policy — the network never says "done". |
 | `SearchResponse` | `user`, `freeUploadSlots`, `uploadSpeed` (bytes/s), `queueLength`, `files`, `lockedFiles`. Helpers `fileCount()`, `hasFreeSlot()`. | One peer's answer. `lockedFiles` are held for privileged users. |
 | `SearchFile` | `path` (backslash-joined remote path), `size` (bytes), `attributes`. Helpers `name()`, `extension()`. | A file on offer. |
-| `FileAttributes` | `raw` (`Map<FileAttributeType, Integer>`). Accessors `bitrate()`, `duration()`, `variableBitRate()`, `sampleRate()`, `bitDepth()`. Factory `none()`. | Typed accessors over the raw protocol map. The raw map is kept because clients disagree about what they send. |
+| `FileAttributes` | `raw` (`Map<FileAttributeType, Integer>`). Accessors `bitrate()`, `duration()`, `variableBitRate()`, `sampleRate()`, `bitDepth()`. Factories `none()` and `probe(Path)`. | Typed accessors over the raw protocol map. The raw map is kept because clients disagree about what they send. `probe` reads a local audio file's headers (MP3, FLAC, WAV, Ogg Vorbis, Opus, MP4/AAC/ALAC) so a `ShareCatalog` can publish real attributes; call it from your scanner, once per file, and persist the result. |
 | `FileAttributeType` | `BIT_RATE`(0), `LENGTH`(1), `VARIABLE_BIT_RATE`(2), `SAMPLE_RATE`(4), `BIT_DEPTH`(5). `code()`, `fromCode(int)`. | Wire codes. Not contiguous. `fromCode` returns `null` for an unmodeled code. |
 
 **`SearchEvent`** (sealed). The first two concern our searches. The last three

@@ -10,7 +10,8 @@ import java.util.Optional;
 import java.util.OptionalInt;
 
 /**
- * What a peer said about a file, as typed accessors over the raw protocol map.
+ * What is said about a file on the wire — by a peer about theirs, or by
+ * {@link #probe} about ours — as typed accessors over the raw protocol map.
  *
  * <p>The raw map is kept rather than flattened into fields because clients
  * disagree about which attributes they send and what they mean by them, and a
@@ -30,6 +31,31 @@ public record FileAttributes(Map<FileAttributeType, Integer> raw) {
     /** Returns attributes with nothing in them. */
     public static FileAttributes none() {
         return new FileAttributes(Map.of());
+    }
+
+    /**
+     * Reads a local file's attributes from its own headers, for sharing it.
+     *
+     * <p>This is the producing side of the type: a {@link
+     * dev.slsk.spi.ShareCatalog} builds {@link SearchFile}s, and the attributes
+     * it puts on them are what peers see in their search results — bitrate and
+     * duration for lossy audio, duration, sample rate and bit depth for
+     * lossless. The built-in catalog probes with this during a scan; a catalog
+     * with its own index calls it from its scanner and persists the result,
+     * because a probe costs a few small reads and a scanner should pay that
+     * once per file, not once per search.
+     *
+     * <p>Recognized by extension: MP3, FLAC, WAV, Ogg Vorbis, Opus and MP4
+     * audio (AAC, ALAC). Never throws: anything else — unrecognized,
+     * unreadable, truncated, or lying about itself — yields {@link #none()},
+     * which is also the honest answer for a shared document.
+     *
+     * @param file the local file
+     * @return its attributes, or none if it is not recognized audio
+     */
+    public static FileAttributes probe(java.nio.file.Path file) {
+        Objects.requireNonNull(file, "file");
+        return dev.slsk.internal.share.AudioMetadata.probe(file);
     }
 
     /**

@@ -67,14 +67,23 @@ public final class AudioMetadata {
             return FileAttributes.none();
         }
         String extension = name.substring(dot + 1);
+        // Decided before the file is opened, so a scan over a share full of
+        // documents costs no opens at all.
+        boolean recognized =
+                switch (extension) {
+                    case "mp3", "flac", "wav", "wave", "ogg", "oga", "opus", "m4a", "m4b", "mp4", "aac" -> true;
+                    default -> false;
+                };
+        if (!recognized) {
+            return FileAttributes.none();
+        }
         try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ)) {
             return switch (extension) {
                 case "mp3" -> mp3(channel);
                 case "flac" -> flac(channel);
                 case "wav", "wave" -> wav(channel);
                 case "ogg", "oga", "opus" -> ogg(channel);
-                case "m4a", "m4b", "mp4", "aac" -> mp4(channel);
-                default -> FileAttributes.none();
+                default -> mp4(channel);
             };
         } catch (IOException | RuntimeException unreadable) {
             // Unreadable, truncated, or a header that lies: the same silence a
