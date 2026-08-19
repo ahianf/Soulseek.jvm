@@ -7,6 +7,7 @@ package dev.slsk.internal.options;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -17,12 +18,19 @@ import dev.slsk.internal.search.SearchResponseCache;
 import dev.slsk.internal.search.SearchResponseCacheRecord;
 import dev.slsk.internal.user.UserEndpointCache;
 import java.net.InetAddress;
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 class SoulseekClientOptionsTest {
     @Test
     void instantiatesWithGivenData() throws Exception {
-        ConnectionOptions server = new ConnectionOptions(1, 2, 3, 4, 5);
+        ConnectionOptions server = ConnectionOptions.builder()
+                .readBufferSize(1)
+                .writeBufferSize(2)
+                .writeQueueSize(3)
+                .connectTimeout(Duration.ofMillis(4))
+                .inactivityTimeout(Duration.ofMillis(5))
+                .build();
         ConnectionOptions peer = new ConnectionOptions();
         ConnectionOptions transfer = new ConnectionOptions();
         ConnectionOptions incoming = new ConnectionOptions();
@@ -76,7 +84,7 @@ class SoulseekClientOptionsTest {
         assertTrue(options.isAcceptPrivateRoomInvitations());
         assertEquals(DiagnosticLevel.TRACE, options.getMinimumDiagnosticLevel());
         assertEquals(13, options.getStartingToken());
-        assertEquals(-1, options.getServerConnectionOptions().getInactivityTimeout());
+        assertNull(options.getServerConnectionOptions().inactivityTimeout());
         assertSame(peer, options.getPeerConnectionOptions());
         assertSame(transfer, options.getTransferConnectionOptions());
         assertSame(incoming, options.getIncomingConnectionOptions());
@@ -108,7 +116,7 @@ class SoulseekClientOptionsTest {
         assertFalse(options.isAcceptPrivateRoomInvitations());
         assertEquals(DiagnosticLevel.INFO, options.getMinimumDiagnosticLevel());
         assertNotNull(options.getServerConnectionOptions());
-        assertEquals(-1, options.getServerConnectionOptions().getInactivityTimeout());
+        assertNull(options.getServerConnectionOptions().inactivityTimeout());
         assertNotNull(options.getPeerConnectionOptions());
         assertNotNull(options.getTransferConnectionOptions());
         assertNotNull(options.getIncomingConnectionOptions());
@@ -152,7 +160,7 @@ class SoulseekClientOptionsTest {
 
     @Test
     void withAppliesPatchAndPreservesSourceCloneBehavior() {
-        ConnectionOptions peer = new ConnectionOptions(7);
+        ConnectionOptions peer = ConnectionOptions.builder().readBufferSize(7).build();
         SoulseekClientOptions original = complete(1234, 2, 44, 42, 24);
         SoulseekClientOptionsPatch patch = new SoulseekClientOptionsPatch(
                 false,

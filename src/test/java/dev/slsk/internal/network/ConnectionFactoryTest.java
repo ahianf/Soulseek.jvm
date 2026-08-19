@@ -6,6 +6,7 @@ package dev.slsk.internal.network;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -22,6 +23,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -38,7 +40,7 @@ class ConnectionFactoryTest {
     @Test
     @DisplayName("Factory creates transfer connection with supplied options")
     void createsTransferConnection() {
-        ConnectionOptions options = new ConnectionOptions(1, 2, 3, 4, -1);
+        ConnectionOptions options = options(1, 2, 3, 4, null);
         try (Connection connection =
                 new DefaultConnectionFactory(Monitors.shared()).getTransferConnection(ENDPOINT, options, null)) {
             assertTrue(connection instanceof SocketConnection);
@@ -54,7 +56,7 @@ class ConnectionFactoryTest {
     @Test
     @DisplayName("Factory creates peer and distributed message variants")
     void createsPeerVariants() {
-        ConnectionOptions options = new ConnectionOptions(1, 2, 3, 4, -1);
+        ConnectionOptions options = options(1, 2, 3, 4, null);
         DefaultConnectionFactory factory = new DefaultConnectionFactory(Monitors.shared());
         try (MessageConnection peer = factory.getMessageConnection("alice", ENDPOINT, options, null);
                 MessageConnection distributed = factory.getDistributedConnection("alice", ENDPOINT, options, null)) {
@@ -85,7 +87,7 @@ class ConnectionFactoryTest {
         AtomicInteger read = new AtomicInteger();
         AtomicInteger written = new AtomicInteger();
         CountDownLatch readEvent = new CountDownLatch(1);
-        ConnectionOptions options = new ConnectionOptions(8, 8, 3, 100, 50);
+        ConnectionOptions options = options(8, 8, 3, 100, Duration.ofMillis(50));
 
         MessageConnection connection = new DefaultConnectionFactory(Monitors.shared())
                 .getServerConnection(
@@ -105,7 +107,7 @@ class ConnectionFactoryTest {
         assertTrue(readEvent.await(1, TimeUnit.SECONDS));
         assertEquals(1, connected.get());
         assertEquals(1, read.get());
-        assertEquals(-1, connection.getOptions().getInactivityTimeout());
+        assertNull(connection.getOptions().inactivityTimeout());
 
         client.connected = true;
         connection.write(() -> new byte[] {1});
@@ -122,8 +124,23 @@ class ConnectionFactoryTest {
         try (MessageConnection connection =
                 new DefaultConnectionFactory(Monitors.shared()).getServerConnection(ENDPOINT, null, null, null, null)) {
             assertNotNull(connection.getOptions());
-            assertEquals(-1, connection.getOptions().getInactivityTimeout());
+            assertNull(connection.getOptions().inactivityTimeout());
         }
+    }
+
+    private static ConnectionOptions options(
+            int readBufferSize,
+            int writeBufferSize,
+            int writeQueueSize,
+            long connectTimeoutMillis,
+            Duration inactivityTimeout) {
+        return ConnectionOptions.builder()
+                .readBufferSize(readBufferSize)
+                .writeBufferSize(writeBufferSize)
+                .writeQueueSize(writeQueueSize)
+                .connectTimeout(Duration.ofMillis(connectTimeoutMillis))
+                .inactivityTimeout(inactivityTimeout)
+                .build();
     }
 
     private static final class FakeTcpClient implements TcpClient {

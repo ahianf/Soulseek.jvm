@@ -146,7 +146,8 @@ class EngineReconfigureTest {
         ListenerProbe preflight = new ListenerProbe();
         ListenerProbe replacement = new ListenerProbe();
         fixture.listenerFactory.sequence = new ArrayList<>(List.of(preflight, replacement));
-        ConnectionOptions incoming = new ConnectionOptions(8192);
+        ConnectionOptions incoming =
+                ConnectionOptions.builder().readBufferSize(8192).build();
         SoulseekClientOptionsPatch patch =
                 patch(null, LOOPBACK, 50_002, null, null, null, null, null, null, null, incoming, null);
 
@@ -169,7 +170,8 @@ class EngineReconfigureTest {
     void stoppedListenerIsRemovedWithoutReplacement() {
         Fixture fixture = new Fixture();
         fixture.initialListener.listening = false;
-        ConnectionOptions incoming = new ConnectionOptions(4096);
+        ConnectionOptions incoming =
+                ConnectionOptions.builder().readBufferSize(4096).build();
         SoulseekClientOptionsPatch patch =
                 patch(null, null, null, null, null, null, null, null, null, null, incoming, null);
 
@@ -184,7 +186,8 @@ class EngineReconfigureTest {
     @Test
     void updatesOptionsAndChangedTokenBucketCapacities() {
         Fixture fixture = new Fixture();
-        ConnectionOptions peer = new ConnectionOptions(7000);
+        ConnectionOptions peer =
+                ConnectionOptions.builder().readBufferSize(7000).build();
         SoulseekClientOptionsPatch patch = patch(false, null, null, false, false, 7, 50, 70, true, null, null, null);
         patch = new SoulseekClientOptionsPatch(
                 patch.getEnableListener(),

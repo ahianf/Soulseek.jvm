@@ -26,6 +26,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -39,7 +40,13 @@ import org.junit.jupiter.api.Test;
 
 class MessageConnectionTest {
     private static final InetSocketAddress ENDPOINT = new InetSocketAddress(InetAddress.getLoopbackAddress(), 2234);
-    private static final ConnectionOptions OPTIONS = new ConnectionOptions(8, 8, 3, 100, -1);
+    private static final ConnectionOptions OPTIONS = ConnectionOptions.builder()
+            .readBufferSize(8)
+            .writeBufferSize(8)
+            .writeQueueSize(3)
+            .connectTimeout(Duration.ofMillis(100))
+            .inactivityTimeout(null)
+            .build();
 
     @Test
     @DisplayName("Message connection distinguishes server and peer identity")

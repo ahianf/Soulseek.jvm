@@ -16,6 +16,7 @@ import dev.slsk.internal.options.ConnectionOptions;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -60,7 +61,13 @@ class ListenerTest {
         InetAddress address = InetAddress.getLoopbackAddress();
         try (ServerSocket server = new ServerSocket(0, 1, address)) {
             TcpListenerAdapter adapter = new TcpListenerAdapter(server);
-            ConnectionOptions options = new ConnectionOptions(8, 8, 3, 100, -1);
+            ConnectionOptions options = ConnectionOptions.builder()
+                    .readBufferSize(8)
+                    .writeBufferSize(8)
+                    .writeQueueSize(3)
+                    .connectTimeout(Duration.ofMillis(100))
+                    .inactivityTimeout(null)
+                    .build();
             SocketListener listener =
                     new SocketListener(address, server.getLocalPort(), options, Monitors.shared(), adapter);
             AtomicReference<Connection> accepted = new AtomicReference<>();

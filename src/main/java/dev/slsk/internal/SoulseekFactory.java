@@ -116,12 +116,7 @@ public final class SoulseekFactory {
 
     /** A connection's options, with only its idle budget changed. */
     private static ConnectionOptions connection(java.time.Duration idle) {
-        return new ConnectionOptions(
-                ConnectionOptions.DEFAULT_READ_BUFFER_SIZE,
-                ConnectionOptions.DEFAULT_WRITE_BUFFER_SIZE,
-                ConnectionOptions.DEFAULT_WRITE_QUEUE_SIZE,
-                ConnectionOptions.DEFAULT_CONNECT_TIMEOUT,
-                (int) idle.toMillis());
+        return ConnectionOptions.builder().inactivityTimeout(idle).build();
     }
 
     /** The public level, as the internal sink spells it. */

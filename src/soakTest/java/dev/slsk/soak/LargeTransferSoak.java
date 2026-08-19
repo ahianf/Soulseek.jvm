@@ -51,7 +51,7 @@ class LargeTransferSoak {
                 long heapAfter = HeapProbe.liveHeapBytes();
 
                 double megabytesPerSecond = (TRANSFER_BYTES / (1024.0 * 1024.0)) / (wallElapsed / 1_000_000_000.0);
-                long chunks = TRANSFER_BYTES / new ConnectionOptions().getReadBufferSize();
+                long chunks = TRANSFER_BYTES / new ConnectionOptions().readBufferSize();
 
                 SoakReport.record("large-transfer", "bytes", HeapProbe.formatBytes(TRANSFER_BYTES));
                 SoakReport.record("large-transfer", "chunks (16 KiB buffer)", chunks);

@@ -181,10 +181,10 @@ public class SocketConnection implements Connection {
         // non-positive configured capacity retains the old observable
         // behaviour (every framed write times out/drops) through the explicit
         // check in enqueueFrameWrite.
-        frameWrites = new ArrayBlockingQueue<>(Math.max(1, this.options.getWriteQueueSize()));
+        frameWrites = new ArrayBlockingQueue<>(Math.max(1, this.options.writeQueueSize()));
 
         try {
-            this.options.getConfigureSocket().configure(this.tcpClient.getClient());
+            this.options.configureSocket().configure(this.tcpClient.getClient());
             setSocketTimeout(CANCELLATION_POLL_MILLIS);
 
             if (this.tcpClient.isConnected()) {
@@ -325,9 +325,9 @@ public class SocketConnection implements Connection {
         changeState(ConnectionState.CONNECTING, "Connecting to " + formatEndpoint(ipEndpoint), null);
 
         try {
-            int timeout = options.getConnectTimeout();
-            if (timeout < -1) {
-                throw new IllegalArgumentException("Connect timeout must be -1 or non-negative");
+            Duration timeout = options.connectTimeout();
+            if (timeout != null && timeout.isNegative()) {
+                throw new IllegalArgumentException("connectTimeout must not be negative: " + timeout);
             }
             awaitTransportConnect(token, timeout);
             startTimers();
@@ -348,12 +348,12 @@ public class SocketConnection implements Connection {
      * and the rest are dropped, which is exactly what completing a future once
      * did, without the composition.
      */
-    private void awaitTransportConnect(CancellationSignal token, int timeout) throws Exception {
+    private void awaitTransportConnect(CancellationSignal token, Duration timeout) throws Exception {
         ArrayBlockingQueue<Object> gate = new ArrayBlockingQueue<>(1);
         Object connected = new Object();
         ioExecutor.execute(() -> {
             try {
-                ProxyOptions proxy = options.getProxyOptions();
+                ProxyOptions proxy = options.proxyOptions();
                 if (proxy != null) {
                     tcpClient.connectThroughProxy(
                             proxy.getIpEndpoint().getAddress(),
@@ -376,7 +376,7 @@ public class SocketConnection implements Connection {
                 token.register(() -> gate.offer(new CancellationException("Operation cancelled")));
         Object outcome;
         try {
-            outcome = timeout == -1 ? gate.take() : gate.poll(timeout, TimeUnit.MILLISECONDS);
+            outcome = timeout == null ? gate.take() : gate.poll(timeout.toNanos(), TimeUnit.NANOSECONDS);
         } catch (InterruptedException interrupted) {
             throw new InterruptedOperationException("Operation cancelled", interrupted);
         } finally {
@@ -384,7 +384,7 @@ public class SocketConnection implements Connection {
         }
 
         if (outcome == null) {
-            throw new TimeoutException("Operation timed out after " + timeout + " milliseconds");
+            throw new TimeoutException("Operation timed out after " + timeout);
         }
         if (outcome instanceof Throwable failure) {
             throw asException(failure);
@@ -674,7 +674,7 @@ public class SocketConnection implements Connection {
         // loop asks for 4 bytes, then the code, then the payload; a full
         // read-buffer allocation for each of those was 48 KiB of garbage per
         // 40-byte protocol message.
-        byte[] buffer = new byte[(int) Math.min(options.getReadBufferSize(), Math.max(1L, length))];
+        byte[] buffer = new byte[(int) Math.min(options.readBufferSize(), Math.max(1L, length))];
         long totalBytesRead = 0;
 
         try {
@@ -752,7 +752,7 @@ public class SocketConnection implements Connection {
             throws InterruptedException, TimeoutException {
         try {
             resetInactivityTime();
-            byte[] buffer = new byte[(int) Math.min(options.getWriteBufferSize(), Math.max(1L, length))];
+            byte[] buffer = new byte[(int) Math.min(options.writeBufferSize(), Math.max(1L, length))];
             long totalBytesWritten = 0;
 
             while (totalBytesWritten < length) {
@@ -881,7 +881,7 @@ public class SocketConnection implements Connection {
 
     /** Enqueues a frame with the configured bounded backpressure wait. */
     private void enqueueFrameWrite(FrameWrite write, CancellationSignal cancellationSignal) {
-        if (writeQueueFull || !frameWritesAccepted || options.getWriteQueueSize() <= 0) {
+        if (writeQueueFull || !frameWritesAccepted || options.writeQueueSize() <= 0) {
             dropFrameWrite(write);
             return;
         }
@@ -915,8 +915,10 @@ public class SocketConnection implements Connection {
 
     /** Offers a frame within the configured backpressure window. */
     private boolean offerFrame(FrameWrite write) throws InterruptedException {
-        int timeout = options.getWriteQueueTimeout();
-        return timeout <= 0 ? frameWrites.offer(write) : frameWrites.offer(write, timeout, TimeUnit.MILLISECONDS);
+        Duration timeout = options.writeQueueTimeout();
+        return timeout == null || timeout.isZero() || timeout.isNegative()
+                ? frameWrites.offer(write)
+                : frameWrites.offer(write, timeout.toNanos(), TimeUnit.NANOSECONDS);
     }
 
     private void dropFrameWrite(FrameWrite write) {
@@ -924,7 +926,7 @@ public class SocketConnection implements Connection {
         ConnectionWriteDroppedException dropped =
                 new ConnectionWriteDroppedException("Dropped buffered message to " + formatEndpoint(ipEndpoint)
                         + "; the write buffer stayed full for "
-                        + options.getWriteQueueTimeout() + " milliseconds");
+                        + options.writeQueueTimeout());
         write.fail(dropped);
         disconnect("The write buffer is full", dropped);
         throw dropped;
@@ -1058,7 +1060,7 @@ public class SocketConnection implements Connection {
         appliedReadTimeoutMillis = CANCELLATION_POLL_MILLIS;
         // SO_TIMEOUT does not apply to writes in Java, so this stays
         // informational; write cancellation is checked between chunks.
-        stream.setWriteTimeout(options.getInactivityTimeout());
+        stream.setWriteTimeout(durationMillisOrInfinite(options.inactivityTimeout()));
     }
 
     private void startTimers() {
@@ -1077,11 +1079,12 @@ public class SocketConnection implements Connection {
      * about as precise as the old dedicated one-shot timer.
      */
     int monitorIntervalMillis() {
-        int timeout = options.getInactivityTimeout();
-        if (timeout <= 0) {
+        Duration timeout = options.inactivityTimeout();
+        if (timeout == null || timeout.isZero() || timeout.isNegative()) {
             return MAX_MONITOR_INTERVAL_MILLIS;
         }
-        return Math.clamp(timeout / 4, MIN_MONITOR_INTERVAL_MILLIS, MAX_MONITOR_INTERVAL_MILLIS);
+        return Math.clamp(
+                Math.toIntExact(timeout.toMillis() / 4), MIN_MONITOR_INTERVAL_MILLIS, MAX_MONITOR_INTERVAL_MILLIS);
     }
 
     /**
@@ -1099,15 +1102,18 @@ public class SocketConnection implements Connection {
             return;
         }
 
-        int timeout = options.getInactivityTimeout();
-        if (timeout > 0) {
-            long idleMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - lastActivityNanos);
-            if (idleMillis >= timeout) {
-                TimeoutException exception =
-                        new TimeoutException("Inactivity timeout of " + timeout + " milliseconds was reached");
+        Duration timeout = options.inactivityTimeout();
+        if (timeout != null && timeout.isPositive()) {
+            Duration idle = Duration.ofNanos(System.nanoTime() - lastActivityNanos);
+            if (idle.compareTo(timeout) >= 0) {
+                TimeoutException exception = new TimeoutException("Inactivity timeout of " + timeout + " was reached");
                 disconnect(exception.getMessage(), exception);
             }
         }
+    }
+
+    private static int durationMillisOrInfinite(Duration duration) {
+        return duration == null ? -1 : Math.toIntExact(duration.toMillis());
     }
 
     private void closeTransport() {

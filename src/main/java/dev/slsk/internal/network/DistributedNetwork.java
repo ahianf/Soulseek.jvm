@@ -46,7 +46,6 @@ import dev.slsk.internal.network.tcp.ConnectionTypes;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import java.io.ByteArrayOutputStream;
 import java.net.InetSocketAddress;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -1076,8 +1075,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             Wait<Connection> wait = waiter.register(
                     new WaitKey(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION, username, solicitationToken),
                     Connection.class,
-                    Duration.ofMillis(
-                            options.get().getDistributedConnectionOptions().getConnectTimeout()),
+                    options.get().getDistributedConnectionOptions().connectTimeout(),
                     cancellationSignal);
             server.write(
                     new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.DISTRIBUTED),

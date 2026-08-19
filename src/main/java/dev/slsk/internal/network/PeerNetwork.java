@@ -33,7 +33,6 @@ import dev.slsk.internal.options.SoulseekClientOptions;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -232,12 +231,12 @@ public final class PeerNetwork implements PeerConnectionManager {
         Wait<Connection> indirectWait = waiter.register(
                 new WaitKey(Constants.WaitKey.INDIRECT_TRANSFER, username, filename, remoteToken),
                 Connection.class,
-                Duration.ofMillis(options.get().getTransferConnectionOptions().getConnectTimeout()),
+                options.get().getTransferConnectionOptions().connectTimeout(),
                 indirectCancellation.token());
         Wait<Connection> directWait = waiter.register(
                 new WaitKey(Constants.WaitKey.DIRECT_TRANSFER, username, remoteToken),
                 Connection.class,
-                Duration.ofMillis(options.get().getTransferConnectionOptions().getConnectTimeout()),
+                options.get().getTransferConnectionOptions().connectTimeout(),
                 directCancellation.token());
 
         // Awaiting two waits at once is the whole reason this dispatches
@@ -757,7 +756,7 @@ public final class PeerNetwork implements PeerConnectionManager {
             Wait<Connection> wait = waiter.register(
                     new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),
                     Connection.class,
-                    Duration.ofMillis(options.get().getPeerConnectionOptions().getIndirectSolicitationTimeout()),
+                    options.get().getPeerConnectionOptions().indirectSolicitationTimeout(),
                     cancellationSignal);
             server.write(
                     new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.PEER),
@@ -871,8 +870,7 @@ public final class PeerNetwork implements PeerConnectionManager {
             Wait<Connection> wait = waiter.register(
                     new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),
                     Connection.class,
-                    Duration.ofMillis(
-                            options.get().getTransferConnectionOptions().getIndirectSolicitationTimeout()),
+                    options.get().getTransferConnectionOptions().indirectSolicitationTimeout(),
                     cancellationSignal);
             server.write(
                     new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.TRANSFER),

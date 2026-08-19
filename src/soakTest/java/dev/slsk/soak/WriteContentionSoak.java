@@ -9,6 +9,7 @@ import dev.slsk.internal.common.Monitors;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.network.tcp.SocketConnection;
 import dev.slsk.internal.options.ConnectionOptions;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -46,7 +47,7 @@ class WriteContentionSoak {
         try (LoopbackPeer peer = LoopbackPeer.start(LoopbackPeer.Behaviour.STALL)) {
             // A write queue large enough that contention does not trip the
             // drop-and-disconnect path, which is a separate defect (3.4).
-            ConnectionOptions options = new ConnectionOptions(16_384, 16_384, WRITERS * 2, 10_000, -1, null, null);
+            ConnectionOptions options = contentionOptions();
             SocketConnection connection = new SocketConnection(peer.endpoint(), options, null, Monitors.shared());
             try {
                 connection.connect(CancellationSignal.none());
@@ -102,7 +103,7 @@ class WriteContentionSoak {
     @DisplayName("Blocked writers consume near-zero CPU")
     void blockedWritersAreFree() throws Exception {
         try (LoopbackPeer peer = LoopbackPeer.start(LoopbackPeer.Behaviour.STALL)) {
-            ConnectionOptions options = new ConnectionOptions(16_384, 16_384, WRITERS * 2, 10_000, -1, null, null);
+            ConnectionOptions options = contentionOptions();
             SocketConnection connection = new SocketConnection(peer.endpoint(), options, null, Monitors.shared());
             try {
                 connection.connect(CancellationSignal.none());
@@ -126,6 +127,14 @@ class WriteContentionSoak {
                 connection.close();
             }
         }
+    }
+
+    private static ConnectionOptions contentionOptions() {
+        return ConnectionOptions.builder()
+                .writeQueueSize(WRITERS * 2)
+                .connectTimeout(Duration.ofSeconds(10))
+                .inactivityTimeout(null)
+                .build();
     }
 
     private static void writeQuietly(SocketConnection connection, byte[] payload) {

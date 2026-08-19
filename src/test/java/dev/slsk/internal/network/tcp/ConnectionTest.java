@@ -366,7 +366,7 @@ class ConnectionTest {
         // drop only happens once a producer has waited this long.
         SocketConnection connection = new SocketConnection(
                 ENDPOINT,
-                options(8, 8, 2, 100, -1, null, null).withWriteQueueTimeout(150),
+                options(8, 8, 2, 100, -1, null, null).withWriteQueueTimeout(Duration.ofMillis(150)),
                 new FakeTcpClient(stream, true),
                 Monitors.shared());
 
@@ -678,8 +678,15 @@ class ConnectionTest {
             int inactivityTimeout,
             ProxyOptions proxy,
             dev.slsk.internal.options.SocketConfigurator configurator) {
-        return new ConnectionOptions(
-                readBuffer, writeBuffer, queue, connectTimeout, inactivityTimeout, proxy, configurator);
+        return ConnectionOptions.builder()
+                .readBufferSize(readBuffer)
+                .writeBufferSize(writeBuffer)
+                .writeQueueSize(queue)
+                .connectTimeout(connectTimeout < 0 ? null : Duration.ofMillis(connectTimeout))
+                .inactivityTimeout(inactivityTimeout < 0 ? null : Duration.ofMillis(inactivityTimeout))
+                .proxyOptions(proxy)
+                .configureSocket(configurator)
+                .build();
     }
 
     @FunctionalInterface

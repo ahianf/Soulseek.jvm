@@ -14,12 +14,19 @@ import dev.slsk.internal.search.SearchResponseCache;
 import dev.slsk.internal.search.SearchResponseCacheRecord;
 import dev.slsk.internal.user.UserEndpointCache;
 import java.net.InetAddress;
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 class SoulseekClientOptionsPatchTest {
     @Test
     void instantiatesWithGivenData() throws Exception {
-        ConnectionOptions server = new ConnectionOptions(1, 2, 3, 4, 5);
+        ConnectionOptions server = ConnectionOptions.builder()
+                .readBufferSize(1)
+                .writeBufferSize(2)
+                .writeQueueSize(3)
+                .connectTimeout(Duration.ofMillis(4))
+                .inactivityTimeout(Duration.ofMillis(5))
+                .build();
         ConnectionOptions peer = new ConnectionOptions();
         ConnectionOptions transfer = new ConnectionOptions();
         ConnectionOptions incoming = new ConnectionOptions();
@@ -61,7 +68,7 @@ class SoulseekClientOptionsPatchTest {
         assertEquals(false, patch.getAutoAcknowledgePrivateMessages());
         assertEquals(false, patch.getAutoAcknowledgePrivilegeNotifications());
         assertEquals(true, patch.getAcceptPrivateRoomInvitations());
-        assertEquals(-1, patch.getServerConnectionOptions().getInactivityTimeout());
+        assertNull(patch.getServerConnectionOptions().inactivityTimeout());
         assertSame(peer, patch.getPeerConnectionOptions());
         assertSame(transfer, patch.getTransferConnectionOptions());
         assertSame(incoming, patch.getIncomingConnectionOptions());
