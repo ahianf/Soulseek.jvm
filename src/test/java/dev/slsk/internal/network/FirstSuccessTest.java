@@ -5,7 +5,6 @@ package dev.slsk.internal.network;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -109,8 +108,7 @@ class FirstSuccessTest {
 
         releaseIndirect.countDown();
         assertTrue(raceEnded.await(10, TimeUnit.SECONDS), "the race never ended");
-        CompletionException failure = assertInstanceOf(CompletionException.class, thrown.get());
-        assertSame(lastToFail, failure.getCause());
+        assertSame(lastToFail, thrown.get(), "the losing failure arrives as itself, unwrapped");
     }
 
     /**

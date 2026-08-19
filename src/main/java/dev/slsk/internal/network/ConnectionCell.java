@@ -5,6 +5,7 @@ package dev.slsk.internal.network;
 
 import dev.slsk.internal.common.Failures;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeoutException;
 
 /**
  * One peer's message connection, and the establishment that produces it.
@@ -19,11 +20,8 @@ import java.util.concurrent.CountDownLatch;
  *
  * <p>Whoever claimed the cell settles it exactly once, with a connection or
  * with the failure that stopped it, and the latch publishes that to everyone
- * waiting. {@link #await()} presents a failure the way {@code join()} did — a
- * {@link java.util.concurrent.CancellationException} raw, everything else
- * inside a {@link java.util.concurrent.CompletionException} — so the call sites
- * that read failures with {@link Failures#unwrap} and an {@code instanceof} did
- * not change when the future came out.
+ * waiting. {@link #await()} raises the stored failure as itself — nothing
+ * arrives wrapped.
  *
  * <p>{@link #peek()} is the other half of the reason this is not a future.
  * Counting the connections to peers must never be the thing that waits for one,
@@ -44,12 +42,13 @@ final class ConnectionCell {
      * @return the established connection
      * @throws InterruptedException if this caller abandons its wait; the shared
      *     establishment continues
+     * @throws TimeoutException if the establishment timed out
      */
-    MessageConnection await() throws InterruptedException {
+    MessageConnection await() throws InterruptedException, TimeoutException {
         awaitSettled();
         Throwable cause = failure;
         if (cause != null) {
-            throw Failures.propagate(cause);
+            throw Failures.rethrow(cause);
         }
         return connection;
     }

@@ -106,7 +106,7 @@ class ConnectionCellTest {
         failed.fail(cause);
         failed.fail(new ConnectionException("second"));
         failed.settle(connection());
-        assertSame(cause, assertThrows(CompletionException.class, failed::await).getCause());
+        assertSame(cause, assertThrows(ConnectionException.class, failed::await));
     }
 
     /**
@@ -147,8 +147,8 @@ class ConnectionCellTest {
                         waiting.countDown();
                         try {
                             return cell.await();
-                        } catch (InterruptedException interrupted) {
-                            throw new CompletionException(interrupted);
+                        } catch (InterruptedException | java.util.concurrent.TimeoutException checked) {
+                            throw new CompletionException(checked);
                         }
                     },
                     task -> Thread.ofVirtual().start(task)));

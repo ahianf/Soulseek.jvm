@@ -8,6 +8,7 @@ import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.network.tcp.Connection;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -42,19 +43,18 @@ final class FirstSuccess {
     /**
      * Runs both attempts on their own threads and returns the first to succeed.
      *
-     * <p>Blocks until one arm succeeds or both have failed. A failure is
-     * presented the way {@code join()} presented it — a
-     * {@link java.util.concurrent.CancellationException} raw, everything else
-     * inside a {@link java.util.concurrent.CompletionException} — so the call
-     * sites that read it with {@link Failures#unwrap} and an
-     * {@code instanceof} did not change when the future came out.
+     * <p>Blocks until one arm succeeds or both have failed. The failure that
+     * ends a lost race is raised as itself — nothing arrives wrapped.
      *
      * @param first the first attempt; the direct one at every call site
      * @param second the second attempt; the indirect one at every call site
      * @param <T> the connection type both attempts produce
      * @return the winning arm and its connection
+     * @throws InterruptedException if the caller abandons the race
+     * @throws TimeoutException if the arm that lost the race timed out
      */
-    static <T extends Connection> Winner<T> race(Attempt<T> first, Attempt<T> second) throws InterruptedException {
+    static <T extends Connection> Winner<T> race(Attempt<T> first, Attempt<T> second)
+            throws InterruptedException, TimeoutException {
         // One slot, because exactly one outcome is ever offered: the first arm
         // to succeed, or the second arm to fail.
         BlockingQueue<Outcome<T>> handoff = new ArrayBlockingQueue<>(1);
@@ -66,7 +66,7 @@ final class FirstSuccess {
 
         Outcome<T> outcome = take(handoff);
         if (outcome.failure() != null) {
-            throw Failures.propagate(outcome.failure());
+            throw Failures.rethrow(outcome.failure());
         }
         return outcome.winner();
     }
