@@ -54,7 +54,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
@@ -62,6 +61,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -358,20 +358,19 @@ public final class DistributedNetwork implements DistributedConnectionManager {
 
         try {
             cell.settle(establishDirectChild(username, incomingConnection, superseded));
-        } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
+        } catch (Throwable cause) {
             cell.fail(cause);
             String message = "Failed to establish an inbound direct child connection "
                     + "to " + username + " ("
                     + incomingConnection.getIpEndpoint() + "): "
-                    + message(cause);
+                    + Failures.message(cause);
             diagnostic.debug(
                     message + " (type: " + incomingConnection.getType() + ", id: " + incomingConnection.getId() + ")");
             diagnostic.debug("Purging child connection cache of failed connection to "
                     + username + " ("
                     + incomingConnection.getIpEndpoint() + ")");
             childConnections.remove(username, cell);
-            throw new CompletionException(new ConnectionException(message, cause));
+            throw new ConnectionException(message, cause);
         }
     }
 
@@ -563,7 +562,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             try {
                 pending.add(new PendingChildWrite(connection, connection.beginWrite(bytes, effectiveToken)));
             } catch (Exception failure) {
-                connection.disconnect("Broadcast failure: " + message(unwrap(failure)));
+                connection.disconnect("Broadcast failure: " + Failures.message(failure));
             }
         }
 
@@ -576,7 +575,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 Thread.currentThread().interrupt();
                 return;
             } catch (Exception failure) {
-                write.connection().disconnect("Broadcast failure: " + message(unwrap(failure)));
+                write.connection().disconnect("Broadcast failure: " + Failures.message(failure));
             }
         }
 
@@ -621,7 +620,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             // child per message whose only purpose was to be waited on.
             connection.write(bytes, cancellationSignal);
         } catch (Exception failure) {
-            connection.disconnect("Broadcast failure: " + message(unwrap(failure)));
+            connection.disconnect("Broadcast failure: " + Failures.message(failure));
         }
     }
 
@@ -658,12 +657,11 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 return;
             }
             entry.settle(establishIndirectChild(response));
-        } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
+        } catch (Throwable cause) {
             entry.fail(cause);
             String message = "Failed to establish an inbound indirect child connection "
                     + "to " + username + " ("
-                    + response.getIpEndpoint() + "): " + message(cause);
+                    + response.getIpEndpoint() + "): " + Failures.message(cause);
             diagnostic.debug(message);
             if (!(cause instanceof CancellationException)) {
                 diagnostic.debug("Purging child connection cache of failed connection to "
@@ -675,7 +673,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 // used to detect after the fact and undo.
                 childConnections.remove(username, entry);
             }
-            throw new CompletionException(new ConnectionException(message, cause));
+            throw new ConnectionException(message, cause);
         }
     }
 
@@ -787,8 +785,8 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         } catch (Throwable failure) {
             // A status update is nobody's to fail: every caller here is a
             // state change reporting itself, not a request with a waiter.
-            Throwable cause = unwrap(failure);
-            String message = "Failed to update distributed status: " + message(cause);
+            Throwable cause = failure;
+            String message = "Failed to update distributed status: " + Failures.message(cause);
             if (!server.state().equals(SoulseekClientState.DISCONNECTED)) {
                 diagnostic.warning(message, cause);
             } else {
@@ -856,14 +854,15 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 }
             }
         } catch (Throwable failure) {
-            diagnostic.debug("Failed to handle message from parent candidate: " + message(failure), failure);
-            connection.disconnect(message(failure));
+            diagnostic.debug("Failed to handle message from parent candidate: " + Failures.message(failure), failure);
+            connection.disconnect(Failures.message(failure));
             connection.close();
         }
     }
 
     private MessageConnection establishDirectChild(
-            String username, Connection incomingConnection, ConnectionCell cached) throws InterruptedException {
+            String username, Connection incomingConnection, ConnectionCell cached)
+            throws InterruptedException, TimeoutException {
         diagnostic.debug("Inbound child connection to " + username + " ("
                 + incomingConnection.getIpEndpoint()
                 + ") accepted. (type: " + incomingConnection.getType()
@@ -911,7 +910,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             connection.write(getBranchInformation());
         } catch (Throwable failure) {
             connection.close();
-            throw Failures.propagate(failure);
+            throw Failures.rethrow(failure);
         }
         connection.addDisconnectedListener(childDisconnectedListener);
         children.put(username, connection.getIpEndpoint());
@@ -932,7 +931,8 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         return connection;
     }
 
-    private MessageConnection establishIndirectChild(ConnectToPeerResponse response) {
+    private MessageConnection establishIndirectChild(ConnectToPeerResponse response)
+            throws InterruptedException, TimeoutException {
         diagnostic.debug("Attempting inbound indirect child connection to "
                 + response.getUsername() + " (" + response.getIpEndpoint()
                 + ") for token " + response.getToken());
@@ -950,7 +950,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             connection.write(getBranchInformation(), cancellation.getSignal());
         } catch (Throwable failure) {
             connection.close();
-            throw new CompletionException(unwrap(failure));
+            throw Failures.rethrow(failure);
         } finally {
             pendingInboundIndirectConnections.remove(response.getUsername(), cancellation);
             cancellation.close();
@@ -970,7 +970,8 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     }
 
     private ParentCandidate getParentCandidateConnection(
-            String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal) {
+            String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
         LinkedCancellation directCancellation = new LinkedCancellation(cancellationSignal);
         LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationSignal);
         diagnostic.debug("Attempting simultaneous direct and indirect parent candidate " + "connections to " + username
@@ -984,15 +985,14 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         } catch (Throwable failure) {
             directCancellation.close();
             indirectCancellation.close();
-            Throwable cause = unwrap(failure);
-            if (cause instanceof ConnectionException) {
-                throw new CompletionException(cause);
+            if (failure instanceof ConnectionException connectionFailure) {
+                throw connectionFailure;
             }
             String message = "Failed to establish a direct or indirect parent "
                     + "candidate connection to " + username + " ("
                     + ipEndpoint + ")";
             diagnostic.debug(message);
-            throw new CompletionException(new ConnectionException(message));
+            throw new ConnectionException(message);
         }
 
         boolean directWon = winner.first();
@@ -1027,14 +1027,13 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                     + connection.getType() + ", id: "
                     + connection.getId() + ")");
             return new ParentCandidate(connection, branch.level(), branch.root());
-        } catch (Throwable failure) {
-            Throwable cause = unwrap(failure);
+        } catch (Throwable cause) {
             String message = "Failed to negotiate parent candidate "
                     + "connection to " + username + " ("
-                    + ipEndpoint + "): " + message(cause);
+                    + ipEndpoint + "): " + Failures.message(cause);
             diagnostic.debug(message + " (type: " + connection.getType() + ", id: " + connection.getId() + ")");
             connection.close();
-            throw new CompletionException(new ConnectionException(message, cause));
+            throw new ConnectionException(message, cause);
         } finally {
             directCancellation.close();
             indirectCancellation.close();
@@ -1042,7 +1041,8 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     }
 
     private MessageConnection getParentCandidateConnectionDirect(
-            String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal) {
+            String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal)
+            throws InterruptedException, TimeoutException {
         diagnostic.debug("Attempting direct parent candidate connection to " + username + " (" + ipEndpoint + ")");
         MessageConnection connection = connectionFactory.getDistributedConnection(
                 username, ipEndpoint, options.get().getDistributedConnectionOptions());
@@ -1054,9 +1054,9 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             diagnostic.debug("Failed to establish a direct parent candidate "
                     + "connection to " + username + " ("
                     + ipEndpoint + "): "
-                    + message(unwrap(failure)));
+                    + Failures.message(failure));
             connection.close();
-            throw new CompletionException(unwrap(failure));
+            throw Failures.rethrow(failure);
         }
         diagnostic.debug("Direct parent candidate connection to " + username
                 + " (" + connection.getIpEndpoint()
@@ -1066,7 +1066,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     }
 
     private MessageConnection getParentCandidateConnectionIndirect(
-            String username, CancellationSignal cancellationSignal) {
+            String username, CancellationSignal cancellationSignal) throws InterruptedException, TimeoutException {
         int solicitationToken = tokens.nextToken();
         diagnostic.debug(
                 "Soliciting indirect parent candidate connection to " + username + " with token " + solicitationToken);
@@ -1106,8 +1106,8 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             diagnostic.debug("Failed to establish an indirect parent candidate "
                     + "connection to " + username + " with token "
                     + solicitationToken + ": "
-                    + message(unwrap(failure)));
-            throw new CompletionException(unwrap(failure));
+                    + Failures.message(failure));
+            throw Failures.rethrow(failure);
         } finally {
             pendingSolicitations.remove(solicitationToken, username);
         }
@@ -1148,12 +1148,12 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 return new BranchInformation(level, connection.getUsername());
             } catch (Throwable failure) {
                 connection.disconnect("One or more required messages was not received.");
-                throw new CompletionException(new ConnectionException("Failed to retrieve branch info from parent "
+                throw new ConnectionException("Failed to retrieve branch info from parent "
                         + "candidate connection to "
                         + connection.getUsername() + " ("
                         + connection.getIpEndpoint()
                         + "); one or more required messages was not "
-                        + "received. (id: " + connection.getId() + ")"));
+                        + "received. (id: " + connection.getId() + ")");
             } finally {
                 connection.removeMessageReadListener(parentInitializationListener);
             }
@@ -1222,8 +1222,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             try {
                 addParentConnection(candidates);
             } catch (Throwable failure) {
-                diagnostic.debug(
-                        "Failed to re-establish a parent connection: " + message(unwrap(failure)), unwrap(failure));
+                diagnostic.debug("Failed to re-establish a parent connection: " + Failures.message(failure), failure);
             }
         });
     }
@@ -1240,7 +1239,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             NetworkExecutor.dispatch(
                     this::updateStatus,
                     failure -> diagnostic.debug(
-                            "Failed to force a distributed status update: " + message(unwrap(failure))));
+                            "Failed to force a distributed status update: " + Failures.message(failure)));
         }
         ScheduledFuture<?> next = scheduler.schedule(this::updateStatus, STATUS_DEBOUNCE_TIME, TimeUnit.MILLISECONDS);
         ScheduledFuture<?> prior = statusDebounce.getAndSet(next);
@@ -1310,19 +1309,6 @@ public final class DistributedNetwork implements DistributedConnectionManager {
 
     private static CancellationSignal token(CancellationSignal token) {
         return token == null ? CancellationSignal.none() : token;
-    }
-
-    private static Throwable unwrap(Throwable failure) {
-        Throwable current = failure;
-        while ((current instanceof CompletionException || current instanceof java.util.concurrent.ExecutionException)
-                && current.getCause() != null) {
-            current = current.getCause();
-        }
-        return current;
-    }
-
-    private static String message(Throwable failure) {
-        return failure.getMessage() == null ? "" : failure.getMessage();
     }
 
     private record ParentCandidate(MessageConnection connection, int branchLevel, String branchRoot) {}

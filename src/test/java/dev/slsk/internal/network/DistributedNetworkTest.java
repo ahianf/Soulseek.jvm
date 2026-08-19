@@ -62,7 +62,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -207,12 +206,11 @@ class DistributedNetworkTest {
         child.writeFuture = CompletableFuture.failedFuture(expected);
         fixture.factory.distributedHandoff = child;
 
-        CompletionException thrown = assertThrows(
-                CompletionException.class,
+        ConnectionException mapped = assertThrows(
+                ConnectionException.class,
                 () -> fixture.manager.addOrUpdateChildConnection(
                         USERNAME, ConnectionProbe.connection(ENDPOINT).connection()));
 
-        ConnectionException mapped = assertInstanceOf(ConnectionException.class, thrown.getCause());
         assertSame(expected, mapped.getCause());
         assertEquals(1, child.closeCount);
         assertTrue(fixture.manager.getChildren().isEmpty());
@@ -251,12 +249,11 @@ class DistributedNetworkTest {
         child.connectFuture = CompletableFuture.failedFuture(expected);
         fixture.factory.distributedDirect.put(ENDPOINT, child);
 
-        CompletionException thrown = assertThrows(
-                CompletionException.class,
+        ConnectionException mapped = assertThrows(
+                ConnectionException.class,
                 () -> fixture.manager.getOrAddChildConnection(new ConnectToPeerResponse(
                         USERNAME, Constants.ConnectionType.DISTRIBUTED, ENDPOINT, TOKEN, false)));
 
-        ConnectionException mapped = assertInstanceOf(ConnectionException.class, thrown.getCause());
         assertSame(expected, mapped.getCause());
         assertEquals(1, child.closeCount);
         assertTrue(fixture.manager.getChildren().isEmpty());
