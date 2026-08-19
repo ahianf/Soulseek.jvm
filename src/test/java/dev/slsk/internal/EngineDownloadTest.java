@@ -175,7 +175,7 @@ class EngineDownloadTest {
                                     .build()));
 
             fixture.client.getDownloadRegistry().clear();
-            fixture.client.getUniqueKeys().put("Download:alice:file", true);
+            fixture.client.getUniqueKeys().add("Download:alice:file");
             assertThrows(
                     DuplicateTransferException.class,
                     () -> fixture.client
@@ -233,7 +233,7 @@ class EngineDownloadTest {
             assertTrue(timeline.progress.contains(0L));
             assertTrue(timeline.progress.contains((long) bytes.length));
             assertFalse(fixture.client.getDownloadRegistry().containsKey(11));
-            assertFalse(fixture.client.getUniqueKeys().containsKey("Download:alice:remote\\file"));
+            assertFalse(fixture.client.getUniqueKeys().contains("Download:alice:remote\\file"));
         }
     }
 

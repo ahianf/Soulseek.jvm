@@ -74,6 +74,7 @@ import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -723,7 +724,7 @@ final class SoulseekEngine implements AutoCloseable {
     }
 
     /** Duplicate-transfer keys, owned by the transfer domain. */
-    final Map<String, Boolean> getUniqueKeys() {
+    final Set<String> getUniqueKeys() {
         return transfers.uniqueKeys();
     }
 

@@ -296,7 +296,7 @@ class EngineUploadTest {
                                     .build()));
 
             fixture.client.getUploadRegistry().clear();
-            fixture.client.getUniqueKeys().put("Upload:alice:file", true);
+            fixture.client.getUniqueKeys().add("Upload:alice:file");
             assertThrows(
                     DuplicateTransferException.class,
                     () -> fixture.client
@@ -404,7 +404,7 @@ class EngineUploadTest {
             assertTrue(timeline.progress.contains(0L));
             assertTrue(timeline.progress.contains((long) bytes.length));
             assertFalse(fixture.client.getUploadRegistry().containsKey(22));
-            assertFalse(fixture.client.getUniqueKeys().containsKey("Upload:alice:remote\\file"));
+            assertFalse(fixture.client.getUniqueKeys().contains("Upload:alice:remote\\file"));
         }
     }
 
@@ -777,7 +777,7 @@ class EngineUploadTest {
                             .options(options(20))
                             .build());
             assertSame(fixture.transfer.writeFailure, causeOf(write));
-            assertFalse(fixture.client.getUniqueKeys().containsKey("Upload:alice:other"));
+            assertFalse(fixture.client.getUniqueKeys().contains("Upload:alice:other"));
         }
     }
 

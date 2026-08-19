@@ -51,6 +51,7 @@ import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.function.LongFunction;
@@ -137,7 +138,7 @@ final class TransferDomain implements PeerServices {
     private final Semaphore uploadSemaphoreSyncRoot = new Semaphore(1);
 
     /** Duplicate-transfer keys; owned here, since this is what detects duplicates. */
-    private final Map<String, Boolean> uniqueKeys = new ConcurrentHashMap<>();
+    private final Set<String> uniqueKeys = ConcurrentHashMap.newKeySet();
 
     /**
      * The transfers in flight, by token.
@@ -386,7 +387,7 @@ final class TransferDomain implements PeerServices {
         return uploads;
     }
 
-    Map<String, Boolean> uniqueKeys() {
+    Set<String> uniqueKeys() {
         return uniqueKeys;
     }
 
@@ -1055,7 +1056,7 @@ final class TransferDomain implements PeerServices {
         download.setSize(size);
         String uniqueKey = downloadUniqueKey(requestedUsername, remoteFilename);
 
-        if (uniqueKeys.putIfAbsent(uniqueKey, true) != null) {
+        if (!uniqueKeys.add(uniqueKey)) {
             throw new DuplicateTransferException(
                     "Duplicate download of " + remoteFilename + " from " + requestedUsername + " aborted");
         }
@@ -1083,7 +1084,7 @@ final class TransferDomain implements PeerServices {
         upload.setSize(size);
         String uniqueKey = uploadUniqueKey(requestedUsername, remoteFilename);
 
-        if (uniqueKeys.putIfAbsent(uniqueKey, true) != null) {
+        if (!uniqueKeys.add(uniqueKey)) {
             throw new DuplicateTransferException(
                     "Duplicate upload of " + remoteFilename + " to " + requestedUsername + " aborted");
         }
@@ -1124,7 +1125,7 @@ final class TransferDomain implements PeerServices {
             throw new DuplicateTokenException("The specified or generated token " + token + " is already in progress");
         }
         if (!matching(downloads, requestedUsername, remoteFilename).isEmpty()
-                || uniqueKeys.containsKey(downloadUniqueKey(requestedUsername, remoteFilename))) {
+                || uniqueKeys.contains(downloadUniqueKey(requestedUsername, remoteFilename))) {
             throw new DuplicateTransferException("An active or queued download of "
                     + remoteFilename + " from " + requestedUsername
                     + " is already in progress");
@@ -1136,7 +1137,7 @@ final class TransferDomain implements PeerServices {
             throw new DuplicateTokenException("The specified or generated token " + token + " is already in progress");
         }
         if (!matching(uploads, requestedUsername, remoteFilename).isEmpty()
-                || uniqueKeys.containsKey(uploadUniqueKey(requestedUsername, remoteFilename))) {
+                || uniqueKeys.contains(uploadUniqueKey(requestedUsername, remoteFilename))) {
             throw new DuplicateTransferException("An active or queued upload of "
                     + remoteFilename + " to " + requestedUsername
                     + " is already in progress");
