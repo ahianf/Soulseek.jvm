@@ -117,9 +117,11 @@ class BrowseResponseFactoryTest {
     @Test
     @DisplayName("Parser rejects mismatch compression and missing data")
     void parserRejectsInvalidMessages() {
-        assertThrows(
+        MessageException mismatch = assertThrows(
                 MessageException.class,
                 () -> BrowseResponseFactory.fromByteArray(new TransferResponse(1).toByteArray()));
+        assertEquals(
+                "Message Code mismatch creating BrowseResponse (expected: 5, received: 41)", mismatch.getMessage());
         byte[] uncompressed = new MessageBuilder()
                 .writeCode(MessageCode.Peer.BROWSE_RESPONSE)
                 .writeBytes(new byte[] {0, 1, 2, 3})

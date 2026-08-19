@@ -452,9 +452,9 @@ public class SocketConnection implements Connection {
             ConnectionReporter reporter,
             CancellationSignal cancellationSignal) {
         if (length < 0) {
-            throw new IllegalArgumentException("The requested length must be greater than or equal " + "to zero");
+            throw new IllegalArgumentException("length must be greater than or equal to zero: " + length);
         }
-        Objects.requireNonNull(outputStream, "The specified output stream is null");
+        Objects.requireNonNull(outputStream, "outputStream");
         validateConnected();
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         ConnectionGovernor effectiveGovernor = governor == null ? SocketConnection::grantAll : governor;
@@ -521,10 +521,12 @@ public class SocketConnection implements Connection {
             ConnectionGovernor governor,
             ConnectionReporter reporter,
             CancellationSignal cancellationSignal) {
+        // Zero is rejected, not just negatives: a streaming write exists to
+        // move transfer bytes, and a zero-length one is a caller bug.
         if (length <= 0) {
-            throw new IllegalArgumentException("The requested length must be greater than or equal " + "to zero");
+            throw new IllegalArgumentException("length must be greater than zero: " + length);
         }
-        Objects.requireNonNull(inputStream, "The specified output stream is null");
+        Objects.requireNonNull(inputStream, "inputStream");
         validateConnected();
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         ConnectionGovernor effectiveGovernor = governor == null ? SocketConnection::grantAll : governor;

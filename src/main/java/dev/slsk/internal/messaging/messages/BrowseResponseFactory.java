@@ -24,7 +24,7 @@ public final class BrowseResponseFactory {
         MessageCode.Peer code = reader.readCode();
         if (code != MessageCode.Peer.BROWSE_RESPONSE) {
             throw new MessageException(
-                    "Message Code mismatch creating BrowseResponse " + "(expected: 5, received: " + code.getValue());
+                    "Message Code mismatch creating BrowseResponse (expected: 5, received: " + code.getValue() + ")");
         }
 
         reader.decompress();

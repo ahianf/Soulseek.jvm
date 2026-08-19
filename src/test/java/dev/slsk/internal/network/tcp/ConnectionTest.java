@@ -507,11 +507,20 @@ class ConnectionTest {
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), connected, Monitors.shared());
         assertThrows(IllegalArgumentException.class, () -> connection.write((byte[]) null, null));
         assertThrows(IllegalArgumentException.class, () -> connection.write(new byte[0], null));
-        assertThrows(
+        IllegalArgumentException zeroWrite = assertThrows(
                 IllegalArgumentException.class,
                 () -> connection.write(0, new ByteArrayInputStream(new byte[0]), null, null, null));
-        assertThrows(NullPointerException.class, () -> connection.write(1, null, null, null, null));
-        assertThrows(NullPointerException.class, () -> connection.read(1, null, null, null, null));
+        assertEquals("length must be greater than zero: 0", zeroWrite.getMessage());
+        IllegalArgumentException negativeRead = assertThrows(
+                IllegalArgumentException.class,
+                () -> connection.read(-1, new java.io.ByteArrayOutputStream(), null, null, null));
+        assertEquals("length must be greater than or equal to zero: -1", negativeRead.getMessage());
+        NullPointerException nullInput =
+                assertThrows(NullPointerException.class, () -> connection.write(1, null, null, null, null));
+        assertEquals("inputStream", nullInput.getMessage());
+        NullPointerException nullOutput =
+                assertThrows(NullPointerException.class, () -> connection.read(1, null, null, null, null));
+        assertEquals("outputStream", nullOutput.getMessage());
         assertThrows(IllegalStateException.class, () -> connection.connect(null));
         connection.disconnect();
         assertThrows(IllegalStateException.class, () -> connection.read(1, null));
