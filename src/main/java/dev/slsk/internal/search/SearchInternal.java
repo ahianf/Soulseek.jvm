@@ -24,6 +24,7 @@ import java.util.stream.StreamSupport;
 
 /** The mutable internal state of a single file search. */
 public final class SearchInternal implements AutoCloseable {
+    private static final long MAX_TIMEOUT_CHECK_MILLIS = 250;
     /**
      * The waits in progress, and the terminal outcome they will all be given.
      *
@@ -52,6 +53,7 @@ public final class SearchInternal implements AutoCloseable {
 
     private volatile Consumer<SearchResponse> responseReceived;
     private volatile ScheduledFuture<?> timeoutTask;
+    private volatile long timeoutDeadlineNanos;
     private volatile SearchState state = SearchState.NONE;
 
     /** Serializes timeout replacement with scheduler callbacks. */
@@ -140,6 +142,10 @@ public final class SearchInternal implements AutoCloseable {
     boolean isTimeoutActive() {
         ScheduledFuture<?> task = timeoutTask;
         return task != null && !task.isDone();
+    }
+
+    ScheduledFuture<?> timeoutTaskForTest() {
+        return timeoutTask;
     }
 
     /** Replaces the response callback. */
@@ -350,17 +356,25 @@ public final class SearchInternal implements AutoCloseable {
 
     private void resetTimeout() {
         synchronized (timeoutLock) {
-            cancelTimeoutTask();
-            // Time out on the scheduler, but run completion (which raises the state-changed
-            // event and the caller's stateChanged callback) on a virtual thread so a blocking
-            // callback cannot stall this timer thread.
-            timeoutTask = timerExecutor.schedule(
-                    () -> complete(SearchState.TIMED_OUT), options.getSearchTimeout(), TimeUnit.MILLISECONDS);
+            timeoutDeadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(options.getSearchTimeout());
+            if (timeoutTask == null || timeoutTask.isDone()) {
+                long cadence = Math.max(1, Math.min(MAX_TIMEOUT_CHECK_MILLIS, options.getSearchTimeout()));
+                timeoutTask =
+                        timerExecutor.scheduleAtFixedRate(this::checkTimeout, cadence, cadence, TimeUnit.MILLISECONDS);
+            }
+        }
+    }
+
+    private void checkTimeout() {
+        long deadline = timeoutDeadlineNanos;
+        if (deadline != 0 && System.nanoTime() - deadline >= 0) {
+            complete(SearchState.TIMED_OUT);
         }
     }
 
     private void stopTimeout() {
         synchronized (timeoutLock) {
+            timeoutDeadlineNanos = 0;
             cancelTimeoutTask();
         }
     }

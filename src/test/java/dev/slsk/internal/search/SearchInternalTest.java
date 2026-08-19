@@ -135,10 +135,12 @@ class SearchInternalTest {
             search.setState(SearchState.IN_PROGRESS);
             search.addResponseReceived(response -> order.append('a'));
             search.addResponseReceived(response -> order.append('b'));
+            java.util.concurrent.ScheduledFuture<?> timeout = search.timeoutTaskForTest();
             search.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of()));
 
             assertEquals("ab", order.toString());
             assertTrue(search.isTimeoutActive());
+            assertSame(timeout, search.timeoutTaskForTest(), "a response advances the deadline without rescheduling");
         }
     }
 
