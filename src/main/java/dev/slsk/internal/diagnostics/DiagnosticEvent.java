@@ -15,27 +15,31 @@ public class DiagnosticEvent {
     private final boolean includesException;
     private final DiagnosticLevel level;
     private final String message;
+    private final String source;
     private final Instant timestamp;
 
     /**
      * Creates diagnostic event arguments without an exception.
      *
      * @param level the diagnostic level
+     * @param source the fully qualified name of the class that emitted the diagnostic
      * @param message the diagnostic message
      */
-    public DiagnosticEvent(DiagnosticLevel level, String message) {
-        this(level, message, null);
+    public DiagnosticEvent(DiagnosticLevel level, String source, String message) {
+        this(level, source, message, null);
     }
 
     /**
      * Creates diagnostic event arguments.
      *
      * @param level the diagnostic level
+     * @param source the fully qualified name of the class that emitted the diagnostic
      * @param message the diagnostic message
      * @param exception the associated exception
      */
-    public DiagnosticEvent(DiagnosticLevel level, String message, Throwable exception) {
+    public DiagnosticEvent(DiagnosticLevel level, String source, String message, Throwable exception) {
         this.level = Objects.requireNonNull(level, "level");
+        this.source = Objects.requireNonNull(source, "source");
         this.message = message;
         this.exception = exception;
         this.timestamp = Instant.now();
@@ -76,6 +80,18 @@ public class DiagnosticEvent {
      */
     public final String getMessage() {
         return message;
+    }
+
+    /**
+     * Returns the class that emitted the diagnostic.
+     *
+     * <p>The value is a fully qualified class name suitable for use as a logging
+     * framework category.
+     *
+     * @return the fully qualified emitter class name
+     */
+    public final String getSource() {
+        return source;
     }
 
     /**

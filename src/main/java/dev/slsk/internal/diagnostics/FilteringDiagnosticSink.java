@@ -4,10 +4,13 @@
 
 package dev.slsk.internal.diagnostics;
 
+import java.lang.StackWalker.Option;
 import java.util.function.Consumer;
 
 /** Creates filtered diagnostic messages. */
 public final class FilteringDiagnosticSink implements DiagnosticSink {
+    private static final StackWalker CALLER = StackWalker.getInstance(Option.RETAIN_CLASS_REFERENCE);
+
     private final Consumer<DiagnosticEvent> eventHandler;
     private final DiagnosticLevel minimumLevel;
 
@@ -19,37 +22,76 @@ public final class FilteringDiagnosticSink implements DiagnosticSink {
 
     @Override
     public void trace(String message) {
-        raiseEvent(DiagnosticLevel.TRACE, message, null);
+        if (enabled(DiagnosticLevel.TRACE)) {
+            raiseEvent(
+                    DiagnosticLevel.TRACE,
+                    message,
+                    null,
+                    CALLER.getCallerClass().getName());
+        }
     }
 
     @Override
     public void trace(String message, Throwable exception) {
-        raiseEvent(DiagnosticLevel.TRACE, message, exception);
+        if (enabled(DiagnosticLevel.TRACE)) {
+            raiseEvent(
+                    DiagnosticLevel.TRACE,
+                    message,
+                    exception,
+                    CALLER.getCallerClass().getName());
+        }
     }
 
     @Override
     public void debug(String message) {
-        raiseEvent(DiagnosticLevel.DEBUG, message, null);
+        if (enabled(DiagnosticLevel.DEBUG)) {
+            raiseEvent(
+                    DiagnosticLevel.DEBUG,
+                    message,
+                    null,
+                    CALLER.getCallerClass().getName());
+        }
     }
 
     @Override
     public void debug(String message, Throwable exception) {
-        raiseEvent(DiagnosticLevel.DEBUG, message, exception);
+        if (enabled(DiagnosticLevel.DEBUG)) {
+            raiseEvent(
+                    DiagnosticLevel.DEBUG,
+                    message,
+                    exception,
+                    CALLER.getCallerClass().getName());
+        }
     }
 
     @Override
     public void info(String message) {
-        raiseEvent(DiagnosticLevel.INFO, message, null);
+        if (enabled(DiagnosticLevel.INFO)) {
+            raiseEvent(
+                    DiagnosticLevel.INFO, message, null, CALLER.getCallerClass().getName());
+        }
     }
 
     @Override
     public void warning(String message) {
-        warning(message, null);
+        if (enabled(DiagnosticLevel.WARNING)) {
+            raiseEvent(
+                    DiagnosticLevel.WARNING,
+                    message,
+                    null,
+                    CALLER.getCallerClass().getName());
+        }
     }
 
     @Override
     public void warning(String message, Throwable exception) {
-        raiseEvent(DiagnosticLevel.WARNING, message, exception);
+        if (enabled(DiagnosticLevel.WARNING)) {
+            raiseEvent(
+                    DiagnosticLevel.WARNING,
+                    message,
+                    exception,
+                    CALLER.getCallerClass().getName());
+        }
     }
 
     DiagnosticLevel getMinimumLevel() {
@@ -60,9 +102,11 @@ public final class FilteringDiagnosticSink implements DiagnosticSink {
         return eventHandler;
     }
 
-    private void raiseEvent(DiagnosticLevel level, String message, Throwable exception) {
-        if (level.getValue() <= minimumLevel.getValue()) {
-            eventHandler.accept(new DiagnosticEvent(level, message, exception));
-        }
+    private boolean enabled(DiagnosticLevel level) {
+        return level.getValue() <= minimumLevel.getValue();
+    }
+
+    private void raiseEvent(DiagnosticLevel level, String message, Throwable exception, String source) {
+        eventHandler.accept(new DiagnosticEvent(level, source, message, exception));
     }
 }

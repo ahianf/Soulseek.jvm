@@ -95,6 +95,7 @@ final class DefaultDiagnostics implements Diagnostics {
         }
         events.publish(new DiagnosticEvent(
                 level(event.getLevel()),
+                event.getSource(),
                 event.getMessage(),
                 Optional.ofNullable(event.getException()),
                 event.getTimestamp() == null ? Instant.now() : event.getTimestamp()));

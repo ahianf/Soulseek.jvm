@@ -83,6 +83,7 @@ class FilteringDiagnosticSinkTest {
 
     private static void assertEvent(DiagnosticEvent event, DiagnosticLevel level, String message, Throwable exception) {
         assertEquals(level, event.getLevel());
+        assertEquals(FilteringDiagnosticSinkTest.class.getName(), event.getSource());
         assertEquals(message, event.getMessage());
         assertSame(exception, event.getException());
         assertEquals(exception != null, event.isIncludesException());

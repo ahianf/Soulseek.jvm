@@ -22,9 +22,11 @@ class DiagnosticEventTest {
         Instant before = Instant.now();
         RuntimeException exception = new RuntimeException("failure");
 
-        DiagnosticEvent args = new DiagnosticEvent(DiagnosticLevel.WARNING, "message", exception);
+        DiagnosticEvent args =
+                new DiagnosticEvent(DiagnosticLevel.WARNING, DiagnosticEventTest.class.getName(), "message", exception);
 
         assertEquals(DiagnosticLevel.WARNING, args.getLevel());
+        assertEquals(DiagnosticEventTest.class.getName(), args.getSource());
         assertEquals("message", args.getMessage());
         assertSame(exception, args.getException());
         assertTrue(args.isIncludesException());
@@ -35,7 +37,7 @@ class DiagnosticEventTest {
     @Test
     @DisplayName("DiagnosticEvent instantiates with null Exception given null")
     void instantiatesWithNullExceptionGivenNull() {
-        DiagnosticEvent args = new DiagnosticEvent(DiagnosticLevel.INFO, null);
+        DiagnosticEvent args = new DiagnosticEvent(DiagnosticLevel.INFO, DiagnosticEventTest.class.getName(), null);
 
         assertEquals(DiagnosticLevel.INFO, args.getLevel());
         assertNull(args.getMessage());
@@ -46,6 +48,14 @@ class DiagnosticEventTest {
     @Test
     @DisplayName("Rejects null level because the C# enum is non-nullable")
     void rejectsNullLevel() {
-        assertThrows(NullPointerException.class, () -> new DiagnosticEvent(null, "message"));
+        assertThrows(
+                NullPointerException.class,
+                () -> new DiagnosticEvent(null, DiagnosticEventTest.class.getName(), "message"));
+    }
+
+    @Test
+    @DisplayName("Rejects a null source because every diagnostic names its emitter")
+    void rejectsNullSource() {
+        assertThrows(NullPointerException.class, () -> new DiagnosticEvent(DiagnosticLevel.INFO, null, "message"));
     }
 }

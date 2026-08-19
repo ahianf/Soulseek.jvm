@@ -923,12 +923,17 @@ for `protocolTrace`, which changes only how much it says.
 | `protocolTrace(boolean)` | Cheap | Turns per-message protocol tracing on or off. Expensive and very loud. Idempotent. |
 
 **`DiagnosticEvent`** — a record, not a hierarchy: `level`
-(`DiagnosticLevel`), `message`, `exception` (`Optional<Throwable>`), `at`.
-Wire it to your logger:
+(`DiagnosticLevel`), `source` (the fully qualified emitter class name),
+`message`, `exception` (`Optional<Throwable>`), `at`. Wire it to your logger
+using `source` as the category, so the logging framework can filter the
+library by package or class:
 
 ```java
 slsk.diagnostics().events().subscribe(e ->
-        logger.atLevel(map(e.level())).log(e.message(), e.exception().orElse(null)));
+        org.slf4j.LoggerFactory.getLogger(e.source())
+                .atLevel(map(e.level()))
+                .setCause(e.exception().orElse(null))
+                .log(e.message()));
 ```
 
 **`DiagnosticLevel`** — `NONE`, `WARNING`, `INFO`, `DEBUG`, `TRACE`. Ordered
@@ -1443,7 +1448,7 @@ capability models live in the package listed in [section 1](#1-the-library-at-a-
 | `MeEvent` | LoggedIn, PrivilegeNotificationReceived, PrivilegedUserListReceived, PresenceChanged |
 | `ShareEvent` | ScanStarted, ScanProgressed, ScanCompleted, BrowseServed |
 | `MeshEvent` | StateChanged |
-| `DiagnosticEvent` | (record, not sealed) level, message, exception, at |
+| `DiagnosticEvent` | (record, not sealed) level, source, message, exception, at |
 
 **`dev.slsk.spi` — what you implement**
 

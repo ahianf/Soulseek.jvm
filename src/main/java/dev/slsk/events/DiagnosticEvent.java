@@ -16,16 +16,20 @@ import java.util.Optional;
  * DiagnosticLevel#WARNING} rather than letting it reach a read loop.
  *
  * @param level how important it is
+ * @param source fully qualified name of the class that emitted it; suitable for
+ *     use as a logging framework category
  * @param message what happened
  * @param exception the cause, when there was one
  * @param at when
  */
-public record DiagnosticEvent(DiagnosticLevel level, String message, Optional<Throwable> exception, Instant at)
+public record DiagnosticEvent(
+        DiagnosticLevel level, String source, String message, Optional<Throwable> exception, Instant at)
         implements SoulseekEvent {
 
     /** Validates and returns the event. */
     public DiagnosticEvent {
         Objects.requireNonNull(level, "level");
+        Objects.requireNonNull(source, "source");
         Objects.requireNonNull(message, "message");
         Objects.requireNonNull(exception, "exception");
         Objects.requireNonNull(at, "at");

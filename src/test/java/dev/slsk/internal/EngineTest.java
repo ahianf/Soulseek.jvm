@@ -266,14 +266,15 @@ class EngineTest {
         AtomicReference<DiagnosticEvent> diagnostic = new AtomicReference<>();
         Subscription subscription = fixture.client.events().on(Kind.DIAGNOSTIC_GENERATED, diagnostic::set);
 
-        DiagnosticEvent expected = new DiagnosticEvent(dev.slsk.internal.diagnostics.DiagnosticLevel.INFO, "message");
+        DiagnosticEvent expected = new DiagnosticEvent(
+                dev.slsk.internal.diagnostics.DiagnosticLevel.INFO, EngineTest.class.getName(), "message");
         fixture.search.raiseDiagnostic(expected);
         assertSame(expected, diagnostic.get());
 
         subscription.close();
         diagnostic.set(null);
-        fixture.search.raiseDiagnostic(
-                new DiagnosticEvent(dev.slsk.internal.diagnostics.DiagnosticLevel.INFO, "after"));
+        fixture.search.raiseDiagnostic(new DiagnosticEvent(
+                dev.slsk.internal.diagnostics.DiagnosticLevel.INFO, EngineTest.class.getName(), "after"));
         assertNull(diagnostic.get(), "a closed subscription receives nothing");
 
         AtomicReference<DistributedChildEvent> child = new AtomicReference<>();
