@@ -831,44 +831,48 @@ final class DownloadQueue {
     }
 
     private void attempt(Entry entry) {
-        TransferOutcome outcome;
         try {
-            outcome = Objects.requireNonNull(runner.run(entry), "runner outcome");
-        } catch (RuntimeException failure) {
-            outcome = new TransferOutcome.Failed(failure, true);
-        }
+            TransferOutcome outcome;
+            try {
+                // Throwable, not RuntimeException: an Error out of the runner
+                // used to escape to the uncaught handler with the entry still
+                // Requesting, occupying its admission slot forever.
+                outcome = Objects.requireNonNull(runner.run(entry), "runner outcome");
+            } catch (Throwable failure) {
+                outcome = new TransferOutcome.Failed(failure, true);
+            }
 
-        if (entry.paused.get()) {
-            // The pause already published its own state; a cancelled attempt
-            // coming back is not an outcome anyone asked to hear about.
-            admit();
-            return;
-        }
+            if (entry.paused.get()) {
+                // The pause already published its own state; a cancelled attempt
+                // coming back is not an outcome anyone asked to hear about.
+                return;
+            }
 
-        if (entry.isTerminal()) {
-            // Same rule as paused: cancel() already published Finished while
-            // this attempt was still in flight. Acting on the returning
-            // outcome published a second Finished for the same entry — or,
-            // when the outcome read as retryable, resurrected a CANCELLED
-            // download back to Queued after its terminal event.
-            admit();
-            return;
-        }
+            if (entry.isTerminal()) {
+                // Same rule as paused: cancel() already published Finished while
+                // this attempt was still in flight. Acting on the returning
+                // outcome published a second Finished for the same entry — or,
+                // when the outcome read as retryable, resurrected a CANCELLED
+                // download back to Queued after its terminal event.
+                return;
+            }
 
-        if (outcome instanceof TransferOutcome.Rejected rejected && isQueueLimit(rejected.reason())) {
-            holdForQueueLimit(entry);
-            admit();
-            return;
-        }
+            if (outcome instanceof TransferOutcome.Rejected rejected && isQueueLimit(rejected.reason())) {
+                holdForQueueLimit(entry);
+                return;
+            }
 
-        DownloadPolicy current = policy;
-        if (current.retry().shouldRetry(outcome, entry.attempt)) {
-            scheduleRetry(entry, current.retry().backoffBefore(entry.attempt + 1));
+            DownloadPolicy current = policy;
+            if (current.retry().shouldRetry(outcome, entry.attempt)) {
+                scheduleRetry(entry, current.retry().backoffBefore(entry.attempt + 1));
+                return;
+            }
+            finish(entry, outcome);
+        } finally {
+            // Every path frees the slot, including a throw from a
+            // consumer-supplied retry policy or from finish itself.
             admit();
-            return;
         }
-        finish(entry, outcome);
-        admit();
     }
 
     /**

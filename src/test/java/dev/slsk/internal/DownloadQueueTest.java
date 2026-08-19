@@ -417,6 +417,31 @@ class DownloadQueueTest {
     }
 
     @Test
+    @DisplayName("an Error out of an attempt frees the slot instead of wedging the entry")
+    void anErrorInAnAttemptFreesTheSlot() {
+        AtomicInteger attempts = new AtomicInteger();
+        DownloadQueue queue = queue(entry -> {
+            if (entry.id().value().equals("dying") && attempts.incrementAndGet() == 1) {
+                throw new AssertionError("the attempt died, not failed");
+            }
+            return new TransferOutcome.Rejected(RejectionReason.FILE_NOT_SHARED, "File not shared.");
+        });
+
+        TransferId dying = TransferId.of("dying");
+        TransferId next = TransferId.of("next");
+        queue.enqueue(dying, request("alice", "music\\one.mp3"));
+
+        // The Error must not strand the entry in Requesting with its admission
+        // slot held; it settles like any other failed attempt.
+        awaitTerminal(queue, dying);
+
+        // And the queue is still admitting afterwards.
+        queue.enqueue(next, request("alice", "music\\two.mp3"));
+        awaitTerminal(queue, next);
+        queue.close();
+    }
+
+    @Test
     @DisplayName("pause and resume are idempotent, and neither disturbs a finished download")
     void intentsAreIdempotent() {
         GatedRunner runner = new GatedRunner();
