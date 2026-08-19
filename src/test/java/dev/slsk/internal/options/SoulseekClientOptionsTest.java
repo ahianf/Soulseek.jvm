@@ -193,8 +193,8 @@ class SoulseekClientOptionsTest {
         assertEquals(24, copy.getMaximumConcurrentDownloads());
         assertEquals(DiagnosticLevel.NONE, copy.getMinimumDiagnosticLevel());
 
-        // The source's internal With overload omits these two values.
-        assertEquals(2, copy.getMaximumConcurrentSearches());
+        // Not patchable, so a customized limit must survive an unrelated patch.
+        assertEquals(44, copy.getMaximumConcurrentSearches());
     }
 
     @Test
@@ -204,6 +204,7 @@ class SoulseekClientOptionsTest {
         assertThrows(NullPointerException.class, () -> original.with(null));
         SoulseekClientOptions copy = original.with(new SoulseekClientOptionsPatch());
         assertEquals(1234, copy.getListenPort());
+        assertEquals(8, copy.getMaximumConcurrentSearches());
         assertEquals(9, copy.getMaximumConcurrentUploads());
         assertEquals(10, copy.getMaximumConcurrentDownloads());
     }

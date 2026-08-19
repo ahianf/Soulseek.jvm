@@ -313,7 +313,7 @@ public class SoulseekClientOptions {
                         ? acceptDistributedChildren
                         : patch.getAcceptDistributedChildren(),
                 patch.getDistributedChildLimit() == null ? distributedChildLimit : patch.getDistributedChildLimit(),
-                DEFAULT_MAXIMUM_CONCURRENT_SEARCHES,
+                maximumConcurrentSearches,
                 maximumConcurrentUploads,
                 patch.getMaximumUploadSpeed() == null ? maximumUploadSpeed : patch.getMaximumUploadSpeed(),
                 maximumConcurrentDownloads,
