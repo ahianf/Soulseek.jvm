@@ -27,7 +27,13 @@ public interface Connection extends AutoCloseable {
     /** Removes a data-read listener. */
     void removeDataReadListener(ConnectionEventListener<ConnectionDataEvent> listener);
 
-    /** Adds a data-written listener. */
+    /**
+     * Adds a data-written listener.
+     *
+     * <p>This is an internal progress hook. Implementations invoke it on their
+     * I/O worker, so a listener must be non-blocking and must never synchronously
+     * enqueue and wait for another write on the same connection.
+     */
     void addDataWrittenListener(ConnectionEventListener<ConnectionDataEvent> listener);
 
     /** Removes a data-written listener. */
@@ -143,10 +149,10 @@ public interface Connection extends AutoCloseable {
     /**
      * Writes an array, blocking until it lands.
      *
-     * <p>Every caller here already owns a virtual thread, so dispatching the
-     * write onto a second one and immediately blocking on the result bought a
-     * thread whose only job was to be waited on. The distributed broadcast did
-     * it once per child, per message.
+     * <p>The caller waits only on the connection-owned writer's completion;
+     * socket I/O never runs on the caller. Cancellation removes a queued frame,
+     * but once writing starts the writer finishes the complete frame so a
+     * shared protocol stream is never corrupted by caller cancellation.
      *
      * @param bytes the bytes to write
      * @param cancellationSignal the cancellation signal

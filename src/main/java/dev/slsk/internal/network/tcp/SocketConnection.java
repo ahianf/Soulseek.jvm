@@ -32,10 +32,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** Provides client connections for TCP network services. */
 public class SocketConnection implements Connection {
@@ -81,8 +81,21 @@ public class SocketConnection implements Connection {
     private final CountDownLatch disconnected = new CountDownLatch(1);
     private volatile String disconnectMessage;
     private volatile Exception disconnectFailure;
-    private final Semaphore writeSemaphore = new Semaphore(1);
-    private final Semaphore writeQueueSemaphore;
+
+    /**
+     * Frames waiting for this connection's sole writer.
+     *
+     * <p>The queue is the backpressure mechanism: there is no second semaphore
+     * or caller-owned write lock. Transfer streaming deliberately bypasses it;
+     * see {@link #write(long, InputStream, ConnectionGovernor,
+     * ConnectionReporter, CancellationSignal)}.
+     */
+    private final ArrayBlockingQueue<FrameWrite> frameWrites;
+
+    private final Object frameWriterLifecycle = new Object();
+    private final AtomicBoolean frameWriterStarted = new AtomicBoolean();
+    private volatile boolean frameWritesAccepted;
+    private volatile FrameWrite activeFrameWrite;
 
     private final AtomicBoolean closeStarted = new AtomicBoolean();
     private volatile boolean disposed;
@@ -130,7 +143,11 @@ public class SocketConnection implements Connection {
         this.ipEndpoint = ipEndpoint;
         this.options = options == null ? new ConnectionOptions() : options;
         this.tcpClient = tcpClient == null ? new TcpClientAdapter() : tcpClient;
-        writeQueueSemaphore = new Semaphore(this.options.getWriteQueueSize());
+        // ArrayBlockingQueue requires a positive physical capacity. A
+        // non-positive configured capacity retains the old observable
+        // behaviour (every framed write times out/drops) through the explicit
+        // check in enqueueFrameWrite.
+        frameWrites = new ArrayBlockingQueue<>(Math.max(1, this.options.getWriteQueueSize()));
 
         try {
             this.options.getConfigureSocket().configure(this.tcpClient.getClient());
@@ -141,6 +158,7 @@ public class SocketConnection implements Connection {
                 startTimers();
                 stream = this.tcpClient.getStream();
                 setStreamTimeouts();
+                startFrameWriter();
             }
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
@@ -239,7 +257,13 @@ public class SocketConnection implements Connection {
 
     @Override
     public int getWriteQueueDepth() {
-        return options.getWriteQueueSize() - writeQueueSemaphore.availablePermits();
+        int queued = 0;
+        for (FrameWrite write : frameWrites) {
+            if (write != FrameWrite.STOP) {
+                queued++;
+            }
+        }
+        return queued + (activeFrameWrite == null ? 0 : 1);
     }
 
     /**
@@ -274,6 +298,7 @@ public class SocketConnection implements Connection {
             startTimers();
             stream = tcpClient.getStream();
             setStreamTimeouts();
+            startFrameWriter();
             changeState(ConnectionState.CONNECTED, "Connected to " + formatEndpoint(ipEndpoint), null);
         } catch (Exception exception) {
             throw Failures.propagate(handleConnectFailure(exception));
@@ -363,6 +388,7 @@ public class SocketConnection implements Connection {
 
         publishStateChanged(previousState, ConnectionState.DISCONNECTING, reason, null);
         stopTimers();
+        stopFrameWriter(frameWriteTeardownFailure(reason, exception));
         closeTransport();
 
         state = ConnectionState.DISCONNECTED;
@@ -372,6 +398,7 @@ public class SocketConnection implements Connection {
 
     @Override
     public TcpClient handoffTcpClient() {
+        stopFrameWriter(new ConnectionWriteException("Write aborted because the transport was handed off"));
         TcpClient result = tcpClient;
         tcpClient = null;
         stream = null;
@@ -471,8 +498,9 @@ public class SocketConnection implements Connection {
         validateConnected();
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         try {
-            writeInternal(
-                    bytes.length, new java.io.ByteArrayInputStream(bytes), SocketConnection::grantAll, null, token);
+            FrameWrite write = new FrameWrite(bytes.clone());
+            enqueueFrameWrite(write, token);
+            awaitFrameWrite(write, token);
         } catch (Exception exception) {
             throw Failures.propagate(exception);
         }
@@ -493,7 +521,7 @@ public class SocketConnection implements Connection {
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         ConnectionGovernor effectiveGovernor = governor == null ? SocketConnection::grantAll : governor;
         try {
-            writeInternal(length, inputStream, effectiveGovernor, reporter, token);
+            writeStreamingInternal(length, inputStream, effectiveGovernor, reporter, token);
         } catch (Exception exception) {
             throw Failures.propagate(exception);
         }
@@ -672,42 +700,22 @@ public class SocketConnection implements Connection {
         }
     }
 
-    private void writeInternal(
+    /**
+     * Streams transfer data on its dedicated connection.
+     *
+     * <p>This path is intentionally caller-thread/signal driven internally: its
+     * public owner already dispatches the transfer on a library worker, and
+     * cancellation tears down this single-purpose connection. Framed shared-
+     * connection traffic must use {@link #enqueueFrameWrite(FrameWrite,
+     * CancellationSignal)} instead.
+     */
+    private void writeStreamingInternal(
             long length,
             InputStream inputStream,
             ConnectionGovernor governor,
             ConnectionReporter reporter,
             CancellationSignal cancellationSignal)
             throws Exception {
-        // Real backpressure rather than an immediate kill. The source dropped
-        // the connection the moment the queue filled, which is a hard failure
-        // with no signal to the producer: a burst that the peer would have
-        // drained a moment later cost the whole connection.
-        //
-        // A producer now waits for room. Waiting is cheap because the caller is
-        // on a virtual thread. The disconnect survives only as the terminal
-        // case, once a producer has waited longer than the queue timeout, which
-        // means the peer really has stopped consuming.
-        if (writeQueueFull || !acquireWriteQueueSlot(cancellationSignal)) {
-            writeQueueFull = true;
-            disconnect("The write buffer is full", null);
-            throw new ConnectionWriteDroppedException("Dropped buffered message to " + formatEndpoint(ipEndpoint)
-                    + "; the write buffer stayed full for "
-                    + options.getWriteQueueTimeout() + " milliseconds");
-        }
-        try {
-            acquire(writeSemaphore, cancellationSignal);
-        } catch (Exception failure) {
-            // The queue slot is already held, and the finally that releases it
-            // is not reached from here. Without this, every write cancelled
-            // while waiting for the write lock cost one of the queue's permits
-            // permanently — exhaust the 250 and every later write disconnects
-            // the connection as "buffer full". The C# source has the identical
-            // leak; it is a defect there too.
-            writeQueueSemaphore.release();
-            throw failure;
-        }
-
         try {
             resetInactivityTime();
             byte[] buffer = new byte[(int) Math.min(options.getWriteBufferSize(), Math.max(1L, length))];
@@ -747,11 +755,205 @@ public class SocketConnection implements Connection {
                             + formatEndpoint(ipEndpoint) + ": "
                             + actual.getMessage(),
                     actual);
-        } finally {
-            if (!disposed) {
-                writeQueueSemaphore.release();
-                writeSemaphore.release();
+        }
+    }
+
+    /** Starts the one persistent writer owned by this connection lifecycle. */
+    private void startFrameWriter() {
+        synchronized (frameWriterLifecycle) {
+            if (frameWriterStarted.get()) {
+                return;
             }
+            frameWritesAccepted = true;
+            frameWriterStarted.set(true);
+            IO_EXECUTOR.execute(this::runFrameWriter);
+        }
+    }
+
+    /** Drains framed writes until connection teardown posts the stop marker. */
+    private void runFrameWriter() {
+        while (true) {
+            FrameWrite write;
+            try {
+                // This is a library-owned socket thread. It is never
+                // interrupted; teardown wakes it with STOP and closes the
+                // transport if a write is blocked in the socket.
+                write = frameWrites.take();
+            } catch (InterruptedException impossible) {
+                throw new IllegalStateException("The connection-owned writer was interrupted", impossible);
+            }
+            if (write == FrameWrite.STOP) {
+                return;
+            }
+            activeFrameWrite = write;
+            if (!write.start()) {
+                activeFrameWrite = null;
+                continue;
+            }
+
+            try {
+                writeFrame(write.bytes());
+                write.succeed();
+            } catch (Exception exception) {
+                Exception failure = mapFrameWriteFailure(write.bytes().length, exception);
+                disconnect("Write error: " + failure.getMessage(), failure);
+                write.fail(failure);
+            } catch (Throwable failure) {
+                RuntimeException actual = new RuntimeException("Unexpected framed-write failure", failure);
+                disconnect("Write error: " + actual.getMessage(), actual);
+                write.fail(actual);
+            } finally {
+                activeFrameWrite = null;
+            }
+        }
+    }
+
+    /** Writes one complete frame without consulting its caller's cancellation. */
+    private void writeFrame(byte[] bytes) throws Exception {
+        resetInactivityTime();
+        if (disposed || state == ConnectionState.DISCONNECTING || state == ConnectionState.DISCONNECTED) {
+            throw new ConnectionWriteException("Write aborted before the frame reached the socket; the connection "
+                    + "has been or is being " + (disposed ? "disposed" : "disconnected"));
+        }
+        stream.write(bytes, 0, bytes.length);
+        emitProgress(dataWrittenListeners, null, bytes.length, bytes.length, CancellationSignal.none());
+        resetInactivityTime();
+    }
+
+    private Exception mapFrameWriteFailure(int length, Exception exception) {
+        Exception actual = asException(unwrap(exception));
+        if (actual instanceof TimeoutException || actual instanceof CancellationException) {
+            return actual;
+        }
+        if (actual instanceof ConnectionWriteException) {
+            return actual;
+        }
+        return new ConnectionWriteException(
+                "Failed to write " + length + " bytes to " + formatEndpoint(ipEndpoint) + ": " + actual.getMessage(),
+                actual);
+    }
+
+    private Exception frameWriteTeardownFailure(String reason, Exception exception) {
+        if (exception instanceof ConnectionWriteException || exception instanceof CancellationException) {
+            return exception;
+        }
+        String message = "Write aborted because the connection is disconnecting"
+                + (reason == null || reason.isBlank() ? "" : ": " + reason);
+        return exception == null
+                ? new ConnectionWriteException(message)
+                : new ConnectionWriteException(message, exception);
+    }
+
+    /** Enqueues a frame with the configured bounded backpressure wait. */
+    private void enqueueFrameWrite(FrameWrite write, CancellationSignal cancellationSignal) {
+        if (writeQueueFull || !frameWritesAccepted || options.getWriteQueueSize() <= 0) {
+            dropFrameWrite(write);
+            return;
+        }
+
+        Thread caller = Thread.currentThread();
+        Object interruptGate = new Object();
+        AtomicBoolean waiting = new AtomicBoolean(true);
+        CancellationSubscription registration = cancellationSignal.register(() -> {
+            synchronized (interruptGate) {
+                if (waiting.get()) {
+                    caller.interrupt();
+                }
+            }
+        });
+        boolean offered = false;
+        boolean interrupted = false;
+        try {
+            int timeout = options.getWriteQueueTimeout();
+            offered =
+                    timeout <= 0 ? frameWrites.offer(write) : frameWrites.offer(write, timeout, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException exception) {
+            interrupted = true;
+        } finally {
+            synchronized (interruptGate) {
+                waiting.set(false);
+            }
+            registration.close();
+            interrupted |= Thread.interrupted();
+        }
+
+        if (interrupted || cancellationSignal.isCancellationRequested()) {
+            if (offered) {
+                write.cancel(frameWrites);
+            }
+            throw new CancellationException("Operation cancelled");
+        }
+        if (!offered) {
+            dropFrameWrite(write);
+            return;
+        }
+
+        // Serialize the accepting-state check with teardown's drain. Either
+        // teardown sees this request, or this request observes teardown and
+        // removes itself; it cannot be stranded behind the stop marker.
+        synchronized (frameWriterLifecycle) {
+            if (!frameWritesAccepted) {
+                write.cancel(frameWrites);
+                throw new ConnectionWriteException("Write aborted because the connection is disconnecting");
+            }
+        }
+    }
+
+    private void dropFrameWrite(FrameWrite write) {
+        writeQueueFull = true;
+        ConnectionWriteDroppedException dropped =
+                new ConnectionWriteDroppedException("Dropped buffered message to " + formatEndpoint(ipEndpoint)
+                        + "; the write buffer stayed full for "
+                        + options.getWriteQueueTimeout() + " milliseconds");
+        write.fail(dropped);
+        disconnect("The write buffer is full", dropped);
+        throw dropped;
+    }
+
+    /** Waits only on the request completion; the writer owns all socket I/O. */
+    private void awaitFrameWrite(FrameWrite write, CancellationSignal cancellationSignal) throws Exception {
+        CancellationSubscription registration = cancellationSignal.register(() -> write.cancel(frameWrites));
+        try {
+            try {
+                write.await();
+            } catch (InterruptedException interrupted) {
+                if (write.cancel(frameWrites)) {
+                    throw new CancellationException("Operation cancelled");
+                }
+                // Completion committed first, so this interrupt belongs to the
+                // caller's enclosing work rather than this write.
+                Thread.currentThread().interrupt();
+            }
+        } finally {
+            registration.close();
+        }
+        write.raiseOutcome();
+    }
+
+    /** Stops acceptance and settles every active or queued frame exactly once. */
+    private void stopFrameWriter(Exception failure) {
+        if (!frameWriterStarted.get()) {
+            return;
+        }
+
+        synchronized (frameWriterLifecycle) {
+            if (!frameWritesAccepted) {
+                return;
+            }
+            frameWritesAccepted = false;
+            FrameWrite active = activeFrameWrite;
+            if (active != null) {
+                active.fail(failure);
+            }
+            for (FrameWrite pending; (pending = frameWrites.poll()) != null; ) {
+                if (pending != FrameWrite.STOP) {
+                    pending.fail(failure);
+                }
+            }
+            // The drain above guarantees room. Producers that passed their
+            // pre-offer state check either remove themselves after observing
+            // frameWritesAccepted=false or are drained under this same lock.
+            frameWrites.offer(FrameWrite.STOP);
         }
     }
 
@@ -897,65 +1099,6 @@ public class SocketConnection implements Connection {
                 "Failed to connect to " + formatEndpoint(ipEndpoint) + ": " + actual.getMessage(), actual);
     }
 
-    /**
-     * Waits for room in the write queue.
-     *
-     * @return whether a slot was obtained before the timeout elapsed
-     */
-    private boolean acquireWriteQueueSlot(CancellationSignal cancellationSignal) {
-        int timeout = options.getWriteQueueTimeout();
-        if (timeout <= 0) {
-            return writeQueueSemaphore.tryAcquire();
-        }
-        Thread caller = Thread.currentThread();
-        CancellationSubscription registration = cancellationSignal.register(caller::interrupt);
-        try {
-            return writeQueueSemaphore.tryAcquire(timeout, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException exception) {
-            throw new CancellationException("Operation cancelled");
-        } finally {
-            registration.close();
-            Thread.interrupted();
-        }
-    }
-
-    /**
-     * Acquires a permit, blocking until one is available.
-     *
-     * <p>This used to spin {@code tryAcquire(25, MILLISECONDS)} so that it could
-     * notice cancellation between attempts, which is how C#'s natively
-     * cancellable {@code SemaphoreSlim.WaitAsync(token)} was emulated. Every
-     * queued writer therefore woke forty times a second doing nothing.
-     *
-     * <p>The caller is a virtual thread, so a genuine blocking acquire costs
-     * nothing while parked. Cancellation arrives as an interrupt instead of
-     * being polled for.
-     */
-    private static void acquire(Semaphore semaphore, CancellationSignal cancellationSignal) {
-        Thread caller = Thread.currentThread();
-        // Registering runs the callback inline if cancellation already
-        // happened, so an already-cancelled signal interrupts before the
-        // acquire and takes the InterruptedException path immediately.
-        CancellationSubscription registration = cancellationSignal.register(caller::interrupt);
-        boolean acquired = false;
-        try {
-            semaphore.acquire();
-            acquired = true;
-        } catch (InterruptedException exception) {
-            throw new CancellationException("Operation cancelled");
-        } finally {
-            registration.close();
-            // A cancellation racing a successful acquire can land the interrupt
-            // after the permit is taken. Clear it so it cannot leak into the
-            // caller's next blocking call, and give the permit back.
-            boolean interrupted = Thread.interrupted();
-            if (interrupted && acquired) {
-                semaphore.release();
-                throw new CancellationException("Operation cancelled");
-            }
-        }
-    }
-
     private static int grantAll(int requestedBytes, CancellationSignal cancellationSignal) {
         return Integer.MAX_VALUE;
     }
@@ -993,6 +1136,95 @@ public class SocketConnection implements Connection {
         // the one place consumer code used to be reachable from a read loop is
         // now behind the event bus's own delivery thread.
         dispatch.run();
+    }
+
+    /** One immutable frame plus the two atomic lifecycles it participates in. */
+    private static final class FrameWrite {
+        private static final FrameWrite STOP = new FrameWrite(new byte[0]);
+
+        private final byte[] bytes;
+        private final CountDownLatch settled = new CountDownLatch(1);
+        private final AtomicReference<FrameState> frameState = new AtomicReference<>(FrameState.QUEUED);
+        private final AtomicReference<WaitState> waitState = new AtomicReference<>(WaitState.WAITING);
+        private volatile Exception failure;
+
+        private FrameWrite(byte[] bytes) {
+            this.bytes = bytes;
+        }
+
+        private byte[] bytes() {
+            return bytes;
+        }
+
+        private boolean start() {
+            return frameState.compareAndSet(FrameState.QUEUED, FrameState.WRITING);
+        }
+
+        private void succeed() {
+            frameState.compareAndSet(FrameState.WRITING, FrameState.SUCCEEDED);
+            settle(WaitState.SUCCEEDED, null);
+        }
+
+        private void fail(Exception exception) {
+            frameState.getAndUpdate(current -> switch (current) {
+                case QUEUED, WRITING -> FrameState.FAILED;
+                case CANCELLED, SUCCEEDED, FAILED -> current;
+            });
+            settle(WaitState.FAILED, exception);
+        }
+
+        /**
+         * Lets cancellation atomically win the caller's wait. A queued frame is
+         * also removed; a frame already being written is deliberately left for
+         * the connection-owned writer to finish.
+         */
+        private boolean cancel(ArrayBlockingQueue<FrameWrite> queue) {
+            if (!waitState.compareAndSet(WaitState.WAITING, WaitState.CANCELLED)) {
+                return false;
+            }
+            if (frameState.compareAndSet(FrameState.QUEUED, FrameState.CANCELLED)) {
+                queue.remove(this);
+            }
+            settled.countDown();
+            return true;
+        }
+
+        private void await() throws InterruptedException {
+            settled.await();
+        }
+
+        private void raiseOutcome() throws Exception {
+            switch (waitState.get()) {
+                case SUCCEEDED -> {
+                    return;
+                }
+                case FAILED -> throw failure;
+                case CANCELLED -> throw new CancellationException("Operation cancelled");
+                case WAITING -> throw new IllegalStateException("Framed write wait returned before settling");
+            }
+        }
+
+        private void settle(WaitState outcome, Exception exception) {
+            if (waitState.compareAndSet(WaitState.WAITING, outcome)) {
+                failure = exception;
+                settled.countDown();
+            }
+        }
+    }
+
+    private enum FrameState {
+        QUEUED,
+        WRITING,
+        SUCCEEDED,
+        FAILED,
+        CANCELLED
+    }
+
+    private enum WaitState {
+        WAITING,
+        SUCCEEDED,
+        FAILED,
+        CANCELLED
     }
 
     private static Throwable unwrap(Throwable exception) {

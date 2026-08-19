@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -37,6 +38,8 @@ import java.util.Queue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -377,13 +380,116 @@ class ConnectionTest {
         CompletableFuture<Void> second =
                 CompletableFuture.runAsync(() -> connection.write(new byte[] {2}, null), writers);
         awaitCondition(() -> connection.getWriteQueueDepth() == 2);
-        Throwable dropped = failureOf(() -> connection.write(new byte[] {3}, null));
+        CompletableFuture<Void> third =
+                CompletableFuture.runAsync(() -> connection.write(new byte[] {3}, null), writers);
+        awaitCondition(() -> connection.getWriteQueueDepth() == 3);
+        Throwable dropped = failureOf(() -> connection.write(new byte[] {4}, null));
 
         assertTrue(dropped instanceof ConnectionWriteDroppedException);
         assertEquals(ConnectionState.DISCONNECTED, connection.getState());
+        assertTrue(futureFailure(first) instanceof ConnectionWriteException);
+        assertTrue(futureFailure(second) instanceof ConnectionWriteException);
+        assertTrue(futureFailure(third) instanceof ConnectionWriteException);
+        connection.close();
+    }
+
+    @Test
+    @DisplayName("Framed socket I/O runs only on the connection-owned writer")
+    void framedWritesRunOnOwnedWriter() {
+        FakeStream stream = new FakeStream();
+        SocketConnection connection =
+                new SocketConnection(ENDPOINT, noTimers(), new FakeTcpClient(stream, true), Monitors.shared());
+        Thread caller = Thread.currentThread();
+
+        connection.write(new byte[] {1, 2, 3}, null);
+
+        assertEquals(1, stream.writeThreads.size());
+        assertNotSame(caller, stream.writeThreads.getFirst());
+        assertTrue(stream.writeThreads.getFirst().isVirtual());
+        connection.close();
+    }
+
+    @Test
+    @DisplayName("Cancellation removes a queued frame and preserves the connection")
+    void cancellationBeforeFrameStartsDequeuesIt() throws Exception {
+        FakeStream stream = new FakeStream();
+        CompletableFuture<Void> blocked = new CompletableFuture<>();
+        stream.writeFutures.add(blocked);
+        SocketConnection connection = new SocketConnection(
+                ENDPOINT, options(8, 8, 3, 100, -1, null, null), new FakeTcpClient(stream, true), Monitors.shared());
+        Executor writers = task -> Thread.ofVirtual().start(task);
+        CompletableFuture<Void> first =
+                CompletableFuture.runAsync(() -> connection.write(new byte[] {1}, null), writers);
+        awaitCondition(() -> connection.getWriteQueueDepth() == 1);
+
+        try (CancellationController source = new CancellationController()) {
+            CompletableFuture<Void> cancelled =
+                    CompletableFuture.runAsync(() -> connection.write(new byte[] {2}, source.getSignal()), writers);
+            awaitCondition(() -> connection.getWriteQueueDepth() == 2);
+            source.cancel();
+
+            assertTrue(futureFailure(cancelled) instanceof CancellationException);
+            assertEquals(ConnectionState.CONNECTED, connection.getState());
+            assertEquals(1, connection.getWriteQueueDepth());
+        }
+
         blocked.complete(null);
         first.get(1, TimeUnit.SECONDS);
-        assertTrue(futureFailure(second) instanceof ConnectionWriteException);
+        connection.write(new byte[] {3}, null);
+        assertEquals(List.of(List.of((byte) 1), List.of((byte) 3)), stream.writes);
+        assertEquals(ConnectionState.CONNECTED, connection.getState());
+        connection.close();
+    }
+
+    @Test
+    @DisplayName("Cancellation detaches from an active frame and preserves the connection")
+    void cancellationAfterFrameStartsDetaches() throws Exception {
+        FakeStream stream = new FakeStream();
+        CompletableFuture<Void> blocked = new CompletableFuture<>();
+        stream.writeFutures.add(blocked);
+        SocketConnection connection =
+                new SocketConnection(ENDPOINT, noTimers(), new FakeTcpClient(stream, true), Monitors.shared());
+        Executor writers = task -> Thread.ofVirtual().start(task);
+
+        try (CancellationController source = new CancellationController()) {
+            CompletableFuture<Void> cancelled =
+                    CompletableFuture.runAsync(() -> connection.write(new byte[] {1}, source.getSignal()), writers);
+            awaitCondition(() -> !stream.writes.isEmpty());
+            source.cancel();
+
+            assertTrue(futureFailure(cancelled) instanceof CancellationException);
+            assertEquals(ConnectionState.CONNECTED, connection.getState());
+        }
+
+        blocked.complete(null);
+        awaitCondition(() -> connection.getWriteQueueDepth() == 0);
+        connection.write(new byte[] {2}, null);
+        assertEquals(List.of(List.of((byte) 1), List.of((byte) 2)), stream.writes);
+        assertEquals(ConnectionState.CONNECTED, connection.getState());
+        connection.close();
+    }
+
+    @Test
+    @DisplayName("Teardown promptly settles every active and queued frame")
+    void teardownSettlesParkedFrameWriters() throws Exception {
+        FakeStream stream = new FakeStream();
+        stream.writeFutures.add(new CompletableFuture<>());
+        SocketConnection connection = new SocketConnection(
+                ENDPOINT, options(8, 8, 8, 100, -1, null, null), new FakeTcpClient(stream, true), Monitors.shared());
+        Executor writers = task -> Thread.ofVirtual().start(task);
+        List<CompletableFuture<Void>> calls = new ArrayList<>();
+        for (int value = 0; value < 6; value++) {
+            byte frame = (byte) value;
+            calls.add(CompletableFuture.runAsync(() -> connection.write(new byte[] {frame}, null), writers));
+        }
+        awaitCondition(() -> connection.getWriteQueueDepth() == calls.size());
+
+        connection.disconnect("test teardown");
+
+        for (CompletableFuture<Void> call : calls) {
+            assertTrue(futureFailure(call) instanceof ConnectionWriteException);
+        }
+        assertEquals(0, connection.getWriteQueueDepth());
         connection.close();
     }
 
@@ -662,8 +768,10 @@ class ConnectionTest {
     private static final class FakeStream implements NetworkStream {
         private final Queue<Integer> readCounts = new ArrayDeque<>();
         private final List<Integer> readSizes = new ArrayList<>();
-        private final List<List<Byte>> writes = new ArrayList<>();
-        private final Queue<CompletableFuture<Void>> writeFutures = new ArrayDeque<>();
+        private final List<List<Byte>> writes = new CopyOnWriteArrayList<>();
+        private final Queue<CompletableFuture<Void>> writeFutures = new ConcurrentLinkedQueue<>();
+        private final List<Thread> writeThreads = new CopyOnWriteArrayList<>();
+        private volatile CompletableFuture<Void> activeWriteFuture;
         private byte[] readBytes = new byte[0];
         private int readPosition;
         private int readTimeout = -1;
@@ -707,6 +815,7 @@ class ConnectionTest {
 
         @Override
         public void write(byte[] buffer, int offset, int size) throws IOException {
+            writeThreads.add(Thread.currentThread());
             if (writeFailure != null) {
                 throw asIoException(writeFailure);
             }
@@ -718,7 +827,12 @@ class ConnectionTest {
             if (!writeFutures.isEmpty()) {
                 // Preserved so tests can still stall or fail a write; the
                 // future is now awaited here rather than handed upward.
-                writeFutures.remove().join();
+                activeWriteFuture = writeFutures.remove();
+                try {
+                    activeWriteFuture.join();
+                } finally {
+                    activeWriteFuture = null;
+                }
             }
         }
 
@@ -735,6 +849,15 @@ class ConnectionTest {
         }
 
         @Override
-        public void close() {}
+        public void close() {
+            IOException closed = new IOException("stream closed");
+            CompletableFuture<Void> active = activeWriteFuture;
+            if (active != null) {
+                active.completeExceptionally(closed);
+            }
+            for (CompletableFuture<Void> pending : writeFutures) {
+                pending.completeExceptionally(closed);
+            }
+        }
     }
 }
