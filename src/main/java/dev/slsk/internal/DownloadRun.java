@@ -92,9 +92,9 @@ final class DownloadRun {
      * a permit to a semaphore that never issued one, and inflate the new
      * ceiling by one for the rest of the session.
      */
-    private final AtomicReference<java.util.concurrent.Semaphore> globalPermit = new AtomicReference<>();
+    private java.util.concurrent.Semaphore globalPermit;
 
-    private final AtomicReference<java.util.concurrent.Semaphore> userPermit = new AtomicReference<>();
+    private java.util.concurrent.Semaphore userPermit;
     private final WaitKey transferStartRequestedWaitKey;
     private TransferState lastState = TransferState.NONE;
     private InetSocketAddress endpoint;
@@ -232,10 +232,10 @@ final class DownloadRun {
         // queue after the last had finished.
         java.util.concurrent.Semaphore perUser = domain.downloadSemaphoreFor(download.getUsername());
         Permits.acquire(perUser, cancellationSignal);
-        userPermit.set(perUser);
+        userPermit = perUser;
         java.util.concurrent.Semaphore overall = domain.globalDownloadSemaphore();
         Permits.acquire(overall, cancellationSignal);
-        globalPermit.set(overall);
+        globalPermit = overall;
         domain.diagnostic.debug("Download slots for file "
                 + filenameOnly(download.getFilename()) + " from "
                 + download.getUsername() + " acquired");
@@ -531,18 +531,17 @@ final class DownloadRun {
                 }
             }
         } finally {
-            release(globalPermit, "global");
-            release(userPermit, "per-user");
+            globalPermit = release(globalPermit, "global");
+            userPermit = release(userPermit, "per-user");
             domain.downloads().remove(download.getToken(), download);
             domain.releaseUniqueKey(uniqueKey);
         }
     }
 
     /** Returns one held ceiling, at most once, to the instance it was taken from. */
-    private void release(AtomicReference<java.util.concurrent.Semaphore> held, String which) {
-        java.util.concurrent.Semaphore permit = held.getAndSet(null);
+    private java.util.concurrent.Semaphore release(java.util.concurrent.Semaphore permit, String which) {
         if (permit == null) {
-            return;
+            return null;
         }
         try {
             permit.release();
@@ -554,6 +553,7 @@ final class DownloadRun {
                             + Failures.message(failure),
                     failure);
         }
+        return null;
     }
 
     private void unbindConnectionEvents() {

@@ -729,27 +729,27 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         if (!state.contains(SoulseekClientState.CONNECTED) || !state.contains(SoulseekClientState.LOGGED_IN)) {
             return;
         }
-        if (!statusUpdating.compareAndSet(false, true)) {
-            // The C# source serializes concurrent callers behind a semaphore
-            // so every state change is eventually sent; skipping here dropped
-            // the change outright, and the server held stale branch state
-            // until the fifteen-minute watchdog. The in-flight updater
-            // recomputes before it returns instead.
-            statusDirty.set(true);
-            return;
-        }
+        while (true) {
+            if (!statusUpdating.compareAndSet(false, true)) {
+                // The in-flight updater recomputes before returning rather
+                // than dropping this state change.
+                statusDirty.set(true);
+                return;
+            }
 
-        try {
-            do {
-                statusDirty.set(false);
-                sendStatus(cancellationSignal);
-            } while (statusDirty.get());
-        } finally {
-            statusUpdating.set(false);
-        }
-        if (statusDirty.get()) {
-            // A skipped caller landed in the release window; pick it up.
-            updateStatus(cancellationSignal);
+            try {
+                do {
+                    statusDirty.set(false);
+                    sendStatus(cancellationSignal);
+                } while (statusDirty.get());
+            } finally {
+                statusUpdating.set(false);
+            }
+            if (!statusDirty.get()) {
+                return;
+            }
+            // A caller landed in the release window. Iterate and either take
+            // ownership again or mark the updater that beat us as dirty.
         }
     }
 

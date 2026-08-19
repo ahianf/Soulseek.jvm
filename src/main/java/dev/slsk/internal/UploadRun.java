@@ -50,7 +50,6 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.LongFunction;
 
 /**
@@ -68,9 +67,9 @@ final class UploadRun {
     private final TransferOptions transferOptions;
     private final CancellationSignal cancellationSignal;
     private final String uniqueKey;
-    private final AtomicBoolean perUserPermit = new AtomicBoolean();
-    private final AtomicBoolean slot = new AtomicBoolean();
-    private final AtomicBoolean globalPermit = new AtomicBoolean();
+    private boolean perUserPermit;
+    private boolean slot;
+    private boolean globalPermit;
     private TransferState lastState = TransferState.NONE;
     private Semaphore perUserSemaphore;
     private InetSocketAddress endpoint;
@@ -113,7 +112,7 @@ final class UploadRun {
             updateState(TransferState.QUEUED.or(TransferState.LOCALLY));
 
             Permits.acquire(perUserSemaphore, cancellationSignal);
-            perUserPermit.set(true);
+            perUserPermit = true;
             domain.diagnostic.debug("Upload semaphore for file "
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + " acquired");
@@ -123,13 +122,13 @@ final class UploadRun {
             // second, pluggable gate in front of it was two places to express
             // one rule; the try/catch that guarded the pluggable one went with
             // it, because setting a flag cannot fail.
-            slot.set(true);
+            slot = true;
             domain.diagnostic.debug("Upload slot for file "
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + " acquired");
 
             Permits.acquire(domain.globalUploadSemaphore(), cancellationSignal);
-            globalPermit.set(true);
+            globalPermit = true;
             domain.diagnostic.debug("Global upload semaphore for file "
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + " acquired");
@@ -513,13 +512,15 @@ final class UploadRun {
     }
 
     private void releasePermits() {
-        if (perUserPermit.compareAndSet(true, false)) {
+        if (perUserPermit) {
+            perUserPermit = false;
             perUserSemaphore.release();
             domain.diagnostic.debug("Upload semaphore for file "
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + " released");
         }
-        if (slot.compareAndSet(true, false)) {
+        if (slot) {
+            slot = false;
             domain.diagnostic.debug("Upload slot for file "
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + " released");
@@ -534,7 +535,8 @@ final class UploadRun {
                 }
             }
         }
-        if (globalPermit.compareAndSet(true, false)) {
+        if (globalPermit) {
+            globalPermit = false;
             domain.globalUploadSemaphore().release();
             domain.diagnostic.debug("Global upload semaphore for file "
                     + filenameOnly(upload.getFilename()) + " to "
