@@ -3,7 +3,6 @@
 
 package dev.slsk.user;
 
-import dev.slsk.CancellationSignal;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
@@ -22,10 +21,8 @@ import java.util.function.Consumer;
  * @param user whose share to read
  * @param timeout how long to wait for the peer to start responding
  * @param onProgress called as the response arrives, if anyone is watching
- * @param signal cancels the browse
  */
-public record BrowseRequest(
-        Username user, Duration timeout, Optional<Consumer<BrowseProgress>> onProgress, CancellationSignal signal) {
+public record BrowseRequest(Username user, Duration timeout, Optional<Consumer<BrowseProgress>> onProgress) {
 
     /** The default wait for a peer to begin responding. */
     private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(60);
@@ -35,7 +32,6 @@ public record BrowseRequest(
         Objects.requireNonNull(user, "user");
         Objects.requireNonNull(timeout, "timeout");
         Objects.requireNonNull(onProgress, "onProgress");
-        Objects.requireNonNull(signal, "signal");
         if (timeout.isNegative() || timeout.isZero()) {
             throw new IllegalArgumentException("timeout must be positive: " + timeout);
         }
@@ -48,7 +44,7 @@ public record BrowseRequest(
      * @return the request
      */
     public static BrowseRequest of(Username user) {
-        return new BrowseRequest(user, DEFAULT_TIMEOUT, Optional.empty(), CancellationSignal.none());
+        return new BrowseRequest(user, DEFAULT_TIMEOUT, Optional.empty());
     }
 
     /**
@@ -58,7 +54,7 @@ public record BrowseRequest(
      * @return the request
      */
     public BrowseRequest timeout(Duration value) {
-        return new BrowseRequest(user, value, onProgress, signal);
+        return new BrowseRequest(user, value, onProgress);
     }
 
     /**
@@ -68,16 +64,6 @@ public record BrowseRequest(
      * @return the request
      */
     public BrowseRequest onProgress(Consumer<BrowseProgress> value) {
-        return new BrowseRequest(user, timeout, Optional.of(value), signal);
-    }
-
-    /**
-     * Returns this request with a cancellation signal.
-     *
-     * @param value cancels the browse
-     * @return the request
-     */
-    public BrowseRequest cancelledBy(CancellationSignal value) {
-        return new BrowseRequest(user, timeout, onProgress, value);
+        return new BrowseRequest(user, timeout, Optional.of(value));
     }
 }

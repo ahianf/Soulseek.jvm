@@ -4,7 +4,6 @@
 
 package dev.slsk.internal.messaging.handlers;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.exceptions.RoomJoinForbiddenException;
 import dev.slsk.exceptions.SoulseekClientException;
@@ -13,6 +12,7 @@ import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.connection.ServerInfo;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;

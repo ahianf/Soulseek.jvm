@@ -4,6 +4,7 @@
 package dev.slsk;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -21,6 +22,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -165,6 +167,52 @@ class ExportedSurfaceTest {
                 futures.isEmpty(),
                 "these exported types put a future back on a blocking surface:" + System.lineSeparator()
                         + String.join(System.lineSeparator(), futures));
+    }
+
+    @Test
+    @DisplayName("every blocking member has exactly its base and trailing-Duration forms")
+    void blockingSurfaceMatchesTheTwoFormDeadlineBaseline() {
+        Set<Class<?>> facets = Set.of(
+                Connection.class,
+                Search.class,
+                Downloads.class,
+                Users.class,
+                Rooms.class,
+                PrivateRooms.class,
+                Chat.class,
+                Shares.class,
+                Me.class);
+        java.util.Map<String, List<Method>> families = new java.util.TreeMap<>();
+        for (Class<?> facet : facets) {
+            for (Method method : facet.getDeclaredMethods()) {
+                if (!Arrays.asList(method.getExceptionTypes()).contains(InterruptedException.class)) {
+                    continue;
+                }
+                Class<?>[] parameters = method.getParameterTypes();
+                boolean timed = parameters.length != 0 && parameters[parameters.length - 1] == java.time.Duration.class;
+                int baseLength = parameters.length - (timed ? 1 : 0);
+                String key = facet.getSimpleName() + "." + method.getName()
+                        + Arrays.toString(Arrays.copyOf(parameters, baseLength));
+                families.computeIfAbsent(key, ignored -> new ArrayList<>()).add(method);
+            }
+        }
+
+        assertEquals(31, families.size(), "the normative blocking-member table changed");
+        for (java.util.Map.Entry<String, List<Method>> family : families.entrySet()) {
+            assertEquals(2, family.getValue().size(), family.getKey() + " does not have exactly two forms");
+            Method base = family.getValue().stream()
+                    .filter(method -> method.getParameterCount() == 0
+                            || method.getParameterTypes()[method.getParameterCount() - 1] != java.time.Duration.class)
+                    .findFirst()
+                    .orElseThrow();
+            Method timed = family.getValue().stream()
+                    .filter(method -> method.getParameterCount() != 0
+                            && method.getParameterTypes()[method.getParameterCount() - 1] == java.time.Duration.class)
+                    .findFirst()
+                    .orElseThrow();
+            assertFalse(Arrays.asList(base.getExceptionTypes()).contains(TimeoutException.class));
+            assertTrue(Arrays.asList(timed.getExceptionTypes()).contains(TimeoutException.class));
+        }
     }
 
     @Test

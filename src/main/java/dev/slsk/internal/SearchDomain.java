@@ -3,13 +3,13 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.DuplicateTokenException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.Permits;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.events.SearchResponseReceivedEvent;
 import dev.slsk.internal.events.SearchStateChangedEvent;
 import dev.slsk.internal.messaging.messages.RoomSearchRequest;

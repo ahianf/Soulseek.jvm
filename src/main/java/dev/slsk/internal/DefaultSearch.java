@@ -4,15 +4,16 @@
 package dev.slsk.internal;
 
 import dev.slsk.Attachment;
-import dev.slsk.CancellationController;
-import dev.slsk.CancellationSignal;
-import dev.slsk.CancellationSubscription;
 import dev.slsk.EventStream;
 import dev.slsk.Search;
 import dev.slsk.events.SearchEvent;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Usernames;
+import dev.slsk.internal.concurrent.BlockingInvocation;
+import dev.slsk.internal.concurrent.CancellationController;
+import dev.slsk.internal.concurrent.CancellationSignal;
+import dev.slsk.internal.concurrent.CancellationSubscription;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.events.SearchRequestEvent;
 import dev.slsk.internal.events.SearchRequestResponseEvent;
@@ -41,6 +42,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -238,14 +240,30 @@ final class DefaultSearch implements Search {
         // Returns the id, not the result: the search runs on a virtual thread of
         // its own and its responses reach the caller as events. `execute` never
         // throws, so nothing here can reach the thread's uncaught handler.
-        NetworkExecutor.executor().execute(() -> execute(state));
+        NetworkExecutor.executor().execute(() -> {
+            try {
+                execute(state);
+            } catch (InterruptedException interrupted) {
+                // start() owns this library worker. Its interruption is a
+                // lifecycle stop, not a public invocation to report.
+                finish(state, SearchStatus.CANCELLED);
+            }
+        });
         return state.id;
     }
 
     @Override
-    public SearchResult await(SearchId id, CancellationSignal signal) {
+    public SearchResult await(SearchId id) throws InterruptedException {
+        return BlockingInvocation.run(signal -> await(id, signal));
+    }
+
+    @Override
+    public SearchResult await(SearchId id, Duration timeout) throws InterruptedException, TimeoutException {
+        return BlockingInvocation.run(client.getScheduler(), timeout, signal -> await(id, signal));
+    }
+
+    private SearchResult await(SearchId id, CancellationSignal signal) throws InterruptedException {
         Objects.requireNonNull(id, "id");
-        Objects.requireNonNull(signal, "signal");
         State state = state(id);
 
         if (!state.status.isTerminal()) {
@@ -255,11 +273,10 @@ final class DefaultSearch implements Search {
                             done.countDown();
                         }
                     });
-                    // The signal stops the search rather than only the wait, as
-                    // the facet documents; stopping it produces the terminal
-                    // event this is waiting for, so the latch needs no separate
-                    // release.
-                    CancellationSubscription cancelled = signal.register(() -> stop(id))) {
+                    // This invocation owns only its wait. Explicit stop(id)
+                    // remains the sole way to end an independently started
+                    // search.
+                    CancellationSubscription cancelled = signal.register(done::countDown)) {
                 // Re-read after subscribing: it may have finished between the
                 // two, and a wait that misses its own event never returns.
                 if (!state.status.isTerminal()) {
@@ -267,13 +284,22 @@ final class DefaultSearch implements Search {
                 }
             }
         }
+        signal.throwIfCancellationRequested();
         return state.result();
     }
 
     @Override
-    public SearchResult run(SearchQuery query, CancellationSignal signal) {
+    public SearchResult run(SearchQuery query) throws InterruptedException {
+        return BlockingInvocation.run(signal -> run(query, signal));
+    }
+
+    @Override
+    public SearchResult run(SearchQuery query, Duration timeout) throws InterruptedException, TimeoutException {
+        return BlockingInvocation.run(client.getScheduler(), timeout, signal -> run(query, signal));
+    }
+
+    private SearchResult run(SearchQuery query, CancellationSignal signal) throws InterruptedException {
         Objects.requireNonNull(query, "query");
-        Objects.requireNonNull(signal, "signal");
         State state = begin(query);
         // Chained rather than passed down, so `stop(id)` and the caller's own
         // signal cancel the same thing.
@@ -300,7 +326,7 @@ final class DefaultSearch implements Search {
      * #start}, and a search that fails is a search that ended, not an error to
      * propagate.
      */
-    private SearchResult execute(State state) {
+    private SearchResult execute(State state) throws InterruptedException {
         SearchQuery query = state.query;
         CancellationSignal signal = state.controller.getSignal();
         SearchStatus status;
@@ -314,6 +340,12 @@ final class DefaultSearch implements Search {
                     signal);
             status = SearchStatus.COMPLETED;
         } catch (RuntimeException exception) {
+            InterruptedException interrupted = BlockingInvocation.interruption(exception);
+            if (interrupted != null) {
+                state.controller.cancel();
+                finish(state, SearchStatus.CANCELLED);
+                throw interrupted;
+            }
             status = signal.isCancellationRequested() ? SearchStatus.CANCELLED : SearchStatus.TIMED_OUT;
         }
         finish(state, status);
@@ -358,7 +390,8 @@ final class DefaultSearch implements Search {
         return state;
     }
 
-    private static void waitFor(CountDownLatch latch, java.util.function.BooleanSupplier completed) {
+    private static void waitFor(CountDownLatch latch, java.util.function.BooleanSupplier completed)
+            throws InterruptedException {
         try {
             latch.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
         } catch (InterruptedException interrupted) {
@@ -366,7 +399,7 @@ final class DefaultSearch implements Search {
                 Thread.currentThread().interrupt();
                 return;
             }
-            throw new java.util.concurrent.CancellationException("the wait was interrupted");
+            throw interrupted;
         }
     }
 

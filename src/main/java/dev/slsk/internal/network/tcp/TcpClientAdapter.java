@@ -4,8 +4,8 @@
 
 package dev.slsk.internal.network.tcp;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.ProxyException;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;

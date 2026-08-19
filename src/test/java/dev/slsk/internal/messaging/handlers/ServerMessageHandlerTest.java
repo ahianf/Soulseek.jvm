@@ -12,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.RoomJoinForbiddenException;
 import dev.slsk.internal.ServerLink;
 import dev.slsk.internal.ServerLinks;
@@ -21,6 +20,7 @@ import dev.slsk.internal.common.Eventually;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.connection.ServerInfo;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.PrivateMessageReceivedEvent;

@@ -8,8 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationController;
-import dev.slsk.CancellationSignal;
 import dev.slsk.events.SearchEvent;
 import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.diagnostics.DiagnosticLevel;
@@ -31,6 +29,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -91,7 +90,11 @@ class DefaultSearchTest {
             CountDownLatch returned = new CountDownLatch(1);
             List<SearchResult> results = Collections.synchronizedList(new ArrayList<>());
             Thread waiter = Thread.ofVirtual().start(() -> {
-                results.add(fixture.search.await(id, CancellationSignal.none()));
+                try {
+                    results.add(fixture.search.await(id));
+                } catch (InterruptedException interrupted) {
+                    throw new AssertionError(interrupted);
+                }
                 returned.countDown();
             });
 
@@ -108,12 +111,12 @@ class DefaultSearchTest {
 
     @Test
     @DisplayName("await on a finished search returns without waiting")
-    void awaitOnAFinishedSearchReturns() {
+    void awaitOnAFinishedSearchReturns() throws InterruptedException {
         try (Fixture fixture = new Fixture()) {
             SearchId id = fixture.search.start(query(NEVER));
             fixture.search.stop(id);
 
-            SearchResult result = fixture.search.await(id, CancellationSignal.none());
+            SearchResult result = fixture.search.await(id);
 
             assertEquals(SearchStatus.CANCELLED, result.status());
             assertEquals(id, result.id());
@@ -121,37 +124,49 @@ class DefaultSearchTest {
     }
 
     @Test
-    @DisplayName("the signal passed to await stops the search, as the facet documents")
-    void awaitSignalStopsTheSearch() {
-        try (Fixture fixture = new Fixture();
-                CancellationController controller = new CancellationController()) {
+    @DisplayName("interrupting await stops only the wait, not the independently owned search")
+    void interruptingAwaitLeavesTheSearchRunning() throws Exception {
+        try (Fixture fixture = new Fixture()) {
             SearchId id = fixture.search.start(query(NEVER));
             fixture.waitUntil(() -> !fixture.server.messages.isEmpty());
 
-            Thread.ofVirtual().start(() -> {
-                sleep(50);
-                controller.cancel();
+            AtomicReference<Throwable> failure = new AtomicReference<>();
+            Thread waiter = Thread.ofVirtual().start(() -> {
+                try {
+                    fixture.search.await(id);
+                } catch (Throwable thrown) {
+                    failure.set(thrown);
+                }
             });
-            SearchResult result = fixture.search.await(id, controller.getSignal());
+            sleep(50);
+            waiter.interrupt();
+            waiter.join();
 
-            assertEquals(SearchStatus.CANCELLED, result.status());
-            assertEquals(SearchStatus.CANCELLED, fixture.search.get(id).status());
+            assertTrue(failure.get() instanceof InterruptedException);
+            assertEquals(SearchStatus.IN_PROGRESS, fixture.search.get(id).status());
+            fixture.search.stop(id);
         }
     }
 
     @Test
-    @DisplayName("a search cancelled through run's own signal is cancelled, not timed out")
-    void runIsCancellableThroughItsSignal() {
-        try (Fixture fixture = new Fixture();
-                CancellationController controller = new CancellationController()) {
-            Thread.ofVirtual().start(() -> {
-                sleep(100);
-                controller.cancel();
+    @DisplayName("interrupting run cancels the search the invocation owns")
+    void interruptingRunCancelsItsSearch() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            AtomicReference<Throwable> failure = new AtomicReference<>();
+            Thread runner = Thread.ofVirtual().start(() -> {
+                try {
+                    fixture.search.run(query(NEVER));
+                } catch (Throwable thrown) {
+                    failure.set(thrown);
+                }
             });
+            fixture.waitUntil(() -> !fixture.search.active().isEmpty());
+            SearchId id = fixture.search.active().get(0).id();
+            runner.interrupt();
+            runner.join();
 
-            SearchResult result = fixture.search.run(query(NEVER), controller.getSignal());
-
-            assertEquals(SearchStatus.CANCELLED, result.status());
+            assertTrue(failure.get() instanceof InterruptedException);
+            assertEquals(SearchStatus.CANCELLED, fixture.search.get(id).status());
         }
     }
 
@@ -162,7 +177,11 @@ class DefaultSearchTest {
             CountDownLatch returned = new CountDownLatch(1);
             List<SearchResult> results = Collections.synchronizedList(new ArrayList<>());
             Thread.ofVirtual().start(() -> {
-                results.add(fixture.search.run(query(NEVER), CancellationSignal.none()));
+                try {
+                    results.add(fixture.search.run(query(NEVER)));
+                } catch (InterruptedException interrupted) {
+                    throw new AssertionError(interrupted);
+                }
                 returned.countDown();
             });
 
@@ -243,8 +262,7 @@ class DefaultSearchTest {
         try (Fixture fixture = new Fixture()) {
             SearchId unknown = SearchId.ofToken(987654);
             assertThrows(IllegalArgumentException.class, () -> fixture.search.get(unknown));
-            assertThrows(
-                    IllegalArgumentException.class, () -> fixture.search.await(unknown, CancellationSignal.none()));
+            assertThrows(IllegalArgumentException.class, () -> fixture.search.await(unknown));
         }
     }
 

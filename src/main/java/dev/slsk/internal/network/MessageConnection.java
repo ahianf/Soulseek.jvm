@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.network;
 
-import dev.slsk.CancellationSignal;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.network.tcp.Connection;
 

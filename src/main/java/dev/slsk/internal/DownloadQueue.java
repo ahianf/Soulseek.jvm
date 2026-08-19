@@ -3,12 +3,12 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.CancellationController;
 import dev.slsk.download.Download;
 import dev.slsk.download.DownloadPolicy;
 import dev.slsk.download.DownloadRequest;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Scheduler;
+import dev.slsk.internal.concurrent.CancellationController;
 import dev.slsk.spi.TransferStore;
 import dev.slsk.transfer.Priority;
 import dev.slsk.transfer.Progress;
@@ -168,7 +168,7 @@ final class DownloadQueue {
             resumeOffset = Math.max(0, value);
         }
 
-        dev.slsk.CancellationSignal signal() {
+        dev.slsk.internal.concurrent.CancellationSignal signal() {
             return cancellation.get().getSignal();
         }
 

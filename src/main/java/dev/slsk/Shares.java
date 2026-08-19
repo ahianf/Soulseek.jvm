@@ -7,7 +7,9 @@ import dev.slsk.events.ShareEvent;
 import dev.slsk.share.ShareIndex;
 import dev.slsk.share.SharedFolder;
 import dev.slsk.spi.ShareCatalog;
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.TimeoutException;
 
 /**
  * What we offer to the network.
@@ -45,10 +47,11 @@ public interface Shares {
      * <p>Blocks. On a large share this takes a while, which is why it reports
      * progress through {@link #events()}.
      *
-     * @param signal cancels the scan
      * @return the index as rebuilt
      */
-    ShareIndex rescan(CancellationSignal signal);
+    ShareIndex rescan() throws InterruptedException;
+
+    ShareIndex rescan(Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Returns what we are currently sharing.

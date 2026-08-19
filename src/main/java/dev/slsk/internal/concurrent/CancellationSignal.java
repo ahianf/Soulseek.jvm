@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Ahian Fernandez
 // SPDX-License-Identifier: GPL-3.0-only
 
-package dev.slsk;
+package dev.slsk.internal.concurrent;
 
 import java.util.Objects;
 import java.util.concurrent.CancellationException;

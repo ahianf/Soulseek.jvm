@@ -5,6 +5,8 @@ package dev.slsk;
 
 import dev.slsk.events.ChatEvent;
 import dev.slsk.user.Username;
+import java.time.Duration;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Private messages between users.
@@ -26,9 +28,10 @@ public interface Chat {
      *
      * @param to the recipient
      * @param message what to say
-     * @param signal cancels the send
      */
-    void send(Username to, String message, CancellationSignal signal);
+    void send(Username to, String message) throws InterruptedException;
+
+    void send(Username to, String message, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Returns the stream of chat events.

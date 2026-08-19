@@ -3,7 +3,6 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.UserEndpointCacheException;
 import dev.slsk.exceptions.UserEndpointException;
@@ -16,6 +15,8 @@ import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
+import dev.slsk.internal.concurrent.CancellationSignal;
+import dev.slsk.internal.concurrent.InterruptedOperationException;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.handlers.BrowseResponseConnection;
 import dev.slsk.internal.messaging.messages.BrowseRequest;
@@ -338,7 +339,7 @@ final class UserDirectory {
         try {
             Permits.acquire(userEndpointSemaphoreSyncRoot, token);
         } catch (InterruptedException interrupted) {
-            throw new CancellationException("The endpoint-cache lookup was interrupted");
+            throw new InterruptedOperationException("The endpoint-cache lookup was interrupted", interrupted);
         }
         try {
             semaphore = userEndpointSemaphores.computeIfAbsent(requestedUsername, ignored -> new Semaphore(1));
@@ -351,7 +352,7 @@ final class UserDirectory {
         try {
             Permits.acquire(semaphore, token);
         } catch (InterruptedException interrupted) {
-            throw new CancellationException("The endpoint lookup was interrupted");
+            throw new InterruptedOperationException("The endpoint lookup was interrupted", interrupted);
         }
 
         try {

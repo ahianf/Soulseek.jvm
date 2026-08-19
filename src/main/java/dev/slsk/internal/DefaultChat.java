@@ -3,18 +3,20 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.Chat;
 import dev.slsk.EventStream;
 import dev.slsk.events.ChatEvent;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Usernames;
+import dev.slsk.internal.concurrent.BlockingInvocation;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.events.PrivateMessageReceivedEvent;
 import dev.slsk.user.Username;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.concurrent.TimeoutException;
 
 /**
  * {@link Chat}, over the engine.
@@ -36,11 +38,13 @@ import java.util.Objects;
 final class DefaultChat implements Chat {
 
     private final ServerLink server;
+    private final SoulseekEngine client;
     private final EventBus<ChatEvent> events;
     private final DiagnosticSink diagnostics;
 
     DefaultChat(SoulseekEngine client, EventBus<ChatEvent> events, DiagnosticSink diagnostics) {
-        this.server = Objects.requireNonNull(client, "client").server();
+        this.client = Objects.requireNonNull(client, "client");
+        this.server = client.server();
         this.events = Objects.requireNonNull(events, "events");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
         client.events().on(Kind.PRIVATE_MESSAGE_RECEIVED, (PrivateMessageReceivedEvent event) -> onMessage(event));
@@ -91,10 +95,24 @@ final class DefaultChat implements Chat {
     }
 
     @Override
-    public void send(Username to, String message, CancellationSignal signal) {
+    public void send(Username to, String message) throws InterruptedException {
+        BlockingInvocation.run(signal -> {
+            send(to, message, signal);
+            return null;
+        });
+    }
+
+    @Override
+    public void send(Username to, String message, Duration timeout) throws InterruptedException, TimeoutException {
+        BlockingInvocation.run(client.getScheduler(), timeout, signal -> {
+            send(to, message, signal);
+            return null;
+        });
+    }
+
+    private void send(Username to, String message, dev.slsk.internal.concurrent.CancellationSignal signal) {
         Objects.requireNonNull(to, "to");
         Objects.requireNonNull(message, "message");
-        Objects.requireNonNull(signal, "signal");
         server.sendPrivateMessage(to.value(), message, signal);
     }
 

@@ -10,8 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.ProxyException;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetAddress;

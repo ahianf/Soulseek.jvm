@@ -9,6 +9,7 @@ import dev.slsk.connection.ServerInfo;
 import dev.slsk.events.ConnectionEvent;
 import java.time.Duration;
 import java.util.Optional;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 /**
@@ -26,19 +27,24 @@ public interface Connection {
      * Connects to the default server and logs in with the configured
      * credentials. Blocks until online, or until it fails.
      *
-     * @param signal cancels the attempt; {@link CancellationSignal#none()} to
-     *     let it run to completion
+     * @throws InterruptedException if the calling thread is interrupted
      */
-    void connect(CancellationSignal signal);
+    void connect() throws InterruptedException;
+
+    /** Connects to the default server within the caller's deadline. */
+    void connect(Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Connects to a named server and logs in. Blocks until online, or until it
      * fails.
      *
      * @param address where to connect
-     * @param signal cancels the attempt
+     * @throws InterruptedException if the calling thread is interrupted
      */
-    void connect(ServerAddress address, CancellationSignal signal);
+    void connect(ServerAddress address) throws InterruptedException;
+
+    /** Connects to a named server within the caller's deadline. */
+    void connect(ServerAddress address, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Disconnects.
@@ -70,10 +76,13 @@ public interface Connection {
     /**
      * Measures the round trip to the server.
      *
-     * @param signal cancels the measurement
      * @return the round-trip time
+     * @throws InterruptedException if the calling thread is interrupted
      */
-    Duration ping(CancellationSignal signal);
+    Duration ping() throws InterruptedException;
+
+    /** Measures the server round trip within the caller's deadline. */
+    Duration ping(Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Returns the stream of connection events.

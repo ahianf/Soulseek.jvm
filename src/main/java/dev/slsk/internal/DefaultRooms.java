@@ -4,13 +4,15 @@
 package dev.slsk.internal;
 
 import dev.slsk.Attachment;
-import dev.slsk.CancellationSignal;
 import dev.slsk.EventStream;
 import dev.slsk.PrivateRooms;
 import dev.slsk.Rooms;
 import dev.slsk.events.RoomEvent;
 import dev.slsk.internal.EngineEvents.Kind;
+import dev.slsk.internal.common.Scheduler;
 import dev.slsk.internal.common.Usernames;
+import dev.slsk.internal.concurrent.BlockingInvocation;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.events.PublicChatMessageReceivedEvent;
 import dev.slsk.internal.events.RoomJoinedEvent;
@@ -27,6 +29,7 @@ import dev.slsk.room.RoomUser;
 import dev.slsk.user.UserPresence;
 import dev.slsk.user.UserStatistics;
 import dev.slsk.user.Username;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -37,6 +40,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -70,7 +74,7 @@ final class DefaultRooms implements Rooms {
         this.registry = client.rooms();
         this.server = client.server();
         this.events = Objects.requireNonNull(events, "events");
-        this.privateRooms = new DefaultPrivateRooms(registry);
+        this.privateRooms = new DefaultPrivateRooms(registry, client.getScheduler());
         wire();
     }
 
@@ -312,15 +316,27 @@ final class DefaultRooms implements Rooms {
     // --- operations --------------------------------------------------------
 
     @Override
-    public RoomList list(CancellationSignal signal) {
-        Objects.requireNonNull(signal, "signal");
-        return roomList(registry.getRoomList(signal));
+    public RoomList list() throws InterruptedException {
+        return BlockingInvocation.run(signal -> roomList(registry.getRoomList(signal)));
     }
 
     @Override
-    public Room join(String name, CancellationSignal signal) {
+    public RoomList list(Duration timeout) throws InterruptedException, TimeoutException {
+        return BlockingInvocation.run(client.getScheduler(), timeout, signal -> roomList(registry.getRoomList(signal)));
+    }
+
+    @Override
+    public Room join(String name) throws InterruptedException {
+        return BlockingInvocation.run(signal -> join(name, signal));
+    }
+
+    @Override
+    public Room join(String name, Duration timeout) throws InterruptedException, TimeoutException {
+        return BlockingInvocation.run(client.getScheduler(), timeout, signal -> join(name, signal));
+    }
+
+    private Room join(String name, CancellationSignal signal) {
         Objects.requireNonNull(name, "room");
-        Objects.requireNonNull(signal, "signal");
         Room joined = room(registry.joinRoom(name, signal));
         events.mutateAndPublish(() -> {
             rooms.put(name, joined);
@@ -330,10 +346,25 @@ final class DefaultRooms implements Rooms {
     }
 
     @Override
-    public void leave(String name) {
+    public void leave(String name) throws InterruptedException {
+        BlockingInvocation.run(signal -> {
+            leave(name, signal);
+            return null;
+        });
+    }
+
+    @Override
+    public void leave(String name, Duration timeout) throws InterruptedException, TimeoutException {
+        BlockingInvocation.run(client.getScheduler(), timeout, signal -> {
+            leave(name, signal);
+            return null;
+        });
+    }
+
+    private void leave(String name, CancellationSignal signal) {
         Objects.requireNonNull(name, "room");
         if (rooms.containsKey(name)) {
-            registry.leaveRoom(name);
+            registry.leaveRoom(name, signal);
             events.mutateAndPublish(() -> {
                 rooms.remove(name);
                 return new RoomEvent.Left(name, Instant.now());
@@ -342,17 +373,47 @@ final class DefaultRooms implements Rooms {
     }
 
     @Override
-    public void say(String name, String message) {
-        Objects.requireNonNull(name, "room");
-        Objects.requireNonNull(message, "message");
-        registry.sendRoomMessage(name, message);
+    public void say(String name, String message) throws InterruptedException {
+        BlockingInvocation.run(signal -> {
+            say(name, message, signal);
+            return null;
+        });
     }
 
     @Override
-    public void setTicker(String name, String message) {
+    public void say(String name, String message, Duration timeout) throws InterruptedException, TimeoutException {
+        BlockingInvocation.run(client.getScheduler(), timeout, signal -> {
+            say(name, message, signal);
+            return null;
+        });
+    }
+
+    private void say(String name, String message, CancellationSignal signal) {
         Objects.requireNonNull(name, "room");
         Objects.requireNonNull(message, "message");
-        registry.setRoomTicker(name, message);
+        registry.sendRoomMessage(name, message, signal);
+    }
+
+    @Override
+    public void setTicker(String name, String message) throws InterruptedException {
+        BlockingInvocation.run(signal -> {
+            setTicker(name, message, signal);
+            return null;
+        });
+    }
+
+    @Override
+    public void setTicker(String name, String message, Duration timeout) throws InterruptedException, TimeoutException {
+        BlockingInvocation.run(client.getScheduler(), timeout, signal -> {
+            setTicker(name, message, signal);
+            return null;
+        });
+    }
+
+    private void setTicker(String name, String message, CancellationSignal signal) {
+        Objects.requireNonNull(name, "room");
+        Objects.requireNonNull(message, "message");
+        registry.setRoomTicker(name, message, signal);
     }
 
     @Override
@@ -371,13 +432,35 @@ final class DefaultRooms implements Rooms {
     }
 
     @Override
-    public void startPublicChat() {
-        server.startPublicChat();
+    public void startPublicChat() throws InterruptedException {
+        BlockingInvocation.run(signal -> {
+            server.startPublicChat(signal);
+            return null;
+        });
     }
 
     @Override
-    public void stopPublicChat() {
-        server.stopPublicChat();
+    public void startPublicChat(Duration timeout) throws InterruptedException, TimeoutException {
+        BlockingInvocation.run(client.getScheduler(), timeout, signal -> {
+            server.startPublicChat(signal);
+            return null;
+        });
+    }
+
+    @Override
+    public void stopPublicChat() throws InterruptedException {
+        BlockingInvocation.run(signal -> {
+            server.stopPublicChat(signal);
+            return null;
+        });
+    }
+
+    @Override
+    public void stopPublicChat(Duration timeout) throws InterruptedException, TimeoutException {
+        BlockingInvocation.run(client.getScheduler(), timeout, signal -> {
+            server.stopPublicChat(signal);
+            return null;
+        });
     }
 
     @Override
@@ -396,36 +479,101 @@ final class DefaultRooms implements Rooms {
     }
 
     /** {@link PrivateRooms} over the same registry. */
-    private record DefaultPrivateRooms(RoomRegistry registry) implements PrivateRooms {
+    private record DefaultPrivateRooms(RoomRegistry registry, Scheduler scheduler) implements PrivateRooms {
 
         @Override
-        public void addMember(String room, Username user, CancellationSignal signal) {
-            registry.addPrivateRoomMember(require(room), user.value(), require(signal));
+        public void addMember(String room, Username user) throws InterruptedException {
+            run(signal ->
+                    registry.addPrivateRoomMember(require(room), require(user).value(), signal));
         }
 
         @Override
-        public void removeMember(String room, Username user, CancellationSignal signal) {
-            registry.removePrivateRoomMember(require(room), user.value(), require(signal));
+        public void addMember(String room, Username user, Duration timeout)
+                throws InterruptedException, TimeoutException {
+            run(
+                    timeout,
+                    signal -> registry.addPrivateRoomMember(
+                            require(room), require(user).value(), signal));
         }
 
         @Override
-        public void addOperator(String room, Username user, CancellationSignal signal) {
-            registry.addPrivateRoomModerator(require(room), user.value(), require(signal));
+        public void removeMember(String room, Username user) throws InterruptedException {
+            run(signal -> registry.removePrivateRoomMember(
+                    require(room), require(user).value(), signal));
         }
 
         @Override
-        public void removeOperator(String room, Username user, CancellationSignal signal) {
-            registry.removePrivateRoomModerator(require(room), user.value(), require(signal));
+        public void removeMember(String room, Username user, Duration timeout)
+                throws InterruptedException, TimeoutException {
+            run(
+                    timeout,
+                    signal -> registry.removePrivateRoomMember(
+                            require(room), require(user).value(), signal));
         }
 
         @Override
-        public void dropMembership(String room, CancellationSignal signal) {
-            registry.dropPrivateRoomMembership(require(room), require(signal));
+        public void addOperator(String room, Username user) throws InterruptedException {
+            run(signal -> registry.addPrivateRoomModerator(
+                    require(room), require(user).value(), signal));
         }
 
         @Override
-        public void dropOwnership(String room, CancellationSignal signal) {
-            registry.dropPrivateRoomOwnership(require(room), require(signal));
+        public void addOperator(String room, Username user, Duration timeout)
+                throws InterruptedException, TimeoutException {
+            run(
+                    timeout,
+                    signal -> registry.addPrivateRoomModerator(
+                            require(room), require(user).value(), signal));
+        }
+
+        @Override
+        public void removeOperator(String room, Username user) throws InterruptedException {
+            run(signal -> registry.removePrivateRoomModerator(
+                    require(room), require(user).value(), signal));
+        }
+
+        @Override
+        public void removeOperator(String room, Username user, Duration timeout)
+                throws InterruptedException, TimeoutException {
+            run(
+                    timeout,
+                    signal -> registry.removePrivateRoomModerator(
+                            require(room), require(user).value(), signal));
+        }
+
+        @Override
+        public void dropMembership(String room) throws InterruptedException {
+            run(signal -> registry.dropPrivateRoomMembership(require(room), signal));
+        }
+
+        @Override
+        public void dropMembership(String room, Duration timeout) throws InterruptedException, TimeoutException {
+            run(timeout, signal -> registry.dropPrivateRoomMembership(require(room), signal));
+        }
+
+        @Override
+        public void dropOwnership(String room) throws InterruptedException {
+            run(signal -> registry.dropPrivateRoomOwnership(require(room), signal));
+        }
+
+        @Override
+        public void dropOwnership(String room, Duration timeout) throws InterruptedException, TimeoutException {
+            run(timeout, signal -> registry.dropPrivateRoomOwnership(require(room), signal));
+        }
+
+        private void run(java.util.function.Consumer<CancellationSignal> operation) throws InterruptedException {
+            BlockingInvocation.run(signal -> {
+                operation.accept(signal);
+                return null;
+            });
+        }
+
+        private void run(Duration timeout, java.util.function.Consumer<CancellationSignal> operation)
+                throws InterruptedException, TimeoutException {
+            BlockingInvocation.run(scheduler, timeout, signal -> {
+                operation.accept(signal);
+                return null;
+            });
         }
 
         private static <T> T require(T value) {

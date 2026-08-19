@@ -4,9 +4,6 @@
 
 package dev.slsk.internal.network;
 
-import dev.slsk.CancellationController;
-import dev.slsk.CancellationSignal;
-import dev.slsk.CancellationSubscription;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.internal.ServerLink;
 import dev.slsk.internal.common.Constants;
@@ -15,6 +12,9 @@ import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
+import dev.slsk.internal.concurrent.CancellationController;
+import dev.slsk.internal.concurrent.CancellationSignal;
+import dev.slsk.internal.concurrent.CancellationSubscription;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;
 import dev.slsk.internal.diagnostics.DiagnosticSink;

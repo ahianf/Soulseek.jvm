@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.Attachment;
-import dev.slsk.CancellationSignal;
 import dev.slsk.Soulseek;
 import dev.slsk.events.RoomEvent;
 import dev.slsk.internal.options.SoulseekClientOptions;
@@ -45,7 +44,7 @@ class DefaultRoomsTest {
 
     @Test
     @DisplayName("leaving a room we are not in does nothing rather than failing")
-    void leaveIsAnIdempotentIntent() {
+    void leaveIsAnIdempotentIntent() throws InterruptedException {
         try (Soulseek slsk = client()) {
             slsk.rooms().leave("nowhere");
             slsk.rooms().leave("nowhere");
@@ -66,7 +65,7 @@ class DefaultRoomsTest {
     void rejectsNullArguments() {
         try (Soulseek slsk = client()) {
             assertThrows(NullPointerException.class, () -> slsk.rooms().list(null));
-            assertThrows(NullPointerException.class, () -> slsk.rooms().join(null, CancellationSignal.none()));
+            assertThrows(NullPointerException.class, () -> slsk.rooms().join((String) null));
             assertThrows(NullPointerException.class, () -> slsk.rooms().join("r", null));
             assertThrows(NullPointerException.class, () -> slsk.rooms().leave(null));
             assertThrows(NullPointerException.class, () -> slsk.rooms().say(null, "m"));

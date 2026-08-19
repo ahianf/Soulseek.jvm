@@ -4,7 +4,6 @@
 package dev.slsk.internal;
 
 import dev.slsk.Attachment;
-import dev.slsk.CancellationSignal;
 import dev.slsk.Downloads;
 import dev.slsk.EventStream;
 import dev.slsk.download.Download;
@@ -13,6 +12,8 @@ import dev.slsk.download.DownloadRequest;
 import dev.slsk.events.DownloadEvent;
 import dev.slsk.exceptions.TransferNotFoundException;
 import dev.slsk.internal.common.Usernames;
+import dev.slsk.internal.concurrent.BlockingInvocation;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.messaging.handlers.PeerServices;
 import dev.slsk.internal.messaging.messages.TransferRequest;
@@ -25,6 +26,7 @@ import dev.slsk.transfer.TransferOutcome;
 import dev.slsk.transfer.TransferState;
 import dev.slsk.user.Username;
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +36,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -356,8 +359,16 @@ final class DefaultDownloads implements Downloads {
     }
 
     @Override
-    public Download await(TransferId id, CancellationSignal signal) {
-        Objects.requireNonNull(signal, "signal");
+    public Download await(TransferId id) throws InterruptedException {
+        return BlockingInvocation.run(signal -> await(id, signal));
+    }
+
+    @Override
+    public Download await(TransferId id, Duration timeout) throws InterruptedException, TimeoutException {
+        return BlockingInvocation.run(client.getScheduler(), timeout, signal -> await(id, signal));
+    }
+
+    private Download await(TransferId id, CancellationSignal signal) throws InterruptedException {
         Download current = get(id);
         if (current.state() instanceof TransferState.Finished) {
             return current;
@@ -369,7 +380,8 @@ final class DefaultDownloads implements Downloads {
                         finished.countDown();
                     }
                 });
-                dev.slsk.CancellationSubscription cancelled = signal.register(finished::countDown)) {
+                dev.slsk.internal.concurrent.CancellationSubscription cancelled =
+                        signal.register(finished::countDown)) {
             // Re-read after subscribing: it may have finished between the two,
             // and a wait that misses its own event never returns.
             if (!(get(id).state() instanceof TransferState.Finished)) {
@@ -380,7 +392,8 @@ final class DefaultDownloads implements Downloads {
         return get(id);
     }
 
-    private static void waitFor(CountDownLatch latch, java.util.function.BooleanSupplier completed) {
+    private static void waitFor(CountDownLatch latch, java.util.function.BooleanSupplier completed)
+            throws InterruptedException {
         try {
             latch.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
         } catch (InterruptedException interrupted) {
@@ -388,7 +401,7 @@ final class DefaultDownloads implements Downloads {
                 Thread.currentThread().interrupt();
                 return;
             }
-            throw new java.util.concurrent.CancellationException("the wait was interrupted");
+            throw interrupted;
         }
     }
 

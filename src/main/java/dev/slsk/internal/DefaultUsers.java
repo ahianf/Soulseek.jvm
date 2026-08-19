@@ -3,12 +3,13 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.EventStream;
 import dev.slsk.Users;
 import dev.slsk.events.UserEvent;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Usernames;
+import dev.slsk.internal.concurrent.BlockingInvocation;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.options.BrowseOptions;
@@ -26,6 +27,7 @@ import dev.slsk.user.UserStatus;
 import dev.slsk.user.Username;
 import dev.slsk.user.Watch;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +36,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -54,6 +57,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 final class DefaultUsers implements Users {
 
+    private final SoulseekEngine client;
     private final UserDirectory directory;
     private final EventBus<UserEvent> events;
     private final DiagnosticSink diagnostics;
@@ -62,7 +66,8 @@ final class DefaultUsers implements Users {
     private final Map<Username, Registration> watches = new ConcurrentHashMap<>();
 
     DefaultUsers(SoulseekEngine client, EventBus<UserEvent> events, DiagnosticSink diagnostics) {
-        this.directory = Objects.requireNonNull(client, "client").users();
+        this.client = Objects.requireNonNull(client, "client");
+        this.directory = client.users();
         this.events = Objects.requireNonNull(events, "events");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
         client.events().on(Kind.LOGGED_IN, (Void ignored) -> reregister());
@@ -173,9 +178,17 @@ final class DefaultUsers implements Users {
     }
 
     @Override
-    public UserInfo info(Username user, CancellationSignal signal) {
+    public UserInfo info(Username user) throws InterruptedException {
+        return BlockingInvocation.run(signal -> info(user, signal));
+    }
+
+    @Override
+    public UserInfo info(Username user, Duration timeout) throws InterruptedException, TimeoutException {
+        return BlockingInvocation.run(client.getScheduler(), timeout, signal -> info(user, signal));
+    }
+
+    private UserInfo info(Username user, CancellationSignal signal) {
         Objects.requireNonNull(user, "user");
-        Objects.requireNonNull(signal, "signal");
         dev.slsk.internal.user.UserInfo source = directory.getUserInfo(user.value(), signal);
         return new UserInfo(
                 user,
@@ -187,28 +200,61 @@ final class DefaultUsers implements Users {
     }
 
     @Override
-    public UserStatistics statistics(Username user, CancellationSignal signal) {
+    public UserStatistics statistics(Username user) throws InterruptedException {
+        return BlockingInvocation.run(signal -> statistics(user, signal));
+    }
+
+    @Override
+    public UserStatistics statistics(Username user, Duration timeout) throws InterruptedException, TimeoutException {
+        return BlockingInvocation.run(client.getScheduler(), timeout, signal -> statistics(user, signal));
+    }
+
+    private UserStatistics statistics(Username user, CancellationSignal signal) {
         Objects.requireNonNull(user, "user");
-        Objects.requireNonNull(signal, "signal");
         return statistics(directory.getUserStatistics(user.value(), signal));
     }
 
     @Override
-    public UserStatus status(Username user, CancellationSignal signal) {
+    public UserStatus status(Username user) throws InterruptedException {
+        return BlockingInvocation.run(signal -> status(user, signal));
+    }
+
+    @Override
+    public UserStatus status(Username user, Duration timeout) throws InterruptedException, TimeoutException {
+        return BlockingInvocation.run(client.getScheduler(), timeout, signal -> status(user, signal));
+    }
+
+    private UserStatus status(Username user, CancellationSignal signal) {
         Objects.requireNonNull(user, "user");
-        Objects.requireNonNull(signal, "signal");
         return status(directory.getUserStatus(user.value(), signal));
     }
 
     @Override
-    public InetSocketAddress endpoint(Username user, CancellationSignal signal) {
+    public InetSocketAddress endpoint(Username user) throws InterruptedException {
+        return BlockingInvocation.run(signal -> endpoint(user, signal));
+    }
+
+    @Override
+    public InetSocketAddress endpoint(Username user, Duration timeout) throws InterruptedException, TimeoutException {
+        return BlockingInvocation.run(client.getScheduler(), timeout, signal -> endpoint(user, signal));
+    }
+
+    private InetSocketAddress endpoint(Username user, CancellationSignal signal) {
         Objects.requireNonNull(user, "user");
-        Objects.requireNonNull(signal, "signal");
         return directory.getUserEndpoint(user.value(), signal);
     }
 
     @Override
-    public Browse browse(BrowseRequest request) {
+    public Browse browse(BrowseRequest request) throws InterruptedException {
+        return BlockingInvocation.run(signal -> browse(request, signal));
+    }
+
+    @Override
+    public Browse browse(BrowseRequest request, Duration timeout) throws InterruptedException, TimeoutException {
+        return BlockingInvocation.run(client.getScheduler(), timeout, signal -> browse(request, signal));
+    }
+
+    private Browse browse(BrowseRequest request, CancellationSignal signal) {
         Objects.requireNonNull(request, "request");
         BrowseOptions options = new BrowseOptions(
                 (int) request.timeout().toMillis(),
@@ -217,7 +263,7 @@ final class DefaultUsers implements Users {
                                 new BrowseProgress(request.user(), progress.bytesTransferred(), progress.size())))
                         .orElse(null));
         dev.slsk.internal.share.BrowseResponse response =
-                directory.browse(request.user().value(), options, request.signal());
+                directory.browse(request.user().value(), options, signal);
         return new Browse(
                 request.user(),
                 Instant.now(),
@@ -226,10 +272,19 @@ final class DefaultUsers implements Users {
     }
 
     @Override
-    public List<Directory> directory(Username user, String path, CancellationSignal signal) {
+    public List<Directory> directory(Username user, String path) throws InterruptedException {
+        return BlockingInvocation.run(signal -> directory(user, path, signal));
+    }
+
+    @Override
+    public List<Directory> directory(Username user, String path, Duration timeout)
+            throws InterruptedException, TimeoutException {
+        return BlockingInvocation.run(client.getScheduler(), timeout, signal -> directory(user, path, signal));
+    }
+
+    private List<Directory> directory(Username user, String path, CancellationSignal signal) {
         Objects.requireNonNull(user, "user");
         Objects.requireNonNull(path, "path");
-        Objects.requireNonNull(signal, "signal");
         return directories(directory.getDirectoryContents(user.value(), path, null, signal));
     }
 

@@ -3,22 +3,25 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.EventStream;
 import dev.slsk.Me;
 import dev.slsk.connection.ServerInfo;
 import dev.slsk.events.MeEvent;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Usernames;
+import dev.slsk.internal.concurrent.BlockingInvocation;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.events.PrivilegeNotificationReceivedEvent;
 import dev.slsk.user.UserPresence;
 import dev.slsk.user.UserProfile;
 import dev.slsk.user.Username;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -114,13 +117,28 @@ final class DefaultMe implements Me {
     }
 
     @Override
-    public void presence(UserPresence value) {
+    public void presence(UserPresence value) throws InterruptedException {
+        BlockingInvocation.run(signal -> {
+            presence(value, signal);
+            return null;
+        });
+    }
+
+    @Override
+    public void presence(UserPresence value, Duration timeout) throws InterruptedException, TimeoutException {
+        BlockingInvocation.run(client.getScheduler(), timeout, signal -> {
+            presence(value, signal);
+            return null;
+        });
+    }
+
+    private void presence(UserPresence value, CancellationSignal signal) {
         Objects.requireNonNull(value, "presence");
         UserPresence previous = presence.getAndSet(value);
         if (previous == value) {
             return;
         }
-        server.setStatus(map(value));
+        server.setStatus(map(value), signal);
         events.publish(new MeEvent.PresenceChanged(previous, value, Instant.now()));
     }
 
@@ -144,16 +162,38 @@ final class DefaultMe implements Me {
     }
 
     @Override
-    public int privileges(CancellationSignal signal) {
-        Objects.requireNonNull(signal, "signal");
+    public int privileges() throws InterruptedException {
+        return BlockingInvocation.run(this::privileges);
+    }
+
+    @Override
+    public int privileges(Duration timeout) throws InterruptedException, TimeoutException {
+        return BlockingInvocation.run(client.getScheduler(), timeout, this::privileges);
+    }
+
+    private int privileges(CancellationSignal signal) {
         Integer days = server.getPrivileges(signal);
         return days == null ? 0 : days;
     }
 
     @Override
-    public void giftPrivileges(Username to, int days, CancellationSignal signal) {
+    public void giftPrivileges(Username to, int days) throws InterruptedException {
+        BlockingInvocation.run(signal -> {
+            giftPrivileges(to, days, signal);
+            return null;
+        });
+    }
+
+    @Override
+    public void giftPrivileges(Username to, int days, Duration timeout) throws InterruptedException, TimeoutException {
+        BlockingInvocation.run(client.getScheduler(), timeout, signal -> {
+            giftPrivileges(to, days, signal);
+            return null;
+        });
+    }
+
+    private void giftPrivileges(Username to, int days, CancellationSignal signal) {
         Objects.requireNonNull(to, "to");
-        Objects.requireNonNull(signal, "signal");
         if (days <= 0) {
             throw new IllegalArgumentException("days must be positive: " + days);
         }
@@ -161,9 +201,23 @@ final class DefaultMe implements Me {
     }
 
     @Override
-    public void changePassword(String newPassword, CancellationSignal signal) {
+    public void changePassword(String newPassword) throws InterruptedException {
+        BlockingInvocation.run(signal -> {
+            changePassword(newPassword, signal);
+            return null;
+        });
+    }
+
+    @Override
+    public void changePassword(String newPassword, Duration timeout) throws InterruptedException, TimeoutException {
+        BlockingInvocation.run(client.getScheduler(), timeout, signal -> {
+            changePassword(newPassword, signal);
+            return null;
+        });
+    }
+
+    private void changePassword(String newPassword, CancellationSignal signal) {
         Objects.requireNonNull(newPassword, "newPassword");
-        Objects.requireNonNull(signal, "signal");
         server.changePassword(newPassword, signal);
     }
 

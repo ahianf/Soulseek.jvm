@@ -14,8 +14,10 @@ import dev.slsk.user.UserStatus;
 import dev.slsk.user.Username;
 import dev.slsk.user.Watch;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Other users: what they share, whether they are around, and where to reach
@@ -35,28 +37,31 @@ public interface Users {
      * Asks a user to describe themselves.
      *
      * @param user who to ask
-     * @param signal cancels the request
      * @return their self-description
      */
-    UserInfo info(Username user, CancellationSignal signal);
+    UserInfo info(Username user) throws InterruptedException;
+
+    UserInfo info(Username user, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Asks the server for a user's sharing figures.
      *
      * @param user who
-     * @param signal cancels the request
      * @return their figures
      */
-    UserStatistics statistics(Username user, CancellationSignal signal);
+    UserStatistics statistics(Username user) throws InterruptedException;
+
+    UserStatistics statistics(Username user, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Asks the server whether a user is around.
      *
      * @param user who
-     * @param signal cancels the request
      * @return their status; offline is an answer, not a failure
      */
-    UserStatus status(Username user, CancellationSignal signal);
+    UserStatus status(Username user) throws InterruptedException;
+
+    UserStatus status(Username user, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Resolves the address to connect to a user on.
@@ -65,10 +70,11 @@ public interface Users {
      * reason a consumer does not need one of its own.
      *
      * @param user who
-     * @param signal cancels the lookup
      * @return where they are
      */
-    InetSocketAddress endpoint(Username user, CancellationSignal signal);
+    InetSocketAddress endpoint(Username user) throws InterruptedException;
+
+    InetSocketAddress endpoint(Username user, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Reads everything a user is sharing.
@@ -76,7 +82,9 @@ public interface Users {
      * @param request whose share to read, and how patiently
      * @return what they were sharing, at the moment they answered
      */
-    Browse browse(BrowseRequest request);
+    Browse browse(BrowseRequest request) throws InterruptedException;
+
+    Browse browse(BrowseRequest request, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Reads the contents of one of a user's directories.
@@ -86,10 +94,12 @@ public interface Users {
      *
      * @param user whose share to read
      * @param path the directory's full remote path
-     * @param signal cancels the request
      * @return the directories they answered with, empty if none
      */
-    List<Directory> directory(Username user, String path, CancellationSignal signal);
+    List<Directory> directory(Username user, String path) throws InterruptedException;
+
+    List<Directory> directory(Username user, String path, Duration timeout)
+            throws InterruptedException, TimeoutException;
 
     /**
      * Opens a status subscription, re-registered automatically on every login

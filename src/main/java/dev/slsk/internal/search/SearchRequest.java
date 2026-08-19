@@ -3,7 +3,7 @@
 
 package dev.slsk.internal.search;
 
-import dev.slsk.CancellationSignal;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.options.SearchOptions;
 import java.util.Objects;
 

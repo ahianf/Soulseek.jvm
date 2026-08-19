@@ -12,8 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationController;
-import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.ConnectionReadException;
 import dev.slsk.exceptions.DuplicateTokenException;
@@ -26,6 +24,8 @@ import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
+import dev.slsk.internal.concurrent.CancellationController;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.messaging.messages.TransferRequest;
@@ -561,7 +561,8 @@ class EngineUploadTest {
     @Test
     void cancellationSetsFinalStateWritesDeniedAndReleasesSlot() {
         try (Fixture fixture = new Fixture()) {
-            dev.slsk.CancellationController cancelled = new dev.slsk.CancellationController();
+            dev.slsk.internal.concurrent.CancellationController cancelled =
+                    new dev.slsk.internal.concurrent.CancellationController();
             cancelled.cancel();
             AtomicInteger released = new AtomicInteger();
             List<Transfer> terminal = new ArrayList<>();

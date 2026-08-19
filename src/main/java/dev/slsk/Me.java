@@ -7,6 +7,8 @@ import dev.slsk.events.MeEvent;
 import dev.slsk.user.UserPresence;
 import dev.slsk.user.UserProfile;
 import dev.slsk.user.Username;
+import java.time.Duration;
+import java.util.concurrent.TimeoutException;
 
 /**
  * This account: who we are, and the things only we can change about ourselves.
@@ -41,7 +43,9 @@ public interface Me {
      *
      * @param presence what to publish
      */
-    void presence(UserPresence presence);
+    void presence(UserPresence presence) throws InterruptedException;
+
+    void presence(UserPresence presence, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Returns what other users see when they ask about this account.
@@ -64,27 +68,30 @@ public interface Me {
     /**
      * Returns how many days of privileges remain on this account.
      *
-     * @param signal cancels the query
      * @return days remaining, or zero if none
      */
-    int privileges(CancellationSignal signal);
+    int privileges() throws InterruptedException;
+
+    int privileges(Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Gives some of our privileges to another user.
      *
      * @param to who receives them
      * @param days how many days to give
-     * @param signal cancels the request
      */
-    void giftPrivileges(Username to, int days, CancellationSignal signal);
+    void giftPrivileges(Username to, int days) throws InterruptedException;
+
+    void giftPrivileges(Username to, int days, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Changes this account's password.
      *
      * @param newPassword the new password
-     * @param signal cancels the request
      */
-    void changePassword(String newPassword, CancellationSignal signal);
+    void changePassword(String newPassword) throws InterruptedException;
+
+    void changePassword(String newPassword, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Returns the stream of account events.

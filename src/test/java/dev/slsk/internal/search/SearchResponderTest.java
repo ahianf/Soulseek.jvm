@@ -12,10 +12,10 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.internal.common.CacheLookupResult;
 import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.TokenFactory;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
 import dev.slsk.internal.diagnostics.DiagnosticEventListener;
 import dev.slsk.internal.diagnostics.DiagnosticLevel;

@@ -5,8 +5,8 @@ package dev.slsk.soak;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.internal.common.Monitors;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.network.tcp.SocketConnection;
 import dev.slsk.internal.options.ConnectionOptions;
 import java.util.concurrent.CountDownLatch;

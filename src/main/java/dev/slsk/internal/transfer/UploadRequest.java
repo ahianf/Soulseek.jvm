@@ -3,7 +3,7 @@
 
 package dev.slsk.internal.transfer;
 
-import dev.slsk.CancellationSignal;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.options.TransferOptions;
 import java.io.InputStream;
 import java.util.Objects;

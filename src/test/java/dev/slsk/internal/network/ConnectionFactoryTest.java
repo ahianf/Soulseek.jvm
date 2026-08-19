@@ -9,8 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.internal.common.Monitors;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.NetworkStream;
 import dev.slsk.internal.network.tcp.SocketConnection;

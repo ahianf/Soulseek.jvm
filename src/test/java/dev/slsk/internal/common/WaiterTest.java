@@ -12,9 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationController;
-import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.SoulseekClientException;
+import dev.slsk.internal.concurrent.CancellationController;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;

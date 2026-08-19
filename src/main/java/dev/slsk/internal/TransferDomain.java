@@ -3,8 +3,6 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.CancellationController;
-import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.DuplicateTokenException;
 import dev.slsk.exceptions.DuplicateTransferException;
 import dev.slsk.exceptions.TransferNotFoundException;
@@ -19,6 +17,8 @@ import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
+import dev.slsk.internal.concurrent.CancellationController;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.handlers.PeerServices;

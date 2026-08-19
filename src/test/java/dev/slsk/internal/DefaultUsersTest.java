@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.Soulseek;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.user.UserPresence;
@@ -58,11 +57,11 @@ class DefaultUsersTest {
     void rejectsNullArguments() {
         try (Soulseek slsk = client()) {
             assertThrows(NullPointerException.class, () -> slsk.users().watch(null));
-            assertThrows(NullPointerException.class, () -> slsk.users().info(null, CancellationSignal.none()));
+            assertThrows(NullPointerException.class, () -> slsk.users().info(null));
             assertThrows(NullPointerException.class, () -> slsk.users().info(BOB, null));
-            assertThrows(NullPointerException.class, () -> slsk.users().statistics(null, CancellationSignal.none()));
-            assertThrows(NullPointerException.class, () -> slsk.users().status(null, CancellationSignal.none()));
-            assertThrows(NullPointerException.class, () -> slsk.users().endpoint(null, CancellationSignal.none()));
+            assertThrows(NullPointerException.class, () -> slsk.users().statistics(null));
+            assertThrows(NullPointerException.class, () -> slsk.users().status(null));
+            assertThrows(NullPointerException.class, () -> slsk.users().endpoint(null));
         }
     }
 

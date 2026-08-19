@@ -11,10 +11,10 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.ConnectionWriteException;
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.internal.common.Monitors;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.network.tcp.ConnectionKey;
 import dev.slsk.internal.network.tcp.NetworkStream;

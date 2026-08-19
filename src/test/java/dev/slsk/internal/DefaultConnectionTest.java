@@ -10,7 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.Attachment;
-import dev.slsk.CancellationSignal;
 import dev.slsk.Soulseek;
 import dev.slsk.connection.ConnectionState;
 import dev.slsk.connection.ServerAddress;
@@ -89,9 +88,9 @@ class DefaultConnectionTest {
     @Test
     void rejectsNullArguments() {
         try (Soulseek slsk = client()) {
-            assertThrows(NullPointerException.class, () -> slsk.connection().connect(null));
+            assertThrows(NullPointerException.class, () -> slsk.connection().connect((java.time.Duration) null));
             assertThrows(NullPointerException.class, () -> slsk.connection().connect(ServerAddress.soulseek(), null));
-            assertThrows(NullPointerException.class, () -> slsk.connection().connect(null, CancellationSignal.none()));
+            assertThrows(NullPointerException.class, () -> slsk.connection().connect((ServerAddress) null));
             assertThrows(NullPointerException.class, () -> slsk.connection().ping(null));
         }
     }
@@ -102,7 +101,7 @@ class DefaultConnectionTest {
         try (Soulseek slsk = client()) {
             // The point is that it terminates and reports, not what it reports:
             // there is no server to reach in a unit test.
-            assertThrows(Exception.class, () -> slsk.connection().connect(CancellationSignal.none()));
+            assertThrows(Exception.class, () -> slsk.connection().connect());
         }
     }
 
@@ -113,7 +112,7 @@ class DefaultConnectionTest {
             ServerAddress nowhere = ServerAddress.of("127.0.0.1", closedPort());
 
             // The call still throws, because Connection documents that it does.
-            assertThrows(Exception.class, () -> slsk.connection().connect(nowhere, CancellationSignal.none()));
+            assertThrows(Exception.class, () -> slsk.connection().connect(nowhere));
 
             // ...and the supervisor picks it up from there. This is the case
             // that used to cost a restart: one transient failure at startup and
@@ -129,7 +128,7 @@ class DefaultConnectionTest {
     void disconnectStopsTheRetrying() throws Exception {
         try (Soulseek slsk = client()) {
             ServerAddress nowhere = ServerAddress.of("127.0.0.1", closedPort());
-            assertThrows(Exception.class, () -> slsk.connection().connect(nowhere, CancellationSignal.none()));
+            assertThrows(Exception.class, () -> slsk.connection().connect(nowhere));
             assertTrue(awaitState(slsk, ConnectionState.Reconnecting.class));
 
             slsk.connection().disconnect("that will do");
@@ -147,7 +146,7 @@ class DefaultConnectionTest {
     void closeStopsTheRetrying() throws Exception {
         Soulseek slsk = client();
         ServerAddress nowhere = ServerAddress.of("127.0.0.1", closedPort());
-        assertThrows(Exception.class, () -> slsk.connection().connect(nowhere, CancellationSignal.none()));
+        assertThrows(Exception.class, () -> slsk.connection().connect(nowhere));
         assertTrue(awaitState(slsk, ConnectionState.Reconnecting.class));
 
         slsk.close();

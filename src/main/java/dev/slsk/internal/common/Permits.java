@@ -3,8 +3,8 @@
 
 package dev.slsk.internal.common;
 
-import dev.slsk.CancellationSignal;
-import dev.slsk.CancellationSubscription;
+import dev.slsk.internal.concurrent.CancellationSignal;
+import dev.slsk.internal.concurrent.CancellationSubscription;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicReference;

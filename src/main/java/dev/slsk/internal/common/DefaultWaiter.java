@@ -4,10 +4,10 @@
 
 package dev.slsk.internal.common;
 
-import dev.slsk.CancellationSignal;
-import dev.slsk.CancellationSubscription;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.internal.concurrent.BoundedCleanup;
+import dev.slsk.internal.concurrent.CancellationSignal;
+import dev.slsk.internal.concurrent.CancellationSubscription;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;

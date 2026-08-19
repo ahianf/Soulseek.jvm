@@ -4,14 +4,15 @@
 
 package dev.slsk.internal.network.tcp;
 
-import dev.slsk.CancellationSignal;
-import dev.slsk.CancellationSubscription;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.ConnectionReadException;
 import dev.slsk.exceptions.ConnectionWriteDroppedException;
 import dev.slsk.exceptions.ConnectionWriteException;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
+import dev.slsk.internal.concurrent.CancellationSignal;
+import dev.slsk.internal.concurrent.CancellationSubscription;
+import dev.slsk.internal.concurrent.InterruptedOperationException;
 import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.ProxyOptions;
 import java.io.ByteArrayOutputStream;
@@ -344,7 +345,7 @@ public class SocketConnection implements Connection {
         try {
             outcome = timeout == -1 ? gate.take() : gate.poll(timeout, TimeUnit.MILLISECONDS);
         } catch (InterruptedException interrupted) {
-            throw new CancellationException("Operation cancelled");
+            throw new InterruptedOperationException("Operation cancelled", interrupted);
         } finally {
             registration.close();
         }
@@ -855,24 +856,29 @@ public class SocketConnection implements Connection {
             }
         });
         boolean offered = false;
-        boolean interrupted = false;
+        InterruptedException callerInterruption = null;
         try {
             int timeout = options.getWriteQueueTimeout();
             offered =
                     timeout <= 0 ? frameWrites.offer(write) : frameWrites.offer(write, timeout, TimeUnit.MILLISECONDS);
         } catch (InterruptedException exception) {
-            interrupted = true;
+            callerInterruption = exception;
         } finally {
             synchronized (interruptGate) {
                 waiting.set(false);
             }
             registration.close();
-            interrupted |= Thread.interrupted();
+            if (Thread.interrupted() && callerInterruption == null) {
+                callerInterruption = new InterruptedException("The frame enqueue was interrupted");
+            }
         }
 
-        if (interrupted || cancellationSignal.isCancellationRequested()) {
+        if (callerInterruption != null || cancellationSignal.isCancellationRequested()) {
             if (offered) {
                 write.cancel(frameWrites);
+            }
+            if (callerInterruption != null && !cancellationSignal.isCancellationRequested()) {
+                throw new InterruptedOperationException("Operation cancelled", callerInterruption);
             }
             throw new CancellationException("Operation cancelled");
         }
@@ -911,7 +917,7 @@ public class SocketConnection implements Connection {
                 write.await();
             } catch (InterruptedException interrupted) {
                 if (write.cancel(frameWrites)) {
-                    throw new CancellationException("Operation cancelled");
+                    throw new InterruptedOperationException("Operation cancelled", interrupted);
                 }
                 // Completion committed first, so this interrupt belongs to the
                 // caller's enclosing work rather than this write.

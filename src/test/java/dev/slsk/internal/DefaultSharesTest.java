@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.Soulseek;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.search.SearchFile;
@@ -57,7 +56,11 @@ class DefaultSharesTest {
      * same way the login-time announcement always tolerated it.
      */
     private static void scan(Soulseek slsk) {
-        slsk.shares().rescan(CancellationSignal.none());
+        try {
+            slsk.shares().rescan();
+        } catch (InterruptedException interrupted) {
+            throw new AssertionError(interrupted);
+        }
     }
 
     private static ShareCatalog catalogOf(Soulseek slsk) {

@@ -4,6 +4,8 @@
 package dev.slsk;
 
 import dev.slsk.user.Username;
+import java.time.Duration;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Administration of private rooms we own or moderate.
@@ -23,50 +25,56 @@ public interface PrivateRooms {
      *
      * @param room the room
      * @param user who to add
-     * @param signal cancels the request
      */
-    void addMember(String room, Username user, CancellationSignal signal);
+    void addMember(String room, Username user) throws InterruptedException;
+
+    void addMember(String room, Username user, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Removes a member from a room we own.
      *
      * @param room the room
      * @param user who to remove
-     * @param signal cancels the request
      */
-    void removeMember(String room, Username user, CancellationSignal signal);
+    void removeMember(String room, Username user) throws InterruptedException;
+
+    void removeMember(String room, Username user, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Makes a member a moderator of a room we own.
      *
      * @param room the room
      * @param user who to promote
-     * @param signal cancels the request
      */
-    void addOperator(String room, Username user, CancellationSignal signal);
+    void addOperator(String room, Username user) throws InterruptedException;
+
+    void addOperator(String room, Username user, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Removes a moderator from a room we own.
      *
      * @param room the room
      * @param user who to demote
-     * @param signal cancels the request
      */
-    void removeOperator(String room, Username user, CancellationSignal signal);
+    void removeOperator(String room, Username user) throws InterruptedException;
+
+    void removeOperator(String room, Username user, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Gives up our membership of a private room.
      *
      * @param room the room
-     * @param signal cancels the request
      */
-    void dropMembership(String room, CancellationSignal signal);
+    void dropMembership(String room) throws InterruptedException;
+
+    void dropMembership(String room, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Gives up ownership of a private room.
      *
      * @param room the room
-     * @param signal cancels the request
      */
-    void dropOwnership(String room, CancellationSignal signal);
+    void dropOwnership(String room) throws InterruptedException;
+
+    void dropOwnership(String room, Duration timeout) throws InterruptedException, TimeoutException;
 }

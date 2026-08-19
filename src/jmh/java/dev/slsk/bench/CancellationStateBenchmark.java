@@ -3,8 +3,8 @@
 
 package dev.slsk.bench;
 
-import dev.slsk.CancellationController;
-import dev.slsk.CancellationSignal;
+import dev.slsk.internal.concurrent.CancellationController;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;

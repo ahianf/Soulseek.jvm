@@ -6,7 +6,9 @@ package dev.slsk;
 import dev.slsk.events.RoomEvent;
 import dev.slsk.room.Room;
 import dev.slsk.room.RoomList;
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 /**
@@ -24,10 +26,11 @@ public interface Rooms {
     /**
      * Asks the server for its room directory.
      *
-     * @param signal cancels the request
      * @return the directory
      */
-    RoomList list(CancellationSignal signal);
+    RoomList list() throws InterruptedException;
+
+    RoomList list(Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Joins a room.
@@ -36,17 +39,20 @@ public interface Rooms {
      * current state rather than failing.
      *
      * @param room the room to join
-     * @param signal cancels the request
      * @return the room as it stands
      */
-    Room join(String room, CancellationSignal signal);
+    Room join(String room) throws InterruptedException;
+
+    Room join(String room, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Leaves a room. Leaving a room we are not in does nothing.
      *
      * @param room the room to leave
      */
-    void leave(String room);
+    void leave(String room) throws InterruptedException;
+
+    void leave(String room, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Says something in a room.
@@ -54,7 +60,9 @@ public interface Rooms {
      * @param room the room
      * @param message what to say
      */
-    void say(String room, String message);
+    void say(String room, String message) throws InterruptedException;
+
+    void say(String room, String message, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Pins our ticker in a room, replacing whatever we pinned before.
@@ -62,7 +70,9 @@ public interface Rooms {
      * @param room the room
      * @param message what to pin
      */
-    void setTicker(String room, String message);
+    void setTicker(String room, String message) throws InterruptedException;
+
+    void setTicker(String room, String message, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Returns a room we are in.
@@ -83,12 +93,16 @@ public interface Rooms {
     /**
      * Starts the all-rooms message firehose. Idempotent.
      */
-    void startPublicChat();
+    void startPublicChat() throws InterruptedException;
+
+    void startPublicChat(Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Stops the all-rooms message firehose. Idempotent.
      */
-    void stopPublicChat();
+    void stopPublicChat() throws InterruptedException;
+
+    void stopPublicChat(Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Returns administration for private rooms.

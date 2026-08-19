@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.network.tcp;
 
-import dev.slsk.CancellationSignal;
+import dev.slsk.internal.concurrent.CancellationSignal;
 
 /**
  * Grants bytes for a connection read or write, blocking if the rate limit says

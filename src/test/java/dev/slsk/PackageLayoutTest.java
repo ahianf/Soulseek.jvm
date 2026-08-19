@@ -25,10 +25,6 @@ class PackageLayoutTest {
         assertEquals(
                 Set.of(
                         "Attachment",
-                        "CancellationController",
-                        "CancellationSignal",
-                        "CancellationState",
-                        "CancellationSubscription",
                         "Chat",
                         "Connection",
                         "Diagnostics",

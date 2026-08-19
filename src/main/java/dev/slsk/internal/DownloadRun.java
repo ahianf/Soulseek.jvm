@@ -7,9 +7,6 @@ import static dev.slsk.internal.transfer.TransferStreams.determineOutputPosition
 import static dev.slsk.internal.transfer.TransferStreams.filenameOnly;
 import static dev.slsk.internal.transfer.TransferStreams.seekOutputStream;
 
-import dev.slsk.CancellationController;
-import dev.slsk.CancellationSignal;
-import dev.slsk.CancellationSubscription;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferSizeMismatchException;
@@ -21,6 +18,9 @@ import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.common.Settlement;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
+import dev.slsk.internal.concurrent.CancellationController;
+import dev.slsk.internal.concurrent.CancellationSignal;
+import dev.slsk.internal.concurrent.CancellationSubscription;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.messages.QueueDownloadRequest;
 import dev.slsk.internal.messaging.messages.TransferRequest;

@@ -4,11 +4,11 @@
 
 package dev.slsk.internal.network;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.network.tcp.ConnectionDataEvent;
 import dev.slsk.internal.network.tcp.ConnectionEventListener;

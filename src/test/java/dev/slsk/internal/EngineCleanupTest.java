@@ -60,7 +60,8 @@ class EngineCleanupTest {
     void theSweepReachesTheSemaphoresAnUploadActuallyTakes() throws Exception {
         try (Fixture fixture = new Fixture()) {
             TransferDomain transfers = fixture.client.transfers();
-            Semaphore taken = transfers.uploadSemaphoreFor("alice", dev.slsk.CancellationSignal.none());
+            Semaphore taken =
+                    transfers.uploadSemaphoreFor("alice", dev.slsk.internal.concurrent.CancellationSignal.none());
             assertSame(taken, transfers.uploadSemaphoresForTest().get("alice"));
 
             taken.acquireUninterruptibly();

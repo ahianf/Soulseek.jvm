@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.common;
 
-import dev.slsk.CancellationSignal;
+import dev.slsk.internal.concurrent.CancellationSignal;
 
 /**
  * Correlates responses with keyed waits.

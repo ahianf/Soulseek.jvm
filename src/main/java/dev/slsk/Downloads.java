@@ -9,8 +9,10 @@ import dev.slsk.download.DownloadRequest;
 import dev.slsk.events.DownloadEvent;
 import dev.slsk.transfer.Priority;
 import dev.slsk.transfer.TransferId;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 /**
@@ -85,10 +87,13 @@ public interface Downloads {
      * Blocks until a download reaches a terminal state.
      *
      * @param id which download
-     * @param signal stops waiting; it does not cancel the download
      * @return the download as it finished
+     * @throws InterruptedException if this wait is interrupted; the download continues
      */
-    Download await(TransferId id, CancellationSignal signal);
+    Download await(TransferId id) throws InterruptedException;
+
+    /** Waits for a download within the caller's deadline. */
+    Download await(TransferId id, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Returns how the queue is being run.

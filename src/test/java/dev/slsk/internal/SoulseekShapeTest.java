@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.Connection;
 import dev.slsk.Soulseek;
 import dev.slsk.internal.options.SoulseekClientOptions;
@@ -153,7 +152,7 @@ class SoulseekShapeTest {
             // The offline announcement at the end of the scan is tolerated —
             // scanning before connect() is the natural order — so the scan
             // returns its index rather than throwing it away.
-            slsk.shares().rescan(CancellationSignal.none());
+            slsk.shares().rescan();
             assertEquals(3, slsk.shares().index().fileCount());
             assertEquals(7, slsk.shares().index().totalBytes());
         }

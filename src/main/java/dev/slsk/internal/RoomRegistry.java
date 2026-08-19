@@ -3,7 +3,6 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.RoomJoinForbiddenException;
 import dev.slsk.internal.common.CommonUtils;
@@ -11,6 +10,7 @@ import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.messages.JoinRoomRequest;
 import dev.slsk.internal.messaging.messages.LeaveRoomRequest;

@@ -8,7 +8,9 @@ import dev.slsk.search.SearchId;
 import dev.slsk.search.SearchQuery;
 import dev.slsk.search.SearchResult;
 import dev.slsk.search.SearchSnapshot;
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 /**
@@ -48,19 +50,25 @@ public interface Search {
      * Waits for a running search to stop.
      *
      * @param id the search
-     * @param signal stops waiting, and stops the search
      * @return the finished search
+     * @throws InterruptedException if this wait is interrupted; the search continues
      */
-    SearchResult await(SearchId id, CancellationSignal signal);
+    SearchResult await(SearchId id) throws InterruptedException;
+
+    /** Waits for a running search within the caller's deadline. */
+    SearchResult await(SearchId id, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Starts a search and waits for it. The common case.
      *
      * @param query what to search for
-     * @param signal stops the search
      * @return the finished search
+     * @throws InterruptedException if interrupted; the owned search is stopped
      */
-    SearchResult run(SearchQuery query, CancellationSignal signal);
+    SearchResult run(SearchQuery query) throws InterruptedException;
+
+    /** Starts and waits for a search within the caller's deadline. */
+    SearchResult run(SearchQuery query, Duration timeout) throws InterruptedException, TimeoutException;
 
     /**
      * Stops a search early. Idempotent, and stopping a finished search does

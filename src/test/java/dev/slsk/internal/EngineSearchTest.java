@@ -12,12 +12,12 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationController;
 import dev.slsk.exceptions.DuplicateTokenException;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Outcomes;
+import dev.slsk.internal.concurrent.CancellationController;
 import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.messaging.messages.RoomSearchRequest;
 import dev.slsk.internal.messaging.messages.UserSearchRequest;

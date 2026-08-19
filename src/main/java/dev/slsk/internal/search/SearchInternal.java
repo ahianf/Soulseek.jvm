@@ -4,12 +4,12 @@
 
 package dev.slsk.internal.search;
 
-import dev.slsk.CancellationSignal;
-import dev.slsk.CancellationSubscription;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Scheduler;
 import dev.slsk.internal.common.Settlement;
+import dev.slsk.internal.concurrent.CancellationSignal;
+import dev.slsk.internal.concurrent.CancellationSubscription;
 import dev.slsk.internal.options.SearchOptions;
 import java.util.List;
 import java.util.Objects;

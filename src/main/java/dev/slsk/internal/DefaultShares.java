@@ -3,10 +3,11 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.EventStream;
 import dev.slsk.Shares;
 import dev.slsk.events.ShareEvent;
+import dev.slsk.internal.concurrent.BlockingInvocation;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.share.ShareIndex;
 import dev.slsk.share.SharedFolder;
@@ -14,10 +15,12 @@ import dev.slsk.spi.ShareCatalog;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
@@ -93,8 +96,16 @@ final class DefaultShares implements Shares {
     }
 
     @Override
-    public ShareIndex rescan(CancellationSignal signal) {
-        Objects.requireNonNull(signal, "signal");
+    public ShareIndex rescan() throws InterruptedException {
+        return BlockingInvocation.run(this::rescan);
+    }
+
+    @Override
+    public ShareIndex rescan(Duration timeout) throws InterruptedException, TimeoutException {
+        return BlockingInvocation.run(client.getScheduler(), timeout, this::rescan);
+    }
+
+    private ShareIndex rescan(CancellationSignal signal) throws InterruptedException {
         events.publish(new ShareEvent.ScanStarted(Instant.now()));
         index.set(new ShareIndex(
                 index.get().directoryCount(),
@@ -108,7 +119,7 @@ final class DefaultShares implements Shares {
         int files = 0;
         try {
             for (SharedFolder folder : folders.get()) {
-                signal.throwIfCancellationRequested();
+                BlockingInvocation.checkpoint(signal);
                 if (!Files.isDirectory(folder.path())) {
                     continue;
                 }
@@ -119,7 +130,7 @@ final class DefaultShares implements Shares {
                 Path root = folder.path().toAbsolutePath().normalize();
                 try (Stream<Path> walk = Files.walk(root)) {
                     for (Path entry : walk.toList()) {
-                        signal.throwIfCancellationRequested();
+                        BlockingInvocation.checkpoint(signal);
                         if (Files.isDirectory(entry)) {
                             directories++;
                         } else if (Files.isRegularFile(entry)) {

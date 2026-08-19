@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.Soulseek;
 import dev.slsk.events.ChatEvent;
 import dev.slsk.events.MeEvent;
@@ -44,7 +43,7 @@ class DefaultChatAndMeTest {
 
     @Test
     @DisplayName("setting the presence we already have is a no-op, not a wire message")
-    void presenceIsAnIdempotentIntent() {
+    void presenceIsAnIdempotentIntent() throws InterruptedException {
         try (Soulseek slsk = client()) {
             List<MeEvent> events = new ArrayList<>();
             slsk.me().events().subscribe(events::add);
@@ -62,15 +61,11 @@ class DefaultChatAndMeTest {
     void rejectsNullAndNonsenseArguments() {
         try (Soulseek slsk = client()) {
             assertThrows(NullPointerException.class, () -> slsk.me().presence(null));
-            assertThrows(NullPointerException.class, () -> slsk.chat().send(null, "m", CancellationSignal.none()));
-            assertThrows(
-                    NullPointerException.class,
-                    () -> slsk.chat().send(Username.of("bob"), null, CancellationSignal.none()));
+            assertThrows(NullPointerException.class, () -> slsk.chat().send(null, "m"));
+            assertThrows(NullPointerException.class, () -> slsk.chat().send(Username.of("bob"), null));
             assertThrows(NullPointerException.class, () -> slsk.chat().send(Username.of("bob"), "m", null));
             assertThrows(NullPointerException.class, () -> slsk.me().privileges(null));
-            assertThrows(
-                    IllegalArgumentException.class,
-                    () -> slsk.me().giftPrivileges(Username.of("bob"), 0, CancellationSignal.none()));
+            assertThrows(IllegalArgumentException.class, () -> slsk.me().giftPrivileges(Username.of("bob"), 0));
         }
     }
 

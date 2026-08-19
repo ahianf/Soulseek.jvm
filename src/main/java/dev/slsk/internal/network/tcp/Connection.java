@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.network.tcp;
 
-import dev.slsk.CancellationSignal;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.options.ConnectionOptions;
 import java.io.InputStream;
 import java.io.OutputStream;

@@ -7,8 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.CancellationController;
 import dev.slsk.internal.common.Monitors;
+import dev.slsk.internal.concurrent.CancellationController;
 import dev.slsk.internal.network.tcp.ConnectionState;
 import dev.slsk.internal.network.tcp.SocketConnection;
 import dev.slsk.internal.options.ConnectionOptions;
@@ -60,7 +60,7 @@ class CancellationSoak {
             SocketConnection connection =
                     new SocketConnection(peer.endpoint(), new ConnectionOptions(), null, Monitors.shared());
             try {
-                connection.connect(dev.slsk.CancellationSignal.none());
+                connection.connect(dev.slsk.internal.concurrent.CancellationSignal.none());
 
                 CancellationController controller = new CancellationController();
                 CompletableFuture<Void> transfer = reader(() -> connection.read(
@@ -103,7 +103,7 @@ class CancellationSoak {
             SocketConnection connection =
                     new SocketConnection(peer.endpoint(), new ConnectionOptions(), null, Monitors.shared());
             try {
-                connection.connect(dev.slsk.CancellationSignal.none());
+                connection.connect(dev.slsk.internal.concurrent.CancellationSignal.none());
 
                 CancellationController controller = new CancellationController();
                 CompletableFuture<Void> read = reader(() -> connection.read(
@@ -145,14 +145,14 @@ class CancellationSoak {
             SocketConnection bystander =
                     new SocketConnection(peer.endpoint(), new ConnectionOptions(), null, Monitors.shared());
             try {
-                cancelled.connect(dev.slsk.CancellationSignal.none());
-                bystander.connect(dev.slsk.CancellationSignal.none());
+                cancelled.connect(dev.slsk.internal.concurrent.CancellationSignal.none());
+                bystander.connect(dev.slsk.internal.concurrent.CancellationSignal.none());
 
                 CancellationController controller = new CancellationController();
                 CompletableFuture<Void> doomed = reader(() -> cancelled.read(
                         TRANSFER_BYTES, OutputStream.nullOutputStream(), null, null, controller.getSignal()));
                 CompletableFuture<byte[]> survivor = CompletableFuture.supplyAsync(
-                        () -> bystander.read(64, dev.slsk.CancellationSignal.none()), READERS);
+                        () -> bystander.read(64, dev.slsk.internal.concurrent.CancellationSignal.none()), READERS);
 
                 Thread.sleep(250);
                 controller.cancel();

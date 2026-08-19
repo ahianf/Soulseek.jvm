@@ -4,7 +4,6 @@
 package dev.slsk.internal;
 
 import dev.slsk.Attachment;
-import dev.slsk.CancellationSignal;
 import dev.slsk.Connection;
 import dev.slsk.EventStream;
 import dev.slsk.connection.ConnectionState;
@@ -14,6 +13,8 @@ import dev.slsk.events.ConnectionEvent;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.LoginRejectedException;
 import dev.slsk.internal.EngineEvents.Kind;
+import dev.slsk.internal.concurrent.BlockingInvocation;
+import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.events.SoulseekClientDisconnectedEvent;
@@ -24,6 +25,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -284,19 +286,43 @@ final class DefaultConnection implements Connection {
     }
 
     @Override
-    public void connect(CancellationSignal signal) {
-        Objects.requireNonNull(signal, "signal");
-        consumerConnect(null, () -> client.connect(credentials.username(), credentials.password(), signal));
+    public void connect() throws InterruptedException {
+        BlockingInvocation.run(signal -> {
+            consumerConnect(null, () -> client.connect(credentials.username(), credentials.password(), signal));
+            return null;
+        });
     }
 
     @Override
-    public void connect(ServerAddress address, CancellationSignal signal) {
-        Objects.requireNonNull(address, "address");
-        Objects.requireNonNull(signal, "signal");
-        consumerConnect(
-                address,
-                () -> client.connect(
-                        address.host(), address.port(), credentials.username(), credentials.password(), signal));
+    public void connect(Duration timeout) throws InterruptedException, TimeoutException {
+        BlockingInvocation.run(client.getScheduler(), timeout, signal -> {
+            consumerConnect(null, () -> client.connect(credentials.username(), credentials.password(), signal));
+            return null;
+        });
+    }
+
+    @Override
+    public void connect(ServerAddress address) throws InterruptedException {
+        BlockingInvocation.run(signal -> {
+            Objects.requireNonNull(address, "address");
+            consumerConnect(
+                    address,
+                    () -> client.connect(
+                            address.host(), address.port(), credentials.username(), credentials.password(), signal));
+            return null;
+        });
+    }
+
+    @Override
+    public void connect(ServerAddress address, Duration timeout) throws InterruptedException, TimeoutException {
+        BlockingInvocation.run(client.getScheduler(), timeout, signal -> {
+            Objects.requireNonNull(address, "address");
+            consumerConnect(
+                    address,
+                    () -> client.connect(
+                            address.host(), address.port(), credentials.username(), credentials.password(), signal));
+            return null;
+        });
     }
 
     @Override
@@ -317,8 +343,16 @@ final class DefaultConnection implements Connection {
     }
 
     @Override
-    public Duration ping(CancellationSignal signal) {
-        Objects.requireNonNull(signal, "signal");
+    public Duration ping() throws InterruptedException {
+        return BlockingInvocation.run(signal -> ping(signal));
+    }
+
+    @Override
+    public Duration ping(Duration timeout) throws InterruptedException, TimeoutException {
+        return BlockingInvocation.run(client.getScheduler(), timeout, signal -> ping(signal));
+    }
+
+    private Duration ping(CancellationSignal signal) {
         Long milliseconds = server.pingServer(signal);
         return Duration.ofMillis(milliseconds == null ? 0L : milliseconds);
     }

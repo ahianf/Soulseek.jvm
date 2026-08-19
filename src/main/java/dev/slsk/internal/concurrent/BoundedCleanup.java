@@ -26,6 +26,20 @@ public final class BoundedCleanup {
      * @param primary the interruption the caller will observe
      */
     public static void afterInterruption(Runnable cleanup, InterruptedException primary) {
+        run(cleanup, primary);
+    }
+
+    /**
+     * Runs deadline-expiry cleanup under the same bound as interruption.
+     *
+     * @param cleanup teardown for the expired invocation
+     * @param primary the timeout the caller will observe
+     */
+    public static void afterTimeout(Runnable cleanup, java.util.concurrent.TimeoutException primary) {
+        run(cleanup, primary);
+    }
+
+    private static void run(Runnable cleanup, Throwable primary) {
         CountDownLatch finished = new CountDownLatch(1);
         AtomicReference<Throwable> failure = new AtomicReference<>();
         NetworkExecutor.executor().execute(() -> {

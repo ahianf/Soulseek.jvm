@@ -4,7 +4,6 @@
 
 package dev.slsk.internal;
 
-import dev.slsk.CancellationSignal;
 import dev.slsk.exceptions.AddressException;
 import dev.slsk.exceptions.KickedFromServerException;
 import dev.slsk.exceptions.ListenException;
@@ -23,6 +22,8 @@ import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
+import dev.slsk.internal.concurrent.CancellationSignal;
+import dev.slsk.internal.concurrent.InterruptedOperationException;
 import dev.slsk.internal.connection.ServerInfo;
 import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
@@ -923,7 +924,7 @@ final class SoulseekEngine implements AutoCloseable {
             // to release; the acquire stays outside the try for that reason.
             Permits.acquire(stateSemaphore, cancellationSignal);
         } catch (InterruptedException interrupted) {
-            throw new CancellationException("The connect invocation was interrupted");
+            throw new InterruptedOperationException("The connect invocation was interrupted", interrupted);
         } catch (RuntimeException failure) {
             throw reportConnectFailure(failure);
         }
@@ -1114,7 +1115,7 @@ final class SoulseekEngine implements AutoCloseable {
             // Never held on the failing path, so nothing to release.
             Permits.acquire(stateSemaphore, cancellationSignal);
         } catch (InterruptedException interrupted) {
-            throw new CancellationException("The reconfiguration invocation was interrupted");
+            throw new InterruptedOperationException("The reconfiguration invocation was interrupted", interrupted);
         } catch (RuntimeException failure) {
             throw reportReconfigureFailure(failure);
         }
