@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import dev.slsk.internal.EngineEvents.Kind;
+import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.diagnostics.DiagnosticLevel;
 import dev.slsk.internal.events.SoulseekClientStateChangedEvent;
 import dev.slsk.internal.options.SoulseekClientOptions;
@@ -141,7 +142,6 @@ class EngineLiveIT {
                 null,
                 null,
                 null,
-                null,
-                false);
+                null);
     }
 }
