@@ -49,7 +49,7 @@ class ConnectionCellTest {
 
     @Test
     @DisplayName("one failure is raised to every waiter, in the shape join produced")
-    void oneFailureIsBroadcastToEveryWaiter() {
+    void oneFailureIsBroadcastToEveryWaiter() throws Exception {
         ConnectionCell cell = new ConnectionCell();
         ConnectionException cause = new ConnectionException("no route to host");
         List<CompletableFuture<MessageConnection>> waiters = await(cell, 8);
@@ -65,7 +65,7 @@ class ConnectionCellTest {
 
     @Test
     @DisplayName("a cancellation is raised as itself")
-    void cancellationIsRaisedUnwrapped() {
+    void cancellationIsRaisedUnwrapped() throws Exception {
         ConnectionCell cell = new ConnectionCell();
         cell.fail(new CancellationException("cancelled"));
 
@@ -93,7 +93,7 @@ class ConnectionCellTest {
 
     @Test
     @DisplayName("a cell settles once, and the loser of that race changes nothing")
-    void aCellSettlesOnlyOnce() {
+    void aCellSettlesOnlyOnce() throws Exception {
         ConnectionCell settled = new ConnectionCell();
         MessageConnection first = connection();
         settled.settle(first);
@@ -145,7 +145,11 @@ class ConnectionCellTest {
             awaits.add(CompletableFuture.supplyAsync(
                     () -> {
                         waiting.countDown();
-                        return cell.await();
+                        try {
+                            return cell.await();
+                        } catch (InterruptedException interrupted) {
+                            throw new CompletionException(interrupted);
+                        }
                     },
                     task -> Thread.ofVirtual().start(task)));
         }

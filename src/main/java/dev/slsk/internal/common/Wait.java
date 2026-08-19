@@ -13,12 +13,8 @@ package dev.slsk.internal.common;
  * reply. Handing the caller a {@code Wait} at registration is what lets the
  * write sit between the two.
  *
- * <p>{@link #await()} presents a failure the way {@code join()} did — a
- * {@link java.util.concurrent.CancellationException} raw, everything else
- * inside a {@link java.util.concurrent.CompletionException} — so the call
- * sites that read failures with {@link Failures#unwrap} and an
- * {@code instanceof} did not have to change when the future underneath became
- * a handoff cell.
+ * <p>{@link #await()} is a caller-facing park: interruption cancels this wait,
+ * not the independently owned operation whose answer it observes.
  *
  * @param <T> the answer type
  */
@@ -28,12 +24,8 @@ public interface Wait<T> {
     /**
      * Waits for this wait's answer.
      *
-     * <p>Uninterruptibly, restoring the interrupt on the way out. An interrupt
-     * belongs to whatever the caller does next; cancellation of a wait arrives
-     * through its {@link dev.slsk.CancellationSignal}, not through the
-     * waiting thread.
-     *
      * @return the answer, or {@code null} for a wait with no value
+     * @throws InterruptedException if the waiting thread is interrupted
      */
-    T await();
+    T await() throws InterruptedException;
 }

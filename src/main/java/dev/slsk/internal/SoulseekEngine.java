@@ -922,6 +922,8 @@ final class SoulseekEngine implements AutoCloseable {
             // The permit is never held on the failing path, so there is nothing
             // to release; the acquire stays outside the try for that reason.
             Permits.acquire(stateSemaphore, cancellationSignal);
+        } catch (InterruptedException interrupted) {
+            throw new CancellationException("The connect invocation was interrupted");
         } catch (RuntimeException failure) {
             throw reportConnectFailure(failure);
         }
@@ -990,7 +992,8 @@ final class SoulseekEngine implements AutoCloseable {
         }
     }
 
-    private void login(String requestedUsername, String password, CancellationSignal cancellationSignal) {
+    private void login(String requestedUsername, String password, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         // Registered before the login bytes go out: the server answers a login
         // as fast as anything on this protocol.
         Wait<LoginResponse> loginWait =
@@ -1110,6 +1113,8 @@ final class SoulseekEngine implements AutoCloseable {
         try {
             // Never held on the failing path, so nothing to release.
             Permits.acquire(stateSemaphore, cancellationSignal);
+        } catch (InterruptedException interrupted) {
+            throw new CancellationException("The reconfiguration invocation was interrupted");
         } catch (RuntimeException failure) {
             throw reportReconfigureFailure(failure);
         }

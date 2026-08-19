@@ -286,7 +286,7 @@ public final class SearchInternal implements AutoCloseable {
      *
      * @param cancellationSignal abandons this wait when signalled
      */
-    public void waitForCompletion(CancellationSignal cancellationSignal) {
+    public void waitForCompletion(CancellationSignal cancellationSignal) throws InterruptedException {
         Objects.requireNonNull(cancellationSignal, "cancellationSignal");
         Settlement wait = new Settlement();
         // Registered and the terminal state read under the same lock the
@@ -314,7 +314,7 @@ public final class SearchInternal implements AutoCloseable {
     }
 
     /** Waits without a cancellable caller token. */
-    public void waitForCompletion() {
+    public void waitForCompletion() throws InterruptedException {
         waitForCompletion(CancellationSignal.none());
     }
 

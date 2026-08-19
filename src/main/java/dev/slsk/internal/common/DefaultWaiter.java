@@ -7,6 +7,7 @@ package dev.slsk.internal.common;
 import dev.slsk.CancellationSignal;
 import dev.slsk.CancellationSubscription;
 import dev.slsk.exceptions.SoulseekClientException;
+import dev.slsk.internal.concurrent.BoundedCleanup;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -18,6 +19,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Correlates asynchronous responses with FIFO waits.
@@ -94,17 +96,19 @@ public final class DefaultWaiter implements Waiter {
      * specific wait; so does this.
      */
     private void cancel(WaitKey key, PendingWait<?> wait) {
-        if (remove(key, wait)) {
+        if (wait.trySettle(null, new CancellationException("The wait was cancelled"))) {
+            remove(key, wait);
             wait.close();
-            wait.settle(null, new CancellationException("The wait was cancelled"));
+            wait.publish();
         }
     }
 
     /** Times out one specific wait — the one whose timer fired. */
     private void timeout(WaitKey key, PendingWait<?> wait) {
-        if (remove(key, wait)) {
+        if (wait.trySettle(null, new TimeoutException("The wait timed out after " + wait.timeout + " milliseconds"))) {
+            remove(key, wait);
             wait.close();
-            wait.settle(null, new TimeoutException("The wait timed out after " + wait.timeout + " milliseconds"));
+            wait.publish();
         }
     }
 
@@ -232,7 +236,10 @@ public final class DefaultWaiter implements Waiter {
         // The actions name the wait itself, not the key's queue head: another
         // caller's wait under the same key must not absorb this one's
         // cancellation or timeout.
-        wait.actions(() -> cancel(key, wait), () -> timeout(key, wait));
+        wait.actions(() -> cancel(key, wait), () -> timeout(key, wait), () -> {
+            remove(key, wait);
+            wait.close();
+        });
 
         synchronized (this) {
             if (closed) {
@@ -317,9 +324,9 @@ public final class DefaultWaiter implements Waiter {
         private final int timeout;
         private Runnable cancelAction;
         private Runnable timeoutAction;
-        private T result;
-        private Throwable failure;
+        private final AtomicReference<Outcome<T>> outcome = new AtomicReference<>();
         private CancellationSubscription cancellationSubscription;
+        private Runnable interruptionCleanup;
         private boolean closed;
         private ScheduledFuture<?> timeoutTask;
 
@@ -334,39 +341,67 @@ public final class DefaultWaiter implements Waiter {
          * both actions reference the wait itself — and before {@link
          * #register}, which is what arms them.
          */
-        void actions(Runnable cancelAction, Runnable timeoutAction) {
+        void actions(Runnable cancelAction, Runnable timeoutAction, Runnable interruptionCleanup) {
             this.cancelAction = Objects.requireNonNull(cancelAction, "cancelAction");
             this.timeoutAction = Objects.requireNonNull(timeoutAction, "timeoutAction");
+            this.interruptionCleanup = Objects.requireNonNull(interruptionCleanup, "interruptionCleanup");
         }
 
         @Override
-        public T await() {
-            boolean interrupted = false;
+        public T await() throws InterruptedException {
             try {
-                while (true) {
-                    try {
-                        settled.await();
-                        break;
-                    } catch (InterruptedException exception) {
-                        interrupted = true;
-                    }
+                settled.await();
+            } catch (InterruptedException interrupted) {
+                if (trySettle(null, interrupted)) {
+                    BoundedCleanup.afterInterruption(interruptionCleanup, interrupted);
+                    publish();
+                    throw interrupted;
                 }
-            } finally {
-                if (interrupted) {
-                    Thread.currentThread().interrupt();
-                }
+                // A result was committed first. Wait only for its publication,
+                // then return it with this later interrupt still visible to the
+                // caller's enclosing work.
+                awaitCommittedOutcome();
+                Thread.currentThread().interrupt();
             }
-            if (failure != null) {
-                throw Failures.propagate(failure);
+            Outcome<T> settledOutcome = outcome.get();
+            if (settledOutcome.failure() instanceof InterruptedException interrupted) {
+                throw interrupted;
             }
-            return result;
+            if (settledOutcome.failure() != null) {
+                throw Failures.propagate(settledOutcome.failure());
+            }
+            return settledOutcome.result();
         }
 
-        /** Hands the answer over. The latch publishes both fields. */
+        /** Commits and publishes an answer in one ordinary settlement path. */
         void settle(T value, Throwable error) {
-            result = value;
-            failure = error;
+            if (trySettle(value, error)) {
+                publish();
+            }
+        }
+
+        /** Atomically selects this outcome without publishing it yet. */
+        boolean trySettle(T value, Throwable error) {
+            return outcome.compareAndSet(null, new Outcome<>(value, error));
+        }
+
+        /** Publishes the already committed outcome. */
+        void publish() {
             settled.countDown();
+        }
+
+        private void awaitCommittedOutcome() {
+            boolean interrupted = false;
+            while (settled.getCount() != 0) {
+                try {
+                    settled.await();
+                } catch (InterruptedException repeated) {
+                    interrupted = true;
+                }
+            }
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
         }
 
         /**
@@ -433,5 +468,7 @@ public final class DefaultWaiter implements Waiter {
                 task.cancel(false);
             }
         }
+
+        private record Outcome<T>(T result, Throwable failure) {}
     }
 }

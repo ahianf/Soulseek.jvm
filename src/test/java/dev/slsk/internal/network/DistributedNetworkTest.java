@@ -383,7 +383,7 @@ class DistributedNetworkTest {
     }
 
     @Test
-    void parentCandidateMessageCompletesRequiredWaits() {
+    void parentCandidateMessageCompletesRequiredWaits() throws Exception {
         Fixture fixture = fixture();
         ConnectionProbe parent = ConnectionProbe.message(USERNAME, ENDPOINT);
         Wait<Integer> level = fixture.waiter.register(

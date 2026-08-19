@@ -139,10 +139,10 @@ public interface Connection extends AutoCloseable {
      * @param cancellationSignal disconnects the connection when signalled
      * @return the disconnect message
      */
-    String awaitDisconnect(CancellationSignal cancellationSignal);
+    String awaitDisconnect(CancellationSignal cancellationSignal) throws InterruptedException;
 
     /** Waits without a cancellable token. */
-    default String awaitDisconnect() {
+    default String awaitDisconnect() throws InterruptedException {
         return awaitDisconnect(CancellationSignal.none());
     }
 

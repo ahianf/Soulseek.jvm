@@ -193,7 +193,7 @@ public final class TokenBucket implements AutoCloseable {
             armWakeup();
         }
 
-        return request.awaitGrant();
+        return request.awaitGrant(() -> cancelInterrupted(request));
     }
 
     /**
@@ -459,6 +459,20 @@ public final class TokenBucket implements AutoCloseable {
         request.settle(new CancellationException("The operation was cancelled"));
     }
 
+    /** Removes a request whose own waiting thread was interrupted. */
+    private void cancelInterrupted(Request request) {
+        synchronized (this) {
+            if (!requests.remove(request)) {
+                return;
+            }
+            request.closeRegistration();
+            if (request.active) {
+                activateFirstRequest();
+            }
+            armWakeup();
+        }
+    }
+
     /**
      * One caller's place in the queue, and the cell it is parked on.
      *
@@ -486,27 +500,37 @@ public final class TokenBucket implements AutoCloseable {
             return decided.get();
         }
 
-        private void settle(int amount) {
+        private boolean settle(int amount) {
             if (decided.compareAndSet(false, true)) {
                 granted = amount;
                 settled.countDown();
+                return true;
             }
+            return false;
         }
 
-        private void settle(RuntimeException reason) {
+        private boolean settle(RuntimeException reason) {
             if (decided.compareAndSet(false, true)) {
                 failure = reason;
                 settled.countDown();
+                return true;
             }
+            return false;
         }
 
         /** Blocks until this request is decided, then reports the decision. */
-        private int awaitGrant() {
+        private int awaitGrant(Runnable cancelAction) {
             try {
                 settled.await();
             } catch (InterruptedException interrupted) {
+                CancellationException cancelled = new CancellationException("The wait for tokens was interrupted");
+                if (settle(cancelled)) {
+                    cancelAction.run();
+                    throw cancelled;
+                }
+                // A grant committed first. Preserve the later interrupt for
+                // the worker's enclosing transfer loop.
                 Thread.currentThread().interrupt();
-                throw new CancellationException("The wait for tokens was interrupted");
             }
             RuntimeException reason = failure;
             if (reason != null) {

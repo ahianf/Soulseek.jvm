@@ -37,7 +37,7 @@ class SettlementTest {
 
     @Test
     @DisplayName("the first to settle wins and everybody after it is a no-op")
-    void firstSettlementWins() {
+    void firstSettlementWins() throws Exception {
         IllegalStateException first = new IllegalStateException("first");
         Settlement settlement = new Settlement();
 
@@ -50,7 +50,7 @@ class SettlementTest {
 
     @Test
     @DisplayName("a settlement that succeeded reports no failure")
-    void successHasNoFailure() {
+    void successHasNoFailure() throws Exception {
         Settlement settlement = new Settlement();
 
         assertTrue(settlement.succeed());
@@ -69,7 +69,11 @@ class SettlementTest {
         try (ExecutorService threads = Executors.newVirtualThreadPerTaskExecutor()) {
             threads.execute(() -> {
                 waiting.countDown();
-                observed.set(settlement.await());
+                try {
+                    observed.set(settlement.await());
+                } catch (InterruptedException unexpected) {
+                    throw new AssertionError(unexpected);
+                }
             });
             assertTrue(waiting.await(5, TimeUnit.SECONDS));
             settlement.fail(dropped);
@@ -130,5 +134,50 @@ class SettlementTest {
         settlement.succeed();
 
         assertTrue(settlement.await(60_000));
+    }
+
+    @Test
+    @DisplayName("an interrupt that wins an unsettled wait is consumed and reported")
+    void interruptionWinsAnUnsettledWait() throws Exception {
+        Settlement settlement = new Settlement();
+        AtomicReference<Throwable> observed = new AtomicReference<>();
+        AtomicReference<Boolean> flag = new AtomicReference<>(true);
+        Thread thread = Thread.ofVirtual().start(() -> {
+            try {
+                settlement.await();
+            } catch (Throwable failure) {
+                observed.set(failure);
+                flag.set(Thread.currentThread().isInterrupted());
+            }
+        });
+
+        thread.interrupt();
+        thread.join(1_000);
+
+        assertFalse(thread.isAlive());
+        assertTrue(observed.get() instanceof InterruptedException);
+        assertFalse(flag.get());
+    }
+
+    @Test
+    @DisplayName("a committed settlement wins a later interrupt and preserves its flag")
+    void committedSettlementWinsLaterInterrupt() throws Exception {
+        Settlement settlement = new Settlement();
+        settlement.succeed();
+        AtomicReference<Throwable> result = new AtomicReference<>(new AssertionError("not returned"));
+        AtomicReference<Boolean> flag = new AtomicReference<>();
+        Thread thread = Thread.ofVirtual().start(() -> {
+            Thread.currentThread().interrupt();
+            try {
+                result.set(settlement.await());
+                flag.set(Thread.currentThread().isInterrupted());
+            } catch (InterruptedException unexpected) {
+                result.set(unexpected);
+            }
+        });
+        thread.join(1_000);
+
+        assertNull(result.get());
+        assertTrue(flag.get());
     }
 }

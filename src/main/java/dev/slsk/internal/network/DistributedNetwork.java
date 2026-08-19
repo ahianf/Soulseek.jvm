@@ -573,7 +573,13 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     private void writeToChild(ConnectionCell pending, byte[] bytes, CancellationSignal cancellationSignal) {
         // The child may still be completing its handshake; one that failed it
         // answers null rather than throwing.
-        MessageConnection connection = pending.awaitQuietly();
+        MessageConnection connection;
+        try {
+            connection = pending.awaitQuietly();
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return;
+        }
         if (connection == null || connection.getState() != ConnectionState.CONNECTED) {
             return;
         }
@@ -826,7 +832,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     }
 
     private MessageConnection establishDirectChild(
-            String username, Connection incomingConnection, ConnectionCell cached) {
+            String username, Connection incomingConnection, ConnectionCell cached) throws InterruptedException {
         diagnostic.debug("Inbound child connection to " + username + " ("
                 + incomingConnection.getIpEndpoint()
                 + ") accepted. (type: " + incomingConnection.getType()

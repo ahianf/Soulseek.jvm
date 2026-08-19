@@ -261,7 +261,7 @@ final class UploadRun {
         }
     }
 
-    private void writeAndAwaitDisconnectRace() {
+    private void writeAndAwaitDisconnectRace() throws InterruptedException {
         long remaining = upload.getSize() - upload.getStartOffset();
         Settlement settlement = upload.settlement();
         if (remaining == 0) {

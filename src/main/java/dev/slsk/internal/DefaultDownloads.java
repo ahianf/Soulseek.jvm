@@ -373,18 +373,21 @@ final class DefaultDownloads implements Downloads {
             // Re-read after subscribing: it may have finished between the two,
             // and a wait that misses its own event never returns.
             if (!(get(id).state() instanceof TransferState.Finished)) {
-                waitFor(finished);
+                waitFor(finished, () -> get(id).state() instanceof TransferState.Finished);
             }
         }
         signal.throwIfCancellationRequested();
         return get(id);
     }
 
-    private static void waitFor(CountDownLatch latch) {
+    private static void waitFor(CountDownLatch latch, java.util.function.BooleanSupplier completed) {
         try {
             latch.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
         } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
+            if (completed.getAsBoolean()) {
+                Thread.currentThread().interrupt();
+                return;
+            }
             throw new java.util.concurrent.CancellationException("the wait was interrupted");
         }
     }

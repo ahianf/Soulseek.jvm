@@ -555,7 +555,7 @@ public final class PeerNetwork implements PeerConnectionManager {
     }
 
     private MessageConnection establishIncomingMessageConnection(
-            String username, Connection incomingConnection, ConnectionCell superseded) {
+            String username, Connection incomingConnection, ConnectionCell superseded) throws InterruptedException {
         diagnostic.debug("Inbound message connection to " + username + " ("
                 + incomingConnection.getIpEndpoint()
                 + ") accepted. (type: " + incomingConnection.getType()

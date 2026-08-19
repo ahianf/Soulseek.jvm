@@ -318,7 +318,7 @@ final class TransferDomain implements PeerServices {
      * @param cancellationSignal stops the wait for the sync root
      * @return the peer's semaphore
      */
-    Semaphore uploadSemaphoreFor(String username, CancellationSignal cancellationSignal) {
+    Semaphore uploadSemaphoreFor(String username, CancellationSignal cancellationSignal) throws InterruptedException {
         dev.slsk.internal.common.Permits.acquire(uploadSemaphoreSyncRoot, cancellationSignal);
         try {
             // The lease is what makes the sweep safe. The C# source starts the

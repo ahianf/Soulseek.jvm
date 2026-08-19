@@ -335,7 +335,11 @@ final class UserDirectory {
         // under its own cancellation signal; sharing one in-flight request would let one caller's
         // cancellation or failure surface in another's.
         Semaphore semaphore;
-        userEndpointSemaphoreSyncRoot.acquireUninterruptibly();
+        try {
+            Permits.acquire(userEndpointSemaphoreSyncRoot, token);
+        } catch (InterruptedException interrupted) {
+            throw new CancellationException("The endpoint-cache lookup was interrupted");
+        }
         try {
             semaphore = userEndpointSemaphores.computeIfAbsent(requestedUsername, ignored -> new Semaphore(1));
         } finally {
@@ -344,7 +348,11 @@ final class UserDirectory {
 
         // The permit is released only on the path that acquired it; a cancelled acquisition must
         // not release a permit it never held, which is why the acquire is outside the try.
-        Permits.acquire(semaphore, token);
+        try {
+            Permits.acquire(semaphore, token);
+        } catch (InterruptedException interrupted) {
+            throw new CancellationException("The endpoint lookup was interrupted");
+        }
 
         try {
             CacheLookupResult<InetSocketAddress> second = tryCacheGet(cache, requestedUsername);

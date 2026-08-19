@@ -10,7 +10,6 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 
 /**
  * Races two attempts to reach a peer and returns the first that succeeds.
@@ -55,7 +54,7 @@ final class FirstSuccess {
      * @param <T> the connection type both attempts produce
      * @return the winning arm and its connection
      */
-    static <T extends Connection> Winner<T> race(Supplier<T> first, Supplier<T> second) {
+    static <T extends Connection> Winner<T> race(Attempt<T> first, Attempt<T> second) throws InterruptedException {
         // One slot, because exactly one outcome is ever offered: the first arm
         // to succeed, or the second arm to fail.
         BlockingQueue<Outcome<T>> handoff = new ArrayBlockingQueue<>(1);
@@ -73,7 +72,7 @@ final class FirstSuccess {
     }
 
     private static <T extends Connection> void attempt(
-            Supplier<T> arm,
+            Attempt<T> arm,
             boolean first,
             BlockingQueue<Outcome<T>> handoff,
             AtomicReference<Throwable> lostArm,
@@ -98,28 +97,14 @@ final class FirstSuccess {
         }
     }
 
-    /**
-     * Waits for the handoff uninterruptibly, restoring the interrupt after.
-     *
-     * <p>An interrupt belongs to whatever the caller does next. Cancelling a
-     * connection attempt arrives through its
-     * {@link dev.slsk.CancellationSignal}, never through the waiting thread.
-     */
-    private static <T> T take(BlockingQueue<T> handoff) {
-        boolean interrupted = false;
-        try {
-            while (true) {
-                try {
-                    return handoff.take();
-                } catch (InterruptedException exception) {
-                    interrupted = true;
-                }
-            }
-        } finally {
-            if (interrupted) {
-                Thread.currentThread().interrupt();
-            }
-        }
+    /** Waits interruptibly for the first completed arm. */
+    private static <T> T take(BlockingQueue<T> handoff) throws InterruptedException {
+        return handoff.take();
+    }
+
+    @FunctionalInterface
+    interface Attempt<T extends Connection> {
+        T get() throws Exception;
     }
 
     /**

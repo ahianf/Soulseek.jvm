@@ -199,7 +199,7 @@ final class DownloadRun {
      * keeping it in one place is what stops the offered path drifting into a
      * second, less-tested copy of the download.
      */
-    private void receiveFile() throws IOException {
+    private void receiveFile() throws IOException, InterruptedException {
         bindConnectionEvents();
         outputStream = Objects.requireNonNull(outputStreamFactory.get(), "outputStreamFactory result");
         positionOutputStream();
@@ -218,7 +218,7 @@ final class DownloadRun {
         connection.disconnect("Transfer complete");
     }
 
-    private void beginQueuedDownload(Wait<TransferRequest> transferStartRequested) {
+    private void beginQueuedDownload(Wait<TransferRequest> transferStartRequested) throws InterruptedException {
         updateState(TransferState.QUEUED.or(TransferState.REMOTELY));
         TransferRequest request = transferStartRequested.await();
 
@@ -344,7 +344,7 @@ final class DownloadRun {
         }
     }
 
-    private void readTransfer() {
+    private void readTransfer() throws InterruptedException {
         try (CancellationController linkedController = new CancellationController();
                 CancellationSubscription registration = cancellationSignal.register(linkedController::cancel)) {
             CancellationSignal linkedToken = linkedController.getSignal();

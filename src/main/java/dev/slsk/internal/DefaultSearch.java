@@ -263,7 +263,7 @@ final class DefaultSearch implements Search {
                 // Re-read after subscribing: it may have finished between the
                 // two, and a wait that misses its own event never returns.
                 if (!state.status.isTerminal()) {
-                    waitFor(done);
+                    waitFor(done, () -> state.status.isTerminal());
                 }
             }
         }
@@ -358,11 +358,14 @@ final class DefaultSearch implements Search {
         return state;
     }
 
-    private static void waitFor(CountDownLatch latch) {
+    private static void waitFor(CountDownLatch latch, java.util.function.BooleanSupplier completed) {
         try {
             latch.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
         } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
+            if (completed.getAsBoolean()) {
+                Thread.currentThread().interrupt();
+                return;
+            }
             throw new java.util.concurrent.CancellationException("the wait was interrupted");
         }
     }

@@ -263,7 +263,8 @@ public class SocketConnection implements Connection {
                 queued++;
             }
         }
-        return queued + (activeFrameWrite == null ? 0 : 1);
+        FrameWrite active = activeFrameWrite;
+        return queued + (active == null || !active.isWriting() ? 0 : 1);
     }
 
     /**
@@ -343,7 +344,6 @@ public class SocketConnection implements Connection {
         try {
             outcome = timeout == -1 ? gate.take() : gate.poll(timeout, TimeUnit.MILLISECONDS);
         } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
             throw new CancellationException("Operation cancelled");
         } finally {
             registration.close();
@@ -388,10 +388,13 @@ public class SocketConnection implements Connection {
 
         publishStateChanged(previousState, ConnectionState.DISCONNECTING, reason, null);
         stopTimers();
+        // Make the terminal state visible before releasing parked writers. The
+        // disconnected event still follows transport teardown below, but an
+        // exceptional send never returns while the state says transitioning.
+        state = ConnectionState.DISCONNECTED;
         stopFrameWriter(frameWriteTeardownFailure(reason, exception));
         closeTransport();
 
-        state = ConnectionState.DISCONNECTED;
         publishStateChanged(ConnectionState.DISCONNECTING, ConnectionState.DISCONNECTED, reason, exception);
         publishDisconnected(reason, exception);
     }
@@ -462,27 +465,17 @@ public class SocketConnection implements Connection {
     }
 
     @Override
-    public String awaitDisconnect(CancellationSignal cancellationSignal) {
+    public String awaitDisconnect(CancellationSignal cancellationSignal) throws InterruptedException {
         if (cancellationSignal != null) {
             cancellationSignal.register(() -> disconnect(null, new CancellationException("Operation cancelled")));
         }
-        // Uninterruptibly, restoring the flag on the way out: this is what
-        // join() did, and an interrupt here belongs to whatever the caller does
-        // next rather than to a connection that has not gone down yet.
-        boolean interrupted = false;
         try {
-            while (true) {
-                try {
-                    disconnected.await();
-                    break;
-                } catch (InterruptedException exception) {
-                    interrupted = true;
-                }
+            disconnected.await();
+        } catch (InterruptedException interrupted) {
+            if (disconnected.getCount() != 0) {
+                throw interrupted;
             }
-        } finally {
-            if (interrupted) {
-                Thread.currentThread().interrupt();
-            }
+            Thread.currentThread().interrupt();
         }
         if (disconnectFailure != null) {
             throw Failures.propagate(disconnectFailure);
@@ -1158,6 +1151,10 @@ public class SocketConnection implements Connection {
 
         private boolean start() {
             return frameState.compareAndSet(FrameState.QUEUED, FrameState.WRITING);
+        }
+
+        private boolean isWriting() {
+            return frameState.get() == FrameState.WRITING;
         }
 
         private void succeed() {

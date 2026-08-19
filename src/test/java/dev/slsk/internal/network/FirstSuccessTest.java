@@ -36,7 +36,7 @@ class FirstSuccessTest {
 
     @Test
     @DisplayName("the first arm to succeed wins, and says which arm it was")
-    void theFirstArmToSucceedWins() {
+    void theFirstArmToSucceedWins() throws Exception {
         ConnectionProbe direct = new ConnectionProbe();
         FirstSuccess.Winner<Connection> directWinner = FirstSuccess.race(direct::connection, () -> refuse("indirect"));
         assertSame(direct.connection(), directWinner.value());
@@ -57,7 +57,7 @@ class FirstSuccessTest {
      */
     @Test
     @DisplayName("an arm that fails does not lose the race for the one still trying")
-    void oneArmFailingDoesNotLoseTheRace() {
+    void oneArmFailingDoesNotLoseTheRace() throws Exception {
         ConnectionProbe slow = new ConnectionProbe();
         CountDownLatch directFailed = new CountDownLatch(1);
 
@@ -121,7 +121,7 @@ class FirstSuccessTest {
      */
     @Test
     @DisplayName("the arm that arrives second is closed")
-    void theLoserIsClosed() {
+    void theLoserIsClosed() throws Exception {
         ConnectionProbe winner = new ConnectionProbe();
         ConnectionProbe loser = new ConnectionProbe();
         CountDownLatch raceDecided = new CountDownLatch(1);

@@ -41,14 +41,11 @@ final class ConnectionCell {
     /**
      * Waits for this cell to settle and returns its connection.
      *
-     * <p>Uninterruptibly, restoring the interrupt on the way out. An interrupt
-     * belongs to whatever the caller does next; a connection attempt is
-     * cancelled through its {@link dev.slsk.CancellationSignal}, not through
-     * the threads waiting on its result.
-     *
      * @return the established connection
+     * @throws InterruptedException if this caller abandons its wait; the shared
+     *     establishment continues
      */
-    MessageConnection await() {
+    MessageConnection await() throws InterruptedException {
         awaitSettled();
         Throwable cause = failure;
         if (cause != null) {
@@ -63,7 +60,7 @@ final class ConnectionCell {
      *
      * @return the established connection, or {@code null}
      */
-    MessageConnection awaitQuietly() {
+    MessageConnection awaitQuietly() throws InterruptedException {
         awaitSettled();
         return failure == null ? connection : null;
     }
@@ -144,21 +141,16 @@ final class ConnectionCell {
         }
     }
 
-    private void awaitSettled() {
-        boolean interrupted = false;
+    private void awaitSettled() throws InterruptedException {
         try {
-            while (true) {
-                try {
-                    settled.await();
-                    break;
-                } catch (InterruptedException exception) {
-                    interrupted = true;
+            settled.await();
+        } catch (InterruptedException interrupted) {
+            synchronized (this) {
+                if (!established && failure == null) {
+                    throw interrupted;
                 }
             }
-        } finally {
-            if (interrupted) {
-                Thread.currentThread().interrupt();
-            }
+            Thread.currentThread().interrupt();
         }
     }
 }

@@ -163,7 +163,7 @@ class SearchInternalTest {
     }
 
     @Test
-    void responseLimitWinsWhenBothLimitsAreReached() {
+    void responseLimitWinsWhenBothLimitsAreReached() throws Exception {
         SearchOptions options = new SearchOptions(1000, 1, false, 1, Integer.MAX_VALUE, 0, 1);
         try (SearchInternal search = search(42, options)) {
             search.setState(SearchState.IN_PROGRESS);
@@ -175,7 +175,7 @@ class SearchInternalTest {
     }
 
     @Test
-    void fileLimitCompletesSearch() {
+    void fileLimitCompletesSearch() throws Exception {
         SearchOptions options = new SearchOptions(1000, 2, false, 1, Integer.MAX_VALUE, 0, 1);
         try (SearchInternal search = search(42, options)) {
             search.setState(SearchState.IN_PROGRESS);

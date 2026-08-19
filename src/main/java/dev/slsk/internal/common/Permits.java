@@ -7,6 +7,7 @@ import dev.slsk.CancellationSignal;
 import dev.slsk.CancellationSubscription;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Acquiring a semaphore permit without burning a core waiting for it.
@@ -37,29 +38,47 @@ public final class Permits {
      *
      * @param semaphore the semaphore to acquire from
      * @param cancellationSignal the cancellation signal
-     * @throws CancellationException if cancellation is requested before or
-     *     during the wait
+     * @throws CancellationException if the internal signal is cancelled first
+     * @throws InterruptedException if the waiting thread is interrupted first
      */
-    public static void acquire(Semaphore semaphore, CancellationSignal cancellationSignal) {
+    public static void acquire(Semaphore semaphore, CancellationSignal cancellationSignal) throws InterruptedException {
+        if (Thread.interrupted()) {
+            throw new InterruptedException("The permit wait was interrupted before it started");
+        }
         cancellationSignal.throwIfCancellationRequested();
         if (semaphore.tryAcquire()) {
             return;
         }
 
         Thread waiter = Thread.currentThread();
-        try (CancellationSubscription registration = cancellationSignal.register(waiter::interrupt)) {
+        AtomicReference<Outcome> outcome = new AtomicReference<>(Outcome.WAITING);
+        try (CancellationSubscription registration = cancellationSignal.register(() -> {
+            if (outcome.compareAndSet(Outcome.WAITING, Outcome.CANCELLED)) {
+                waiter.interrupt();
+            }
+        })) {
             semaphore.acquire();
+            if (!outcome.compareAndSet(Outcome.WAITING, Outcome.ACQUIRED)) {
+                semaphore.release();
+                throw new CancellationException("The operation was cancelled");
+            }
         } catch (InterruptedException interrupted) {
-            // Reported by the exception, not by the flag: catching
-            // InterruptedException already cleared it, and re-setting it would
-            // break the caller's next blocking call for a cancellation it has
-            // just been told about.
-            throw new CancellationException("The operation was cancelled");
-        } finally {
-            // A cancellation landing just after the permit was taken leaves the
-            // flag set on a thread that goes on to do more work. The permit is
-            // held and the caller's own signal check is what ends the operation.
-            Thread.interrupted();
+            if (outcome.compareAndSet(Outcome.WAITING, Outcome.INTERRUPTED)) {
+                throw interrupted;
+            }
+            if (outcome.get() == Outcome.CANCELLED) {
+                throw new CancellationException("The operation was cancelled");
+            }
+            // Acquisition committed first. Preserve the later interrupt for
+            // the caller's enclosing work instead of consuming it here.
+            Thread.currentThread().interrupt();
         }
+    }
+
+    private enum Outcome {
+        WAITING,
+        ACQUIRED,
+        CANCELLED,
+        INTERRUPTED
     }
 }

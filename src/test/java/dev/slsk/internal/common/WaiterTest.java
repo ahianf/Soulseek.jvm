@@ -23,6 +23,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,7 +41,7 @@ class WaiterTest {
 
     @Test
     @DisplayName("Complete dequeues and completes the oldest wait")
-    void completeDequeuesAndCompletesOldestWait() {
+    void completeDequeuesAndCompletesOldestWait() throws Exception {
         try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("login");
             Wait<String> first = waiter.register(key, String.class, null, null);
@@ -62,7 +63,7 @@ class WaiterTest {
 
     @Test
     @DisplayName("Non-generic complete returns null")
-    void nonGenericCompleteReturnsNull() {
+    void nonGenericCompleteReturnsNull() throws Exception {
         try (DefaultWaiter waiter = new DefaultWaiter()) {
             WaitKey key = new WaitKey("room-list");
             Wait<Void> wait = waiter.register(key, null, null);
@@ -102,7 +103,7 @@ class WaiterTest {
 
     @Test
     @DisplayName("Cancelling by key takes exactly one wait, oldest first")
-    void cancelTakesExactlyOneWaitOldestFirst() {
+    void cancelTakesExactlyOneWaitOldestFirst() throws Exception {
         // A caller can no longer cancel its own wait — a handle is not a
         // future — so cancellation is by key, and the queue behind that key has
         // to survive it.
@@ -190,7 +191,7 @@ class WaiterTest {
      */
     @Test
     @DisplayName("A caller's cancellation settles its own wait, not the oldest under the key")
-    void cancellationTargetsTheWaitWhoseSignalFired() {
+    void cancellationTargetsTheWaitWhoseSignalFired() throws Exception {
         try (DefaultWaiter waiter = new DefaultWaiter();
                 CancellationController secondSource = new CancellationController()) {
             WaitKey key = new WaitKey("login");
@@ -301,15 +302,111 @@ class WaiterTest {
         try (Scheduler scheduler = new Scheduler("waiter-test-timer")) {
             DefaultWaiter.PendingWait<String> unregistered =
                     new DefaultWaiter.PendingWait<>(String.class, 30_000, CancellationSignal.none());
-            unregistered.actions(() -> {}, () -> {});
+            unregistered.actions(() -> {}, () -> {}, () -> {});
             DefaultWaiter.PendingWait<String> registered =
                     new DefaultWaiter.PendingWait<>(String.class, 30_000, CancellationSignal.none());
-            registered.actions(() -> {}, () -> {});
+            registered.actions(() -> {}, () -> {}, () -> {});
 
             assertDoesNotThrow(unregistered::close);
             registered.register(scheduler);
             assertDoesNotThrow(registered::close);
         }
+    }
+
+    @Test
+    @DisplayName("Interrupting a parked wait cancels that wait and consumes the interrupt")
+    void interruptionCancelsOnlyTheParkedWait() throws Exception {
+        try (DefaultWaiter waiter = new DefaultWaiter()) {
+            WaitKey key = new WaitKey("interrupt");
+            Wait<String> wait = waiter.registerIndefinitely(key, String.class, null);
+            AtomicReference<Throwable> observed = new AtomicReference<>();
+            AtomicBoolean flagInCatch = new AtomicBoolean(true);
+            CountDownLatch entered = new CountDownLatch(1);
+            Thread thread = Thread.ofVirtual().start(() -> {
+                entered.countDown();
+                try {
+                    wait.await();
+                } catch (Throwable failure) {
+                    observed.set(failure);
+                    flagInCatch.set(Thread.currentThread().isInterrupted());
+                }
+            });
+            assertTrue(entered.await(1, TimeUnit.SECONDS));
+
+            thread.interrupt();
+            thread.join(1_000);
+
+            assertFalse(thread.isAlive());
+            assertTrue(observed.get() instanceof InterruptedException);
+            assertFalse(flagInCatch.get(), "the observed interrupt must be consumed");
+            assertFalse(waiter.hasWait(key));
+        }
+    }
+
+    @Test
+    @DisplayName("A committed result wins a later interrupt and leaves its flag set")
+    void committedResultWinsAndPreservesLaterInterrupt() throws Exception {
+        DefaultWaiter.PendingWait<String> wait =
+                new DefaultWaiter.PendingWait<>(String.class, 30_000, CancellationSignal.none());
+        wait.actions(() -> {}, () -> {}, () -> {});
+        AtomicReference<String> result = new AtomicReference<>();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        AtomicBoolean flagAtReturn = new AtomicBoolean();
+        CountDownLatch entered = new CountDownLatch(1);
+        Thread thread = Thread.ofVirtual().start(() -> {
+            entered.countDown();
+            try {
+                result.set(wait.await());
+                flagAtReturn.set(Thread.currentThread().isInterrupted());
+            } catch (Throwable thrown) {
+                failure.set(thrown);
+            }
+        });
+        assertTrue(entered.await(1, TimeUnit.SECONDS));
+
+        assertTrue(wait.trySettle("answer", null));
+        thread.interrupt();
+        wait.publish();
+        thread.join(1_000);
+
+        assertFalse(thread.isAlive());
+        assertNull(failure.get());
+        assertEquals("answer", result.get());
+        assertTrue(flagAtReturn.get());
+    }
+
+    @Test
+    @DisplayName("An interrupt that commits first cannot be overwritten by a later result")
+    void interruptionWinnerDiscardsLaterResult() throws Exception {
+        DefaultWaiter.PendingWait<String> wait =
+                new DefaultWaiter.PendingWait<>(String.class, 30_000, CancellationSignal.none());
+        CountDownLatch cleanupEntered = new CountDownLatch(1);
+        CountDownLatch releaseCleanup = new CountDownLatch(1);
+        wait.actions(() -> {}, () -> {}, () -> {
+            cleanupEntered.countDown();
+            try {
+                releaseCleanup.await();
+            } catch (InterruptedException impossible) {
+                throw new AssertionError(impossible);
+            }
+        });
+        AtomicReference<Throwable> observed = new AtomicReference<>();
+        Thread thread = Thread.ofVirtual().start(() -> {
+            try {
+                wait.await();
+            } catch (Throwable failure) {
+                observed.set(failure);
+            }
+        });
+
+        thread.interrupt();
+        assertTrue(cleanupEntered.await(1, TimeUnit.SECONDS));
+        wait.settle("too late", null);
+        thread.join(1_000);
+        releaseCleanup.countDown();
+
+        assertFalse(thread.isAlive(), "bounded cleanup must release the interrupted caller");
+        assertTrue(observed.get() instanceof InterruptedException);
     }
 
     @Test

@@ -95,7 +95,7 @@ class DistributedMessageHandlerTest {
     }
 
     @Test
-    void childDepthAndPingCompleteExpectedWaitKeys() {
+    void childDepthAndPingCompleteExpectedWaitKeys() throws Exception {
         Fixture fixture = new Fixture(true);
         ConnectionProbe connection = new ConnectionProbe(USERNAME, ENDPOINT);
         Wait<Integer> depth = fixture.waiter.register(

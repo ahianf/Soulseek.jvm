@@ -25,7 +25,7 @@ class PermitsTest {
 
     @Test
     @DisplayName("an available permit is taken without blocking")
-    void takesAnAvailablePermit() {
+    void takesAnAvailablePermit() throws Exception {
         Semaphore semaphore = new Semaphore(1);
         Permits.acquire(semaphore, CancellationSignal.none());
         assertEquals(0, semaphore.availablePermits());
@@ -50,8 +50,12 @@ class PermitsTest {
 
         CountDownLatch acquired = new CountDownLatch(1);
         Thread waiter = Thread.ofVirtual().start(() -> {
-            Permits.acquire(semaphore, CancellationSignal.none());
-            acquired.countDown();
+            try {
+                Permits.acquire(semaphore, CancellationSignal.none());
+                acquired.countDown();
+            } catch (InterruptedException unexpected) {
+                throw new AssertionError(unexpected);
+            }
         });
 
         assertFalse(acquired.await(100, TimeUnit.MILLISECONDS), "it should still be waiting");
@@ -110,6 +114,8 @@ class PermitsTest {
                     Permits.acquire(semaphore, controller.getSignal());
                 } catch (CancellationException expected) {
                     stillInterrupted.set(Thread.currentThread().isInterrupted());
+                } catch (InterruptedException unexpected) {
+                    throw new AssertionError(unexpected);
                 } finally {
                     done.countDown();
                 }
@@ -122,6 +128,55 @@ class PermitsTest {
         }
 
         assertFalse(stillInterrupted.get(), "the caller was left interrupted");
+    }
+
+    @Test
+    @DisplayName("a caller interrupt is reported as InterruptedException and consumed")
+    void callerInterruptionIsReportedAndConsumed() throws Exception {
+        Semaphore semaphore = new Semaphore(0);
+        AtomicReference<Throwable> thrown = new AtomicReference<>();
+        AtomicReference<Boolean> flagInCatch = new AtomicReference<>(true);
+        CountDownLatch entered = new CountDownLatch(1);
+        Thread waiter = Thread.ofVirtual().start(() -> {
+            entered.countDown();
+            try {
+                Permits.acquire(semaphore, CancellationSignal.none());
+            } catch (Throwable failure) {
+                thrown.set(failure);
+                flagInCatch.set(Thread.currentThread().isInterrupted());
+            }
+        });
+        assertTrue(entered.await(1, TimeUnit.SECONDS));
+
+        waiter.interrupt();
+        waiter.join(1_000);
+
+        assertFalse(waiter.isAlive());
+        assertTrue(thrown.get() instanceof InterruptedException);
+        assertFalse(flagInCatch.get());
+        assertEquals(0, semaphore.availablePermits());
+    }
+
+    @Test
+    @DisplayName("a pre-existing interrupt is consumed before an available permit is touched")
+    void preExistingInterruptWinsAtEntry() throws Exception {
+        Semaphore semaphore = new Semaphore(1);
+        AtomicReference<Throwable> thrown = new AtomicReference<>();
+        AtomicReference<Boolean> flagInCatch = new AtomicReference<>(true);
+        Thread waiter = Thread.ofVirtual().start(() -> {
+            Thread.currentThread().interrupt();
+            try {
+                Permits.acquire(semaphore, CancellationSignal.none());
+            } catch (Throwable failure) {
+                thrown.set(failure);
+                flagInCatch.set(Thread.currentThread().isInterrupted());
+            }
+        });
+        waiter.join(1_000);
+
+        assertTrue(thrown.get() instanceof InterruptedException);
+        assertFalse(flagInCatch.get());
+        assertEquals(1, semaphore.availablePermits());
     }
 
     private static void assertInstanceOfCancellation(Throwable failure) {

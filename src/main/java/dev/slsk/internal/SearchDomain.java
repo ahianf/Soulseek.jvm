@@ -311,7 +311,7 @@ final class SearchDomain {
         }
     }
 
-    void acquireSearchPermit(CancellationSignal cancellationSignal) {
+    void acquireSearchPermit(CancellationSignal cancellationSignal) throws InterruptedException {
         Permits.acquire(searchSemaphore, cancellationSignal);
     }
 

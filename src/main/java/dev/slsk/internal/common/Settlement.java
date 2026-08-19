@@ -95,30 +95,20 @@ public final class Settlement {
     /**
      * Waits for the settlement.
      *
-     * <p>Uninterruptibly, restoring the interrupt on the way out — the same
-     * rule the rest of this library's blocking waits follow. An interrupt
-     * belongs to whatever the caller does next; a transfer is stopped through
-     * its {@link dev.slsk.CancellationSignal}, not through the waiting
-     * thread.
-     *
      * @return the failure it settled with, or {@code null} if it succeeded
+     * @throws InterruptedException if the waiting thread is interrupted first
      */
-    public Throwable await() {
-        boolean interrupted = false;
+    public Throwable await() throws InterruptedException {
         try {
-            while (true) {
-                try {
-                    settled.await();
-                    return failure();
-                } catch (InterruptedException exception) {
-                    interrupted = true;
-                }
-            }
-        } finally {
-            if (interrupted) {
+            settled.await();
+        } catch (InterruptedException interrupted) {
+            if (isSettled()) {
                 Thread.currentThread().interrupt();
+                return failure();
             }
+            throw interrupted;
         }
+        return failure();
     }
 
     /**
