@@ -41,7 +41,7 @@ public class UserInfo {
     public UserInfo(String description, int uploadSlots, int queueLength, boolean hasFreeUploadSlot, byte[] picture) {
         this.description = description;
         this.picturePresent = picture != null;
-        this.picture = picture;
+        this.picture = picture == null ? null : picture.clone();
         this.uploadSlots = uploadSlots;
         this.queueLength = queueLength;
         this.freeUploadSlot = hasFreeUploadSlot;
@@ -77,13 +77,10 @@ public class UserInfo {
     /**
      * Returns the picture data, if configured.
      *
-     * <p>The C# source exposes the original array, so this direct port does
-     * the same.</p>
-     *
-     * @return the original picture array, or {@code null}
+     * @return a copy of the picture array, or {@code null}
      */
     public final byte[] getPicture() {
-        return picture;
+        return picture == null ? null : picture.clone();
     }
 
     /**

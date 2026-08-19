@@ -117,13 +117,13 @@ class TransferTest {
     }
 
     @Test
-    @DisplayName("RemainingTime truncates to source TimeSpan 100-nanosecond ticks")
-    void remainingTimeTruncatesToSourceTimeSpanTicks() {
+    @DisplayName("RemainingTime retains nanosecond precision")
+    void remainingTimeRetainsNanosecondPrecision() {
         Transfer positive = transfer(TransferState.NONE, 1, 0, 600);
         Transfer negative = transfer(TransferState.NONE, -1, 0, 600);
 
-        assertEquals(Duration.ofNanos(1_666_600), positive.getRemainingTime());
-        assertEquals(Duration.ofNanos(-1_666_600), negative.getRemainingTime());
+        assertEquals(Duration.ofNanos(1_666_666), positive.getRemainingTime());
+        assertEquals(Duration.ofNanos(-1_666_666), negative.getRemainingTime());
     }
 
     @Test
@@ -142,7 +142,7 @@ class TransferTest {
     @DisplayName("Rejects a non-finite remaining duration")
     void rejectsNonFiniteRemainingDuration() {
         assertThrows(IllegalArgumentException.class, () -> transfer(TransferState.NONE, 1, 0, Double.NaN));
-        assertThrows(ArithmeticException.class, () -> transfer(TransferState.NONE, 1, 0, Double.MIN_VALUE));
+        assertThrows(IllegalArgumentException.class, () -> transfer(TransferState.NONE, 1, 0, Double.MIN_VALUE));
     }
 
     private static Transfer transfer(TransferState state, long size, long bytesTransferred, double averageSpeed) {

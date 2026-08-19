@@ -5,13 +5,14 @@
 package dev.slsk.internal.search;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 
 /**
  * Search scope definition.
  */
 public class SearchScope {
-    private final String[] subjects;
+    private final List<String> subjects;
     private final SearchScopeType type;
 
     /**
@@ -24,27 +25,28 @@ public class SearchScope {
      */
     public SearchScope(SearchScopeType type, String... subjects) {
         this.type = Objects.requireNonNull(type, "type");
-        this.subjects = subjects == null ? new String[0] : subjects;
+        String[] suppliedSubjects = subjects == null ? new String[0] : subjects;
 
-        if ((type == SearchScopeType.NETWORK || type == SearchScopeType.WISHLIST) && this.subjects.length > 0) {
+        if ((type == SearchScopeType.NETWORK || type == SearchScopeType.WISHLIST) && suppliedSubjects.length > 0) {
             throw new IllegalArgumentException(
                     "The " + displayName(type) + " search scope can not be used with subjects");
         }
 
         if (type == SearchScopeType.ROOM
-                && (this.subjects.length != 1 || this.subjects[0] == null || this.subjects[0].isEmpty())) {
+                && (suppliedSubjects.length != 1 || suppliedSubjects[0] == null || suppliedSubjects[0].isEmpty())) {
             throw new IllegalArgumentException(
                     "The Room search scope requires a single, non null and non empty subject");
         }
 
         if (type == SearchScopeType.USER) {
-            if (this.subjects.length == 0) {
+            if (suppliedSubjects.length == 0) {
                 throw new IllegalArgumentException("The User search scope requires at least one subject");
             }
-            if (Arrays.stream(this.subjects).anyMatch(value -> value == null || value.isEmpty())) {
+            if (Arrays.stream(suppliedSubjects).anyMatch(value -> value == null || value.isEmpty())) {
                 throw new IllegalArgumentException("One or more of the supplied User scope subjects is null or empty");
             }
         }
+        this.subjects = List.copyOf(Arrays.asList(suppliedSubjects));
     }
 
     /**
@@ -68,13 +70,10 @@ public class SearchScope {
     /**
      * Returns the scope subjects.
      *
-     * <p>The C# source retains the supplied parameter array. This iterable is
-     * therefore backed by the caller's array rather than being a snapshot.</p>
-     *
      * @return the scope subjects
      */
-    public final Iterable<String> getSubjects() {
-        return Arrays.asList(subjects);
+    public final List<String> getSubjects() {
+        return subjects;
     }
 
     /**

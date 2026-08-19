@@ -32,20 +32,6 @@ public class ProxyOptions {
     }
 
     /**
-     * Creates proxy options with a username.
-     *
-     * <p>This overload is retained for the C# optional-parameter call shape;
-     * validation requires a password whenever the username is non-null.</p>
-     *
-     * @param address the proxy address
-     * @param port the proxy port
-     * @param username the proxy username
-     */
-    public ProxyOptions(String address, int port, String username) {
-        this(address, port, username, null);
-    }
-
-    /**
      * Creates proxy options.
      *
      * @param address the proxy address
@@ -77,9 +63,8 @@ public class ProxyOptions {
         try {
             resolvedAddress = InetAddress.getAllByName(address)[0];
         } catch (UnknownHostException exception) {
-            // The source interpolates Address before assigning it, yielding
-            // an empty address in this message. Preserve that behavior.
-            throw new AddressException("Failed to resolve address '': " + exception.getMessage(), exception);
+            throw new AddressException(
+                    "Failed to resolve address '" + address + "': " + exception.getMessage(), exception);
         }
 
         this.address = address;

@@ -149,14 +149,14 @@ class SearchScopeTest {
     }
 
     @Test
-    @DisplayName("Subjects retains the supplied array like the C# params value")
-    void subjectsRetainsSuppliedArray() {
+    @DisplayName("Subjects snapshots the supplied array")
+    void subjectsSnapshotsSuppliedArray() {
         String[] source = {"alice"};
         SearchScope scope = new SearchScope(SearchScopeType.USER, source);
 
         source[0] = "bob";
 
-        assertEquals(List.of("bob"), subjects(scope));
+        assertEquals(List.of("alice"), subjects(scope));
     }
 
     @Test

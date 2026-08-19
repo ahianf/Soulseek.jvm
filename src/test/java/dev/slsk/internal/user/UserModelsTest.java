@@ -4,10 +4,11 @@
 
 package dev.slsk.internal.user;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -56,18 +57,21 @@ class UserModelsTest {
         assertEquals(5, info.getQueueLength());
         assertTrue(info.hasFreeUploadSlot());
         assertTrue(info.hasPicture());
-        assertSame(picture, info.getPicture());
+        assertArrayEquals(picture, info.getPicture());
+        assertNotSame(picture, info.getPicture());
     }
 
     @Test
-    @DisplayName("UserInfo preserves the source array alias")
-    void userInfoPreservesSourceArrayAlias() {
+    @DisplayName("UserInfo snapshots and protects picture data")
+    void userInfoSnapshotsAndProtectsPictureData() {
         byte[] picture = {1};
         UserInfo info = new UserInfo(null, 0, 0, false, picture);
 
         picture[0] = 9;
+        byte[] returned = info.getPicture();
+        returned[0] = 8;
 
-        assertEquals(9, info.getPicture()[0]);
+        assertEquals(1, info.getPicture()[0]);
         assertFalse(info.hasFreeUploadSlot());
     }
 

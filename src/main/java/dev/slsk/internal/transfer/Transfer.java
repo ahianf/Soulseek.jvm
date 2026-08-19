@@ -248,24 +248,16 @@ public class Transfer {
         return username;
     }
 
-    /**
-     * Converts seconds to a duration with the C# TimeSpan's semantics,
-     * including its NaN and overflow failures. Shared with
-     * {@code TransferInternal}, which used to carry a verbatim copy.
-     */
+    /** Converts a finite second count to a nanosecond-precision duration. */
     public static Duration durationFromSeconds(double seconds) {
-        if (Double.isNaN(seconds)) {
-            throw new IllegalArgumentException("TimeSpan does not accept NaN");
+        if (!Double.isFinite(seconds)) {
+            throw new IllegalArgumentException("seconds must be finite: " + seconds);
         }
-
-        double ticks = seconds * 10_000_000;
-        if (!Double.isFinite(ticks) || ticks >= 0x1.0p63 || ticks < -0x1.0p63) {
-            throw new ArithmeticException("TimeSpan overflowed because the duration is too long");
+        if (seconds >= Long.MAX_VALUE || seconds <= Long.MIN_VALUE) {
+            throw new ArithmeticException("seconds exceed Duration's range: " + seconds);
         }
-
-        long truncatedTicks = (long) ticks;
-        long secondsPart = truncatedTicks / 10_000_000;
-        long nanosecondsPart = (truncatedTicks % 10_000_000) * 100;
-        return Duration.ofSeconds(secondsPart, nanosecondsPart);
+        long wholeSeconds = (long) seconds;
+        long nanoseconds = (long) ((seconds - wholeSeconds) * 1_000_000_000);
+        return Duration.ofSeconds(wholeSeconds, nanoseconds);
     }
 }

@@ -40,7 +40,7 @@ class ProxyOptionsTest {
         AddressException exception =
                 assertThrows(AddressException.class, () -> new ProxyOptions("not a valid host name", 1, "u", "p"));
 
-        assertTrue(exception.getMessage().startsWith("Failed to resolve address '': "));
+        assertTrue(exception.getMessage().startsWith("Failed to resolve address 'not a valid host name': "));
         assertTrue(exception.getCause() instanceof java.net.UnknownHostException);
     }
 
@@ -92,12 +92,6 @@ class ProxyOptionsTest {
         ProxyOptions options = new ProxyOptions("127.0.0.1", 1, maxCredential, maxCredential);
         assertEquals(255, options.getUsername().length());
         assertEquals(255, options.getPassword().length());
-    }
-
-    @Test
-    @DisplayName("Username-only optional overload follows canonical validation")
-    void usernameOnlyOverloadFollowsCanonicalValidation() {
-        assertThrows(IllegalArgumentException.class, () -> new ProxyOptions("127.0.0.1", 1, "user"));
     }
 
     private static Stream<Arguments> badInputs() {
