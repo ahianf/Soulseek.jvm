@@ -4,7 +4,7 @@
 package dev.slsk.internal.network;
 
 import dev.slsk.internal.common.Failures;
-import java.util.concurrent.CountDownLatch;
+import dev.slsk.internal.common.Settlement;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -30,10 +30,7 @@ import java.util.concurrent.TimeoutException;
  * answer.
  */
 final class ConnectionCell {
-    private final CountDownLatch settled = new CountDownLatch(1);
-    private volatile MessageConnection connection;
-    private volatile Throwable failure;
-    private boolean established;
+    private final Settlement<MessageConnection> settlement = new Settlement<>();
     private boolean disposed;
 
     /**
@@ -45,12 +42,12 @@ final class ConnectionCell {
      * @throws TimeoutException if the establishment timed out
      */
     MessageConnection await() throws InterruptedException, TimeoutException {
-        awaitSettled();
-        Throwable cause = failure;
+        Settlement.Outcome<MessageConnection> outcome = settlement.await();
+        Throwable cause = outcome.failure();
         if (cause != null) {
             throw Failures.rethrow(cause);
         }
-        return connection;
+        return outcome.value();
     }
 
     /**
@@ -60,8 +57,8 @@ final class ConnectionCell {
      * @return the established connection, or {@code null}
      */
     MessageConnection awaitQuietly() throws InterruptedException {
-        awaitSettled();
-        return failure == null ? connection : null;
+        Settlement.Outcome<MessageConnection> outcome = settlement.await();
+        return outcome.failure() == null ? outcome.value() : null;
     }
 
     /**
@@ -71,7 +68,8 @@ final class ConnectionCell {
      *     settled on a failure
      */
     synchronized MessageConnection peek() {
-        return established ? connection : null;
+        Settlement.Outcome<MessageConnection> outcome = settlement.outcome();
+        return outcome != null && outcome.failure() == null ? outcome.value() : null;
     }
 
     /**
@@ -83,15 +81,12 @@ final class ConnectionCell {
         boolean close;
 
         synchronized (this) {
-            if (established || failure != null) {
+            if (!settlement.succeed(value)) {
                 return;
             }
-            connection = value;
-            established = true;
             close = disposed;
         }
 
-        settled.countDown();
         // Claimed while it was still being established. The caller that
         // established it still receives it, exactly as it received a connection
         // closed by the future this replaces.
@@ -110,14 +105,7 @@ final class ConnectionCell {
      * @param cause the failure
      */
     void fail(Throwable cause) {
-        synchronized (this) {
-            if (established || failure != null) {
-                return;
-            }
-            failure = cause;
-        }
-
-        settled.countDown();
+        settlement.fail(cause);
     }
 
     /**
@@ -132,24 +120,12 @@ final class ConnectionCell {
 
         synchronized (this) {
             disposed = true;
-            close = established ? connection : null;
+            Settlement.Outcome<MessageConnection> outcome = settlement.outcome();
+            close = outcome != null && outcome.failure() == null ? outcome.value() : null;
         }
 
         if (close != null) {
             close.close();
-        }
-    }
-
-    private void awaitSettled() throws InterruptedException {
-        try {
-            settled.await();
-        } catch (InterruptedException interrupted) {
-            synchronized (this) {
-                if (!established && failure == null) {
-                    throw interrupted;
-                }
-            }
-            Thread.currentThread().interrupt();
         }
     }
 }

@@ -6,6 +6,7 @@ package dev.slsk.internal.common;
 import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * A one-shot cell: settled once, awaited by many, and read as a failure or not.
@@ -36,12 +37,10 @@ import java.util.concurrent.TimeUnit;
  * the transfer path needs to know, but a caller that must undo work on losing
  * can.
  */
-public final class Settlement {
+public final class Settlement<T> {
 
-    private final Object lock = new Object();
     private final CountDownLatch settled = new CountDownLatch(1);
-    private boolean done;
-    private Throwable failure;
+    private final AtomicReference<Outcome<T>> outcome = new AtomicReference<>();
 
     /**
      * Settles as complete.
@@ -49,7 +48,12 @@ public final class Settlement {
      * @return whether this call was the one that settled it
      */
     public boolean succeed() {
-        return settle(null);
+        return succeed(null);
+    }
+
+    /** Settles successfully with a payload. */
+    public boolean succeed(T value) {
+        return settle(value, null);
     }
 
     /**
@@ -59,56 +63,67 @@ public final class Settlement {
      * @return whether this call was the one that settled it
      */
     public boolean fail(Throwable cause) {
-        return settle(Objects.requireNonNull(cause, "cause"));
+        return settle(null, Objects.requireNonNull(cause, "cause"));
     }
 
-    private boolean settle(Throwable cause) {
-        synchronized (lock) {
-            if (done) {
-                return false;
-            }
-            done = true;
-            failure = cause;
+    /** Commits an outcome without publishing it to waiters yet. */
+    public boolean trySettle(T value, Throwable failure) {
+        if (failure != null) {
+            Objects.requireNonNull(failure, "failure");
+        }
+        return outcome.compareAndSet(null, new Outcome<>(value, failure));
+    }
+
+    /** Publishes an outcome previously committed with {@link #trySettle}. */
+    public void publish() {
+        if (outcome.get() == null) {
+            throw new IllegalStateException("No settlement outcome has been committed");
         }
         settled.countDown();
+    }
+
+    private boolean settle(T value, Throwable failure) {
+        if (!trySettle(value, failure)) {
+            return false;
+        }
+        publish();
         return true;
     }
 
     /** Returns whether this has been settled either way. */
     public boolean isSettled() {
-        synchronized (lock) {
-            return done;
-        }
+        return outcome.get() != null;
     }
 
-    /**
-     * Returns the failure this settled with, or {@code null}.
-     *
-     * @return the failure, or {@code null} if it succeeded or has not settled
-     */
+    /** Returns the committed outcome, or {@code null} while unsettled. */
+    public Outcome<T> outcome() {
+        return outcome.get();
+    }
+
+    /** Returns the committed failure, or {@code null} before or after success. */
     public Throwable failure() {
-        synchronized (lock) {
-            return failure;
-        }
+        Outcome<T> current = outcome();
+        return current == null ? null : current.failure();
     }
 
     /**
      * Waits for the settlement.
      *
-     * @return the failure it settled with, or {@code null} if it succeeded
+     * @return the immutable winning outcome
      * @throws InterruptedException if the waiting thread is interrupted first
      */
-    public Throwable await() throws InterruptedException {
+    public Outcome<T> await() throws InterruptedException {
         try {
             settled.await();
         } catch (InterruptedException interrupted) {
             if (isSettled()) {
                 Thread.currentThread().interrupt();
-                return failure();
+                awaitPublished();
+                return outcome();
             }
             throw interrupted;
         }
-        return failure();
+        return outcome();
     }
 
     /**
@@ -138,4 +153,21 @@ public final class Settlement {
             }
         }
     }
+
+    private void awaitPublished() {
+        boolean interrupted = false;
+        while (settled.getCount() != 0) {
+            try {
+                settled.await();
+            } catch (InterruptedException repeated) {
+                interrupted = true;
+            }
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /** The immutable result committed by the winning settler. */
+    public record Outcome<T>(T value, Throwable failure) {}
 }

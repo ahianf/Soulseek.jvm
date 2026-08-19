@@ -14,6 +14,7 @@ import dev.slsk.internal.concurrent.BlockingInvocation;
 import dev.slsk.internal.concurrent.CancellationController;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.concurrent.CancellationSubscription;
+import dev.slsk.internal.concurrent.InterruptibleWaits;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.events.SearchRequestEvent;
 import dev.slsk.internal.events.SearchRequestResponseEvent;
@@ -41,7 +42,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -284,7 +284,7 @@ final class DefaultSearch implements Search {
                 // Re-read after subscribing: it may have finished between the
                 // two, and a wait that misses its own event never returns.
                 if (!state.status.isTerminal()) {
-                    waitFor(done, () -> state.status.isTerminal());
+                    InterruptibleWaits.await(done, () -> state.status.isTerminal());
                 }
             }
         }
@@ -392,19 +392,6 @@ final class DefaultSearch implements Search {
             throw new IllegalArgumentException("unknown search: " + id);
         }
         return state;
-    }
-
-    private static void waitFor(CountDownLatch latch, java.util.function.BooleanSupplier completed)
-            throws InterruptedException {
-        try {
-            latch.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException interrupted) {
-            if (completed.getAsBoolean()) {
-                Thread.currentThread().interrupt();
-                return;
-            }
-            throw interrupted;
-        }
     }
 
     /** Records a response and publishes it, keeping the snapshot and stream in step. */

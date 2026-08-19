@@ -29,7 +29,7 @@ class SettlementTest {
     @Test
     @DisplayName("a new settlement is unsettled and has no failure")
     void startsUnsettled() {
-        Settlement settlement = new Settlement();
+        Settlement<Void> settlement = new Settlement<>();
 
         assertFalse(settlement.isSettled());
         assertNull(settlement.failure());
@@ -39,29 +39,33 @@ class SettlementTest {
     @DisplayName("the first to settle wins and everybody after it is a no-op")
     void firstSettlementWins() throws Exception {
         IllegalStateException first = new IllegalStateException("first");
-        Settlement settlement = new Settlement();
+        Settlement<Void> settlement = new Settlement<>();
 
         assertTrue(settlement.fail(first));
         assertFalse(settlement.fail(new IllegalStateException("second")));
         assertFalse(settlement.succeed());
         assertSame(first, settlement.failure());
-        assertSame(first, settlement.await());
+        assertSame(first, settlement.await().failure());
     }
 
     @Test
     @DisplayName("a settlement that succeeded reports no failure")
     void successHasNoFailure() throws Exception {
-        Settlement settlement = new Settlement();
+        Settlement<Void> settlement = new Settlement<>();
 
         assertTrue(settlement.succeed());
         assertTrue(settlement.isSettled());
-        assertNull(settlement.await());
+        assertNull(settlement.await().failure());
+
+        Settlement<String> valued = new Settlement<>();
+        valued.succeed("answer");
+        assertSame("answer", valued.await().value());
     }
 
     @Test
     @DisplayName("a waiter is released by whichever party settles first")
     void aWaiterIsReleasedByTheWinner() throws InterruptedException {
-        Settlement settlement = new Settlement();
+        Settlement<Void> settlement = new Settlement<>();
         IllegalStateException dropped = new IllegalStateException("the connection dropped");
         AtomicReference<Throwable> observed = new AtomicReference<>();
         CountDownLatch waiting = new CountDownLatch(1);
@@ -70,7 +74,7 @@ class SettlementTest {
             threads.execute(() -> {
                 waiting.countDown();
                 try {
-                    observed.set(settlement.await());
+                    observed.set(settlement.await().failure());
                 } catch (InterruptedException unexpected) {
                     throw new AssertionError(unexpected);
                 }
@@ -87,7 +91,7 @@ class SettlementTest {
     @Test
     @DisplayName("exactly one of many concurrent settlements is the winner")
     void exactlyOneConcurrentSettlementWins() throws InterruptedException {
-        Settlement settlement = new Settlement();
+        Settlement<Void> settlement = new Settlement<>();
         CountDownLatch start = new CountDownLatch(1);
         List<Throwable> arms = List.of(
                 new IllegalStateException("read"),
@@ -121,7 +125,7 @@ class SettlementTest {
     @Test
     @DisplayName("a timed wait gives up on a settlement that never comes")
     void aTimedWaitGivesUp() {
-        Settlement settlement = new Settlement();
+        Settlement<Void> settlement = new Settlement<>();
 
         assertFalse(settlement.await(1));
         assertFalse(settlement.isSettled());
@@ -130,7 +134,7 @@ class SettlementTest {
     @Test
     @DisplayName("a timed wait returns as soon as it is settled")
     void aTimedWaitSeesASettlement() {
-        Settlement settlement = new Settlement();
+        Settlement<Void> settlement = new Settlement<>();
         settlement.succeed();
 
         assertTrue(settlement.await(60_000));
@@ -139,7 +143,7 @@ class SettlementTest {
     @Test
     @DisplayName("an interrupt that wins an unsettled wait is consumed and reported")
     void interruptionWinsAnUnsettledWait() throws Exception {
-        Settlement settlement = new Settlement();
+        Settlement<Void> settlement = new Settlement<>();
         AtomicReference<Throwable> observed = new AtomicReference<>();
         AtomicReference<Boolean> flag = new AtomicReference<>(true);
         Thread thread = Thread.ofVirtual().start(() -> {
@@ -162,14 +166,14 @@ class SettlementTest {
     @Test
     @DisplayName("a committed settlement wins a later interrupt and preserves its flag")
     void committedSettlementWinsLaterInterrupt() throws Exception {
-        Settlement settlement = new Settlement();
+        Settlement<Void> settlement = new Settlement<>();
         settlement.succeed();
         AtomicReference<Throwable> result = new AtomicReference<>(new AssertionError("not returned"));
         AtomicReference<Boolean> flag = new AtomicReference<>();
         Thread thread = Thread.ofVirtual().start(() -> {
             Thread.currentThread().interrupt();
             try {
-                result.set(settlement.await());
+                result.set(settlement.await().failure());
                 flag.set(Thread.currentThread().isInterrupted());
             } catch (InterruptedException unexpected) {
                 result.set(unexpected);

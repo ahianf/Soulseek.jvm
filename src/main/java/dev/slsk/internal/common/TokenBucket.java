@@ -11,10 +11,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Implements the token-bucket rate-limiting algorithm.
@@ -484,10 +482,7 @@ public final class TokenBucket implements AutoCloseable {
      */
     private static final class Request {
         private final int count;
-        private final CountDownLatch settled = new CountDownLatch(1);
-        private final AtomicBoolean decided = new AtomicBoolean();
-        private volatile int granted;
-        private volatile RuntimeException failure;
+        private final Settlement<Integer> settlement = new Settlement<>();
         private boolean active;
         private CancellationSubscription registration;
 
@@ -497,46 +492,41 @@ public final class TokenBucket implements AutoCloseable {
 
         /** Whether this request has already been decided, one way or the other. */
         private boolean isSettled() {
-            return decided.get();
+            return settlement.isSettled();
         }
 
         private boolean settle(int amount) {
-            if (decided.compareAndSet(false, true)) {
-                granted = amount;
-                settled.countDown();
-                return true;
-            }
-            return false;
+            return settlement.succeed(amount);
         }
 
         private boolean settle(RuntimeException reason) {
-            if (decided.compareAndSet(false, true)) {
-                failure = reason;
-                settled.countDown();
-                return true;
-            }
-            return false;
+            return settlement.fail(reason);
         }
 
         /** Blocks until this request is decided, then reports the decision. */
         private int awaitGrant(Runnable cancelAction) {
+            Settlement.Outcome<Integer> outcome;
             try {
-                settled.await();
+                outcome = settlement.await();
             } catch (InterruptedException interrupted) {
                 CancellationException cancelled = new CancellationException("The wait for tokens was interrupted");
-                if (settle(cancelled)) {
+                if (settlement.fail(cancelled)) {
                     cancelAction.run();
                     throw cancelled;
                 }
                 // A grant committed first. Preserve the later interrupt for
                 // the worker's enclosing transfer loop.
+                try {
+                    outcome = settlement.await();
+                } catch (InterruptedException impossible) {
+                    throw new AssertionError(impossible);
+                }
                 Thread.currentThread().interrupt();
             }
-            RuntimeException reason = failure;
-            if (reason != null) {
-                throw reason;
+            if (outcome.failure() != null) {
+                throw (RuntimeException) outcome.failure();
             }
-            return granted;
+            return outcome.value();
         }
 
         private void closeRegistration() {

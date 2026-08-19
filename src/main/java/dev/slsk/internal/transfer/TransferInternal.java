@@ -32,7 +32,7 @@ public final class TransferInternal {
     private final TransferOptions options;
     private final int progressUpdateLimit;
     private Integer remoteToken;
-    private final Settlement settlement = new Settlement();
+    private final Settlement<Void> settlement = new Settlement<>();
     private Long size;
     private boolean speedInitialized;
     private long startOffset;
@@ -166,7 +166,7 @@ public final class TransferInternal {
      *
      * @return the settlement, never {@code null}
      */
-    public Settlement settlement() {
+    public Settlement<Void> settlement() {
         return settlement;
     }
 

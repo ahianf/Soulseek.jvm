@@ -35,7 +35,7 @@ public final class SearchInternal implements AutoCloseable {
      * what makes registering and reading the state under the same lock enough
      * to close the gap between them.
      */
-    private final Set<Settlement> waiters = new HashSet<>();
+    private final Set<Settlement<Void>> waiters = new HashSet<>();
 
     private Boolean terminal;
     private final AtomicBoolean disposed = new AtomicBoolean();
@@ -274,7 +274,7 @@ public final class SearchInternal implements AutoCloseable {
     public void waitForCompletion(CancellationSignal cancellationSignal)
             throws InterruptedException, java.util.concurrent.TimeoutException {
         Objects.requireNonNull(cancellationSignal, "cancellationSignal");
-        Settlement wait = new Settlement();
+        Settlement<Void> wait = new Settlement<>();
         // Registered and the terminal state read under the same lock the
         // terminal transition takes, so a search that ends between the two is
         // not waited on forever.
@@ -286,7 +286,7 @@ public final class SearchInternal implements AutoCloseable {
         CancellationSubscription registration =
                 cancellationSignal.register(() -> wait.fail(new CancellationException("Operation cancelled")));
         try {
-            Throwable failure = wait.await();
+            Throwable failure = wait.await().failure();
             if (failure != null) {
                 throw Failures.rethrow(failure);
             }
@@ -330,7 +330,7 @@ public final class SearchInternal implements AutoCloseable {
         waiters.forEach(wait -> settle(wait, completed));
     }
 
-    private static void settle(Settlement wait, Boolean completed) {
+    private static void settle(Settlement<Void> wait, Boolean completed) {
         if (completed == null) {
             return;
         }

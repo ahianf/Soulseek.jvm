@@ -15,11 +15,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Correlates asynchronous responses with FIFO waits.
@@ -319,12 +317,11 @@ public final class DefaultWaiter implements Waiter {
      */
     static final class PendingWait<T> implements Wait<T>, AutoCloseable {
         private final CancellationSignal cancellationSignal;
-        private final CountDownLatch settled = new CountDownLatch(1);
+        private final Settlement<T> settlement = new Settlement<>();
         private final Class<T> resultType;
         private final int timeout;
         private Runnable cancelAction;
         private Runnable timeoutAction;
-        private final AtomicReference<Outcome<T>> outcome = new AtomicReference<>();
         private CancellationSubscription cancellationSubscription;
         private Runnable interruptionCleanup;
         private boolean closed;
@@ -349,8 +346,9 @@ public final class DefaultWaiter implements Waiter {
 
         @Override
         public T await() throws InterruptedException, TimeoutException {
+            Settlement.Outcome<T> settledOutcome;
             try {
-                settled.await();
+                settledOutcome = settlement.await();
             } catch (InterruptedException interrupted) {
                 if (trySettle(null, interrupted)) {
                     BoundedCleanup.afterInterruption(interruptionCleanup, interrupted);
@@ -360,14 +358,13 @@ public final class DefaultWaiter implements Waiter {
                 // A result was committed first. Wait only for its publication,
                 // then return it with this later interrupt still visible to the
                 // caller's enclosing work.
-                awaitCommittedOutcome();
+                settledOutcome = settlement.await();
                 Thread.currentThread().interrupt();
             }
-            Outcome<T> settledOutcome = outcome.get();
             if (settledOutcome.failure() != null) {
                 throw Failures.rethrow(settledOutcome.failure());
             }
-            return settledOutcome.result();
+            return settledOutcome.value();
         }
 
         /** Commits and publishes an answer in one ordinary settlement path. */
@@ -379,26 +376,12 @@ public final class DefaultWaiter implements Waiter {
 
         /** Atomically selects this outcome without publishing it yet. */
         boolean trySettle(T value, Throwable error) {
-            return outcome.compareAndSet(null, new Outcome<>(value, error));
+            return settlement.trySettle(value, error);
         }
 
         /** Publishes the already committed outcome. */
         void publish() {
-            settled.countDown();
-        }
-
-        private void awaitCommittedOutcome() {
-            boolean interrupted = false;
-            while (settled.getCount() != 0) {
-                try {
-                    settled.await();
-                } catch (InterruptedException repeated) {
-                    interrupted = true;
-                }
-            }
-            if (interrupted) {
-                Thread.currentThread().interrupt();
-            }
+            settlement.publish();
         }
 
         /**
@@ -465,7 +448,5 @@ public final class DefaultWaiter implements Waiter {
                 task.cancel(false);
             }
         }
-
-        private record Outcome<T>(T result, Throwable failure) {}
     }
 }

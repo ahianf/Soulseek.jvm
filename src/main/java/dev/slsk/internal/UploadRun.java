@@ -259,7 +259,7 @@ final class UploadRun {
 
     private void writeAndAwaitDisconnectRace() throws InterruptedException, TimeoutException {
         long remaining = upload.getSize() - upload.getStartOffset();
-        Settlement settlement = upload.settlement();
+        Settlement<Void> settlement = upload.settlement();
         if (remaining == 0) {
             // Nothing to send, so nothing to race: the peer is re-requesting a
             // file it already has all of.
@@ -295,7 +295,7 @@ final class UploadRun {
             });
         }
 
-        Throwable failure = settlement.await();
+        Throwable failure = settlement.await().failure();
         if (failure != null) {
             throw Failures.rethrow(failure);
         }
@@ -323,7 +323,7 @@ final class UploadRun {
                 // On a thread of its own so the budget can lapse while the read
                 // is still parked: a peer that says nothing is the ordinary case
                 // here, and giving up on it is the point.
-                Settlement read = new Settlement();
+                Settlement<Void> read = new Settlement<>();
                 domain.networkExecutor().executor().execute(() -> {
                     try {
                         connection.read(1, cancellationSignal);
@@ -336,7 +336,7 @@ final class UploadRun {
                     connection.disconnect("Transfer complete, maximum " + "linger time exceeded");
                     return;
                 }
-                Throwable failure = read.failure();
+                Throwable failure = read.outcome().failure();
                 if (failure != null) {
                     throw Failures.rethrow(failure);
                 }

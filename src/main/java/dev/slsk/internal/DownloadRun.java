@@ -44,7 +44,6 @@ import java.nio.ByteOrder;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 /**
@@ -256,17 +255,15 @@ final class DownloadRun {
         // transfer connection the moment it reads it. A thread of its own is
         // what "before" means here: the wait has to be in place while the write
         // happens, and neither can wait for the other.
-        AtomicReference<Connection> incoming = new AtomicReference<>();
-        Settlement established = new Settlement();
+        Settlement<Connection> established = new Settlement<>();
         domain.networkExecutor().executor().execute(() -> {
             try {
-                incoming.set(domain.peers()
+                established.succeed(domain.peers()
                         .awaitTransferConnection(
                                 download.getUsername(),
                                 download.getFilename(),
                                 download.getRemoteToken(),
                                 cancellationSignal));
-                established.succeed();
             } catch (Throwable failure) {
                 established.fail(failure);
             }
@@ -275,9 +272,10 @@ final class DownloadRun {
                 new TransferResponse(download.getRemoteToken(), download.getSize() == null ? 0 : download.getSize()),
                 CommonUtils.token(cancellationSignal));
 
-        Throwable failure = established.await();
+        Settlement.Outcome<Connection> establishment = established.await();
+        Throwable failure = establishment.failure();
         if (failure == null) {
-            connection = incoming.get();
+            connection = establishment.value();
             domain.diagnostic.debug("Fetched transfer connection for download of "
                     + filenameOnly(download.getFilename()) + " from "
                     + download.getUsername() + " (id: " + connection.getId()
@@ -363,7 +361,7 @@ final class DownloadRun {
             // failed on an entirely different connection; racing is work
             // blocking code cannot do. All three settle the one cell, so the
             // first to arrive is the answer and the rest are no-ops.
-            Settlement settlement = download.settlement();
+            Settlement<Void> settlement = download.settlement();
             domain.networkExecutor().executor().execute(() -> {
                 try {
                     connection.read(
@@ -395,7 +393,7 @@ final class DownloadRun {
                 }
             });
 
-            Throwable failure = settlement.await();
+            Throwable failure = settlement.await().failure();
             // Whoever lost is still working; stopping it is what the linked
             // controller is for.
             linkedController.cancel();

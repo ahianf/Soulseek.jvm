@@ -14,6 +14,7 @@ import dev.slsk.exceptions.TransferNotFoundException;
 import dev.slsk.internal.common.Usernames;
 import dev.slsk.internal.concurrent.BlockingInvocation;
 import dev.slsk.internal.concurrent.CancellationSignal;
+import dev.slsk.internal.concurrent.InterruptibleWaits;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.messaging.handlers.PeerServices;
 import dev.slsk.internal.messaging.messages.TransferRequest;
@@ -35,7 +36,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -390,24 +390,11 @@ final class DefaultDownloads implements Downloads {
             // Re-read after subscribing: it may have finished between the two,
             // and a wait that misses its own event never returns.
             if (!(get(id).state() instanceof TransferState.Finished)) {
-                waitFor(finished, () -> get(id).state() instanceof TransferState.Finished);
+                InterruptibleWaits.await(finished, () -> get(id).state() instanceof TransferState.Finished);
             }
         }
         signal.throwIfCancellationRequested();
         return get(id);
-    }
-
-    private static void waitFor(CountDownLatch latch, java.util.function.BooleanSupplier completed)
-            throws InterruptedException {
-        try {
-            latch.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException interrupted) {
-            if (completed.getAsBoolean()) {
-                Thread.currentThread().interrupt();
-                return;
-            }
-            throw interrupted;
-        }
     }
 
     @Override
