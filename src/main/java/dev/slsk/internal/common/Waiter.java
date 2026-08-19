@@ -53,9 +53,9 @@ public interface Waiter extends AutoCloseable {
         return register(key, Void.class, timeout, cancellationSignal);
     }
 
-    /** Registers a wait that uses the source's maximum timeout. */
+    /** Registers a wait that never times out, and schedules no timer. */
     default <T> Wait<T> registerIndefinitely(WaitKey key, Class<T> resultType, CancellationSignal cancellationSignal) {
-        return register(key, resultType, Integer.MAX_VALUE, cancellationSignal);
+        return register(key, resultType, -1, cancellationSignal);
     }
 
     @Override

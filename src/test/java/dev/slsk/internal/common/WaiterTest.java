@@ -240,14 +240,17 @@ class WaiterTest {
     }
 
     @Test
-    @DisplayName("registerIndefinitely uses Integer.MAX_VALUE timeout")
-    void registerIndefinitelyUsesMaximumTimeout() {
-        try (DefaultWaiter waiter = new DefaultWaiter()) {
+    @DisplayName("registerIndefinitely never times out and parks no timer")
+    void registerIndefinitelySchedulesNothing() {
+        try (Scheduler scheduler = new Scheduler("waiter-test");
+                DefaultWaiter waiter = new DefaultWaiter(5_000, scheduler)) {
             WaitKey key = new WaitKey("transfer");
             Wait<String> wait = waiter.registerIndefinitely(key, String.class, null);
 
             assertFalse(settles(wait));
             assertEquals(1, waiter.getWaitCount(key));
+            assertEquals(
+                    0, scheduler.pendingTasksForTest(), "an indefinite wait parked a real timer in the delay queue");
         }
     }
 

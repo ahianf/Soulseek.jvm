@@ -134,6 +134,11 @@ public final class Scheduler implements AutoCloseable {
         }
     }
 
+    /** Returns how many tasks sit in the delay queue, for tests. */
+    int pendingTasksForTest() {
+        return timer.getQueue().size();
+    }
+
     /** Stops the timer and releases its thread. Dispatched tasks are not awaited. */
     @Override
     public void close() {
