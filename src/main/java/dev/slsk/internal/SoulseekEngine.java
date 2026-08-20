@@ -48,7 +48,6 @@ import dev.slsk.internal.messaging.messages.PrivateRoomToggle;
 import dev.slsk.internal.messaging.messages.SetListenPortCommand;
 import dev.slsk.internal.network.ConnectionFactory;
 import dev.slsk.internal.network.DefaultConnectionFactory;
-import dev.slsk.internal.network.DefaultListenerHandler;
 import dev.slsk.internal.network.DistributedConnectionManager;
 import dev.slsk.internal.network.DistributedNetwork;
 import dev.slsk.internal.network.ListenerHandler;
@@ -292,7 +291,7 @@ final class SoulseekEngine implements AutoCloseable {
                 : connectionFactory;
 
         this.listenerHandler = listenerHandler == null
-                ? new DefaultListenerHandler(
+                ? new ListenerHandler(
                         this::getOptions,
                         () -> this.listener,
                         this::getPeerConnectionManager,

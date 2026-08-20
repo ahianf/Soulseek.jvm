@@ -50,7 +50,7 @@ class ListenerHandlerTest {
             assertThrows(NullPointerException.class, () -> handler(nulls, null));
         }
         try (Fixture fixture = fixture(null)) {
-            DefaultListenerHandler handler = handler(fixture, fixture.options);
+            ListenerHandler handler = handler(fixture, fixture.options);
             AtomicReference<DiagnosticMessage> event = new AtomicReference<>();
             handler.subscribe(args -> event.set(args));
             handler.getDiagnostic().info("test");
@@ -228,13 +228,13 @@ class ListenerHandlerTest {
     }
 
     /** Builds a handler over a fixture's probes. */
-    private static DefaultListenerHandler handler(Fixture fixture, SoulseekClientOptions options) {
+    private static ListenerHandler handler(Fixture fixture, SoulseekClientOptions options) {
         return handler(fixture, options, null);
     }
 
-    private static DefaultListenerHandler handler(
+    private static ListenerHandler handler(
             Fixture fixture, SoulseekClientOptions options, RecordingDiagnostic diagnostic) {
-        return new DefaultListenerHandler(
+        return new ListenerHandler(
                 options == null ? null : () -> options,
                 fixture::listener,
                 () -> fixture.peer().proxy,
@@ -259,10 +259,10 @@ class ListenerHandlerTest {
             SearchResponderProbe searchResponder,
             DefaultWaiter waiter,
             RecordingDiagnostic diagnostic,
-            DefaultListenerHandler handler)
+            ListenerHandler handler)
             implements AutoCloseable {
 
-        private Fixture with(DefaultListenerHandler value) {
+        private Fixture with(ListenerHandler value) {
             return new Fixture(options, listener, peer, distributed, searchResponder, waiter, diagnostic, value);
         }
 

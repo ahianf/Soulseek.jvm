@@ -819,7 +819,7 @@ public final class PeerNetwork implements PeerConnectionManager {
      *
      * <p>The wait is gone either way — whatever provoked the solicitation has
      * already failed — but the connection need not be. {@code
-     * DefaultListenerHandler} adopts it into the cache instead, so the next
+     * ListenerHandler} adopts it into the cache instead, so the next
      * attempt at this peer starts from a connection that is already open.
      * Transfer solicitations get no such grace: a transfer connection with no
      * transfer waiting on it has nothing to carry.

@@ -36,7 +36,6 @@ import dev.slsk.internal.messaging.handlers.ServerMessageEvent;
 import dev.slsk.internal.messaging.handlers.ServerMessageHandler;
 import dev.slsk.internal.network.ConnectionFactory;
 import dev.slsk.internal.network.DistributedConnectionManager;
-import dev.slsk.internal.network.ListenerHandler;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.PeerConnectionManager;
 import dev.slsk.internal.network.PeerEndpoint;
@@ -461,7 +460,6 @@ class EngineTest {
         private final ServerHandlerProbe server = new ServerHandlerProbe();
         private final SearchResponderProbe search = new SearchResponderProbe();
         private final DistributedManagerProbe distributed = new DistributedManagerProbe();
-        private final ListenerHandler listenerHandler = diagnosticProxy(ListenerHandler.class);
         private final DistributedMessageHandler distributedHandler = diagnosticProxy(DistributedMessageHandler.class);
         private final PeerConnectionManager peerManager = diagnosticProxy(PeerConnectionManager.class);
         private final SoulseekEngine client;
@@ -478,7 +476,7 @@ class EngineTest {
                     peer.proxy,
                     distributedHandler,
                     null,
-                    listenerHandler,
+                    null,
                     search.proxy,
                     new RecordingWaiter(),
                     new TokenFactory(),
