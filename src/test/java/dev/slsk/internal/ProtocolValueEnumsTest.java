@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.internal.search.SearchScopeType;
-import dev.slsk.internal.share.FileAttributeType;
+import dev.slsk.internal.share.WireFileAttribute;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.user.UserPresence;
 import java.util.stream.Stream;
@@ -28,10 +28,10 @@ class ProtocolValueEnumsTest {
 
     @ParameterizedTest(name = "{0} uses value {1}")
     @MethodSource("fileAttributeTypes")
-    void preservesFileAttributeTypeValues(FileAttributeType value, int expected) {
+    void preservesFileAttributeTypeValues(WireFileAttribute value, int expected) {
         assertEquals(expected, value.getValue());
-        assertEquals(value, FileAttributeType.fromValue(expected));
-        assertEquals(value, FileAttributeType.tryFromValue(expected).orElseThrow());
+        assertEquals(value, WireFileAttribute.fromValue(expected));
+        assertEquals(value, WireFileAttribute.tryFromValue(expected).orElseThrow());
     }
 
     @ParameterizedTest(name = "{0} uses value {1}")
@@ -52,8 +52,8 @@ class ProtocolValueEnumsTest {
     @DisplayName("Rejects unknown protocol enum values")
     void rejectsUnknownValues() {
         assertThrows(IllegalArgumentException.class, () -> TransferDirection.fromValue(-1));
-        assertThrows(IllegalArgumentException.class, () -> FileAttributeType.fromValue(3));
-        assertTrue(FileAttributeType.tryFromValue(3).isEmpty());
+        assertThrows(IllegalArgumentException.class, () -> WireFileAttribute.fromValue(3));
+        assertTrue(WireFileAttribute.tryFromValue(3).isEmpty());
         assertThrows(IllegalArgumentException.class, () -> SearchScopeType.fromValue(4));
         assertThrows(IllegalArgumentException.class, () -> UserPresence.fromValue(3));
     }
@@ -64,11 +64,11 @@ class ProtocolValueEnumsTest {
 
     private static Stream<Arguments> fileAttributeTypes() {
         return Stream.of(
-                Arguments.of(FileAttributeType.BIT_RATE, 0),
-                Arguments.of(FileAttributeType.LENGTH, 1),
-                Arguments.of(FileAttributeType.VARIABLE_BIT_RATE, 2),
-                Arguments.of(FileAttributeType.SAMPLE_RATE, 4),
-                Arguments.of(FileAttributeType.BIT_DEPTH, 5));
+                Arguments.of(WireFileAttribute.BIT_RATE, 0),
+                Arguments.of(WireFileAttribute.LENGTH, 1),
+                Arguments.of(WireFileAttribute.VARIABLE_BIT_RATE, 2),
+                Arguments.of(WireFileAttribute.SAMPLE_RATE, 4),
+                Arguments.of(WireFileAttribute.BIT_DEPTH, 5));
     }
 
     private static Stream<Arguments> searchScopeTypes() {

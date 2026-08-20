@@ -36,8 +36,8 @@ import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.internal.options.BrowseOptions;
-import dev.slsk.internal.share.BrowseResponse;
-import dev.slsk.internal.share.Directory;
+import dev.slsk.internal.share.BrowseResponseMessage;
+import dev.slsk.internal.share.SharedDirectory;
 import dev.slsk.internal.user.UserData;
 import dev.slsk.internal.user.UserEndpointCache;
 import dev.slsk.internal.user.UserInfo;
@@ -219,19 +219,21 @@ final class UserDirectory {
         }
     }
 
-    BrowseResponse browse(String requestedUsername) throws InterruptedException {
+    BrowseResponseMessage browse(String requestedUsername) throws InterruptedException {
         return browse(requestedUsername, null, CancellationSignal.none());
     }
 
-    BrowseResponse browse(String requestedUsername, BrowseOptions browseOptions) throws InterruptedException {
+    BrowseResponseMessage browse(String requestedUsername, BrowseOptions browseOptions) throws InterruptedException {
         return browse(requestedUsername, browseOptions, CancellationSignal.none());
     }
 
-    BrowseResponse browse(String requestedUsername, CancellationSignal cancellationSignal) throws InterruptedException {
+    BrowseResponseMessage browse(String requestedUsername, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         return browse(requestedUsername, null, cancellationSignal);
     }
 
-    BrowseResponse browse(String requestedUsername, BrowseOptions browseOptions, CancellationSignal cancellationSignal)
+    BrowseResponseMessage browse(
+            String requestedUsername, BrowseOptions browseOptions, CancellationSignal cancellationSignal)
             throws InterruptedException {
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("browse");
@@ -239,8 +241,8 @@ final class UserDirectory {
         CancellationSignal token = CommonUtils.token(cancellationSignal);
         WaitKey browseWaitKey = new WaitKey(MessageCode.Peer.BROWSE_RESPONSE, requestedUsername);
         try {
-            Wait<BrowseResponse> browseWait =
-                    context.getWaiter().registerIndefinitely(browseWaitKey, BrowseResponse.class, token);
+            Wait<BrowseResponseMessage> browseWait =
+                    context.getWaiter().registerIndefinitely(browseWaitKey, BrowseResponseMessage.class, token);
             Wait<BrowseResponseConnection> connectionWait = context.getWaiter()
                     .register(
                             new WaitKey(Constants.WaitKey.BROWSE_RESPONSE_CONNECTION, requestedUsername),
@@ -272,7 +274,7 @@ final class UserDirectory {
                             eventData.currentLength(),
                             eventData.totalLength(),
                             completionEventFired);
-            BrowseResponse response;
+            BrowseResponseMessage response;
             try (Subscription disconnectedSubscription = connection.subscribe(
                             Connection.Kind.DISCONNECTED,
                             (ConnectionDisconnectedEvent eventData) -> context.getWaiter()
@@ -416,22 +418,23 @@ final class UserDirectory {
         }
     }
 
-    List<Directory> getDirectoryContents(String requestedUsername, String directoryName) throws InterruptedException {
+    List<SharedDirectory> getDirectoryContents(String requestedUsername, String directoryName)
+            throws InterruptedException {
         return getDirectoryContents(requestedUsername, directoryName, null, CancellationSignal.none());
     }
 
-    List<Directory> getDirectoryContents(String requestedUsername, String directoryName, int operationToken)
+    List<SharedDirectory> getDirectoryContents(String requestedUsername, String directoryName, int operationToken)
             throws InterruptedException {
         return getDirectoryContents(requestedUsername, directoryName, operationToken, CancellationSignal.none());
     }
 
-    List<Directory> getDirectoryContents(
+    List<SharedDirectory> getDirectoryContents(
             String requestedUsername, String directoryName, CancellationSignal cancellationSignal)
             throws InterruptedException {
         return getDirectoryContents(requestedUsername, directoryName, null, cancellationSignal);
     }
 
-    List<Directory> getDirectoryContents(
+    List<SharedDirectory> getDirectoryContents(
             String requestedUsername,
             String directoryName,
             Integer operationToken,
@@ -445,7 +448,7 @@ final class UserDirectory {
         try {
             @SuppressWarnings("unchecked")
             Waiter waiter = context.getWaiter();
-            Wait<List<Directory>> contentsWait = (Wait<List<Directory>>) (Wait<?>) waiter.register(
+            Wait<List<SharedDirectory>> contentsWait = (Wait<List<SharedDirectory>>) (Wait<?>) waiter.register(
                     new WaitKey(MessageCode.Peer.FOLDER_CONTENTS_RESPONSE, requestedUsername, tokenValue),
                     List.class,
                     waiter.getDefaultTimeout(),

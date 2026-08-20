@@ -7,7 +7,7 @@ package dev.slsk.internal.share;
 import java.util.Objects;
 
 /** A file attribute. */
-public record FileAttribute(FileAttributeType type, int value) {
+public record FileAttribute(WireFileAttribute type, int value) {
     public FileAttribute {
         type = Objects.requireNonNull(type, "type");
     }

@@ -8,19 +8,19 @@ import dev.slsk.internal.messaging.messages.BrowseResponseFactory;
 import java.util.List;
 
 /** A response to a peer browse request. */
-public record BrowseResponse(List<Directory> directories, List<Directory> lockedDirectories) {
-    public BrowseResponse {
+public record BrowseResponseMessage(List<SharedDirectory> directories, List<SharedDirectory> lockedDirectories) {
+    public BrowseResponseMessage {
         directories = directories == null ? List.of() : List.copyOf(directories);
         lockedDirectories = lockedDirectories == null ? List.of() : List.copyOf(lockedDirectories);
     }
 
     /** Creates an empty browse response. */
-    public BrowseResponse() {
+    public BrowseResponseMessage() {
         this(List.of(), List.of());
     }
 
     /** Creates a browse response with unlocked directories. */
-    public BrowseResponse(List<Directory> directories) {
+    public BrowseResponseMessage(List<SharedDirectory> directories) {
         this(directories, List.of());
     }
 

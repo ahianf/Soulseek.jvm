@@ -24,31 +24,31 @@ public record File(int code, String filename, long size, String extension, List<
 
     /** Returns the bit-depth attribute, if present. */
     public Integer bitDepth() {
-        return value(FileAttributeType.BIT_DEPTH);
+        return value(WireFileAttribute.BIT_DEPTH);
     }
 
     /** Returns the bit-rate attribute, if present. */
     public Integer bitRate() {
-        return value(FileAttributeType.BIT_RATE);
+        return value(WireFileAttribute.BIT_RATE);
     }
 
     /** Returns whether the variable-bit-rate attribute is nonzero, if present. */
     public Boolean variableBitRate() {
-        Integer value = value(FileAttributeType.VARIABLE_BIT_RATE);
+        Integer value = value(WireFileAttribute.VARIABLE_BIT_RATE);
         return value == null ? null : value != 0;
     }
 
     /** Returns the length attribute, if present. */
     public Integer length() {
-        return value(FileAttributeType.LENGTH);
+        return value(WireFileAttribute.LENGTH);
     }
 
     /** Returns the sample-rate attribute, if present. */
     public Integer sampleRate() {
-        return value(FileAttributeType.SAMPLE_RATE);
+        return value(WireFileAttribute.SAMPLE_RATE);
     }
 
-    private Integer value(FileAttributeType type) {
+    private Integer value(WireFileAttribute type) {
         return attributes.stream()
                 .filter(attribute -> attribute.type() == type)
                 .map(FileAttribute::value)

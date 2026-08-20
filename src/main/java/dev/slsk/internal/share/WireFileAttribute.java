@@ -9,7 +9,7 @@ import java.util.Optional;
 /**
  * File attribute type.
  */
-public enum FileAttributeType {
+public enum WireFileAttribute {
     /** Bit rate in kbps. */
     BIT_RATE(0),
 
@@ -27,7 +27,7 @@ public enum FileAttributeType {
 
     private final int value;
 
-    FileAttributeType(int value) {
+    WireFileAttribute(int value) {
         this.value = value;
     }
 
@@ -47,7 +47,7 @@ public enum FileAttributeType {
      * @return the matching type
      * @throws IllegalArgumentException when the value is unknown
      */
-    public static FileAttributeType fromValue(int value) {
+    public static WireFileAttribute fromValue(int value) {
         return tryFromValue(value)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown file attribute type: " + value));
     }
@@ -63,8 +63,8 @@ public enum FileAttributeType {
      * @param value the protocol value
      * @return the matching type
      */
-    public static Optional<FileAttributeType> tryFromValue(int value) {
-        for (FileAttributeType type : values()) {
+    public static Optional<WireFileAttribute> tryFromValue(int value) {
+        for (WireFileAttribute type : values()) {
             if (type.value == value) {
                 return Optional.of(type);
             }

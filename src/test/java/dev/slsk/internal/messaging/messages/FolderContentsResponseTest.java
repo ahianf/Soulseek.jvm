@@ -14,10 +14,10 @@ import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
-import dev.slsk.internal.share.Directory;
 import dev.slsk.internal.share.File;
 import dev.slsk.internal.share.FileAttribute;
-import dev.slsk.internal.share.FileAttributeType;
+import dev.slsk.internal.share.SharedDirectory;
+import dev.slsk.internal.share.WireFileAttribute;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -27,8 +27,8 @@ class FolderContentsResponseTest {
     @Test
     @DisplayName("Constructor snapshots directory data")
     void constructorSnapshotsDirectoryData() {
-        Directory directory = new Directory("root");
-        List<Directory> source = new ArrayList<>();
+        SharedDirectory directory = new SharedDirectory("root");
+        List<SharedDirectory> source = new ArrayList<>();
         source.add(directory);
 
         FolderContentsResponse response = new FolderContentsResponse(17, "root", source);
@@ -49,7 +49,7 @@ class FolderContentsResponseTest {
     @DisplayName("Empty directory response round trips through compression")
     void emptyDirectoryResponseRoundTrips() {
         FolderContentsResponse outgoing =
-                new FolderContentsResponse(0x12345678, "root", List.of(new Directory("root")));
+                new FolderContentsResponse(0x12345678, "root", List.of(new SharedDirectory("root")));
 
         FolderContentsResponse parsed = FolderContentsResponse.fromByteArray(outgoing.toByteArray());
 
@@ -63,7 +63,7 @@ class FolderContentsResponseTest {
     @Test
     @DisplayName("Complete response preserves directories files and attributes")
     void completeResponseRoundTrips() {
-        Directory root = new Directory(
+        SharedDirectory root = new SharedDirectory(
                 "root",
                 List.of(
                         new File(
@@ -72,10 +72,10 @@ class FolderContentsResponseTest {
                                 0x0102030405060708L,
                                 ".mp3",
                                 List.of(
-                                        new FileAttribute(FileAttributeType.BIT_DEPTH, 24),
-                                        new FileAttribute(FileAttributeType.BIT_RATE, 320))),
+                                        new FileAttribute(WireFileAttribute.BIT_DEPTH, 24),
+                                        new FileAttribute(WireFileAttribute.BIT_RATE, 320))),
                         new File(2, "two", 12, ".txt")));
-        Directory child = new Directory("root/child", List.of(new File(0, "three", 42, "")));
+        SharedDirectory child = new SharedDirectory("root/child", List.of(new File(0, "three", 42, "")));
 
         FolderContentsResponse parsed = FolderContentsResponse.fromByteArray(
                 new FolderContentsResponse(-17, "root", List.of(root, child)).toByteArray());
@@ -93,9 +93,9 @@ class FolderContentsResponseTest {
         FolderContentsResponse response = new FolderContentsResponse(
                 0x12345678,
                 "r",
-                List.of(new Directory(
+                List.of(new SharedDirectory(
                         "r",
-                        List.of(new File(1, "f", 2, "e", List.of(new FileAttribute(FileAttributeType.BIT_RATE, 3)))))));
+                        List.of(new File(1, "f", 2, "e", List.of(new FileAttribute(WireFileAttribute.BIT_RATE, 3)))))));
         MessageReader<MessageCode.Peer> reader = new MessageReader<>(response.toByteArray(), MessageCode.Peer.class);
 
         assertEquals(MessageCode.Peer.FOLDER_CONTENTS_RESPONSE, reader.readCode());
@@ -110,7 +110,7 @@ class FolderContentsResponseTest {
         assertEquals(2, reader.readLong());
         assertEquals("e", reader.readString());
         assertEquals(1, reader.readInteger());
-        assertEquals(FileAttributeType.BIT_RATE.getValue(), reader.readInteger());
+        assertEquals(WireFileAttribute.BIT_RATE.getValue(), reader.readInteger());
         assertEquals(3, reader.readInteger());
         assertEquals(0, reader.getRemaining());
     }
@@ -144,7 +144,7 @@ class FolderContentsResponseTest {
         assertThrows(MessageReadException.class, () -> FolderContentsResponse.fromByteArray(missingFileCount));
     }
 
-    private static void assertDirectoryEquals(Directory expected, Directory actual) {
+    private static void assertDirectoryEquals(SharedDirectory expected, SharedDirectory actual) {
         assertEquals(expected.name(), actual.name());
         assertEquals(expected.fileCount(), actual.fileCount());
         for (int index = 0; index < expected.fileCount(); index++) {

@@ -14,11 +14,11 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class BrowseResponseTest {
+class BrowseResponseMessageTest {
     @Test
-    @DisplayName("BrowseResponse defaults both directory lists to empty")
+    @DisplayName("BrowseResponseMessage defaults both directory lists to empty")
     void defaultsDirectoryListsToEmpty() {
-        BrowseResponse response = new BrowseResponse();
+        BrowseResponseMessage response = new BrowseResponseMessage();
 
         assertEquals(0, response.directoryCount());
         assertEquals(List.of(), response.directories());
@@ -27,14 +27,14 @@ class BrowseResponseTest {
     }
 
     @Test
-    @DisplayName("BrowseResponse snapshots both directory lists")
+    @DisplayName("BrowseResponseMessage snapshots both directory lists")
     void snapshotsDirectoryLists() {
-        Directory unlocked = new Directory("open");
-        Directory locked = new Directory("locked");
-        List<Directory> unlockedSource = new ArrayList<>(List.of(unlocked));
-        List<Directory> lockedSource = new ArrayList<>(List.of(locked));
+        SharedDirectory unlocked = new SharedDirectory("open");
+        SharedDirectory locked = new SharedDirectory("locked");
+        List<SharedDirectory> unlockedSource = new ArrayList<>(List.of(unlocked));
+        List<SharedDirectory> lockedSource = new ArrayList<>(List.of(locked));
 
-        BrowseResponse response = new BrowseResponse(unlockedSource, lockedSource);
+        BrowseResponseMessage response = new BrowseResponseMessage(unlockedSource, lockedSource);
         unlockedSource.clear();
         lockedSource.clear();
 
@@ -51,15 +51,15 @@ class BrowseResponseTest {
     }
 
     @Test
-    @DisplayName("BrowseResponse defaults null lists and rejects null elements")
+    @DisplayName("BrowseResponseMessage defaults null lists and rejects null elements")
     void supportsSourceNullSemantics() {
-        BrowseResponse response = new BrowseResponse(null, null);
+        BrowseResponseMessage response = new BrowseResponseMessage(null, null);
 
         assertEquals(0, response.directoryCount());
         assertEquals(0, response.lockedDirectoryCount());
         assertThrows(
                 NullPointerException.class,
-                () -> new BrowseResponse(List.of(), java.util.Arrays.asList((Directory) null)));
+                () -> new BrowseResponseMessage(List.of(), java.util.Arrays.asList((SharedDirectory) null)));
     }
 
     @Test

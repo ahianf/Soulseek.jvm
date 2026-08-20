@@ -44,10 +44,10 @@ import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.search.SearchPhase;
 import dev.slsk.internal.search.SearchResponseMessage;
 import dev.slsk.internal.search.SearchTarget;
-import dev.slsk.internal.share.BrowseResponse;
+import dev.slsk.internal.share.BrowseResponseMessage;
 import dev.slsk.internal.share.Catalogs;
-import dev.slsk.internal.share.Directory;
 import dev.slsk.internal.share.File;
+import dev.slsk.internal.share.SharedDirectory;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.internal.user.UserInfo;
@@ -107,7 +107,7 @@ class PeerMessageHandlerTest {
 
         fixture.handler.handleMessageRead(
                 fixture.connection.proxy,
-                new FolderContentsResponse(TOKEN, "dir", List.of(new Directory("dir"))).toByteArray());
+                new FolderContentsResponse(TOKEN, "dir", List.of(new SharedDirectory("dir"))).toByteArray());
         fixture.handler.handleMessageRead(
                 fixture.connection.proxy, new UserInfo("description", 2, 3, true).toByteArray());
         fixture.handler.handleMessageRead(fixture.connection.proxy, new TransferResponse(TOKEN, 123L).toByteArray());
@@ -131,12 +131,12 @@ class PeerMessageHandlerTest {
     @Test
     void browseResponseCompletesWaitAndInvalidPayloadFailsIt() {
         Fixture fixture = new Fixture(new SoulseekClientOptions());
-        BrowseResponse response = new BrowseResponse(List.of(new Directory("shared")));
+        BrowseResponseMessage response = new BrowseResponseMessage(List.of(new SharedDirectory("shared")));
 
         fixture.handler.handleMessageRead(fixture.connection.proxy, response.toByteArray());
 
         WaitKey key = new WaitKey(MessageCode.Peer.BROWSE_RESPONSE, USERNAME);
-        assertInstanceOf(BrowseResponse.class, fixture.waiter.completed.get(key));
+        assertInstanceOf(BrowseResponseMessage.class, fixture.waiter.completed.get(key));
 
         fixture.handler.handleMessageRead(
                 fixture.connection.proxy,
@@ -307,7 +307,7 @@ class PeerMessageHandlerTest {
                 null));
         failed.handler.handleMessageRead(failed.connection.proxy, new BrowseRequestMessage().toByteArray());
         assertEquals(1, failed.connection.bytes.size());
-        assertArrayEquals(new BrowseResponse().toByteArray(), failed.connection.bytes.getFirst());
+        assertArrayEquals(new BrowseResponseMessage().toByteArray(), failed.connection.bytes.getFirst());
         assertTrue(failed.diagnostic.containsWarning("The share catalog failed to answer a browse"));
     }
 
@@ -528,7 +528,7 @@ class PeerMessageHandlerTest {
     @Test
     void receiptAndWrittenCallbacksCorrelateBrowseAndLogCodes() {
         Fixture fixture = new Fixture(new SoulseekClientOptions());
-        byte[] response = new BrowseResponse(List.of()).toByteArray();
+        byte[] response = new BrowseResponseMessage(List.of()).toByteArray();
         MessageReceivedEvent received =
                 new MessageReceivedEvent(fixture.connection.proxy, response.length, Arrays.copyOfRange(response, 4, 8));
 

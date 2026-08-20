@@ -268,7 +268,7 @@ final class DefaultUsers implements Users {
                                         request.user(), progress.bytesTransferred(), progress.size())))
                         .orElse(null))
                 .build();
-        dev.slsk.internal.share.BrowseResponse response =
+        dev.slsk.internal.share.BrowseResponseMessage response =
                 directory.browse(request.user().value(), options, signal);
         return new Browse(
                 request.user(),
@@ -296,12 +296,12 @@ final class DefaultUsers implements Users {
     }
 
     /** The wire's directories, as the surface describes them. */
-    private static List<Directory> directories(List<dev.slsk.internal.share.Directory> source) {
+    private static List<Directory> directories(List<dev.slsk.internal.share.SharedDirectory> source) {
         if (source == null) {
             return List.of();
         }
         List<Directory> converted = new ArrayList<>(source.size());
-        for (dev.slsk.internal.share.Directory entry : source) {
+        for (dev.slsk.internal.share.SharedDirectory entry : source) {
             List<SearchFile> files = new ArrayList<>(entry.files().size());
             for (dev.slsk.internal.share.File file : entry.files()) {
                 files.add(new SearchFile(file.filename(), file.size(), FileAttributes.none()));

@@ -5,9 +5,9 @@
 package dev.slsk.internal.messaging;
 
 import dev.slsk.exceptions.MessageCompressionException;
-import dev.slsk.internal.share.Directory;
 import dev.slsk.internal.share.File;
 import dev.slsk.internal.share.FileAttribute;
+import dev.slsk.internal.share.SharedDirectory;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -185,7 +185,7 @@ public final class MessageBuilder {
     /**
      * Writes a directory record.
      */
-    public MessageBuilder writeDirectory(Directory directory) {
+    public MessageBuilder writeDirectory(SharedDirectory directory) {
         Objects.requireNonNull(directory, "directory");
         writeString(directory.name()).writeInteger(directory.fileCount());
         for (File file : directory.files()) {

@@ -7,13 +7,13 @@ package dev.slsk.internal.share;
 import java.util.List;
 
 /** A file directory within a peer's shared files. */
-public record Directory(String name, List<File> files) {
-    public Directory {
+public record SharedDirectory(String name, List<File> files) {
+    public SharedDirectory {
         files = files == null ? List.of() : List.copyOf(files);
     }
 
     /** Creates an empty directory. */
-    public Directory(String name) {
+    public SharedDirectory(String name) {
         this(name, List.of());
     }
 

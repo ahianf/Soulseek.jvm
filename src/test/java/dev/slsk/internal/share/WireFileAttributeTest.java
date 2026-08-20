@@ -10,13 +10,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class FileAttributeTest {
+class WireFileAttributeTest {
     @Test
     @DisplayName("Instantiates with the given data")
     void instantiatesWithTheGivenData() {
-        FileAttribute attribute = new FileAttribute(FileAttributeType.SAMPLE_RATE, 44100);
+        FileAttribute attribute = new FileAttribute(WireFileAttribute.SAMPLE_RATE, 44100);
 
-        assertEquals(FileAttributeType.SAMPLE_RATE, attribute.type());
+        assertEquals(WireFileAttribute.SAMPLE_RATE, attribute.type());
         assertEquals(44100, attribute.value());
     }
 

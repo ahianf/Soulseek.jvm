@@ -21,7 +21,7 @@ class FileTest {
     @DisplayName("Instantiates with the given data")
     void instantiatesWithTheGivenData() {
         List<FileAttribute> attributes = List.of(
-                new FileAttribute(FileAttributeType.BIT_RATE, 320), new FileAttribute(FileAttributeType.LENGTH, 123));
+                new FileAttribute(WireFileAttribute.BIT_RATE, 320), new FileAttribute(WireFileAttribute.LENGTH, 123));
 
         File file = new File(7, "music/file.mp3", 45_678L, "mp3", attributes);
 
@@ -53,7 +53,7 @@ class FileTest {
     @Test
     @DisplayName("Copies and protects the attribute list")
     void copiesAndProtectsAttributeList() {
-        FileAttribute attribute = new FileAttribute(FileAttributeType.BIT_RATE, 128);
+        FileAttribute attribute = new FileAttribute(WireFileAttribute.BIT_RATE, 128);
         List<FileAttribute> source = new ArrayList<>(List.of(attribute));
         File file = new File(1, "a", 2, "b", source);
 
@@ -74,10 +74,10 @@ class FileTest {
                 2,
                 "b",
                 List.of(
-                        new FileAttribute(FileAttributeType.BIT_DEPTH, 24),
-                        new FileAttribute(FileAttributeType.BIT_RATE, 320),
-                        new FileAttribute(FileAttributeType.SAMPLE_RATE, 96),
-                        new FileAttribute(FileAttributeType.LENGTH, 180)));
+                        new FileAttribute(WireFileAttribute.BIT_DEPTH, 24),
+                        new FileAttribute(WireFileAttribute.BIT_RATE, 320),
+                        new FileAttribute(WireFileAttribute.SAMPLE_RATE, 96),
+                        new FileAttribute(WireFileAttribute.LENGTH, 180)));
 
         assertEquals(24, file.bitDepth());
         assertEquals(320, file.bitRate());
@@ -100,7 +100,7 @@ class FileTest {
     @Test
     @DisplayName("IsVariableBitRate returns true when attribute is nonzero")
     void variableBitRateReturnsTrueWhenAttributeIsNonzero() {
-        File file = new File(1, "a", 2, "b", List.of(new FileAttribute(FileAttributeType.VARIABLE_BIT_RATE, -1)));
+        File file = new File(1, "a", 2, "b", List.of(new FileAttribute(WireFileAttribute.VARIABLE_BIT_RATE, -1)));
 
         assertTrue(file.variableBitRate());
     }
@@ -108,7 +108,7 @@ class FileTest {
     @Test
     @DisplayName("IsVariableBitRate returns false when attribute is zero")
     void variableBitRateReturnsFalseWhenAttributeIsZero() {
-        File file = new File(1, "a", 2, "b", List.of(new FileAttribute(FileAttributeType.VARIABLE_BIT_RATE, 0)));
+        File file = new File(1, "a", 2, "b", List.of(new FileAttribute(WireFileAttribute.VARIABLE_BIT_RATE, 0)));
 
         assertFalse(file.variableBitRate());
     }
@@ -122,8 +122,8 @@ class FileTest {
                 2,
                 "b",
                 List.of(
-                        new FileAttribute(FileAttributeType.BIT_RATE, 128),
-                        new FileAttribute(FileAttributeType.BIT_RATE, 256)));
+                        new FileAttribute(WireFileAttribute.BIT_RATE, 128),
+                        new FileAttribute(WireFileAttribute.BIT_RATE, 256)));
 
         assertEquals(256, file.bitRate());
         assertEquals(2, file.attributeCount());

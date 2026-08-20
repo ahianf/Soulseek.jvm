@@ -13,11 +13,11 @@ import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
-import dev.slsk.internal.share.BrowseResponse;
-import dev.slsk.internal.share.Directory;
+import dev.slsk.internal.share.BrowseResponseMessage;
 import dev.slsk.internal.share.File;
 import dev.slsk.internal.share.FileAttribute;
-import dev.slsk.internal.share.FileAttributeType;
+import dev.slsk.internal.share.SharedDirectory;
+import dev.slsk.internal.share.WireFileAttribute;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,7 +26,7 @@ class BrowseResponseFactoryTest {
     @Test
     @DisplayName("Empty browse response round trips with compatibility fields")
     void emptyResponseRoundTrips() {
-        byte[] bytes = new BrowseResponse().toByteArray();
+        byte[] bytes = new BrowseResponseMessage().toByteArray();
         MessageReader<MessageCode.Peer> reader = new MessageReader<>(bytes, MessageCode.Peer.class);
 
         assertEquals(MessageCode.Peer.BROWSE_RESPONSE, reader.readCode());
@@ -36,7 +36,7 @@ class BrowseResponseFactoryTest {
         assertEquals(0, reader.readInteger());
         assertEquals(0, reader.getRemaining());
 
-        BrowseResponse parsed = BrowseResponseFactory.fromByteArray(bytes);
+        BrowseResponseMessage parsed = BrowseResponseFactory.fromByteArray(bytes);
         assertEquals(0, parsed.directoryCount());
         assertEquals(0, parsed.lockedDirectoryCount());
     }
@@ -44,18 +44,18 @@ class BrowseResponseFactoryTest {
     @Test
     @DisplayName("Complete browse response preserves all directory data")
     void completeResponseRoundTrips() {
-        Directory open = new Directory(
+        SharedDirectory open = new SharedDirectory(
                 "open",
                 List.of(new File(
                         1,
                         "one",
                         0x0102030405060708L,
                         ".mp3",
-                        List.of(new FileAttribute(FileAttributeType.BIT_RATE, 320)))));
-        Directory locked = new Directory("locked", List.of(new File(2, "two", 42, ".txt")));
+                        List.of(new FileAttribute(WireFileAttribute.BIT_RATE, 320)))));
+        SharedDirectory locked = new SharedDirectory("locked", List.of(new File(2, "two", 42, ".txt")));
 
-        BrowseResponse parsed =
-                BrowseResponseFactory.fromByteArray(new BrowseResponse(List.of(open), List.of(locked)).toByteArray());
+        BrowseResponseMessage parsed = BrowseResponseFactory.fromByteArray(
+                new BrowseResponseMessage(List.of(open), List.of(locked)).toByteArray());
 
         assertEquals(1, parsed.directoryCount());
         assertDirectoryEquals(open, parsed.directories().getFirst());
@@ -69,7 +69,7 @@ class BrowseResponseFactoryTest {
         byte[] withoutCompatibilityFields = new MessageBuilder()
                 .writeCode(MessageCode.Peer.BROWSE_RESPONSE)
                 .writeInteger(1)
-                .writeDirectory(new Directory("root"))
+                .writeDirectory(new SharedDirectory("root"))
                 .compress()
                 .build();
         byte[] withUnknownOnly = new MessageBuilder()
@@ -79,8 +79,8 @@ class BrowseResponseFactoryTest {
                 .compress()
                 .build();
 
-        BrowseResponse one = BrowseResponseFactory.fromByteArray(withoutCompatibilityFields);
-        BrowseResponse two = BrowseResponseFactory.fromByteArray(withUnknownOnly);
+        BrowseResponseMessage one = BrowseResponseFactory.fromByteArray(withoutCompatibilityFields);
+        BrowseResponseMessage two = BrowseResponseFactory.fromByteArray(withUnknownOnly);
 
         assertEquals(1, one.directoryCount());
         assertEquals("root", one.directories().getFirst().name());
@@ -121,7 +121,8 @@ class BrowseResponseFactoryTest {
                 MessageException.class,
                 () -> BrowseResponseFactory.fromByteArray(new TransferResponse(1).toByteArray()));
         assertEquals(
-                "Message Code mismatch creating BrowseResponse (expected: 5, received: 41)", mismatch.getMessage());
+                "Message Code mismatch creating BrowseResponseMessage (expected: 5, received: 41)",
+                mismatch.getMessage());
         byte[] uncompressed = new MessageBuilder()
                 .writeCode(MessageCode.Peer.BROWSE_RESPONSE)
                 .writeBytes(new byte[] {0, 1, 2, 3})
@@ -136,7 +137,7 @@ class BrowseResponseFactoryTest {
         assertThrows(MessageReadException.class, () -> BrowseResponseFactory.fromByteArray(missingFileCount));
     }
 
-    private static void assertDirectoryEquals(Directory expected, Directory actual) {
+    private static void assertDirectoryEquals(SharedDirectory expected, SharedDirectory actual) {
         assertEquals(expected.name(), actual.name());
         assertEquals(expected.fileCount(), actual.fileCount());
         for (int index = 0; index < expected.fileCount(); index++) {

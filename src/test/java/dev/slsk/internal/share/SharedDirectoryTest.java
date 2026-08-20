@@ -15,11 +15,11 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class DirectoryTest {
+class SharedDirectoryTest {
     @Test
     @DisplayName("Instantiates with empty File list given no list")
     void instantiatesWithEmptyFileListGivenNoList() {
-        Directory directory = new Directory("music");
+        SharedDirectory directory = new SharedDirectory("music");
 
         assertEquals("music", directory.name());
         assertTrue(directory.files().isEmpty());
@@ -31,7 +31,7 @@ class DirectoryTest {
     void instantiatesWithGivenFileListGivenList() {
         File file = new File(1, "a", 2, "b");
 
-        Directory directory = new Directory("music", List.of(file));
+        SharedDirectory directory = new SharedDirectory("music", List.of(file));
 
         assertEquals(1, directory.fileCount());
         assertSame(file, directory.files().getFirst());
@@ -40,7 +40,7 @@ class DirectoryTest {
     @Test
     @DisplayName("Treats an explicit null fileList like an omitted fileList")
     void treatsNullFileListAsEmpty() {
-        Directory directory = new Directory("music", null);
+        SharedDirectory directory = new SharedDirectory("music", null);
 
         assertTrue(directory.files().isEmpty());
     }
@@ -50,7 +50,7 @@ class DirectoryTest {
     void copiesAndProtectsFileList() {
         File file = new File(1, "a", 2, "b");
         List<File> source = new ArrayList<>(List.of(file));
-        Directory directory = new Directory("music", source);
+        SharedDirectory directory = new SharedDirectory("music", source);
 
         source.clear();
 
@@ -63,9 +63,10 @@ class DirectoryTest {
     @Test
     @DisplayName("Preserves a null name and rejects null file elements")
     void preservesNullNameAndRejectsNullFileElements() {
-        Directory directory = new Directory(null);
+        SharedDirectory directory = new SharedDirectory(null);
 
         assertNull(directory.name());
-        assertThrows(NullPointerException.class, () -> new Directory("music", java.util.Arrays.asList((File) null)));
+        assertThrows(
+                NullPointerException.class, () -> new SharedDirectory("music", java.util.Arrays.asList((File) null)));
     }
 }

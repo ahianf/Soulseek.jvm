@@ -39,9 +39,9 @@ import dev.slsk.internal.network.MessageReceivedEvent;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.search.SearchResponseMessage;
-import dev.slsk.internal.share.BrowseResponse;
+import dev.slsk.internal.share.BrowseResponseMessage;
 import dev.slsk.internal.share.Catalogs;
-import dev.slsk.internal.share.Directory;
+import dev.slsk.internal.share.SharedDirectory;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.internal.user.UserInfo;
@@ -398,7 +398,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
 
     private void handleBrowseRequest(MessageConnection connection) {
         answer(MessageCode.Peer.BROWSE_REQUEST, connection, () -> {
-            BrowseResponse response;
+            BrowseResponseMessage response;
             try {
                 response =
                         Catalogs.browse(services.catalog().browse(dev.slsk.user.Username.of(connection.getUsername())));
@@ -409,7 +409,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 // completes. Answer with nothing, the same as a share we
                 // decline to show them.
                 diagnostic.warning("The share catalog failed to answer a browse: " + Failures.message(cause), cause);
-                response = new BrowseResponse();
+                response = new BrowseResponseMessage();
             }
             connection.write(response.toByteArray());
             diagnostic.info("Share contents sent to " + connection.getUsername());
@@ -419,7 +419,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     private void handleFolderContentsRequest(MessageConnection connection, byte[] message) {
         FolderContentsRequest request = FolderContentsRequest.fromByteArray(message);
         answer(MessageCode.Peer.FOLDER_CONTENTS_REQUEST, connection, () -> {
-            List<Directory> directories;
+            List<SharedDirectory> directories;
             try {
                 directories = Catalogs.directories(services.catalog()
                         .directory(dev.slsk.user.Username.of(connection.getUsername()), request.getDirectoryName()));

@@ -6,10 +6,10 @@ package dev.slsk.internal.messaging;
 
 import dev.slsk.exceptions.MessageCompressionException;
 import dev.slsk.exceptions.MessageReadException;
-import dev.slsk.internal.share.Directory;
 import dev.slsk.internal.share.File;
 import dev.slsk.internal.share.FileAttribute;
-import dev.slsk.internal.share.FileAttributeType;
+import dev.slsk.internal.share.SharedDirectory;
+import dev.slsk.internal.share.WireFileAttribute;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -276,7 +276,7 @@ public final class MessageReader<T extends Enum<T> & ProtocolCode> {
             // is dropped, not the file and not the response it arrived in.
             int type = readInteger();
             int value = readInteger();
-            FileAttributeType.tryFromValue(type).ifPresent(known -> attributes.add(new FileAttribute(known, value)));
+            WireFileAttribute.tryFromValue(type).ifPresent(known -> attributes.add(new FileAttribute(known, value)));
         }
         return new File(code, filename, size, extension, attributes);
     }
@@ -295,10 +295,10 @@ public final class MessageReader<T extends Enum<T> & ProtocolCode> {
     /**
      * Reads a directory record.
      */
-    public Directory readDirectory() {
+    public SharedDirectory readDirectory() {
         String name = readString();
         int fileCount = readInteger();
-        return new Directory(name, readFiles(fileCount));
+        return new SharedDirectory(name, readFiles(fileCount));
     }
 
     private static String strictDecode(byte[] bytes, CharacterEncoding encoding) throws CharacterCodingException {

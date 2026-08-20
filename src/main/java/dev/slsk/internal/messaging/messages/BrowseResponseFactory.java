@@ -8,8 +8,8 @@ import dev.slsk.exceptions.MessageException;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
-import dev.slsk.internal.share.BrowseResponse;
-import dev.slsk.internal.share.Directory;
+import dev.slsk.internal.share.BrowseResponseMessage;
+import dev.slsk.internal.share.SharedDirectory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -19,18 +19,18 @@ public final class BrowseResponseFactory {
     private BrowseResponseFactory() {}
 
     /** Parses a compressed browse response. */
-    public static BrowseResponse fromByteArray(byte[] bytes) {
+    public static BrowseResponseMessage fromByteArray(byte[] bytes) {
         MessageReader<MessageCode.Peer> reader = new MessageReader<>(bytes, MessageCode.Peer.class);
         MessageCode.Peer code = reader.readCode();
         if (code != MessageCode.Peer.BROWSE_RESPONSE) {
-            throw new MessageException(
-                    "Message Code mismatch creating BrowseResponse (expected: 5, received: " + code.getValue() + ")");
+            throw new MessageException("Message Code mismatch creating BrowseResponseMessage (expected: 5, received: "
+                    + code.getValue() + ")");
         }
 
         reader.decompress();
         int directoryCount = reader.readInteger();
-        List<Directory> directories = new ArrayList<>();
-        List<Directory> lockedDirectories = new ArrayList<>();
+        List<SharedDirectory> directories = new ArrayList<>();
+        List<SharedDirectory> lockedDirectories = new ArrayList<>();
         for (int index = 0; index < directoryCount; index++) {
             directories.add(reader.readDirectory());
         }
@@ -43,20 +43,20 @@ public final class BrowseResponseFactory {
                 }
             }
         }
-        return new BrowseResponse(directories, lockedDirectories);
+        return new BrowseResponseMessage(directories, lockedDirectories);
     }
 
     /** Serializes a browse response. */
-    public static byte[] toByteArray(BrowseResponse browseResponse) {
+    public static byte[] toByteArray(BrowseResponseMessage browseResponse) {
         Objects.requireNonNull(browseResponse, "browseResponse");
         MessageBuilder builder = new MessageBuilder()
                 .writeCode(MessageCode.Peer.BROWSE_RESPONSE)
                 .writeInteger(browseResponse.directoryCount());
-        for (Directory directory : browseResponse.directories()) {
+        for (SharedDirectory directory : browseResponse.directories()) {
             builder.writeDirectory(directory);
         }
         builder.writeInteger(0).writeInteger(browseResponse.lockedDirectoryCount());
-        for (Directory directory : browseResponse.lockedDirectories()) {
+        for (SharedDirectory directory : browseResponse.lockedDirectories()) {
             builder.writeDirectory(directory);
         }
         return builder.compress().build();

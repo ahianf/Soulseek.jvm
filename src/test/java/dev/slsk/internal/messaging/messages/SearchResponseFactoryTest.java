@@ -18,7 +18,7 @@ import dev.slsk.internal.messaging.MessageReader;
 import dev.slsk.internal.search.SearchResponseMessage;
 import dev.slsk.internal.share.File;
 import dev.slsk.internal.share.FileAttribute;
-import dev.slsk.internal.share.FileAttributeType;
+import dev.slsk.internal.share.WireFileAttribute;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,8 +33,8 @@ class SearchResponseFactoryTest {
                 0x0102030405060708L,
                 ".mp3",
                 List.of(
-                        new FileAttribute(FileAttributeType.BIT_DEPTH, 24),
-                        new FileAttribute(FileAttributeType.BIT_RATE, 320)));
+                        new FileAttribute(WireFileAttribute.BIT_DEPTH, 24),
+                        new FileAttribute(WireFileAttribute.BIT_RATE, 320)));
         File locked = new File(3, "locked", 42, ".txt");
         byte[] bytes = new SearchResponseMessage("alice", 0x12345678, true, 1000, 7, List.of(open), List.of(locked))
                 .toByteArray();

@@ -13,10 +13,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.exceptions.MessageCompressionException;
 import dev.slsk.exceptions.MessageReadException;
-import dev.slsk.internal.share.Directory;
 import dev.slsk.internal.share.File;
 import dev.slsk.internal.share.FileAttribute;
-import dev.slsk.internal.share.FileAttributeType;
+import dev.slsk.internal.share.SharedDirectory;
+import dev.slsk.internal.share.WireFileAttribute;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -238,16 +238,16 @@ class MessagePrimitivesTest {
                 123_456,
                 "mp3",
                 List.of(
-                        new FileAttribute(FileAttributeType.BIT_RATE, 320),
-                        new FileAttribute(FileAttributeType.LENGTH, 180)));
-        Directory directory = new Directory("music", List.of(file));
+                        new FileAttribute(WireFileAttribute.BIT_RATE, 320),
+                        new FileAttribute(WireFileAttribute.LENGTH, 180)));
+        SharedDirectory directory = new SharedDirectory("music", List.of(file));
         byte[] message = new MessageBuilder()
                 .writeCode(MessageCode.Peer.BROWSE_RESPONSE)
                 .writeDirectory(directory)
                 .build();
         MessageReader<MessageCode.Peer> reader = new MessageReader<>(message, MessageCode.Peer.class);
 
-        Directory decoded = reader.readDirectory();
+        SharedDirectory decoded = reader.readDirectory();
 
         assertEquals("music", decoded.name());
         assertEquals(1, decoded.fileCount());

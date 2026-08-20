@@ -52,12 +52,12 @@ public final class Catalogs {
      * @param directory the directory
      * @return the wire directory
      */
-    public static Directory directory(dev.slsk.share.Directory directory) {
+    public static SharedDirectory directory(dev.slsk.share.Directory directory) {
         List<File> files = new ArrayList<>(directory.files().size());
         for (SearchFile file : directory.files()) {
             files.add(file(file));
         }
-        return new Directory(directory.name(), files);
+        return new SharedDirectory(directory.name(), files);
     }
 
     /**
@@ -66,8 +66,8 @@ public final class Catalogs {
      * @param directories the directories
      * @return the wire directories
      */
-    public static List<Directory> directories(List<dev.slsk.share.Directory> directories) {
-        List<Directory> converted = new ArrayList<>(directories.size());
+    public static List<SharedDirectory> directories(List<dev.slsk.share.Directory> directories) {
+        List<SharedDirectory> converted = new ArrayList<>(directories.size());
         for (dev.slsk.share.Directory directory : directories) {
             converted.add(directory(directory));
         }
@@ -80,8 +80,9 @@ public final class Catalogs {
      * @param response the response
      * @return the wire response
      */
-    public static BrowseResponse browse(dev.slsk.share.BrowseResponse response) {
-        return new BrowseResponse(directories(response.directories()), directories(response.lockedDirectories()));
+    public static BrowseResponseMessage browse(dev.slsk.share.BrowseResponse response) {
+        return new BrowseResponseMessage(
+                directories(response.directories()), directories(response.lockedDirectories()));
     }
 
     /**

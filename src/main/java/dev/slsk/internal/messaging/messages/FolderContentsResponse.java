@@ -8,13 +8,13 @@ import dev.slsk.exceptions.MessageException;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
-import dev.slsk.internal.share.Directory;
+import dev.slsk.internal.share.SharedDirectory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
 /** The response to a peer folder-contents request. */
-public record FolderContentsResponse(int token, String directoryName, List<Directory> directories)
+public record FolderContentsResponse(int token, String directoryName, List<SharedDirectory> directories)
         implements IncomingMessage, OutgoingMessage {
     public FolderContentsResponse {
         Objects.requireNonNull(directories, "directories");
@@ -39,7 +39,7 @@ public record FolderContentsResponse(int token, String directoryName, List<Direc
         int parsedToken = reader.readInteger();
         String parsedRoot = reader.readString();
         int parsedCount = reader.readInteger();
-        List<Directory> parsedDirectories = new ArrayList<>();
+        List<SharedDirectory> parsedDirectories = new ArrayList<>();
         for (int index = 0; index < parsedCount; index++) {
             parsedDirectories.add(reader.readDirectory());
         }
@@ -53,7 +53,7 @@ public record FolderContentsResponse(int token, String directoryName, List<Direc
                 .writeInteger(token)
                 .writeString(directoryName)
                 .writeInteger(directoryCount());
-        for (Directory directory : directories) {
+        for (SharedDirectory directory : directories) {
             builder.writeDirectory(directory);
         }
         return builder.compress().build();

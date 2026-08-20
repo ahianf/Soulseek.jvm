@@ -44,8 +44,8 @@ import dev.slsk.internal.network.PeerConnectionManager;
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.internal.options.BrowseOptions;
-import dev.slsk.internal.share.BrowseResponse;
-import dev.slsk.internal.share.Directory;
+import dev.slsk.internal.share.BrowseResponseMessage;
+import dev.slsk.internal.share.SharedDirectory;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.internal.user.UserInfo;
@@ -249,18 +249,18 @@ class EnginePeerRequestTest {
         fixture.waiter.results.put(
                 UserAddressResponse.class,
                 CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));
-        List<Directory> source = new ArrayList<>(List.of(new Directory("shared")));
+        List<SharedDirectory> source = new ArrayList<>(List.of(new SharedDirectory("shared")));
         fixture.waiter.results.put(List.class, CompletableFuture.completedFuture(source));
         CancellationController cancellationController = new CancellationController();
         CancellationSignal cancellationSignal = cancellationController.getSignal();
 
-        List<Directory> result =
+        List<SharedDirectory> result =
                 fixture.client.users().getDirectoryContents("alice", "shared", 123, cancellationSignal);
 
         assertEquals(1, result.size());
         source.clear();
         assertEquals(1, result.size());
-        assertThrows(UnsupportedOperationException.class, () -> result.add(new Directory("other")));
+        assertThrows(UnsupportedOperationException.class, () -> result.add(new SharedDirectory("other")));
         assertEquals(new WaitKey(MessageCode.Peer.FOLDER_CONTENTS_RESPONSE, "alice", 123), fixture.waiter.keys.get(0));
         FolderContentsRequest request = assertInstanceOf(FolderContentsRequest.class, fixture.peer.message);
         assertEquals(123, request.getToken());
@@ -339,7 +339,7 @@ class EnginePeerRequestTest {
                 UserAddressResponse.class,
                 CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));
         directoryFixture.waiter.results.put(
-                List.class, CompletableFuture.completedFuture(List.of(new Directory("shared"))));
+                List.class, CompletableFuture.completedFuture(List.of(new SharedDirectory("shared"))));
         TimeoutException timeout = new TimeoutException("timed out");
         directoryFixture.peer.result = CompletableFuture.failedFuture(timeout);
         assertSame(
@@ -386,8 +386,8 @@ class EnginePeerRequestTest {
     @Test
     void browseReturnsResponseAndReportsInitialAndFinalProgress() throws Exception {
         Fixture fixture = new Fixture();
-        BrowseResponse response = new BrowseResponse(List.of(new Directory("shared")));
-        fixture.waiter.results.put(BrowseResponse.class, CompletableFuture.completedFuture(response));
+        BrowseResponseMessage response = new BrowseResponseMessage(List.of(new SharedDirectory("shared")));
+        fixture.waiter.results.put(BrowseResponseMessage.class, CompletableFuture.completedFuture(response));
         fixture.waiter.results.put(
                 BrowseResponseConnection.class,
                 CompletableFuture.completedFuture(new BrowseResponseConnection(
@@ -405,7 +405,7 @@ class EnginePeerRequestTest {
         CancellationController source = new CancellationController();
         CancellationSignal token = source.getSignal();
 
-        BrowseResponse actual = fixture.client
+        BrowseResponseMessage actual = fixture.client
                 .users()
                 .browse(
                         "alice",
@@ -446,7 +446,7 @@ class EnginePeerRequestTest {
         assertThrows(IllegalStateException.class, () -> fixture.client.users().browse("alice"));
         fixture.client.setStateForTest(SoulseekClientState.LOGGED_IN);
 
-        fixture.waiter.results.put(BrowseResponse.class, new CompletableFuture<>());
+        fixture.waiter.results.put(BrowseResponseMessage.class, new CompletableFuture<>());
         TimeoutException timeout = new TimeoutException("header timed out");
         fixture.waiter.results.put(BrowseResponseConnection.class, CompletableFuture.failedFuture(timeout));
         fixture.waiter.results.put(
@@ -465,7 +465,7 @@ class EnginePeerRequestTest {
         assertSame(offline, failureOf(() -> fixture.client.users().browse("bob")));
 
         CancellationException cancellation = new CancellationException("cancelled");
-        fixture.waiter.results.put(BrowseResponse.class, CompletableFuture.failedFuture(cancellation));
+        fixture.waiter.results.put(BrowseResponseMessage.class, CompletableFuture.failedFuture(cancellation));
         fixture.waiter.results.put(
                 BrowseResponseConnection.class,
                 CompletableFuture.completedFuture(
@@ -480,7 +480,7 @@ class EnginePeerRequestTest {
     @Test
     void browseFailsIndefiniteWaitOnSetupFailureAndDisconnect() throws Exception {
         Fixture setupFixture = new Fixture();
-        setupFixture.waiter.results.put(BrowseResponse.class, new CompletableFuture<>());
+        setupFixture.waiter.results.put(BrowseResponseMessage.class, new CompletableFuture<>());
         setupFixture.waiter.results.put(BrowseResponseConnection.class, new CompletableFuture<>());
         setupFixture.waiter.results.put(
                 UserAddressResponse.class,
@@ -496,7 +496,7 @@ class EnginePeerRequestTest {
         setupFixture.close();
 
         Fixture disconnectFixture = new Fixture();
-        disconnectFixture.waiter.results.put(BrowseResponse.class, new CompletableFuture<>());
+        disconnectFixture.waiter.results.put(BrowseResponseMessage.class, new CompletableFuture<>());
         disconnectFixture.waiter.results.put(
                 BrowseResponseConnection.class,
                 CompletableFuture.completedFuture(new BrowseResponseConnection(
@@ -504,7 +504,7 @@ class EnginePeerRequestTest {
         disconnectFixture.waiter.results.put(
                 UserAddressResponse.class, CompletableFuture.completedFuture(new UserAddressResponse("bob", ENDPOINT)));
 
-        CompletableFuture<BrowseResponse> operation =
+        CompletableFuture<BrowseResponseMessage> operation =
                 inBackground(() -> disconnectFixture.client.users().browse("bob"));
         // browse runs on another thread now; it has to have wired its
         // disconnect listener before the peer can drop underneath it.
@@ -716,7 +716,7 @@ class EnginePeerRequestTest {
             if (method.getName().equals("fail")) {
                 failedKey = (WaitKey) arguments[0];
                 Throwable failure = (Throwable) arguments[1];
-                CompletableFuture<?> browse = results.get(BrowseResponse.class);
+                CompletableFuture<?> browse = results.get(BrowseResponseMessage.class);
                 if (browse != null && !browse.isDone()) {
                     browse.completeExceptionally(failure);
                 }
