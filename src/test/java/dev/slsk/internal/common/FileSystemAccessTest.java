@@ -17,29 +17,29 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-class IOAdapterTest {
+class FileSystemAccessTest {
     @TempDir
     Path temporaryDirectory;
 
     @Test
     @DisplayName("Exists reflects filesystem state")
     void existsReflectsFilesystemState() throws Exception {
-        IOAdapter adapter = new IOAdapter();
+        FileSystemAccess files = new FileSystemAccess();
         Path existing = temporaryDirectory.resolve("existing.bin");
         Path missing = temporaryDirectory.resolve("missing.bin");
         Files.write(existing, new byte[] {1});
 
-        assertTrue(adapter.exists(existing.toString()));
-        assertFalse(adapter.exists(missing.toString()));
+        assertTrue(files.exists(existing.toString()));
+        assertFalse(files.exists(missing.toString()));
     }
 
     @Test
     @DisplayName("File channel honors open options and seeking")
     void fileChannelHonorsOptionsAndSeeking() throws Exception {
-        IOAdapter adapter = new IOAdapter();
+        FileSystemAccess files = new FileSystemAccess();
         Path file = temporaryDirectory.resolve("transfer.bin");
 
-        try (FileChannel channel = adapter.getFileChannel(
+        try (FileChannel channel = files.openChannel(
                 file.toString(), StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE)) {
             channel.write(ByteBuffer.wrap(new byte[] {1, 2, 3}));
             channel.position(1);
@@ -47,7 +47,7 @@ class IOAdapterTest {
         }
 
         assertEquals(java.util.List.of((byte) 1, (byte) 9, (byte) 3), toList(Files.readAllBytes(file)));
-        assertEquals(3, adapter.getFileInfo(file.toString()).size());
+        assertEquals(3, files.readAttributes(file.toString()).size());
     }
 
     private static java.util.List<Byte> toList(byte[] bytes) {

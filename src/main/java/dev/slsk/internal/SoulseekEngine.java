@@ -14,7 +14,7 @@ import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.DefaultWaiter;
 import dev.slsk.internal.common.Failures;
-import dev.slsk.internal.common.IOAdapter;
+import dev.slsk.internal.common.FileSystemAccess;
 import dev.slsk.internal.common.Locks;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Scheduler;
@@ -114,7 +114,7 @@ final class SoulseekEngine implements AutoCloseable {
     final Waiter waiter;
     private final TokenFactory tokenFactory;
     private final ReentrantLock stateLock = new ReentrantLock();
-    private final IOAdapter ioAdapter;
+    private final FileSystemAccess files;
     final TokenBucket uploadTokenBucket;
     final TokenBucket downloadTokenBucket;
     final ConnectionFactory connectionFactory;
@@ -230,7 +230,7 @@ final class SoulseekEngine implements AutoCloseable {
             Waiter waiter,
             TokenFactory tokenFactory,
             DiagnosticSink diagnosticFactory,
-            IOAdapter ioAdapter,
+            FileSystemAccess files,
             TokenBucket uploadTokenBucket,
             TokenBucket downloadTokenBucket) {
         if (minorVersion <= 100) {
@@ -257,7 +257,7 @@ final class SoulseekEngine implements AutoCloseable {
         this.users = new UserDirectory(this, server);
         this.searchDomain = new SearchDomain(this, server);
         this.tokenFactory = tokenFactory == null ? new TokenFactory(this.options.startingToken()) : tokenFactory;
-        this.ioAdapter = ioAdapter == null ? new IOAdapter() : ioAdapter;
+        this.files = files == null ? new FileSystemAccess() : files;
         this.uploadTokenBucket = uploadTokenBucket == null
                 ? new TokenBucket((this.options.maximumUploadSpeed() * 1024L) / 10, Duration.ofMillis(100), scheduler)
                 : uploadTokenBucket;
@@ -275,7 +275,7 @@ final class SoulseekEngine implements AutoCloseable {
                 users::getUserEndpoint,
                 server,
                 this.tokenFactory,
-                this.ioAdapter,
+                this.files,
                 this.downloadTokenBucket,
                 this.uploadTokenBucket,
                 this::catalog,

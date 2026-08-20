@@ -16,9 +16,9 @@ import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 
 /**
- * Testable adapter around Java filesystem I/O.
+ * Test seam around Java filesystem access.
  */
-public class IOAdapter {
+public class FileSystemAccess {
     /**
      * Returns whether a path exists.
      *
@@ -37,7 +37,7 @@ public class IOAdapter {
      * @return the file channel
      * @throws IOException when the file cannot be opened
      */
-    public FileChannel getFileChannel(String path, OpenOption... options) throws IOException {
+    public FileChannel openChannel(String path, OpenOption... options) throws IOException {
         return FileChannel.open(Path.of(path), options);
     }
 
@@ -48,7 +48,7 @@ public class IOAdapter {
      * @return the input stream
      * @throws IOException when the file cannot be opened
      */
-    public InputStream getInputStream(String path) throws IOException {
+    public InputStream openInputStream(String path) throws IOException {
         return new FileInputStream(path);
     }
 
@@ -60,7 +60,7 @@ public class IOAdapter {
      * @return the output stream
      * @throws IOException when the file cannot be opened
      */
-    public OutputStream getOutputStream(String path, boolean append) throws IOException {
+    public OutputStream openOutputStream(String path, boolean append) throws IOException {
         return new FileOutputStream(path, append);
     }
 
@@ -71,7 +71,7 @@ public class IOAdapter {
      * @return the basic attributes
      * @throws IOException when metadata cannot be read
      */
-    public BasicFileAttributes getFileInfo(String path) throws IOException {
+    public BasicFileAttributes readAttributes(String path) throws IOException {
         return Files.readAttributes(Path.of(path), BasicFileAttributes.class);
     }
 }

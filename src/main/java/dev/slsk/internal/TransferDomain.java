@@ -9,7 +9,7 @@ import dev.slsk.exceptions.TransferNotFoundException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Failures;
-import dev.slsk.internal.common.IOAdapter;
+import dev.slsk.internal.common.FileSystemAccess;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Scheduler;
 import dev.slsk.internal.common.TokenBucket;
@@ -93,7 +93,7 @@ final class TransferDomain implements PeerServices {
     private final EndpointResolver endpoints;
     private final ServerLink server;
     private final TokenFactory tokens;
-    private final IOAdapter io;
+    private final FileSystemAccess files;
     final TokenBucket downloadTokenBucket;
     final TokenBucket uploadTokenBucket;
     private final NetworkExecutor networkExecutor;
@@ -219,7 +219,7 @@ final class TransferDomain implements PeerServices {
             EndpointResolver endpoints,
             ServerLink server,
             TokenFactory tokens,
-            IOAdapter io,
+            FileSystemAccess files,
             TokenBucket downloadTokenBucket,
             TokenBucket uploadTokenBucket,
             Supplier<ShareCatalog> catalog,
@@ -234,7 +234,7 @@ final class TransferDomain implements PeerServices {
         this.endpoints = Objects.requireNonNull(endpoints, "endpoints");
         this.server = Objects.requireNonNull(server, "server");
         this.tokens = Objects.requireNonNull(tokens, "tokens");
-        this.io = Objects.requireNonNull(io, "io");
+        this.files = Objects.requireNonNull(files, "files");
         this.downloadTokenBucket = Objects.requireNonNull(downloadTokenBucket, "downloadTokenBucket");
         this.uploadTokenBucket = Objects.requireNonNull(uploadTokenBucket, "uploadTokenBucket");
         this.networkExecutor = Objects.requireNonNull(networkExecutor, "networkExecutor");
@@ -832,7 +832,7 @@ final class TransferDomain implements PeerServices {
     /** Returns a local file's size, or zero when there is no file yet. */
     private long localFileSize(String path) {
         try {
-            return io.getFileInfo(path).size();
+            return files.readAttributes(path).size();
         } catch (IOException missing) {
             return 0;
         }
@@ -875,7 +875,7 @@ final class TransferDomain implements PeerServices {
                                         + " requested bytes at the wrong place silently");
                             }
                         }
-                        return io.getOutputStream(localFilename, startOffset > 0);
+                        return files.openOutputStream(localFilename, startOffset > 0);
                     } catch (IOException failure) {
                         throw new UncheckedIOException(failure);
                     }
@@ -919,12 +919,12 @@ final class TransferDomain implements PeerServices {
         CommonUtils.requireText(requestedUsername, "username");
         CommonUtils.requireText(remoteFilename, "remoteFilename");
         CommonUtils.requireText(localFilename, "localFilename");
-        if (!io.exists(localFilename)) {
+        if (!files.exists(localFilename)) {
             throw new UncheckedIOException(
                     new FileNotFoundException("The local file does not exist: " + localFilename));
         }
         server.requireLoggedIn("upload files");
-        try (InputStream ignored = io.getInputStream(localFilename)) {
+        try (InputStream ignored = files.openInputStream(localFilename)) {
             // Probe readability before allocating a transfer token.
         } catch (IOException failure) {
             throw new UncheckedIOException(
@@ -939,7 +939,7 @@ final class TransferDomain implements PeerServices {
                 (request.options() == null ? new TransferOptions() : request.options()).withCloseOptions(true, null);
         long size;
         try {
-            size = io.getFileInfo(localFilename).size();
+            size = files.readAttributes(localFilename).size();
         } catch (IOException failure) {
             throw new UncheckedIOException(failure);
         }
@@ -949,7 +949,7 @@ final class TransferDomain implements PeerServices {
                 size,
                 ignoredOffset -> {
                     try {
-                        return io.getInputStream(localFilename);
+                        return files.openInputStream(localFilename);
                     } catch (IOException failure) {
                         throw new UncheckedIOException(failure);
                     }
