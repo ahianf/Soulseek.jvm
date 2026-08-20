@@ -42,7 +42,7 @@ import dev.slsk.internal.messaging.messages.PierceFirewall;
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.internal.network.tcp.ConnectionState;
-import dev.slsk.internal.network.tcp.ConnectionTypes;
+import dev.slsk.internal.network.tcp.ConnectionType;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import java.io.ByteArrayOutputStream;
 import java.net.InetSocketAddress;
@@ -825,7 +825,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 + incomingConnection.getId() + ", new: "
                 + connection.getId() + ")");
         incomingConnection.close();
-        connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.DIRECT));
+        connection.setType(ConnectionType.INBOUND_DIRECT);
         attachChildMessageListeners(connection);
         connection.subscribe(
                 Connection.Kind.DISCONNECTED,
@@ -891,7 +891,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 + ") for token " + response.getToken());
         MessageConnection connection = connectionFactory.getDistributedConnection(
                 response.getUsername(), response.getIpEndpoint(), options.get().distributedConnectionOptions());
-        connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.INDIRECT));
+        connection.setType(ConnectionType.INBOUND_INDIRECT);
         attachChildMessageListeners(connection);
         connection.subscribe(
                 Connection.Kind.DISCONNECTED,
@@ -1002,7 +1002,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         diagnostic.debug("Attempting direct parent candidate connection to " + username + " (" + ipEndpoint + ")");
         MessageConnection connection = connectionFactory.getDistributedConnection(
                 username, ipEndpoint, options.get().distributedConnectionOptions());
-        connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT));
+        connection.setType(ConnectionType.OUTBOUND_DIRECT);
         subscribeToParentCandidateDisconnect(connection);
         try {
             connection.connect(cancellationSignal);
@@ -1047,7 +1047,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                         + " (" + accepted.getIpEndpoint()
                         + ") handed off. (old: " + accepted.getId()
                         + ", new: " + connection.getId() + ")");
-                connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.INDIRECT));
+                connection.setType(ConnectionType.OUTBOUND_INDIRECT);
                 subscribeToParentCandidateDisconnect(connection);
                 diagnostic.debug("Indirect parent candidate connection to " + username
                         + " (" + connection.getIpEndpoint()

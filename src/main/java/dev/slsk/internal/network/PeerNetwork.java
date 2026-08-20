@@ -28,7 +28,7 @@ import dev.slsk.internal.messaging.messages.PeerInit;
 import dev.slsk.internal.messaging.messages.PierceFirewall;
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
-import dev.slsk.internal.network.tcp.ConnectionTypes;
+import dev.slsk.internal.network.tcp.ConnectionType;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -471,7 +471,7 @@ public final class PeerNetwork implements PeerConnectionManager {
                 incomingConnection.getIpEndpoint(),
                 options.get().transferConnectionOptions(),
                 incomingConnection.handoffTcpClient());
-        connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.DIRECT));
+        connection.setType(ConnectionType.INBOUND_DIRECT);
         connection.<ConnectionDisconnectedEvent>subscribe(
                 Connection.Kind.DISCONNECTED,
                 eventData -> diagnostic.debug("Transfer connection to " + username + " ("
@@ -512,7 +512,7 @@ public final class PeerNetwork implements PeerConnectionManager {
                 + ") for token " + response.getToken());
         Connection connection = connectionFactory.getTransferConnection(
                 response.getIpEndpoint(), options.get().transferConnectionOptions());
-        connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.INDIRECT));
+        connection.setType(ConnectionType.INBOUND_INDIRECT);
         connection.<ConnectionDisconnectedEvent>subscribe(
                 Connection.Kind.DISCONNECTED,
                 eventData -> diagnostic.debug("Transfer connection to " + response.getUsername() + " ("
@@ -587,7 +587,7 @@ public final class PeerNetwork implements PeerConnectionManager {
                 + incomingConnection.getId() + ", new: "
                 + connection.getId() + ")");
         incomingConnection.close();
-        connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.DIRECT));
+        connection.setType(ConnectionType.INBOUND_DIRECT);
         attachPeerMessageListeners(connection);
         subscribeToDisconnect(connection);
 
@@ -635,7 +635,7 @@ public final class PeerNetwork implements PeerConnectionManager {
                 + ") for token " + response.getToken());
         MessageConnection connection = connectionFactory.getMessageConnection(
                 response.getUsername(), response.getIpEndpoint(), options.get().peerConnectionOptions());
-        connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.INDIRECT));
+        connection.setType(ConnectionType.INBOUND_INDIRECT);
         attachPeerMessageListeners(connection);
         CancellationController cancellation = new CancellationController();
         pendingInboundIndirectConnections.put(response.getUsername(), cancellation);
@@ -733,7 +733,7 @@ public final class PeerNetwork implements PeerConnectionManager {
         diagnostic.debug("Attempting direct message connection to " + username + " (" + ipEndpoint + ")");
         MessageConnection connection = connectionFactory.getMessageConnection(
                 username, ipEndpoint, options.get().peerConnectionOptions());
-        connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT));
+        connection.setType(ConnectionType.OUTBOUND_DIRECT);
         attachPeerMessageListeners(connection);
         subscribeToProvisionalDisconnect(connection);
         try {
@@ -781,7 +781,7 @@ public final class PeerNetwork implements PeerConnectionManager {
                         + accepted.getIpEndpoint()
                         + ") handed off. (old: " + accepted.getId()
                         + ", new: " + connection.getId() + ")");
-                connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.INDIRECT));
+                connection.setType(ConnectionType.OUTBOUND_INDIRECT);
                 attachPeerMessageListeners(connection);
                 subscribeToProvisionalDisconnect(connection);
                 diagnostic.debug("Indirect message connection to " + username + " ("
@@ -845,7 +845,7 @@ public final class PeerNetwork implements PeerConnectionManager {
         diagnostic.debug("Attempting direct transfer connection for token " + token + " to " + ipEndpoint);
         Connection connection = connectionFactory.getTransferConnection(
                 ipEndpoint, options.get().transferConnectionOptions());
-        connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT));
+        connection.setType(ConnectionType.OUTBOUND_DIRECT);
         connection.<ConnectionDisconnectedEvent>subscribe(
                 Connection.Kind.DISCONNECTED,
                 eventData -> diagnostic.debug("Transfer connection for token " + token + " to "
@@ -894,7 +894,7 @@ public final class PeerNetwork implements PeerConnectionManager {
                         + accepted.getIpEndpoint()
                         + ") handed off. (old: " + accepted.getId()
                         + ", new: " + connection.getId() + ")");
-                connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.INDIRECT));
+                connection.setType(ConnectionType.OUTBOUND_INDIRECT);
                 connection.<ConnectionDisconnectedEvent>subscribe(
                         Connection.Kind.DISCONNECTED,
                         eventData -> diagnostic.debug("Transfer connection for token " + token + " ("

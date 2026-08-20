@@ -46,7 +46,7 @@ import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.internal.network.tcp.ConnectionKey;
 import dev.slsk.internal.network.tcp.ConnectionState;
-import dev.slsk.internal.network.tcp.ConnectionTypes;
+import dev.slsk.internal.network.tcp.ConnectionType;
 import dev.slsk.internal.network.tcp.TcpClient;
 import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.SoulseekClientOptions;
@@ -173,7 +173,7 @@ class DistributedNetworkTest {
         assertEquals(1, incoming.handoffCount);
         assertEquals(1, incoming.closeCount);
         assertEquals(1, child.startReadingCount);
-        assertEquals(ConnectionTypes.INBOUND.or(ConnectionTypes.DIRECT), child.type);
+        assertEquals(ConnectionType.INBOUND_DIRECT, child.type);
         assertArrayEquals(fixture.manager.getBranchInformation(), child.byteWrites.getFirst());
         assertEquals(List.of(new PeerEndpoint(USERNAME, ENDPOINT)), fixture.manager.getChildren());
         assertEquals(1, added.get());
@@ -240,7 +240,7 @@ class DistributedNetworkTest {
         assertEquals(2, child.byteWrites.size());
         assertArrayEquals(new PierceFirewall(TOKEN).toByteArray(), child.byteWrites.get(0));
         assertArrayEquals(fixture.manager.getBranchInformation(), child.byteWrites.get(1));
-        assertEquals(ConnectionTypes.INBOUND.or(ConnectionTypes.INDIRECT), child.type);
+        assertEquals(ConnectionType.INBOUND_INDIRECT, child.type);
         assertEquals(1, added.get());
         assertTrue(fixture.manager.getPendingSolicitations().isEmpty());
         assertTrue(fixture.diagnostic.contains("already exists"));
@@ -824,7 +824,7 @@ class DistributedNetworkTest {
                 new CopyOnWriteArrayList<>();
         private final List<byte[]> byteWrites = new CopyOnWriteArrayList<>();
         private final List<OutgoingMessage> outgoingWrites = new CopyOnWriteArrayList<>();
-        private ConnectionTypes type = ConnectionTypes.NONE;
+        private ConnectionType type = ConnectionType.UNCLASSIFIED;
         private ConnectionState state = ConnectionState.CONNECTED;
         private CompletableFuture<Void> connectFuture = CompletableFuture.completedFuture(null);
         private CompletableFuture<Void> writeFuture = CompletableFuture.completedFuture(null);
@@ -884,7 +884,7 @@ class DistributedNetworkTest {
                 case "getState" -> state;
                 case "getType" -> type;
                 case "setType" -> {
-                    type = (ConnectionTypes) arguments[0];
+                    type = (ConnectionType) arguments[0];
                     yield null;
                 }
                 case "getWriteQueueDepth" -> 0;

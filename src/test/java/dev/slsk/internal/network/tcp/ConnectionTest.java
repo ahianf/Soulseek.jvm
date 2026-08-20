@@ -60,12 +60,12 @@ class ConnectionTest {
             assertSame(ENDPOINT, connection.getIpEndpoint());
             assertEquals(new ConnectionKey(ENDPOINT), connection.getKey());
             assertEquals(ConnectionState.PENDING, connection.getState());
-            assertEquals(ConnectionTypes.NONE, connection.getType());
+            assertEquals(ConnectionType.UNCLASSIFIED, connection.getType());
             assertNotNull(connection.getId());
             assertNotEquals(new java.util.UUID(0, 0), connection.getId());
             assertTrue(connection.getInactiveTime().compareTo(Duration.ZERO) >= 0);
 
-            ConnectionTypes type = ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT);
+            ConnectionType type = ConnectionType.OUTBOUND_DIRECT;
             connection.setType(type);
             assertEquals(type, connection.getType());
         }

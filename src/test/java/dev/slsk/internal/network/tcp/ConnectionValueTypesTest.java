@@ -17,16 +17,10 @@ import org.junit.jupiter.api.Test;
 
 class ConnectionValueTypesTest {
     @Test
-    @DisplayName("SocketConnection type flags combine and test bits")
-    void connectionTypesPreserveFlags() {
-        ConnectionTypes combined = ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT);
-
-        assertEquals(5, combined.getValue());
-        assertTrue(combined.hasFlag(ConnectionTypes.OUTBOUND));
-        assertTrue(combined.hasFlag(ConnectionTypes.DIRECT));
-        assertFalse(combined.hasFlag(ConnectionTypes.INBOUND));
-        assertEquals(combined, ConnectionTypes.fromValue(5));
-        assertEquals("OUTBOUND | DIRECT", combined.toString());
+    @DisplayName("SocketConnection type is one classified category")
+    void connectionTypeIsOneCategory() {
+        assertSame(ConnectionType.OUTBOUND_DIRECT, ConnectionType.valueOf("OUTBOUND_DIRECT"));
+        assertFalse(ConnectionType.OUTBOUND_DIRECT == ConnectionType.INBOUND_DIRECT);
     }
 
     @Test

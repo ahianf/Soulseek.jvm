@@ -47,10 +47,10 @@ public interface Connection extends AutoCloseable {
     ConnectionState getState();
 
     /** Returns the connection traits. */
-    ConnectionTypes getType();
+    ConnectionType getType();
 
     /** Sets the connection traits. */
-    void setType(ConnectionTypes type);
+    void setType(ConnectionType type);
 
     /** Returns the current depth of the double-buffered write queue. */
     int getWriteQueueDepth();

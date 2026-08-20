@@ -108,7 +108,7 @@ public class SocketConnection implements Connection {
     private int appliedReadTimeoutMillis = CANCELLATION_POLL_MILLIS;
 
     private volatile ConnectionState state = ConnectionState.PENDING;
-    private volatile ConnectionTypes type = ConnectionTypes.NONE;
+    private volatile ConnectionType type = ConnectionType.UNCLASSIFIED;
     private volatile boolean writeQueueFull;
 
     /**
@@ -250,12 +250,12 @@ public class SocketConnection implements Connection {
     }
 
     @Override
-    public ConnectionTypes getType() {
+    public ConnectionType getType() {
         return type;
     }
 
     @Override
-    public void setType(ConnectionTypes type) {
+    public void setType(ConnectionType type) {
         this.type = type;
     }
 

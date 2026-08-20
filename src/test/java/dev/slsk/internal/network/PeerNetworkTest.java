@@ -36,7 +36,7 @@ import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.internal.network.tcp.ConnectionKey;
 import dev.slsk.internal.network.tcp.ConnectionState;
-import dev.slsk.internal.network.tcp.ConnectionTypes;
+import dev.slsk.internal.network.tcp.ConnectionType;
 import dev.slsk.internal.network.tcp.TcpClient;
 import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.SoulseekClientOptions;
@@ -111,7 +111,7 @@ class PeerNetworkTest {
         assertEquals(1, incoming.handoffCount);
         assertEquals(1, incoming.closeCount);
         assertEquals(1, message.startReadingCount);
-        assertEquals(ConnectionTypes.INBOUND.or(ConnectionTypes.DIRECT), message.type);
+        assertEquals(ConnectionType.INBOUND_DIRECT, message.type);
         assertSame(message.messageConnection(), fixture.manager().getCachedMessageConnection(USERNAME));
         assertEquals(
                 List.of(new PeerEndpoint(USERNAME, DIRECT_ENDPOINT)),
@@ -175,7 +175,7 @@ class PeerNetworkTest {
         assertSame(transfer.connection(), result.connection());
         assertEquals(TOKEN, result.remoteToken());
         assertEquals(1, incoming.handoffCount);
-        assertEquals(ConnectionTypes.INBOUND.or(ConnectionTypes.DIRECT), transfer.type);
+        assertEquals(ConnectionType.INBOUND_DIRECT, transfer.type);
     }
 
     @Test
@@ -213,7 +213,7 @@ class PeerNetworkTest {
         assertEquals(TOKEN, result.remoteToken());
         assertEquals(1, transfer.connectCount);
         assertArrayEquals(new PierceFirewall(77).toByteArray(), transfer.byteWrites.getFirst());
-        assertEquals(ConnectionTypes.INBOUND.or(ConnectionTypes.INDIRECT), transfer.type);
+        assertEquals(ConnectionType.INBOUND_INDIRECT, transfer.type);
     }
 
     @Test
@@ -245,7 +245,7 @@ class PeerNetworkTest {
                 fixture.manager().getTransferConnection(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none());
 
         assertSame(direct.connection(), result);
-        assertEquals(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT), direct.type);
+        assertEquals(ConnectionType.OUTBOUND_DIRECT, direct.type);
         assertEquals(2, direct.byteWrites.size());
         assertArrayEquals(
                 new PeerInit(LOCAL_USER, Constants.ConnectionType.TRANSFER, TOKEN).toByteArray(),
@@ -269,7 +269,7 @@ class PeerNetworkTest {
                 fixture.manager().getTransferConnection(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none());
 
         assertSame(indirect.connection(), result);
-        assertEquals(ConnectionTypes.OUTBOUND.or(ConnectionTypes.INDIRECT), indirect.type);
+        assertEquals(ConnectionType.OUTBOUND_INDIRECT, indirect.type);
         assertEquals(1, accepted.handoffCount);
         assertEquals(1, accepted.closeCount);
         assertEquals(1, indirect.byteWrites.size());
@@ -311,7 +311,7 @@ class PeerNetworkTest {
         assertSame(result, cached);
         assertEquals(1, message.connectCount);
         assertArrayEquals(new PierceFirewall(TOKEN).toByteArray(), message.byteWrites.getFirst());
-        assertEquals(ConnectionTypes.INBOUND.or(ConnectionTypes.INDIRECT), message.type);
+        assertEquals(ConnectionType.INBOUND_INDIRECT, message.type);
     }
 
     @Test
@@ -344,7 +344,7 @@ class PeerNetworkTest {
                 .getOrAddMessageConnection(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none());
 
         assertSame(direct.messageConnection(), result);
-        assertEquals(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT), direct.type);
+        assertEquals(ConnectionType.OUTBOUND_DIRECT, direct.type);
         assertArrayEquals(
                 new PeerInit(LOCAL_USER, Constants.ConnectionType.PEER, TOKEN).toByteArray(),
                 direct.byteWrites.getFirst());
@@ -366,7 +366,7 @@ class PeerNetworkTest {
                 .getOrAddMessageConnection(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none());
 
         assertSame(indirect.messageConnection(), result);
-        assertEquals(ConnectionTypes.OUTBOUND.or(ConnectionTypes.INDIRECT), indirect.type);
+        assertEquals(ConnectionType.OUTBOUND_INDIRECT, indirect.type);
         assertEquals(1, indirect.startReadingCount);
         assertEquals(0, indirect.byteWrites.size());
         assertTrue(fixture.manager().getPendingSolicitations().isEmpty());
@@ -855,7 +855,7 @@ class PeerNetworkTest {
         private final List<java.util.function.Consumer<MessageEvent>> messageWrittenListeners = new ArrayList<>();
         private final List<byte[]> byteWrites = new ArrayList<>();
         private final List<OutgoingMessage> outgoingWrites = new ArrayList<>();
-        private ConnectionTypes type = ConnectionTypes.NONE;
+        private ConnectionType type = ConnectionType.UNCLASSIFIED;
         private CompletableFuture<Void> connectFuture = CompletableFuture.completedFuture(null);
         private CompletableFuture<Void> writeFuture = CompletableFuture.completedFuture(null);
         private CompletableFuture<byte[]> readFuture = CompletableFuture.completedFuture(new byte[4]);
@@ -910,7 +910,7 @@ class PeerNetworkTest {
                 case "getState" -> ConnectionState.CONNECTED;
                 case "getType" -> type;
                 case "setType" -> {
-                    type = (ConnectionTypes) arguments[0];
+                    type = (ConnectionType) arguments[0];
                     yield null;
                 }
                 case "getWriteQueueDepth" -> 0;
