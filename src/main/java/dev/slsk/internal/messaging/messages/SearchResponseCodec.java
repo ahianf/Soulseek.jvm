@@ -14,8 +14,8 @@ import java.util.List;
 import java.util.Objects;
 
 /** Serializes and parses search-response messages. */
-public final class SearchResponseFactory {
-    private SearchResponseFactory() {}
+public final class SearchResponseCodec {
+    private SearchResponseCodec() {}
 
     /** Parses a compressed search response. */
     public static SearchResponseMessage fromByteArray(byte[] bytes) {

@@ -9,8 +9,8 @@ import dev.slsk.internal.messaging.MessageReader;
 import dev.slsk.internal.user.UserStatisticsSnapshot;
 
 /** Parses responses to user-statistics requests. */
-public final class UserStatisticsResponseFactory {
-    private UserStatisticsResponseFactory() {}
+public final class UserStatisticsResponseCodec {
+    private UserStatisticsResponseCodec() {}
 
     /** Parses user statistics. */
     public static UserStatisticsSnapshot fromByteArray(byte[] bytes) {

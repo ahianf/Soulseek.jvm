@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.share;
 
-import dev.slsk.internal.messaging.messages.BrowseResponseFactory;
+import dev.slsk.internal.messaging.messages.BrowseResponseCodec;
 import java.util.List;
 
 /** A response to a peer browse request. */
@@ -36,6 +36,6 @@ public record BrowseResponseMessage(List<SharedDirectory> directories, List<Shar
 
     /** Serializes this response to its peer protocol message. */
     public byte[] toByteArray() {
-        return BrowseResponseFactory.toByteArray(this);
+        return BrowseResponseCodec.toByteArray(this);
     }
 }

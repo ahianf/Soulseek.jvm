@@ -23,7 +23,7 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class SearchResponseFactoryTest {
+class SearchResponseCodecTest {
     @Test
     @DisplayName("Complete search response round trips all wire fields")
     void completeResponseRoundTrips() {
@@ -54,7 +54,7 @@ class SearchResponseFactoryTest {
         assertFileEquals(locked, reader.readFile());
         assertEquals(0, reader.getRemaining());
 
-        SearchResponseMessage parsed = SearchResponseFactory.fromByteArray(bytes);
+        SearchResponseMessage parsed = SearchResponseCodec.fromByteArray(bytes);
         assertEquals("alice", parsed.username());
         assertEquals(0x12345678, parsed.token());
         assertTrue(parsed.hasFreeUploadSlot());
@@ -80,7 +80,7 @@ class SearchResponseFactoryTest {
                 .compress()
                 .build();
 
-        SearchResponseMessage parsed = SearchResponseFactory.fromByteArray(bytes);
+        SearchResponseMessage parsed = SearchResponseCodec.fromByteArray(bytes);
 
         assertEquals("u", parsed.username());
         assertEquals(1, parsed.token());
@@ -108,7 +108,7 @@ class SearchResponseFactoryTest {
                 .compress()
                 .build();
 
-        SearchResponseMessage parsed = SearchResponseFactory.fromByteArray(bytes);
+        SearchResponseMessage parsed = SearchResponseCodec.fromByteArray(bytes);
 
         assertTrue(parsed.hasFreeUploadSlot());
         assertEquals(3, parsed.queueLength());
@@ -132,7 +132,7 @@ class SearchResponseFactoryTest {
                 .compress()
                 .build();
 
-        SearchResponseMessage parsed = SearchResponseFactory.fromByteArray(bytes);
+        SearchResponseMessage parsed = SearchResponseCodec.fromByteArray(bytes);
 
         assertTrue(parsed.hasFreeUploadSlot());
         assertEquals(0, parsed.lockedFileCount());
@@ -143,18 +143,18 @@ class SearchResponseFactoryTest {
     void parserRejectsInvalidMessages() {
         assertThrows(
                 MessageException.class,
-                () -> SearchResponseFactory.fromByteArray(new BrowseRequestMessage().toByteArray()));
+                () -> SearchResponseCodec.fromByteArray(new BrowseRequestMessage().toByteArray()));
         byte[] uncompressed = new MessageBuilder()
                 .writeCode(MessageCode.Peer.SEARCH_RESPONSE)
                 .writeBytes(new byte[] {0, 1, 2, 3})
                 .build();
-        assertThrows(MessageCompressionException.class, () -> SearchResponseFactory.fromByteArray(uncompressed));
+        assertThrows(MessageCompressionException.class, () -> SearchResponseCodec.fromByteArray(uncompressed));
         byte[] missing = new MessageBuilder()
                 .writeCode(MessageCode.Peer.SEARCH_RESPONSE)
                 .writeString("u")
                 .compress()
                 .build();
-        assertThrows(MessageReadException.class, () -> SearchResponseFactory.fromByteArray(missing));
+        assertThrows(MessageReadException.class, () -> SearchResponseCodec.fromByteArray(missing));
         byte[] countMismatch = new MessageBuilder()
                 .writeCode(MessageCode.Peer.SEARCH_RESPONSE)
                 .writeString("u")
@@ -166,13 +166,13 @@ class SearchResponseFactoryTest {
                 .writeInteger(0)
                 .compress()
                 .build();
-        assertThrows(MessageReadException.class, () -> SearchResponseFactory.fromByteArray(countMismatch));
+        assertThrows(MessageReadException.class, () -> SearchResponseCodec.fromByteArray(countMismatch));
     }
 
     @Test
     @DisplayName("Factory rejects null response serialization")
     void factoryRejectsNullSerialization() {
-        assertThrows(NullPointerException.class, () -> SearchResponseFactory.toByteArray(null));
+        assertThrows(NullPointerException.class, () -> SearchResponseCodec.toByteArray(null));
     }
 
     private static void assertFileEquals(File expected, File actual) {

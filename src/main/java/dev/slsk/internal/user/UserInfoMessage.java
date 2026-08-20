@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.user;
 
-import dev.slsk.internal.messaging.messages.UserInfoResponseFactory;
+import dev.slsk.internal.messaging.messages.UserInfoResponseCodec;
 import java.util.Arrays;
 
 /** The response to a user-info request. */
@@ -32,7 +32,7 @@ public record UserInfoMessage(
 
     /** Serializes this user-info response to its peer protocol message. */
     public byte[] toByteArray() {
-        return UserInfoResponseFactory.toByteArray(this);
+        return UserInfoResponseCodec.toByteArray(this);
     }
 
     @Override

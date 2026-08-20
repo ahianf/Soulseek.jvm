@@ -10,13 +10,13 @@ import dev.slsk.internal.user.UserStatusSnapshot;
 import dev.slsk.internal.user.WireUserPresence;
 
 /** Parses responses to user-status requests. */
-public final class UserStatusResponseFactory {
-    private UserStatusResponseFactory() {}
+public final class UserStatusResponseCodec {
+    private UserStatusResponseCodec() {}
 
     /** Parses a user status. */
     public static UserStatusSnapshot fromByteArray(byte[] bytes) {
         MessageReader<MessageCode.Server> reader =
-                ServerMessageParser.reader(bytes, MessageCode.Server.GET_STATUS, "UserStatusResponseFactory");
+                ServerMessageParser.reader(bytes, MessageCode.Server.GET_STATUS, "UserStatusResponseCodec");
         return new UserStatusSnapshot(
                 reader.readString(), WireUserPresence.fromValue(reader.readInteger()), reader.readByte() > 0);
     }

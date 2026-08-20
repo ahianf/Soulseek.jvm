@@ -20,19 +20,19 @@ import dev.slsk.internal.events.DownloadFailedEvent;
 import dev.slsk.internal.events.Subscriptions;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
-import dev.slsk.internal.messaging.messages.BrowseResponseFactory;
+import dev.slsk.internal.messaging.messages.BrowseResponseCodec;
 import dev.slsk.internal.messaging.messages.FolderContentsRequest;
 import dev.slsk.internal.messaging.messages.FolderContentsResponse;
 import dev.slsk.internal.messaging.messages.PeerSearchRequest;
 import dev.slsk.internal.messaging.messages.PlaceInQueueRequest;
 import dev.slsk.internal.messaging.messages.PlaceInQueueResponse;
 import dev.slsk.internal.messaging.messages.QueueDownloadRequest;
-import dev.slsk.internal.messaging.messages.SearchResponseFactory;
+import dev.slsk.internal.messaging.messages.SearchResponseCodec;
 import dev.slsk.internal.messaging.messages.TransferRequest;
 import dev.slsk.internal.messaging.messages.TransferResponse;
 import dev.slsk.internal.messaging.messages.UploadDenied;
 import dev.slsk.internal.messaging.messages.UploadFailed;
-import dev.slsk.internal.messaging.messages.UserInfoResponseFactory;
+import dev.slsk.internal.messaging.messages.UserInfoResponseCodec;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.MessageEvent;
 import dev.slsk.internal.network.MessageReceivedEvent;
@@ -210,7 +210,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                             response.directories());
                 }
                 case INFO_RESPONSE -> {
-                    UserInfoMessage info = UserInfoResponseFactory.fromByteArray(message);
+                    UserInfoMessage info = UserInfoResponseCodec.fromByteArray(message);
                     waiter.complete(new WaitKey(MessageCode.Peer.INFO_RESPONSE, connection.getUsername()), info);
                 }
                 case TRANSFER_RESPONSE -> {
@@ -328,7 +328,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     private void handleSearchResponse(byte[] message) {
-        SearchResponseMessage response = SearchResponseFactory.fromByteArray(message);
+        SearchResponseMessage response = SearchResponseCodec.fromByteArray(message);
         SearchInternal search = searches.get().get(response.token());
         if (search != null) {
             search.tryAddResponse(response);
@@ -338,7 +338,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     private void handleBrowseResponse(MessageConnection connection, byte[] message) {
         WaitKey key = new WaitKey(MessageCode.Peer.BROWSE_RESPONSE, connection.getUsername());
         try {
-            waiter.complete(key, BrowseResponseFactory.fromByteArray(message));
+            waiter.complete(key, BrowseResponseCodec.fromByteArray(message));
         } catch (Throwable failure) {
             waiter.fail(key, new MessageReadException("The peer returned an invalid browse response", failure));
             throw failure;

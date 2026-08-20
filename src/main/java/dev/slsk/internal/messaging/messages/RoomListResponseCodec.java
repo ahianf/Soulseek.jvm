@@ -12,13 +12,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** Parses the server's public and private chat-room lists. */
-public final class RoomListResponseFactory implements IncomingMessage {
-    private RoomListResponseFactory() {}
+public final class RoomListResponseCodec {
+    private RoomListResponseCodec() {}
 
     /** Parses a room list. */
     public static RoomListMessage fromByteArray(byte[] bytes) {
         MessageReader<MessageCode.Server> reader =
-                ServerMessageParser.reader(bytes, MessageCode.Server.ROOM_LIST, "RoomListResponseFactory", false);
+                ServerMessageParser.reader(bytes, MessageCode.Server.ROOM_LIST, "RoomListResponseCodec", false);
         List<RoomInfoMessage> publicRooms = readRoomInfoList(reader);
         List<RoomInfoMessage> ownedRooms = readRoomInfoList(reader);
         List<RoomInfoMessage> privateRooms = readRoomInfoList(reader);

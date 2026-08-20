@@ -15,8 +15,8 @@ import java.util.List;
 import java.util.Objects;
 
 /** Serializes and parses browse-response messages. */
-public final class BrowseResponseFactory {
-    private BrowseResponseFactory() {}
+public final class BrowseResponseCodec {
+    private BrowseResponseCodec() {}
 
     /** Parses a compressed browse response. */
     public static BrowseResponseMessage fromByteArray(byte[] bytes) {

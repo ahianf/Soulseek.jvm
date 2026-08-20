@@ -72,7 +72,7 @@ class UserServerResponseTest {
     @Test
     @DisplayName("Statistics response parses all scalar widths")
     void statisticsParse() {
-        UserStatisticsSnapshot statistics = UserStatisticsResponseFactory.fromByteArray(new MessageBuilder()
+        UserStatisticsSnapshot statistics = UserStatisticsResponseCodec.fromByteArray(new MessageBuilder()
                 .writeCode(MessageCode.Server.GET_USER_STATS)
                 .writeString("alice")
                 .writeInteger(-12)
@@ -91,7 +91,7 @@ class UserServerResponseTest {
     @Test
     @DisplayName("Status response parses presence and privilege")
     void statusParses() {
-        UserStatusSnapshot status = UserStatusResponseFactory.fromByteArray(new MessageBuilder()
+        UserStatusSnapshot status = UserStatusResponseCodec.fromByteArray(new MessageBuilder()
                 .writeCode(MessageCode.Server.GET_STATUS)
                 .writeString("alice")
                 .writeInteger(WireUserPresence.AWAY.getValue())
@@ -170,8 +170,8 @@ class UserServerResponseTest {
 
         assertThrows(MessageException.class, () -> UserAddressResponse.fromByteArray(mismatch));
         assertThrows(MessageException.class, () -> UserPrivilegeResponse.fromByteArray(mismatch));
-        assertThrows(MessageException.class, () -> UserStatisticsResponseFactory.fromByteArray(mismatch));
-        assertThrows(MessageException.class, () -> UserStatusResponseFactory.fromByteArray(mismatch));
+        assertThrows(MessageException.class, () -> UserStatisticsResponseCodec.fromByteArray(mismatch));
+        assertThrows(MessageException.class, () -> UserStatusResponseCodec.fromByteArray(mismatch));
         assertThrows(MessageException.class, () -> WatchUserResponse.fromByteArray(mismatch));
 
         assertThrows(

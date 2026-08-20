@@ -339,7 +339,7 @@ class ServerVectorsTest {
         @Test
         @DisplayName("test_GetUserStats_Response_deserialize, test_GetUserStats_Response_serialize")
         void getUserStats_Response_deserialize_decodes() {
-            assertNotNull(assertDoesNotThrow(() -> UserStatisticsResponseFactory.fromByteArray(
+            assertNotNull(assertDoesNotThrow(() -> UserStatisticsResponseCodec.fromByteArray(
                     hex("2100000024000000050000007573657230a086010040420f000000000010270000e8030000"))));
         }
     }
@@ -357,8 +357,8 @@ class ServerVectorsTest {
         @Test
         @DisplayName("test_GetUserStatus_Response_deserialize, test_GetUserStatus_Response_serialize")
         void getUserStatus_Response_deserialize_decodes() {
-            assertNotNull(assertDoesNotThrow(() ->
-                    UserStatusResponseFactory.fromByteArray(hex("12000000070000000500000075736572300200000001"))));
+            assertNotNull(assertDoesNotThrow(
+                    () -> UserStatusResponseCodec.fromByteArray(hex("12000000070000000500000075736572300200000001"))));
         }
     }
 

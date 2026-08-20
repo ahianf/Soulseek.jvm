@@ -12,8 +12,8 @@ import dev.slsk.internal.user.UserInfoMessage;
 import java.util.Objects;
 
 /** Serializes and parses user-info response messages. */
-public final class UserInfoResponseFactory {
-    private UserInfoResponseFactory() {}
+public final class UserInfoResponseCodec {
+    private UserInfoResponseCodec() {}
 
     /** Parses a user-info response. */
     public static UserInfoMessage fromByteArray(byte[] bytes) {

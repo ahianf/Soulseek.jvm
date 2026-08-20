@@ -54,7 +54,7 @@ import dev.slsk.internal.messaging.messages.PrivilegeNotification;
 import dev.slsk.internal.messaging.messages.PrivilegedUserListNotification;
 import dev.slsk.internal.messaging.messages.PrivilegedUserNotification;
 import dev.slsk.internal.messaging.messages.PublicChatMessageNotification;
-import dev.slsk.internal.messaging.messages.RoomListResponseFactory;
+import dev.slsk.internal.messaging.messages.RoomListResponseCodec;
 import dev.slsk.internal.messaging.messages.RoomMessageNotification;
 import dev.slsk.internal.messaging.messages.RoomTickerAddedNotification;
 import dev.slsk.internal.messaging.messages.RoomTickerListNotification;
@@ -65,8 +65,8 @@ import dev.slsk.internal.messaging.messages.UserAddressResponse;
 import dev.slsk.internal.messaging.messages.UserJoinedRoomNotification;
 import dev.slsk.internal.messaging.messages.UserLeftRoomNotification;
 import dev.slsk.internal.messaging.messages.UserPrivilegeResponse;
-import dev.slsk.internal.messaging.messages.UserStatisticsResponseFactory;
-import dev.slsk.internal.messaging.messages.UserStatusResponseFactory;
+import dev.slsk.internal.messaging.messages.UserStatisticsResponseCodec;
+import dev.slsk.internal.messaging.messages.UserStatusResponseCodec;
 import dev.slsk.internal.messaging.messages.WatchUserResponse;
 import dev.slsk.internal.network.DistributedConnectionManager;
 import dev.slsk.internal.network.MessageConnection;
@@ -289,7 +289,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                     waiter.complete(new WaitKey(code), LoginResponse.fromByteArray(message));
                 }
                 case ROOM_LIST -> {
-                    RoomListMessage rooms = RoomListResponseFactory.fromByteArray(message);
+                    RoomListMessage rooms = RoomListResponseCodec.fromByteArray(message);
                     waiter.complete(new WaitKey(code), rooms);
                     publish(ServerMessageEvent.ROOM_LIST_RECEIVED, rooms);
                 }
@@ -339,12 +339,12 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                     waiter.complete(new WaitKey(code, response.getUsername()), response);
                 }
                 case GET_STATUS -> {
-                    UserStatusSnapshot status = UserStatusResponseFactory.fromByteArray(message);
+                    UserStatusSnapshot status = UserStatusResponseCodec.fromByteArray(message);
                     waiter.complete(new WaitKey(code, status.username()), status);
                     publish(ServerMessageEvent.USER_STATUS_CHANGED, status);
                 }
                 case GET_USER_STATS -> {
-                    UserStatisticsSnapshot statistics = UserStatisticsResponseFactory.fromByteArray(message);
+                    UserStatisticsSnapshot statistics = UserStatisticsResponseCodec.fromByteArray(message);
                     waiter.complete(new WaitKey(code, statistics.username()), statistics);
                     publish(ServerMessageEvent.USER_STATISTICS_CHANGED, statistics);
                 }

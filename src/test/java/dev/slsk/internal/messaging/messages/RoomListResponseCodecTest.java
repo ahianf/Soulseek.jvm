@@ -17,7 +17,7 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class RoomListResponseFactoryTest {
+class RoomListResponseCodecTest {
     @Test
     @DisplayName("Room list parses every category in protocol order")
     void parsesRoomCategories() {
@@ -27,7 +27,7 @@ class RoomListResponseFactoryTest {
         writeRooms(builder, List.of(new RoomInfoMessage("private", 78)));
         builder.writeInteger(2).writeString("moderated-a").writeString("moderated-b");
 
-        RoomListMessage result = RoomListResponseFactory.fromByteArray(builder.build());
+        RoomListMessage result = RoomListResponseCodec.fromByteArray(builder.build());
         assertRooms(List.of(new ExpectedRoom("public-a", 12), new ExpectedRoom("public-b", 34)), result.publicRooms());
         assertRooms(List.of(new ExpectedRoom("private", 78)), result.privateRooms());
         assertRooms(List.of(new ExpectedRoom("owned", 56)), result.ownedRooms());
@@ -41,7 +41,7 @@ class RoomListResponseFactoryTest {
     @Test
     @DisplayName("Room list parses four empty categories")
     void parsesEmptyRoomList() {
-        RoomListMessage result = RoomListResponseFactory.fromByteArray(new MessageBuilder()
+        RoomListMessage result = RoomListResponseCodec.fromByteArray(new MessageBuilder()
                 .writeCode(MessageCode.Server.ROOM_LIST)
                 .writeInteger(0)
                 .writeInteger(0)
@@ -63,12 +63,12 @@ class RoomListResponseFactoryTest {
     void rejectsInvalidFrames() {
         assertThrows(
                 MessageException.class,
-                () -> RoomListResponseFactory.fromByteArray(new MessageBuilder()
+                () -> RoomListResponseCodec.fromByteArray(new MessageBuilder()
                         .writeCode(MessageCode.Peer.BROWSE_REQUEST)
                         .build()));
         assertThrows(
                 MessageReadException.class,
-                () -> RoomListResponseFactory.fromByteArray(new MessageBuilder()
+                () -> RoomListResponseCodec.fromByteArray(new MessageBuilder()
                         .writeCode(MessageCode.Server.ROOM_LIST)
                         .writeInteger(1)
                         .build()));
@@ -84,7 +84,7 @@ class RoomListResponseFactoryTest {
                 .writeInteger(12)
                 .build();
 
-        assertThrows(IndexOutOfBoundsException.class, () -> RoomListResponseFactory.fromByteArray(message));
+        assertThrows(IndexOutOfBoundsException.class, () -> RoomListResponseCodec.fromByteArray(message));
     }
 
     private static void writeRooms(MessageBuilder builder, List<RoomInfoMessage> rooms) {

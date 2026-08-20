@@ -19,7 +19,7 @@ import dev.slsk.internal.user.UserInfoMessage;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class UserInfoResponseFactoryTest {
+class UserInfoResponseCodecTest {
     @Test
     @DisplayName("UserInfoMessage with a picture preserves its exact wire format")
     void responseWithPicturePreservesWireFormat() {
@@ -62,7 +62,7 @@ class UserInfoResponseFactoryTest {
                 },
                 bytes);
 
-        UserInfoMessage parsed = UserInfoResponseFactory.fromByteArray(bytes);
+        UserInfoMessage parsed = UserInfoResponseCodec.fromByteArray(bytes);
         assertEquals("d", parsed.description());
         assertTrue(parsed.hasPicture());
         assertArrayEquals(picture, parsed.picture());
@@ -106,7 +106,7 @@ class UserInfoResponseFactoryTest {
                 },
                 bytes);
 
-        UserInfoMessage parsed = UserInfoResponseFactory.fromByteArray(bytes);
+        UserInfoMessage parsed = UserInfoResponseCodec.fromByteArray(bytes);
         assertEquals("d", parsed.description());
         assertFalse(parsed.hasPicture());
         assertNull(parsed.picture());
@@ -128,7 +128,7 @@ class UserInfoResponseFactoryTest {
                 .writeByte(255)
                 .build();
 
-        UserInfoMessage parsed = UserInfoResponseFactory.fromByteArray(bytes);
+        UserInfoMessage parsed = UserInfoResponseCodec.fromByteArray(bytes);
 
         assertTrue(parsed.hasPicture());
         assertEquals(0, parsed.picture().length);
@@ -140,17 +140,17 @@ class UserInfoResponseFactoryTest {
     void parserRejectsInvalidData() {
         assertThrows(
                 MessageException.class,
-                () -> UserInfoResponseFactory.fromByteArray(new BrowseRequestMessage().toByteArray()));
+                () -> UserInfoResponseCodec.fromByteArray(new BrowseRequestMessage().toByteArray()));
         byte[] missing = new MessageBuilder()
                 .writeCode(MessageCode.Peer.INFO_RESPONSE)
                 .writeString("d")
                 .build();
-        assertThrows(MessageReadException.class, () -> UserInfoResponseFactory.fromByteArray(missing));
+        assertThrows(MessageReadException.class, () -> UserInfoResponseCodec.fromByteArray(missing));
     }
 
     @Test
     @DisplayName("Factory rejects null response serialization")
     void factoryRejectsNullSerialization() {
-        assertThrows(NullPointerException.class, () -> UserInfoResponseFactory.toByteArray(null));
+        assertThrows(NullPointerException.class, () -> UserInfoResponseCodec.toByteArray(null));
     }
 }

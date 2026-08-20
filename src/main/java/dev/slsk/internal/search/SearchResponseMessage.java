@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.search;
 
-import dev.slsk.internal.messaging.messages.SearchResponseFactory;
+import dev.slsk.internal.messaging.messages.SearchResponseCodec;
 import dev.slsk.internal.share.File;
 import java.util.List;
 
@@ -52,6 +52,6 @@ public record SearchResponseMessage(
 
     /** Serializes this response to its peer protocol message. */
     public byte[] toByteArray() {
-        return SearchResponseFactory.toByteArray(this);
+        return SearchResponseCodec.toByteArray(this);
     }
 }
