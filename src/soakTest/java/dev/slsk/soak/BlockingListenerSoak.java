@@ -43,11 +43,11 @@ class BlockingListenerSoak {
             for (int index = 0; index < CONNECTIONS; index++) {
                 SocketConnection connection =
                         new SocketConnection(peer.endpoint(), new ConnectionOptions(), null, Monitors.shared());
-                connection.addStateChangedListener((sender, event) -> {
+                connection.addStateChangedListener(event -> {
                     stateEvents.incrementAndGet();
                     sleepQuietly(LISTENER_BLOCK_MILLIS);
                 });
-                connection.addDisconnectedListener((sender, event) -> allDisconnected.countDown());
+                connection.addDisconnectedListener(event -> allDisconnected.countDown());
                 connection.connect(CancellationSignal.none());
                 connections[index] = connection;
             }

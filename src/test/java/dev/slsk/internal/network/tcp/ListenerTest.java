@@ -71,10 +71,8 @@ class ListenerTest {
             SocketListener listener =
                     new SocketListener(address, server.getLocalPort(), options, Monitors.shared(), adapter);
             AtomicReference<Connection> accepted = new AtomicReference<>();
-            AtomicReference<Listener> sender = new AtomicReference<>();
             CountDownLatch raised = new CountDownLatch(1);
-            listener.addAcceptedListener((eventSender, connection) -> {
-                sender.set(eventSender);
+            listener.addAcceptedListener(connection -> {
                 accepted.set(connection);
                 raised.countDown();
             });
@@ -82,7 +80,6 @@ class ListenerTest {
             listener.start();
             try (Socket peer = new Socket(address, server.getLocalPort())) {
                 assertTrue(raised.await(2, TimeUnit.SECONDS));
-                assertSame(listener, sender.get());
                 assertEquals(ConnectionState.CONNECTED, accepted.get().getState());
                 assertEquals(peer.getLocalPort(), accepted.get().getIpEndpoint().getPort());
             } finally {
@@ -109,7 +106,7 @@ class ListenerTest {
             SocketListener listener = new SocketListener(
                     address, server.getLocalPort(), null, Monitors.shared(), new TcpListenerAdapter(server));
             CountDownLatch accepted = new CountDownLatch(1);
-            listener.addAcceptedListener((source, connection) -> accepted.countDown());
+            listener.addAcceptedListener(connection -> accepted.countDown());
             listener.start();
             // Prove the accept loop is live — a fixed sleep can pass with the
             // loop never having started, which makes the assertion vacuous.

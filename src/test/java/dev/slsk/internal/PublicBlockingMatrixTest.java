@@ -25,6 +25,7 @@ import dev.slsk.internal.network.DefaultMessageConnection;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.MessageConnectionEventListener;
 import dev.slsk.internal.network.MessageEvent;
+import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionEventListener;
 import dev.slsk.internal.network.tcp.ConnectionState;
 import dev.slsk.internal.network.tcp.NetworkStream;
@@ -703,7 +704,7 @@ class PublicBlockingMatrixTest {
         @Override
         public MessageConnection getServerConnection(
                 InetSocketAddress endpoint,
-                ConnectionEventListener<Void> connected,
+                ConnectionEventListener<Connection> connected,
                 ConnectionEventListener<dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent> disconnected,
                 MessageConnectionEventListener<MessageEvent> read,
                 MessageConnectionEventListener<MessageEvent> written,

@@ -5,9 +5,8 @@
 package dev.slsk.internal.search;
 
 import dev.slsk.internal.events.SoulseekClientEvent;
+import java.util.function.Consumer;
 
 /** Handles a search-responder event. */
 @FunctionalInterface
-public interface SearchResponderEventListener<T extends SoulseekClientEvent> {
-    void handle(SearchResponder sender, T eventData);
-}
+public interface SearchResponderEventListener<T extends SoulseekClientEvent> extends Consumer<T> {}

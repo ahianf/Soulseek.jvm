@@ -38,7 +38,7 @@ class MessageFloodSoak {
 
             DefaultMessageConnection connection =
                     new DefaultMessageConnection(peer.endpoint(), options, 4, null, Monitors.shared());
-            connection.addMessageReadListener((sender, event) -> messages.incrementAndGet());
+            connection.addMessageReadListener(event -> messages.incrementAndGet());
 
             long allocStart = HeapProbe.totalAllocatedBytes();
             long cpuStart = CpuProbe.processCpuNanos();

@@ -259,21 +259,21 @@ final class UserDirectory {
             }
 
             MessageConnection connection = responseConnection.connection();
-            long responseLength = responseConnection.eventData().getLength() - 4;
+            long responseLength = responseConnection.eventData().length() - 4;
             AtomicBoolean completionEventFired = new AtomicBoolean();
             dev.slsk.internal.network.MessageConnectionEventListener<dev.slsk.internal.network.MessageDataEvent>
-                    progressListener = (sender, eventData) -> context.reportBrowseProgress(
+                    progressListener = eventData -> context.reportBrowseProgress(
                     requestedUsername,
                     operationOptions,
-                    eventData.getCurrentLength(),
-                    eventData.getTotalLength(),
+                    eventData.currentLength(),
+                    eventData.totalLength(),
                     completionEventFired);
-            connection.addDisconnectedListener((sender, eventData) -> context.getWaiter()
+            connection.addDisconnectedListener(eventData -> context.getWaiter()
                     .fail(
                             browseWaitKey,
                             new ConnectionException(
-                                    "Peer connection disconnected " + "unexpectedly: " + eventData.getMessage(),
-                                    eventData.getException())));
+                                    "Peer connection disconnected " + "unexpectedly: " + eventData.message(),
+                                    eventData.exception())));
             connection.addMessageDataReadListener(progressListener);
             context.reportBrowseProgress(requestedUsername, operationOptions, 0, responseLength, completionEventFired);
             BrowseResponse response = browseWait.await();

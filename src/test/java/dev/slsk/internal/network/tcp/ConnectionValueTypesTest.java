@@ -86,11 +86,11 @@ class ConnectionValueTypesTest {
     void dataEventComputesPercentage() {
         ConnectionDataEvent args = new ConnectionDataEvent(3, 20);
 
-        assertEquals(3, args.getCurrentLength());
-        assertEquals(20, args.getTotalLength());
-        assertEquals(15.0, args.getPercentComplete());
-        assertTrue(Double.isNaN(new ConnectionDataEvent(0, 0).getPercentComplete()));
-        assertEquals(Double.POSITIVE_INFINITY, new ConnectionDataEvent(1, 0).getPercentComplete());
+        assertEquals(3, args.currentLength());
+        assertEquals(20, args.totalLength());
+        assertEquals(15.0, args.percentComplete());
+        assertTrue(Double.isNaN(new ConnectionDataEvent(0, 0).percentComplete()));
+        assertEquals(Double.POSITIVE_INFINITY, new ConnectionDataEvent(1, 0).percentComplete());
     }
 
     @Test
@@ -99,9 +99,9 @@ class ConnectionValueTypesTest {
         IllegalStateException exception = new IllegalStateException("broken");
         ConnectionDisconnectedEvent args = new ConnectionDisconnectedEvent("closed", exception);
 
-        assertEquals("closed", args.getMessage());
-        assertSame(exception, args.getException());
-        assertNull(new ConnectionDisconnectedEvent("closed").getException());
+        assertEquals("closed", args.message());
+        assertSame(exception, args.exception());
+        assertNull(new ConnectionDisconnectedEvent("closed").exception());
     }
 
     @Test
@@ -113,11 +113,11 @@ class ConnectionValueTypesTest {
         ConnectionStateChangedEvent minimal =
                 new ConnectionStateChangedEvent(ConnectionState.CONNECTED, ConnectionState.DISCONNECTED);
 
-        assertEquals(ConnectionState.CONNECTED, complete.getPreviousState());
-        assertEquals(ConnectionState.DISCONNECTED, complete.getCurrentState());
-        assertEquals("closed", complete.getMessage());
-        assertSame(exception, complete.getException());
-        assertNull(minimal.getMessage());
-        assertNull(minimal.getException());
+        assertEquals(ConnectionState.CONNECTED, complete.previousState());
+        assertEquals(ConnectionState.DISCONNECTED, complete.currentState());
+        assertEquals("closed", complete.message());
+        assertSame(exception, complete.exception());
+        assertNull(minimal.message());
+        assertNull(minimal.exception());
     }
 }

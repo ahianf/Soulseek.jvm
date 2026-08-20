@@ -81,7 +81,7 @@ class PeerNetworkTest {
         Fixture fixture = new Fixture();
         PeerNetwork manager = fixture.manager();
         AtomicInteger events = new AtomicInteger();
-        DiagnosticEventListener listener = (sender, args) -> events.incrementAndGet();
+        DiagnosticEventListener listener = args -> events.incrementAndGet();
         manager.addDiagnosticGeneratedListener(listener);
 
         // The supplied diagnostic remains usable and close is idempotent.
@@ -699,7 +699,7 @@ class PeerNetworkTest {
         @Override
         public MessageConnection getServerConnection(
                 InetSocketAddress ipEndpoint,
-                ConnectionEventListener<Void> connectedEventHandler,
+                ConnectionEventListener<Connection> connectedEventHandler,
                 ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedEventHandler,
                 MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
                 MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler,
@@ -895,8 +895,8 @@ class PeerNetworkTest {
         }
 
         private void fireDisconnected(String message, Exception exception) {
-            ConnectionDisconnectedEvent eventData = new ConnectionDisconnectedEvent(message, exception);
-            List.copyOf(disconnectedListeners).forEach(listener -> listener.handle(proxy, eventData));
+            ConnectionDisconnectedEvent eventData = new ConnectionDisconnectedEvent(proxy, message, exception);
+            List.copyOf(disconnectedListeners).forEach(listener -> listener.accept(eventData));
         }
 
         @Override

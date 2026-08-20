@@ -4,8 +4,8 @@
 
 package dev.slsk.internal.messaging.handlers;
 
+import java.util.function.Consumer;
+
 /** Handles a peer-message-handler event. */
 @FunctionalInterface
-public interface PeerMessageHandlerEventListener<T> {
-    void handle(PeerMessageHandler sender, T eventData);
-}
+public interface PeerMessageHandlerEventListener<T> extends Consumer<T> {}

@@ -309,15 +309,13 @@ final class DownloadRun {
     }
 
     private void bindConnectionEvents() {
-        dataReadListener =
-                (sender, eventData) -> updateProgress(download.getStartOffset() + eventData.getCurrentLength());
-        disconnectedListener = (sender, eventData) -> {
-            Throwable failure = eventData.getException();
+        dataReadListener = eventData -> updateProgress(download.getStartOffset() + eventData.currentLength());
+        disconnectedListener = eventData -> {
+            Throwable failure = eventData.exception();
             if (failure instanceof CancellationException || failure instanceof TimeoutException) {
                 download.settlement().fail(failure);
             } else {
-                download.settlement()
-                        .fail(new ConnectionException("Transfer failed: " + eventData.getMessage(), failure));
+                download.settlement().fail(new ConnectionException("Transfer failed: " + eventData.message(), failure));
             }
         };
         connection.addDataReadListener(dataReadListener);

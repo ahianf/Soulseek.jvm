@@ -65,7 +65,8 @@ public class SocketConnection implements Connection {
     private static final int NO_READ_TIMEOUT = -1;
 
     private final UUID id = UUID.randomUUID();
-    private final CopyOnWriteArrayList<ConnectionEventListener<Void>> connectedListeners = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<ConnectionEventListener<Connection>> connectedListeners =
+            new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<ConnectionEventListener<ConnectionDataEvent>> dataReadListeners =
             new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<ConnectionEventListener<ConnectionDataEvent>> dataWrittenListeners =
@@ -200,12 +201,12 @@ public class SocketConnection implements Connection {
     }
 
     @Override
-    public void addConnectedListener(ConnectionEventListener<Void> listener) {
+    public void addConnectedListener(ConnectionEventListener<Connection> listener) {
         connectedListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override
-    public void removeConnectedListener(ConnectionEventListener<Void> listener) {
+    public void removeConnectedListener(ConnectionEventListener<Connection> listener) {
         connectedListeners.remove(listener);
     }
 
@@ -585,8 +586,8 @@ public class SocketConnection implements Connection {
 
         publishStateChanged(previousState, newState, message, exception);
         if (newState == ConnectionState.CONNECTED) {
-            for (ConnectionEventListener<Void> listener : connectedListeners) {
-                listener.handle(this, null);
+            for (ConnectionEventListener<Connection> listener : connectedListeners) {
+                listener.accept(this);
             }
         } else if (newState == ConnectionState.DISCONNECTED) {
             publishDisconnected(message, exception);
@@ -597,9 +598,9 @@ public class SocketConnection implements Connection {
     private void publishStateChanged(
             ConnectionState previousState, ConnectionState newState, String message, Exception exception) {
         ConnectionStateChangedEvent eventData =
-                new ConnectionStateChangedEvent(previousState, newState, message, exception);
+                new ConnectionStateChangedEvent(this, previousState, newState, message, exception);
         for (ConnectionEventListener<ConnectionStateChangedEvent> listener : stateChangedListeners) {
-            listener.handle(this, eventData);
+            listener.accept(eventData);
         }
     }
 
@@ -608,9 +609,9 @@ public class SocketConnection implements Connection {
      * called with no lock held.
      */
     private void publishDisconnected(String message, Exception exception) {
-        ConnectionDisconnectedEvent eventData = new ConnectionDisconnectedEvent(message, exception);
+        ConnectionDisconnectedEvent eventData = new ConnectionDisconnectedEvent(this, message, exception);
         for (ConnectionEventListener<ConnectionDisconnectedEvent> listener : disconnectedListeners) {
-            listener.handle(this, eventData);
+            listener.accept(eventData);
         }
         // Written before the latch drops and only for the first caller through,
         // so a waiter that is released sees the reason that released it and a
@@ -1168,13 +1169,13 @@ public class SocketConnection implements Connection {
         if (listeners.isEmpty() && scopedListener == null) {
             return;
         }
-        ConnectionDataEvent eventData = new ConnectionDataEvent(currentLength, totalLength);
+        ConnectionDataEvent eventData = new ConnectionDataEvent(this, currentLength, totalLength);
         Runnable dispatch = () -> {
             for (ConnectionEventListener<ConnectionDataEvent> listener : listeners) {
-                listener.handle(this, eventData);
+                listener.accept(eventData);
             }
             if (scopedListener != null) {
-                scopedListener.handle(this, eventData);
+                scopedListener.accept(eventData);
             }
         };
         // Inline: these listeners are the library's own progress counters, and

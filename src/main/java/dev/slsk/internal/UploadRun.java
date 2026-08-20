@@ -207,15 +207,13 @@ final class UploadRun {
     }
 
     private void bindConnectionEvents() {
-        dataWrittenListener =
-                (sender, eventData) -> updateProgress(upload.getStartOffset() + eventData.getCurrentLength());
-        disconnectedListener = (sender, eventData) -> {
-            Throwable failure = eventData.getException();
+        dataWrittenListener = eventData -> updateProgress(upload.getStartOffset() + eventData.currentLength());
+        disconnectedListener = eventData -> {
+            Throwable failure = eventData.exception();
             if (failure instanceof CancellationException || failure instanceof TimeoutException) {
                 upload.settlement().fail(failure);
             } else {
-                upload.settlement()
-                        .fail(new ConnectionException("Transfer failed: " + eventData.getMessage(), failure));
+                upload.settlement().fail(new ConnectionException("Transfer failed: " + eventData.message(), failure));
             }
         };
         connection.addDataWrittenListener(dataWrittenListener);

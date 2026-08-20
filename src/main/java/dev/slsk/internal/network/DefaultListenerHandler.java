@@ -89,7 +89,7 @@ public final class DefaultListenerHandler implements ListenerHandler {
     }
 
     @Override
-    public void handleConnection(Listener sender, Connection connection) {
+    public void handleConnection(Connection connection) {
         diagnostic.debug("Accepted incoming connection from "
                 + connection.getIpEndpoint().getAddress().getHostAddress()
                 + " on " + listener.get().getIpAddress()
@@ -238,7 +238,7 @@ public final class DefaultListenerHandler implements ListenerHandler {
     }
 
     private void raiseDiagnostic(DiagnosticEvent args) {
-        diagnosticListeners.forEach(listener -> listener.handle(this, args));
+        diagnosticListeners.forEach(listener -> listener.accept(args));
     }
 
     private static String toHex(byte[] bytes) {

@@ -4,9 +4,8 @@
 
 package dev.slsk.internal.network.tcp;
 
+import java.util.function.Consumer;
+
 /** Handles an accepted TCP connection. */
 @FunctionalInterface
-public interface ListenerAcceptedEventListener {
-    /** Handles a connection accepted by a listener. */
-    void handle(Listener sender, Connection connection);
-}
+public interface ListenerAcceptedEventListener extends Consumer<Connection> {}

@@ -350,21 +350,21 @@ public final class DefaultSearchResponder implements SearchResponder {
     }
 
     private void raiseDiagnostic(DiagnosticEvent args) {
-        diagnosticListeners.forEach(listener -> listener.handle(this, args));
+        diagnosticListeners.forEach(listener -> listener.accept(args));
     }
 
     private void raiseRequestReceived(SearchRequestEvent args) {
-        requestListeners.forEach(listener -> listener.handle(this, args));
+        requestListeners.forEach(listener -> listener.accept(args));
     }
 
     private void raiseResponseDelivered(SearchResponseCacheRecord record) {
         SearchRequestResponseEvent args = toEvent(record);
-        responseDeliveredListeners.forEach(listener -> listener.handle(this, args));
+        responseDeliveredListeners.forEach(listener -> listener.accept(args));
     }
 
     private void raiseResponseFailed(SearchResponseCacheRecord record) {
         SearchRequestResponseEvent args = toEvent(record);
-        responseFailedListeners.forEach(listener -> listener.handle(this, args));
+        responseFailedListeners.forEach(listener -> listener.accept(args));
     }
 
     private static SearchRequestResponseEvent toEvent(SearchResponseCacheRecord record) {

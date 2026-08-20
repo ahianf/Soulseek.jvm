@@ -4,9 +4,8 @@
 
 package dev.slsk.internal.network;
 
+import java.util.function.Consumer;
+
 /** Handles a message-connection event. */
 @FunctionalInterface
-public interface MessageConnectionEventListener<T extends MessageConnectionEvent> {
-    /** Handles an event raised by a message connection. */
-    void handle(MessageConnection sender, T eventData);
-}
+public interface MessageConnectionEventListener<T extends MessageConnectionEvent> extends Consumer<T> {}

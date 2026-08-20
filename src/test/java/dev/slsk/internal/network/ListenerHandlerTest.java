@@ -52,7 +52,7 @@ class ListenerHandlerTest {
         try (Fixture fixture = fixture(null)) {
             DefaultListenerHandler handler = handler(fixture, fixture.options);
             AtomicReference<DiagnosticEvent> event = new AtomicReference<>();
-            handler.addDiagnosticGeneratedListener((sender, args) -> event.set(args));
+            handler.addDiagnosticGeneratedListener(args -> event.set(args));
             handler.getDiagnostic().info("test");
             assertEquals("test", event.get().message());
         }
@@ -62,13 +62,13 @@ class ListenerHandlerTest {
     void readFailureAndUnrecognizedMessageDisconnectAndClose() throws Exception {
         try (Fixture fixture = fixture(null)) {
             ConnectionProbe readFailure = ConnectionProbe.failure(new RuntimeException("read"));
-            fixture.handler.handleConnection(null, readFailure.proxy);
+            fixture.handler.handleConnection(readFailure.proxy);
             assertNotNull(readFailure.disconnectedException);
             assertTrue(readFailure.closed);
             assertTrue(fixture.diagnostic.debug.stream().anyMatch(text -> text.contains("Failed to initialize")));
 
             ConnectionProbe unknown = ConnectionProbe.message(new byte[] {1});
-            fixture.handler.handleConnection(null, unknown.proxy);
+            fixture.handler.handleConnection(unknown.proxy);
             assertTrue(unknown.disconnectedException.getMessage().contains("Unrecognized initialization message"));
             assertTrue(unknown.closed);
         }
@@ -79,13 +79,13 @@ class ListenerHandlerTest {
         try (Fixture fixture = fixture(null)) {
             ConnectionProbe peer =
                     ConnectionProbe.message(new PeerInit("alice", Constants.ConnectionType.PEER, 1).toByteArray());
-            fixture.handler.handleConnection(null, peer.proxy);
+            fixture.handler.handleConnection(peer.proxy);
             assertEquals("alice", fixture.peer.addedUsername);
             assertSame(peer.proxy, fixture.peer.addedConnection);
 
             ConnectionProbe distributed =
                     ConnectionProbe.message(new PeerInit("bob", Constants.ConnectionType.DISTRIBUTED, 2).toByteArray());
-            fixture.handler.handleConnection(null, distributed.proxy);
+            fixture.handler.handleConnection(distributed.proxy);
             assertEquals("bob", fixture.distributed.addedUsername);
             assertSame(distributed.proxy, fixture.distributed.addedConnection);
         }
@@ -101,7 +101,7 @@ class ListenerHandlerTest {
             ConnectionProbe incoming =
                     ConnectionProbe.message(new PeerInit("alice", Constants.ConnectionType.TRANSFER, 7).toByteArray());
 
-            fixture.handler.handleConnection(null, incoming.proxy);
+            fixture.handler.handleConnection(incoming.proxy);
 
             assertSame(transferConnection, wait.await());
             assertEquals(7, fixture.peer.transferToken);
@@ -117,7 +117,7 @@ class ListenerHandlerTest {
             ConnectionProbe incoming =
                     ConnectionProbe.message(new PeerInit("alice", Constants.ConnectionType.TRANSFER, 7).toByteArray());
 
-            fixture.handler.handleConnection(null, incoming.proxy);
+            fixture.handler.handleConnection(incoming.proxy);
 
             assertEquals("Transfer connection rejected: unknown token", transfer.disconnectMessage);
         }
@@ -130,7 +130,7 @@ class ListenerHandlerTest {
             WaitKey peerKey = new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, "alice", 8);
             Wait<Connection> peerWait = fixture.waiter.registerIndefinitely(peerKey, Connection.class, null);
             ConnectionProbe peer = ConnectionProbe.message(new PierceFirewall(8).toByteArray());
-            fixture.handler.handleConnection(null, peer.proxy);
+            fixture.handler.handleConnection(peer.proxy);
             assertSame(peer.proxy, peerWait.await());
 
             fixture.peer.pending = Map.of();
@@ -139,7 +139,7 @@ class ListenerHandlerTest {
             Wait<Connection> distributedWait =
                     fixture.waiter.registerIndefinitely(distributedKey, Connection.class, null);
             ConnectionProbe distributed = ConnectionProbe.message(new PierceFirewall(9).toByteArray());
-            fixture.handler.handleConnection(null, distributed.proxy);
+            fixture.handler.handleConnection(distributed.proxy);
             assertSame(distributed.proxy, distributedWait.await());
         }
     }
@@ -160,7 +160,7 @@ class ListenerHandlerTest {
             fixture.peer.pending = Map.of(8, "alice");
             ConnectionProbe peer = ConnectionProbe.message(new PierceFirewall(8).toByteArray());
 
-            fixture.handler.handleConnection(null, peer.proxy);
+            fixture.handler.handleConnection(peer.proxy);
 
             assertEquals("alice", fixture.peer.addedUsername);
             assertSame(peer.proxy, fixture.peer.addedConnection);
@@ -176,7 +176,7 @@ class ListenerHandlerTest {
         try (Fixture fixture = fixture(cache)) {
             ConnectionProbe connection = ConnectionProbe.message(new PierceFirewall(11).toByteArray());
 
-            fixture.handler.handleConnection(null, connection.proxy);
+            fixture.handler.handleConnection(connection.proxy);
 
             assertEquals("alice", fixture.peer.addedUsername);
             assertSame(connection.proxy, fixture.peer.addedConnection);
@@ -190,7 +190,7 @@ class ListenerHandlerTest {
         try (Fixture fixture = fixture(null)) {
             ConnectionProbe connection = ConnectionProbe.message(new PierceFirewall(12).toByteArray());
 
-            fixture.handler.handleConnection(null, connection.proxy);
+            fixture.handler.handleConnection(connection.proxy);
 
             assertTrue(connection
                     .disconnectedException
@@ -205,7 +205,7 @@ class ListenerHandlerTest {
         try (Fixture fixture = fixture(null)) {
             ConnectionProbe connection = ConnectionProbe.message(new PeerInit("alice", "X", 1).toByteArray());
 
-            fixture.handler.handleConnection(null, connection.proxy);
+            fixture.handler.handleConnection(connection.proxy);
 
             assertNull(connection.disconnectedException);
             assertFalse(connection.closed);

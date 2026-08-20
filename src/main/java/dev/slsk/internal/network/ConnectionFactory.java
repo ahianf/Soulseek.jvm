@@ -39,7 +39,7 @@ public interface ConnectionFactory {
 
     MessageConnection getServerConnection(
             InetSocketAddress ipEndpoint,
-            ConnectionEventListener<Void> connectedEventHandler,
+            ConnectionEventListener<Connection> connectedEventHandler,
             ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedEventHandler,
             MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
             MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler,
@@ -48,7 +48,7 @@ public interface ConnectionFactory {
 
     default MessageConnection getServerConnection(
             InetSocketAddress ipEndpoint,
-            ConnectionEventListener<Void> connectedEventHandler,
+            ConnectionEventListener<Connection> connectedEventHandler,
             ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedEventHandler,
             MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
             MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler) {
@@ -64,7 +64,7 @@ public interface ConnectionFactory {
 
     default MessageConnection getServerConnection(
             InetSocketAddress ipEndpoint,
-            ConnectionEventListener<Void> connectedEventHandler,
+            ConnectionEventListener<Connection> connectedEventHandler,
             ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedEventHandler,
             MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
             MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler,

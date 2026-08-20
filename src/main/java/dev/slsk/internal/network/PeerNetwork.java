@@ -472,12 +472,11 @@ public final class PeerNetwork implements PeerConnectionManager {
                 options.get().transferConnectionOptions(),
                 incomingConnection.handoffTcpClient());
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.DIRECT));
-        connection.addDisconnectedListener(
-                (sender, eventData) -> diagnostic.debug("Transfer connection to " + username + " ("
-                        + connection.getIpEndpoint() + ") for token " + token
-                        + " disconnected: " + disconnectMessage(eventData)
-                        + ". (type: " + connection.getType() + ", id: "
-                        + connection.getId() + ")"));
+        connection.addDisconnectedListener(eventData -> diagnostic.debug("Transfer connection to " + username + " ("
+                + connection.getIpEndpoint() + ") for token " + token
+                + " disconnected: " + disconnectMessage(eventData)
+                + ". (type: " + connection.getType() + ", id: "
+                + connection.getId() + ")"));
         diagnostic.debug("Inbound transfer connection to " + username + " ("
                 + connection.getIpEndpoint() + ") for token " + token
                 + " handed off. (old: " + incomingConnection.getId()
@@ -513,7 +512,7 @@ public final class PeerNetwork implements PeerConnectionManager {
                 response.getIpEndpoint(), options.get().transferConnectionOptions());
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.INDIRECT));
         connection.addDisconnectedListener(
-                (sender, eventData) -> diagnostic.debug("Transfer connection to " + response.getUsername() + " ("
+                eventData -> diagnostic.debug("Transfer connection to " + response.getUsername() + " ("
                         + response.getIpEndpoint() + ") for token "
                         + response.getToken() + " disconnected: "
                         + disconnectMessage(eventData) + ". (type: "
@@ -839,7 +838,7 @@ public final class PeerNetwork implements PeerConnectionManager {
                 ipEndpoint, options.get().transferConnectionOptions());
         connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT));
         connection.addDisconnectedListener(
-                (sender, eventData) -> diagnostic.debug("Transfer connection for token " + token + " to "
+                eventData -> diagnostic.debug("Transfer connection for token " + token + " to "
                         + ipEndpoint + " disconnected: "
                         + disconnectMessage(eventData) + ". (type: "
                         + connection.getType() + ", id: "
@@ -887,7 +886,7 @@ public final class PeerNetwork implements PeerConnectionManager {
                         + ", new: " + connection.getId() + ")");
                 connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.INDIRECT));
                 connection.addDisconnectedListener(
-                        (sender, eventData) -> diagnostic.debug("Transfer connection for token " + token + " ("
+                        eventData -> diagnostic.debug("Transfer connection for token " + token + " ("
                                 + accepted.getIpEndpoint()
                                 + ") disconnected: "
                                 + disconnectMessage(eventData) + ". (type: "
@@ -955,8 +954,8 @@ public final class PeerNetwork implements PeerConnectionManager {
         }
     }
 
-    private void messageConnectionDisconnected(Connection sender, ConnectionDisconnectedEvent eventData) {
-        MessageConnection connection = (MessageConnection) sender;
+    private void messageConnectionDisconnected(ConnectionDisconnectedEvent eventData) {
+        MessageConnection connection = (MessageConnection) eventData.connection();
         diagnostic.debug("Message connection to " + connection.getUsername() + " ("
                 + connection.getIpEndpoint() + ") disconnected. (type: "
                 + connection.getType() + ", id: " + connection.getId()
@@ -976,12 +975,12 @@ public final class PeerNetwork implements PeerConnectionManager {
         diagnostic.debug("Message connection cache now contains " + messageConnections.size() + " connections.");
     }
 
-    private void messageConnectionProvisionalDisconnected(Connection sender, ConnectionDisconnectedEvent eventData) {
-        sender.close();
+    private void messageConnectionProvisionalDisconnected(ConnectionDisconnectedEvent eventData) {
+        eventData.connection().close();
     }
 
     private void raiseDiagnostic(DiagnosticEvent eventData) {
-        diagnosticListeners.forEach(listener -> listener.handle(this, eventData));
+        diagnosticListeners.forEach(listener -> listener.accept(eventData));
     }
 
     private static int littleEndianInteger(byte[] bytes) {
@@ -1000,10 +999,10 @@ public final class PeerNetwork implements PeerConnectionManager {
     }
 
     private static String disconnectMessage(ConnectionDisconnectedEvent eventData) {
-        if (eventData.getException() != null) {
-            return Failures.message(eventData.getException());
+        if (eventData.exception() != null) {
+            return Failures.message(eventData.exception());
         }
-        return eventData.getMessage();
+        return eventData.message();
     }
 
     private static final class LinkedCancellation implements AutoCloseable {

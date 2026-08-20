@@ -5,45 +5,27 @@
 package dev.slsk.internal.network.tcp;
 
 /** Data describing a TCP connection state change. */
-public final class ConnectionStateChangedEvent extends ConnectionEvent {
-
-    private final ConnectionState currentState;
-    private final Exception exception;
-    private final String message;
-    private final ConnectionState previousState;
+public record ConnectionStateChangedEvent(
+        Connection connection,
+        ConnectionState previousState,
+        ConnectionState currentState,
+        String message,
+        Exception exception)
+        implements ConnectionEvent {
 
     /** Creates state-change data without optional details. */
     public ConnectionStateChangedEvent(ConnectionState previousState, ConnectionState currentState) {
-        this(previousState, currentState, null, null);
+        this(null, previousState, currentState, null, null);
     }
 
     /** Creates state-change data with a message. */
     public ConnectionStateChangedEvent(ConnectionState previousState, ConnectionState currentState, String message) {
-        this(previousState, currentState, message, null);
+        this(null, previousState, currentState, message, null);
     }
 
     /** Creates state-change data. */
     public ConnectionStateChangedEvent(
             ConnectionState previousState, ConnectionState currentState, String message, Exception exception) {
-        this.previousState = previousState;
-        this.currentState = currentState;
-        this.message = message;
-        this.exception = exception;
-    }
-
-    public ConnectionState getCurrentState() {
-        return currentState;
-    }
-
-    public Exception getException() {
-        return exception;
-    }
-
-    public String getMessage() {
-        return message;
-    }
-
-    public ConnectionState getPreviousState() {
-        return previousState;
+        this(null, previousState, currentState, message, exception);
     }
 }

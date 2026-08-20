@@ -168,7 +168,7 @@ public final class SocketListener implements Listener {
                 ? new SocketConnection(endpoint, connectionOptions, new TcpClientAdapter(client), monitor)
                 : new SocketConnection(endpoint, connectionOptions, new TcpClientAdapter(client), monitor, executor);
         for (ListenerAcceptedEventListener listener : acceptedListeners) {
-            listener.handle(this, connection);
+            listener.accept(connection);
         }
     }
 }

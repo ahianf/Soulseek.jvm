@@ -5,27 +5,16 @@
 package dev.slsk.internal.network.tcp;
 
 /** Data describing a TCP disconnection. */
-public final class ConnectionDisconnectedEvent extends ConnectionEvent {
-
-    private final Exception exception;
-    private final String message;
+public record ConnectionDisconnectedEvent(Connection connection, String message, Exception exception)
+        implements ConnectionEvent {
 
     /** Creates a disconnection without an exception. */
     public ConnectionDisconnectedEvent(String message) {
-        this(message, null);
+        this(null, message, null);
     }
 
     /** Creates disconnection event data. */
     public ConnectionDisconnectedEvent(String message, Exception exception) {
-        this.message = message;
-        this.exception = exception;
-    }
-
-    public Exception getException() {
-        return exception;
-    }
-
-    public String getMessage() {
-        return message;
+        this(null, message, exception);
     }
 }

@@ -1128,8 +1128,8 @@ class EngineUploadTest {
                 writeCalls++;
                 writeLength = length;
                 if (disconnectOnWrite != null) {
-                    disconnectedListener.handle(
-                            proxy, new ConnectionDisconnectedEvent("connection lost", disconnectOnWrite));
+                    disconnectedListener.accept(
+                            new ConnectionDisconnectedEvent(proxy, "connection lost", disconnectOnWrite));
                     // Parks like a write to a peer that has stopped reading.
                     new CompletableFuture<Void>().join();
                 }
@@ -1155,7 +1155,7 @@ class EngineUploadTest {
                         throw new IOException("stream ended early");
                     }
                     if (dataWrittenListener != null) {
-                        dataWrittenListener.handle(proxy, new ConnectionDataEvent(transferred, length));
+                        dataWrittenListener.accept(new ConnectionDataEvent(proxy, transferred, length));
                     }
                 }
                 size = transferred;

@@ -504,8 +504,8 @@ class PeerMessageHandlerTest {
         Fixture fixture = new Fixture(new SoulseekClientOptions());
         List<DownloadDeniedEvent> deniedEvents = new ArrayList<>();
         List<DownloadFailedEvent> failedEvents = new ArrayList<>();
-        fixture.handler.addDownloadDeniedListener((sender, eventData) -> deniedEvents.add(eventData));
-        fixture.handler.addDownloadFailedListener((sender, eventData) -> failedEvents.add(eventData));
+        fixture.handler.addDownloadDeniedListener(eventData -> deniedEvents.add(eventData));
+        fixture.handler.addDownloadFailedListener(eventData -> failedEvents.add(eventData));
 
         fixture.handler.handleMessageRead(
                 fixture.connection.proxy, new UploadDenied(FILENAME, "No slot").toByteArray());
@@ -528,20 +528,20 @@ class PeerMessageHandlerTest {
     void receiptAndWrittenCallbacksCorrelateBrowseAndLogCodes() {
         Fixture fixture = new Fixture(new SoulseekClientOptions());
         byte[] response = new BrowseResponse(List.of()).toByteArray();
-        MessageReceivedEvent received = new MessageReceivedEvent(response.length, Arrays.copyOfRange(response, 4, 8));
+        MessageReceivedEvent received =
+                new MessageReceivedEvent(fixture.connection.proxy, response.length, Arrays.copyOfRange(response, 4, 8));
 
-        fixture.handler.handleMessageReceived(fixture.connection.proxy, received);
+        fixture.handler.handleMessageReceived(received);
         Object result =
                 fixture.waiter.completed.get(new WaitKey(Constants.WaitKey.BROWSE_RESPONSE_CONNECTION, USERNAME));
         BrowseResponseConnection browse = assertInstanceOf(BrowseResponseConnection.class, result);
         assertSame(received, browse.eventData());
         assertSame(fixture.connection.proxy, browse.connection());
 
-        fixture.handler.handleMessageReceived(
-                fixture.connection.proxy,
-                new MessageReceivedEvent(8, Arrays.copyOfRange(new BrowseRequest().toByteArray(), 4, 8)));
+        fixture.handler.handleMessageReceived(new MessageReceivedEvent(
+                fixture.connection.proxy, 8, Arrays.copyOfRange(new BrowseRequest().toByteArray(), 4, 8)));
         fixture.handler.handleMessageWritten(
-                fixture.connection.proxy, new MessageEvent(new BrowseRequest().toByteArray()));
+                new MessageEvent(fixture.connection.proxy, new BrowseRequest().toByteArray()));
         assertTrue(fixture.diagnostic.contains("Peer message sent: BROWSE_REQUEST"));
     }
 

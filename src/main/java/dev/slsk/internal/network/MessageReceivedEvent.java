@@ -4,22 +4,12 @@
 
 package dev.slsk.internal.network;
 
-/** Metadata raised after a message header is received. */
-public final class MessageReceivedEvent extends MessageConnectionEvent {
-    private final byte[] code;
-    private final long length;
+/** Metadata emitted after a message header is received. */
+public record MessageReceivedEvent(MessageConnection connection, long length, byte[] code)
+        implements MessageConnectionEvent {
 
     /** Creates received-message header data. */
     public MessageReceivedEvent(long length, byte[] code) {
-        this.length = length;
-        this.code = code;
-    }
-
-    public byte[] getCode() {
-        return code;
-    }
-
-    public long getLength() {
-        return length;
+        this(null, length, code);
     }
 }

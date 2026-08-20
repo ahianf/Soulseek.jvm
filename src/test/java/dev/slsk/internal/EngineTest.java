@@ -542,11 +542,11 @@ class EngineTest {
         }
 
         private void raiseDenied(DownloadDeniedEvent eventData) {
-            denied.handle(proxy, eventData);
+            denied.accept(eventData);
         }
 
         private void raiseFailed(DownloadFailedEvent eventData) {
-            failed.handle(proxy, eventData);
+            failed.accept(eventData);
         }
     }
 
@@ -564,7 +564,7 @@ class EngineTest {
 
         @SuppressWarnings("unchecked")
         private <T> void raise(ServerMessageEvent event, T eventData) {
-            ((ServerMessageHandlerEventListener<T>) listeners.get(event)).handle(proxy, eventData);
+            ((ServerMessageHandlerEventListener<T>) listeners.get(event)).accept(eventData);
         }
     }
 
@@ -581,7 +581,7 @@ class EngineTest {
         }
 
         private void raiseDiagnostic(DiagnosticEvent eventData) {
-            diagnostic.handle(proxy, eventData);
+            diagnostic.accept(eventData);
         }
     }
 
@@ -634,7 +634,7 @@ class EngineTest {
             dev.slsk.internal.network.DistributedManagerEventListener<T> listener =
                     (dev.slsk.internal.network.DistributedManagerEventListener<T>)
                             eventListeners.get(registrationMethod);
-            listener.handle(proxy, eventData);
+            listener.accept(eventData);
         }
     }
 

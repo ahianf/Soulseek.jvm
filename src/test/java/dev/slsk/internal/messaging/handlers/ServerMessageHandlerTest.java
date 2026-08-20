@@ -122,7 +122,7 @@ class ServerMessageHandlerTest {
                 new MessageBuilder().writeCode(MessageCode.Server.ROOM_LIST).build());
         assertTrue(fixture.diagnostic.containsWarning("Error handling server message"));
 
-        fixture.handler.handleMessageWritten(null, new MessageEvent(searchRequest(USERNAME, TOKEN, "query")));
+        fixture.handler.handleMessageWritten(new MessageEvent(null, searchRequest(USERNAME, TOKEN, "query")));
         assertTrue(fixture.diagnostic.contains("Server message sent: FILE_SEARCH"));
 
         AtomicInteger generated = new AtomicInteger();
@@ -136,7 +136,7 @@ class ServerMessageHandlerTest {
                 () -> fixture.client.distributed,
                 fixture.client::distributedMessages,
                 () -> fixture.client.responder);
-        defaultDiagnostic.addDiagnosticGeneratedListener((sender, eventData) -> generated.incrementAndGet());
+        defaultDiagnostic.addDiagnosticGeneratedListener(eventData -> generated.incrementAndGet());
         defaultDiagnostic.handleMessageRead(
                 null,
                 new MessageBuilder()
@@ -149,8 +149,7 @@ class ServerMessageHandlerTest {
     void scalarServerInfoAndBasicWaitsUseSourceKeys() {
         Fixture fixture = new Fixture(options(false, false));
         List<ServerInfo> info = new ArrayList<>();
-        fixture.handler.<ServerInfo>addListener(
-                ServerMessageEvent.SERVER_INFO_RECEIVED, (sender, value) -> info.add(value));
+        fixture.handler.<ServerInfo>addListener(ServerMessageEvent.SERVER_INFO_RECEIVED, value -> info.add(value));
 
         fixture.handle(integer(MessageCode.Server.PARENT_MIN_SPEED, 11));
         fixture.handle(integer(MessageCode.Server.PARENT_SPEED_RATIO, 22));
@@ -181,9 +180,9 @@ class ServerMessageHandlerTest {
         AtomicReference<UserStatus> statusEvent = new AtomicReference<>();
         AtomicReference<UserStatistics> statisticsEvent = new AtomicReference<>();
         fixture.handler.<UserStatus>addListener(
-                ServerMessageEvent.USER_STATUS_CHANGED, (sender, value) -> statusEvent.set(value));
+                ServerMessageEvent.USER_STATUS_CHANGED, value -> statusEvent.set(value));
         fixture.handler.<UserStatistics>addListener(
-                ServerMessageEvent.USER_STATISTICS_CHANGED, (sender, value) -> statisticsEvent.set(value));
+                ServerMessageEvent.USER_STATISTICS_CHANGED, value -> statisticsEvent.set(value));
 
         byte[] ip = new byte[] {1, 0, 0, 127};
         fixture.handle(new MessageBuilder()
@@ -233,7 +232,7 @@ class ServerMessageHandlerTest {
     void roomJoinLeaveAndRejectionPreserveCorrelationAndEvents() {
         Fixture fixture = new Fixture(options(false, false));
         AtomicReference<RoomLeftEvent> left = new AtomicReference<>();
-        fixture.handler.<RoomLeftEvent>addListener(ServerMessageEvent.ROOM_LEFT, (sender, value) -> left.set(value));
+        fixture.handler.<RoomLeftEvent>addListener(ServerMessageEvent.ROOM_LEFT, value -> left.set(value));
 
         fixture.handle(new MessageBuilder()
                 .writeCode(MessageCode.Server.JOIN_ROOM)
@@ -262,8 +261,7 @@ class ServerMessageHandlerTest {
     void roomListCompletesWaitAndRaisesSameSnapshot() {
         Fixture fixture = new Fixture(options(false, false));
         AtomicReference<RoomList> event = new AtomicReference<>();
-        fixture.handler.<RoomList>addListener(
-                ServerMessageEvent.ROOM_LIST_RECEIVED, (sender, value) -> event.set(value));
+        fixture.handler.<RoomList>addListener(ServerMessageEvent.ROOM_LIST_RECEIVED, value -> event.set(value));
 
         fixture.handle(roomList());
 
@@ -332,7 +330,7 @@ class ServerMessageHandlerTest {
                 listen(fixture, ServerMessageEvent.PRIVATE_MESSAGE_RECEIVED);
         List<PrivilegeNotificationReceivedEvent> privileges = new ArrayList<>();
         fixture.handler.<PrivilegeNotificationReceivedEvent>addListener(
-                ServerMessageEvent.PRIVILEGE_NOTIFICATION_RECEIVED, (sender, value) -> privileges.add(value));
+                ServerMessageEvent.PRIVILEGE_NOTIFICATION_RECEIVED, value -> privileges.add(value));
 
         fixture.handle(new MessageBuilder()
                 .writeCode(MessageCode.Server.PRIVATE_MESSAGE)
@@ -385,8 +383,7 @@ class ServerMessageHandlerTest {
         AtomicReference<List<String>> excluded = listen(fixture, ServerMessageEvent.EXCLUDED_SEARCH_PHRASES_RECEIVED);
         AtomicReference<String> global = listen(fixture, ServerMessageEvent.GLOBAL_MESSAGE_RECEIVED);
         AtomicInteger kicked = new AtomicInteger();
-        fixture.handler.<Void>addListener(
-                ServerMessageEvent.KICKED_FROM_SERVER, (sender, value) -> kicked.incrementAndGet());
+        fixture.handler.<Void>addListener(ServerMessageEvent.KICKED_FROM_SERVER, value -> kicked.incrementAndGet());
 
         fixture.handle(stringList(MessageCode.Server.PRIVILEGED_USERS, "one", "two"));
         fixture.handle(stringList(MessageCode.Server.EXCLUDED_SEARCH_PHRASES, "bad", "phrase"));
@@ -446,7 +443,7 @@ class ServerMessageHandlerTest {
         Fixture fixture = new Fixture(options(false, false));
         AtomicInteger resets = new AtomicInteger();
         fixture.handler.<Void>addListener(
-                ServerMessageEvent.DISTRIBUTED_NETWORK_RESET, (sender, value) -> resets.incrementAndGet());
+                ServerMessageEvent.DISTRIBUTED_NETWORK_RESET, value -> resets.incrementAndGet());
         fixture.handle(netInfo());
         assertTrue(Eventually.holds(() -> !fixture.distributed.parents.isEmpty()));
         fixture.handle(new MessageBuilder()
@@ -469,7 +466,7 @@ class ServerMessageHandlerTest {
         Fixture fixture = new Fixture(options(false, false));
         List<UserCannotConnectEvent> events = new ArrayList<>();
         fixture.handler.<UserCannotConnectEvent>addListener(
-                ServerMessageEvent.USER_CANNOT_CONNECT, (sender, value) -> events.add(value));
+                ServerMessageEvent.USER_CANNOT_CONNECT, value -> events.add(value));
 
         fixture.handle(new MessageBuilder()
                 .writeCode(MessageCode.Server.CANNOT_CONNECT)
@@ -726,7 +723,7 @@ class ServerMessageHandlerTest {
 
     private static <T> AtomicReference<T> listen(Fixture fixture, ServerMessageEvent event) {
         AtomicReference<T> result = new AtomicReference<>();
-        fixture.handler.<T>addListener(event, (sender, value) -> result.set(value));
+        fixture.handler.<T>addListener(event, value -> result.set(value));
         return result;
     }
 

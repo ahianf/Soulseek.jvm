@@ -81,7 +81,7 @@ class SearchResponderTest {
         Fixture fixture = fixture(null);
         DefaultSearchResponder responder = responder(fixture.client, null);
         AtomicReference<DiagnosticEvent> event = new AtomicReference<>();
-        DiagnosticEventListener listener = (sender, args) -> event.set(args);
+        DiagnosticEventListener listener = args -> event.set(args);
         responder.addDiagnosticGeneratedListener(listener);
         responder.getDiagnostic().info("test");
         assertEquals("test", event.get().message());
@@ -98,7 +98,7 @@ class SearchResponderTest {
         cache.removed = CacheLookupResult.found(record);
         Fixture fixture = fixture(cache);
         AtomicReference<SearchRequestResponseEvent> failed = new AtomicReference<>();
-        fixture.responder.addResponseDeliveryFailedListener((sender, args) -> failed.set(args));
+        fixture.responder.addResponseDeliveryFailedListener(args -> failed.set(args));
         assertTrue(fixture.responder.tryDiscard(9));
         assertEquals(9, cache.lastRemovedToken);
         assertEquals("alice", failed.get().username());
@@ -114,7 +114,7 @@ class SearchResponderTest {
     void requestEventAlwaysPrecedesNullResolverResult() {
         Fixture fixture = fixture(null);
         AtomicReference<SearchRequestEvent> request = new AtomicReference<>();
-        fixture.responder.addRequestReceivedListener((sender, args) -> request.set(args));
+        fixture.responder.addRequestReceivedListener(args -> request.set(args));
 
         assertFalse(fixture.responder.tryRespond("alice", 4, "query"));
         assertEquals("alice", request.get().username());
@@ -138,7 +138,7 @@ class SearchResponderTest {
         AtomicReference<byte[]> written = new AtomicReference<>();
         fixture.manager.connection = messageConnection(written, CompletableFuture.completedFuture(null));
         AtomicReference<SearchRequestResponseEvent> delivered = new AtomicReference<>();
-        fixture.responder.addResponseDeliveredListener((sender, args) -> delivered.set(args));
+        fixture.responder.addResponseDeliveredListener(args -> delivered.set(args));
 
         assertTrue(fixture.responder.tryRespond("alice", 3, "query"));
 
@@ -177,7 +177,7 @@ class SearchResponderTest {
         Fixture fixture = catalogFixture(MATCHES, cache);
         fixture.manager.connectionFailure = new RuntimeException("connect");
         AtomicReference<SearchRequestResponseEvent> failed = new AtomicReference<>();
-        fixture.responder.addResponseDeliveryFailedListener((sender, args) -> failed.set(args));
+        fixture.responder.addResponseDeliveryFailedListener(args -> failed.set(args));
 
         assertFalse(fixture.responder.tryRespond("alice", 3, "query"));
 
@@ -229,7 +229,7 @@ class SearchResponderTest {
         AtomicReference<byte[]> written = new AtomicReference<>();
         fixture.manager.connection = messageConnection(written, CompletableFuture.completedFuture(null));
         AtomicInteger delivered = new AtomicInteger();
-        fixture.responder.addResponseDeliveredListener((sender, args) -> delivered.incrementAndGet());
+        fixture.responder.addResponseDeliveredListener(args -> delivered.incrementAndGet());
 
         assertTrue(fixture.responder.tryRespond(44));
         assertArrayEquals(RESPONSE.toByteArray(), written.get());
@@ -246,7 +246,7 @@ class SearchResponderTest {
         fixture.manager.connection =
                 messageConnection(new AtomicReference<>(), CompletableFuture.failedFuture(failure));
         AtomicReference<SearchRequestResponseEvent> failed = new AtomicReference<>();
-        fixture.responder.addResponseDeliveryFailedListener((sender, args) -> failed.set(args));
+        fixture.responder.addResponseDeliveryFailedListener(args -> failed.set(args));
 
         assertFalse(fixture.responder.tryRespond(44));
         assertSame(RESPONSE, failed.get().searchResponse());

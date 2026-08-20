@@ -676,7 +676,7 @@ class EnginePeerRequestTest {
         }
 
         private void raiseDisconnected(String message) {
-            disconnectedListener.handle(proxy, new ConnectionDisconnectedEvent(message));
+            disconnectedListener.accept(new ConnectionDisconnectedEvent(proxy, message, null));
         }
     }
 

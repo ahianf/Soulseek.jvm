@@ -240,7 +240,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
         // single thread.
         byte[][] codeHolder = new byte[1][];
         ConnectionEventListener<ConnectionDataEvent> payloadProgress =
-                (sender, args) -> raiseMessageDataRead(codeHolder[0], args.getCurrentLength(), args.getTotalLength());
+                event -> raiseMessageDataRead(codeHolder[0], event.currentLength(), event.totalLength());
         try {
             while (!isDisposed()) {
                 ByteArrayOutputStream message = new ByteArrayOutputStream();
@@ -274,44 +274,44 @@ public final class DefaultMessageConnection extends SocketConnection implements 
     }
 
     private void bindConnectedReadLoop() {
-        addConnectedListener((sender, args) -> startReadLoop());
+        addConnectedListener(connection -> startReadLoop());
     }
 
     private void raiseMessageDataRead(byte[] code, long currentLength, long totalLength) {
-        MessageDataEvent eventData = new MessageDataEvent(code, currentLength, totalLength);
+        MessageDataEvent eventData = new MessageDataEvent(this, code, currentLength, totalLength);
         dispatch(
                 () -> {
                     for (MessageConnectionEventListener<MessageDataEvent> listener : messageDataReadListeners) {
-                        listener.handle(this, eventData);
+                        listener.accept(eventData);
                     }
                 },
                 CancellationSignal.none());
     }
 
     private void raiseMessageReceived(long length, byte[] code) {
-        MessageReceivedEvent eventData = new MessageReceivedEvent(length, code);
+        MessageReceivedEvent eventData = new MessageReceivedEvent(this, length, code);
         for (MessageConnectionEventListener<MessageReceivedEvent> listener : messageReceivedListeners) {
-            listener.handle(this, eventData);
+            listener.accept(eventData);
         }
     }
 
     private void raiseMessageRead(byte[] message) {
-        MessageEvent eventData = new MessageEvent(message);
+        MessageEvent eventData = new MessageEvent(this, message);
         dispatch(
                 () -> {
                     for (MessageConnectionEventListener<MessageEvent> listener : messageReadListeners) {
-                        listener.handle(this, eventData);
+                        listener.accept(eventData);
                     }
                 },
                 CancellationSignal.none());
     }
 
     private void raiseMessageWritten(byte[] message, CancellationSignal cancellationSignal) {
-        MessageEvent eventData = new MessageEvent(message);
+        MessageEvent eventData = new MessageEvent(this, message);
         dispatch(
                 () -> {
                     for (MessageConnectionEventListener<MessageEvent> listener : messageWrittenListeners) {
-                        listener.handle(this, eventData);
+                        listener.accept(eventData);
                     }
                 },
                 cancellationSignal);

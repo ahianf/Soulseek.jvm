@@ -92,13 +92,13 @@ class ConnectionFactoryTest {
         MessageConnection connection = new DefaultConnectionFactory(Monitors.shared())
                 .getServerConnection(
                         ENDPOINT,
-                        (sender, args) -> connected.incrementAndGet(),
-                        (sender, args) -> disconnected.incrementAndGet(),
-                        (sender, args) -> {
+                        args -> connected.incrementAndGet(),
+                        args -> disconnected.incrementAndGet(),
+                        args -> {
                             read.incrementAndGet();
                             readEvent.countDown();
                         },
-                        (sender, args) -> written.incrementAndGet(),
+                        args -> written.incrementAndGet(),
                         options,
                         client);
 

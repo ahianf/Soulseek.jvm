@@ -4,5 +4,8 @@
 
 package dev.slsk.internal.network;
 
-/** Base type for message-connection events. */
-public abstract class MessageConnectionEvent {}
+/** Base type for message-connection event payloads. */
+public sealed interface MessageConnectionEvent permits MessageDataEvent, MessageEvent, MessageReceivedEvent {
+    /** Returns the connection that emitted this event, when known. */
+    MessageConnection connection();
+}

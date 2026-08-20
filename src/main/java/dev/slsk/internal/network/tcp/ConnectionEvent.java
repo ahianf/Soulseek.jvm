@@ -4,5 +4,9 @@
 
 package dev.slsk.internal.network.tcp;
 
-/** Base type for internal TCP connection events. */
-public abstract class ConnectionEvent {}
+/** Base type for internal TCP connection event payloads. */
+public sealed interface ConnectionEvent
+        permits ConnectionDataEvent, ConnectionDisconnectedEvent, ConnectionStateChangedEvent {
+    /** Returns the connection that emitted this event, when known. */
+    Connection connection();
+}

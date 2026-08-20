@@ -4,9 +4,8 @@
 
 package dev.slsk.internal.network.tcp;
 
+import java.util.function.Consumer;
+
 /** Handles a connection event. */
 @FunctionalInterface
-public interface ConnectionEventListener<T> {
-    /** Handles an event raised by a connection. */
-    void handle(Connection sender, T eventData);
-}
+public interface ConnectionEventListener<T> extends Consumer<T> {}

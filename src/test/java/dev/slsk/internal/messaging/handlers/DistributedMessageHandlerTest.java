@@ -215,9 +215,9 @@ class DistributedMessageHandlerTest {
     void writtenMessageCallbacksLogNonPingCodes() {
         Fixture fixture = new Fixture(true);
         ConnectionProbe connection = new ConnectionProbe(USERNAME, ENDPOINT);
-        MessageEvent branch = new MessageEvent(new DistributedBranchLevel(1).toByteArray());
-        fixture.handler.handleChildMessageWritten(connection.proxy, branch);
-        fixture.handler.handleMessageWritten(connection.proxy, branch);
+        MessageEvent branch = new MessageEvent(connection.proxy, new DistributedBranchLevel(1).toByteArray());
+        fixture.handler.handleChildMessageWritten(branch);
+        fixture.handler.handleMessageWritten(branch);
 
         assertTrue(fixture.diagnostic.contains("Distributed child message sent"));
         assertTrue(fixture.diagnostic.contains("Distributed message sent"));

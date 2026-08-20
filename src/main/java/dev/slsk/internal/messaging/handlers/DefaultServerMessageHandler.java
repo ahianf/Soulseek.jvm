@@ -212,8 +212,8 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     }
 
     @Override
-    public void handleMessageRead(MessageConnection sender, MessageEvent eventData) {
-        handleMessageRead(sender, eventData.getMessage());
+    public void handleMessageRead(MessageEvent eventData) {
+        handleMessageRead(eventData.connection(), eventData.message());
     }
 
     @Override
@@ -433,8 +433,9 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     }
 
     @Override
-    public void handleMessageWritten(MessageConnection sender, MessageEvent eventData) {
-        MessageCode.Server code = new MessageReader<>(eventData.getMessage(), MessageCode.Server.class).readCode();
+    public void handleMessageWritten(MessageEvent eventData) {
+        MessageConnection connection = eventData.connection();
+        MessageCode.Server code = new MessageReader<>(eventData.message(), MessageCode.Server.class).readCode();
         diagnostic.debug("Server message sent: " + code);
     }
 
@@ -606,12 +607,12 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     private <T> void raise(ServerMessageEvent event, T eventData) {
         List<ServerMessageHandlerEventListener<?>> snapshot = new ArrayList<>(listeners.get(event));
         for (ServerMessageHandlerEventListener<?> listener : snapshot) {
-            ((ServerMessageHandlerEventListener<T>) listener).handle(this, eventData);
+            ((ServerMessageHandlerEventListener<T>) listener).accept(eventData);
         }
     }
 
     private void raiseDiagnostic(DiagnosticEvent eventData) {
-        diagnosticListeners.forEach(listener -> listener.handle(this, eventData));
+        diagnosticListeners.forEach(listener -> listener.accept(eventData));
     }
 
     private static int integer(byte[] message) {

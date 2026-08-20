@@ -166,8 +166,8 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     @Override
-    public void handleMessageRead(MessageConnection sender, MessageEvent eventData) {
-        handleMessageRead(sender, eventData.getMessage());
+    public void handleMessageRead(MessageEvent eventData) {
+        handleMessageRead(eventData.connection(), eventData.message());
     }
 
     /**
@@ -299,10 +299,11 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     @Override
-    public void handleMessageReceived(MessageConnection connection, MessageReceivedEvent eventData) {
+    public void handleMessageReceived(MessageReceivedEvent eventData) {
+        MessageConnection connection = eventData.connection();
         MessageCode.Peer code;
         try {
-            code = MessageCode.Peer.fromValue(ByteBuffer.wrap(eventData.getCode())
+            code = MessageCode.Peer.fromValue(ByteBuffer.wrap(eventData.code())
                     .order(ByteOrder.LITTLE_ENDIAN)
                     .getInt());
         } catch (IllegalArgumentException unknown) {
@@ -327,8 +328,9 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     @Override
-    public void handleMessageWritten(MessageConnection connection, MessageEvent eventData) {
-        MessageCode.Peer code = new MessageReader<>(eventData.getMessage(), MessageCode.Peer.class).readCode();
+    public void handleMessageWritten(MessageEvent eventData) {
+        MessageConnection connection = eventData.connection();
+        MessageCode.Peer code = new MessageReader<>(eventData.message(), MessageCode.Peer.class).readCode();
         diagnostic.debug("Peer message sent: " + code + " ("
                 + connection.getIpEndpoint() + ") (id: "
                 + connection.getId() + ")");
@@ -518,7 +520,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 new TransferRejectedException(denied.getMessage()));
         DownloadDeniedEvent eventData =
                 new DownloadDeniedEvent(connection.getUsername(), denied.getFilename(), denied.getMessage());
-        downloadDeniedListeners.forEach(listener -> listener.handle(this, eventData));
+        downloadDeniedListeners.forEach(listener -> listener.accept(eventData));
     }
 
     private void handleUploadFailed(MessageConnection connection, byte[] message) {
@@ -528,7 +530,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 new WaitKey(MessageCode.Peer.TRANSFER_REQUEST, connection.getUsername(), failed.getFilename()),
                 new TransferReportedFailedException("Download reported as failed by remote client"));
         DownloadFailedEvent eventData = new DownloadFailedEvent(connection.getUsername(), failed.getFilename());
-        downloadFailedListeners.forEach(listener -> listener.handle(this, eventData));
+        downloadFailedListeners.forEach(listener -> listener.accept(eventData));
     }
 
     /**
@@ -579,7 +581,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     private void raiseDiagnostic(DiagnosticEvent eventData) {
-        diagnosticListeners.forEach(listener -> listener.handle(this, eventData));
+        diagnosticListeners.forEach(listener -> listener.accept(eventData));
     }
 
     private static void closeQuietly(java.io.InputStream stream) {

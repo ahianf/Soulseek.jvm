@@ -134,16 +134,16 @@ class MessageConnectionTest {
         AtomicReference<MessageEvent> read = new AtomicReference<>();
         List<MessageDataEvent> progress = new ArrayList<>();
         CountDownLatch complete = new CountDownLatch(1);
-        connection.addMessageReceivedListener((sender, args) -> {
-            assertSame(connection, sender);
+        connection.addMessageReceivedListener(args -> {
+            assertSame(connection, args.connection());
             received.set(args);
         });
-        connection.addMessageDataReadListener((sender, args) -> {
-            assertSame(connection, sender);
+        connection.addMessageDataReadListener(args -> {
+            assertSame(connection, args.connection());
             progress.add(args);
         });
-        connection.addMessageReadListener((sender, args) -> {
-            assertSame(connection, sender);
+        connection.addMessageReadListener(args -> {
+            assertSame(connection, args.connection());
             read.set(args);
             complete.countDown();
         });
@@ -151,15 +151,15 @@ class MessageConnectionTest {
         connection.startReadingContinuously();
         assertTrue(complete.await(1, TimeUnit.SECONDS));
 
-        assertEquals(7, received.get().getLength());
-        assertSame(received.get().getCode(), progress.get(0).getCode());
-        assertArrayEquals(code, received.get().getCode());
-        assertArrayEquals(frame, read.get().getMessage());
+        assertEquals(7, received.get().length());
+        assertSame(received.get().code(), progress.get(0).code());
+        assertArrayEquals(code, received.get().code());
+        assertArrayEquals(frame, read.get().message());
         assertEquals(
                 List.of(0L, 1L, 2L, 3L),
-                progress.stream().map(MessageDataEvent::getCurrentLength).toList());
-        assertEquals(3, progress.get(0).getTotalLength());
-        assertEquals(100.0, progress.get(3).getPercentComplete());
+                progress.stream().map(MessageDataEvent::currentLength).toList());
+        assertEquals(3, progress.get(0).totalLength());
+        assertEquals(100.0, progress.get(3).percentComplete());
         connection.close();
     }
 
@@ -178,7 +178,7 @@ class MessageConnectionTest {
                 new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 4, client, Monitors.shared());
 
         IllegalStateException injected = new IllegalStateException("listener exploded");
-        connection.addMessageReceivedListener((sender, args) -> {
+        connection.addMessageReceivedListener(args -> {
             throw injected;
         });
 
@@ -199,8 +199,8 @@ class MessageConnectionTest {
                 "alice", ENDPOINT, OPTIONS, 1, new FakeTcpClient(stream, true), Monitors.shared());
         AtomicReference<byte[]> read = new AtomicReference<>();
         CountDownLatch complete = new CountDownLatch(1);
-        connection.addMessageReadListener((sender, args) -> {
-            read.set(args.getMessage());
+        connection.addMessageReadListener(args -> {
+            read.set(args.message());
             complete.countDown();
         });
 
@@ -223,15 +223,15 @@ class MessageConnectionTest {
         AtomicReference<CancellationSignal> tokenSeen = new AtomicReference<>();
         stream.tokenSeen = tokenSeen;
         CancellationSignal token = CancellationSignal.none();
-        connection.addMessageWrittenListener((sender, args) -> {
-            assertSame(connection, sender);
+        connection.addMessageWrittenListener(args -> {
+            assertSame(connection, args.connection());
             written.set(args);
         });
 
         connection.write(() -> bytes, token);
 
         assertArrayEquals(bytes, stream.writtenBytes());
-        assertSame(bytes, written.get().getMessage());
+        assertSame(bytes, written.get().message());
         assertSame(token, tokenSeen.get());
         connection.close();
     }
@@ -278,11 +278,11 @@ class MessageConnectionTest {
         MessageReceivedEvent received = new MessageReceivedEvent(5, code);
         MessageEvent complete = new MessageEvent(message);
 
-        assertSame(code, progress.getCode());
-        assertTrue(Double.isNaN(progress.getPercentComplete()));
-        assertSame(code, received.getCode());
-        assertEquals(5, received.getLength());
-        assertSame(message, complete.getMessage());
+        assertSame(code, progress.code());
+        assertTrue(Double.isNaN(progress.percentComplete()));
+        assertSame(code, received.code());
+        assertEquals(5, received.length());
+        assertSame(message, complete.message());
     }
 
     private static byte[] frame(byte[] code, byte[] payload) {

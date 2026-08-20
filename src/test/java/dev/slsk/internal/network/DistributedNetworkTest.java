@@ -118,9 +118,9 @@ class DistributedNetworkTest {
         AtomicInteger promoted = new AtomicInteger();
         AtomicInteger demoted = new AtomicInteger();
         AtomicInteger states = new AtomicInteger();
-        fixture.manager.addPromotedToBranchRootListener((sender, args) -> promoted.incrementAndGet());
-        fixture.manager.addDemotedFromBranchRootListener((sender, args) -> demoted.incrementAndGet());
-        fixture.manager.addStateChangedListener((sender, args) -> states.incrementAndGet());
+        fixture.manager.addPromotedToBranchRootListener(args -> promoted.incrementAndGet());
+        fixture.manager.addDemotedFromBranchRootListener(args -> demoted.incrementAndGet());
+        fixture.manager.addStateChangedListener(args -> states.incrementAndGet());
 
         fixture.manager.promoteToBranchRoot();
         fixture.manager.promoteToBranchRoot();
@@ -157,11 +157,11 @@ class DistributedNetworkTest {
         fixture.factory.distributedHandoff = child;
         AtomicInteger added = new AtomicInteger();
         AtomicInteger states = new AtomicInteger();
-        fixture.manager.addChildAddedListener((sender, args) -> {
+        fixture.manager.addChildAddedListener(args -> {
             assertEquals(USERNAME, args.username());
             added.incrementAndGet();
         });
-        fixture.manager.addStateChangedListener((sender, args) -> states.incrementAndGet());
+        fixture.manager.addStateChangedListener(args -> states.incrementAndGet());
 
         fixture.manager.addOrUpdateChildConnection(USERNAME, incoming.connection());
 
@@ -225,7 +225,7 @@ class DistributedNetworkTest {
         ConnectToPeerResponse response =
                 new ConnectToPeerResponse(USERNAME, Constants.ConnectionType.DISTRIBUTED, ENDPOINT, TOKEN, false);
         AtomicInteger added = new AtomicInteger();
-        fixture.manager.addChildAddedListener((sender, args) -> added.incrementAndGet());
+        fixture.manager.addChildAddedListener(args -> added.incrementAndGet());
 
         fixture.manager.getOrAddChildConnection(response);
         fixture.manager.getOrAddChildConnection(response);
@@ -268,7 +268,7 @@ class DistributedNetworkTest {
         fixture.manager.addOrUpdateChildConnection(
                 USERNAME, ConnectionProbe.connection(ENDPOINT).connection());
         AtomicInteger disconnected = new AtomicInteger();
-        fixture.manager.addChildDisconnectedListener((sender, args) -> {
+        fixture.manager.addChildDisconnectedListener(args -> {
             assertEquals(USERNAME, args.username());
             disconnected.incrementAndGet();
         });
@@ -399,12 +399,11 @@ class DistributedNetworkTest {
                 null);
 
         fixture.manager.handleParentCandidateMessage(
-                parent.messageConnection(), new MessageEvent(new DistributedBranchLevel(3).toByteArray()));
+                new MessageEvent(parent.messageConnection(), new DistributedBranchLevel(3).toByteArray()));
         fixture.manager.handleParentCandidateMessage(
-                parent.messageConnection(), new MessageEvent(new DistributedBranchRoot("root").toByteArray()));
-        fixture.manager.handleParentCandidateMessage(
-                parent.messageConnection(),
-                new MessageEvent(new DistributedSearchRequest("user", TOKEN, "query").toByteArray()));
+                new MessageEvent(parent.messageConnection(), new DistributedBranchRoot("root").toByteArray()));
+        fixture.manager.handleParentCandidateMessage(new MessageEvent(
+                parent.messageConnection(), new DistributedSearchRequest("user", TOKEN, "query").toByteArray()));
 
         assertEquals(3, level.await());
         assertEquals("root", root.await());
@@ -416,7 +415,7 @@ class DistributedNetworkTest {
         Fixture fixture = fixture();
         ConnectionProbe parent = ConnectionProbe.message(USERNAME, ENDPOINT);
 
-        fixture.manager.handleParentCandidateMessage(parent.messageConnection(), new MessageEvent(new byte[0]));
+        fixture.manager.handleParentCandidateMessage(new MessageEvent(parent.messageConnection(), new byte[0]));
 
         assertEquals(1, parent.disconnectCount);
         assertEquals(1, parent.closeCount);
@@ -430,13 +429,13 @@ class DistributedNetworkTest {
         fixture.factory.distributedDirect.put(ENDPOINT, parent);
         AtomicInteger adopted = new AtomicInteger();
         AtomicInteger states = new AtomicInteger();
-        fixture.manager.addParentAdoptedListener((sender, args) -> {
+        fixture.manager.addParentAdoptedListener(args -> {
             assertEquals(USERNAME, args.username());
             assertEquals(2, args.branchLevel());
             assertEquals("root", args.branchRoot());
             adopted.incrementAndGet();
         });
-        fixture.manager.addStateChangedListener((sender, args) -> states.incrementAndGet());
+        fixture.manager.addStateChangedListener(args -> states.incrementAndGet());
 
         fixture.manager.addParentConnection(List.of(new PeerEndpoint(USERNAME, ENDPOINT)));
 
@@ -524,7 +523,7 @@ class DistributedNetworkTest {
         fixture.factory.distributedDirect.put(ENDPOINT, parent);
         fixture.manager.addParentConnection(List.of(new PeerEndpoint(USERNAME, ENDPOINT)));
         AtomicInteger disconnected = new AtomicInteger();
-        fixture.manager.addParentDisconnectedListener((sender, args) -> {
+        fixture.manager.addParentDisconnectedListener(args -> {
             assertEquals(USERNAME, args.username());
             disconnected.incrementAndGet();
         });
@@ -650,7 +649,7 @@ class DistributedNetworkTest {
         @Override
         public MessageConnection getServerConnection(
                 InetSocketAddress ipEndpoint,
-                ConnectionEventListener<Void> connectedEventHandler,
+                ConnectionEventListener<Connection> connectedEventHandler,
                 ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedEventHandler,
                 MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
                 MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler,
@@ -857,13 +856,13 @@ class DistributedNetworkTest {
         }
 
         private void fireDisconnected(String text, Exception exception) {
-            ConnectionDisconnectedEvent eventData = new ConnectionDisconnectedEvent(text, exception);
-            disconnectedListeners.forEach(listener -> listener.handle(proxy, eventData));
+            ConnectionDisconnectedEvent eventData = new ConnectionDisconnectedEvent(proxy, text, exception);
+            disconnectedListeners.forEach(listener -> listener.accept(eventData));
         }
 
         private void fireMessageRead(byte[] bytes) {
-            MessageEvent eventData = new MessageEvent(bytes);
-            messageReadListeners.forEach(listener -> listener.handle(messageConnection(), eventData));
+            MessageEvent eventData = new MessageEvent(messageConnection(), bytes);
+            messageReadListeners.forEach(listener -> listener.accept(eventData));
         }
 
         @Override

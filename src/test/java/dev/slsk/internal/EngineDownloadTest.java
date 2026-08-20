@@ -1192,8 +1192,8 @@ class EngineDownloadTest {
                     readHook.run();
                 }
                 if (disconnectOnRead != null) {
-                    disconnectedListener.handle(
-                            proxy, new ConnectionDisconnectedEvent("connection lost", disconnectOnRead));
+                    disconnectedListener.accept(
+                            new ConnectionDisconnectedEvent(proxy, "connection lost", disconnectOnRead));
                     // Parks like a read from a peer that has stopped sending.
                     new CompletableFuture<Void>().join();
                 }
@@ -1220,7 +1220,7 @@ class EngineDownloadTest {
                         reporter.report(attempted, granted, actual);
                     }
                     if (dataReadListener != null) {
-                        dataReadListener.handle(proxy, new ConnectionDataEvent(transferred, length));
+                        dataReadListener.accept(new ConnectionDataEvent(proxy, transferred, length));
                     }
                 }
                 return null;

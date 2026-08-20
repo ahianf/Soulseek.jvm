@@ -4,8 +4,8 @@
 
 package dev.slsk.internal.network;
 
+import java.util.function.Consumer;
+
 /** Handles a distributed connection-manager event. */
 @FunctionalInterface
-public interface DistributedManagerEventListener<T> {
-    void handle(DistributedConnectionManager sender, T eventData);
-}
+public interface DistributedManagerEventListener<T> extends Consumer<T> {}

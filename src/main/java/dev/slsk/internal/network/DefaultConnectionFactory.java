@@ -57,7 +57,7 @@ public final class DefaultConnectionFactory implements ConnectionFactory {
     @Override
     public MessageConnection getServerConnection(
             InetSocketAddress ipEndpoint,
-            ConnectionEventListener<Void> connectedEventHandler,
+            ConnectionEventListener<Connection> connectedEventHandler,
             ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedEventHandler,
             MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
             MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler,

@@ -38,6 +38,7 @@ import dev.slsk.internal.network.DistributedConnectionManager;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.MessageConnectionEventListener;
 import dev.slsk.internal.network.MessageEvent;
+import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.internal.network.tcp.ConnectionEventListener;
 import dev.slsk.internal.options.SoulseekClientOptions;
@@ -166,13 +167,13 @@ class EngineConnectTest {
         fixture.connection.fireConnected = true;
         fixture.client.connect("127.0.0.1", 2271, "alice", "secret", CancellationSignal.none());
 
-        fixture.factory.messageRead.handle(fixture.connection.proxy, new MessageEvent(statistics("bob", 999_999)));
+        fixture.factory.messageRead.accept(new MessageEvent(fixture.connection.proxy, statistics("bob", 999_999)));
         assertEquals(
                 0,
                 fixture.client.transfers().advertisedUploadSpeed(),
                 "another user's statistics are not ours to advertise");
 
-        fixture.factory.messageRead.handle(fixture.connection.proxy, new MessageEvent(statistics("alice", 52_000)));
+        fixture.factory.messageRead.accept(new MessageEvent(fixture.connection.proxy, statistics("alice", 52_000)));
         assertEquals(
                 52_000,
                 fixture.client.transfers().advertisedUploadSpeed(),
@@ -291,9 +292,9 @@ class EngineConnectTest {
         assertTrue(fixture.factory.messageRead != null);
         assertTrue(fixture.factory.messageWritten != null);
 
-        fixture.factory.connected.handle(fixture.connection.proxy, null);
+        fixture.factory.connected.accept(fixture.connection.proxy);
         assertEquals(SoulseekClientState.CONNECTED, fixture.client.getState());
-        fixture.factory.disconnected.handle(fixture.connection.proxy, new ConnectionDisconnectedEvent("gone"));
+        fixture.factory.disconnected.accept(new ConnectionDisconnectedEvent(fixture.connection.proxy, "gone", null));
         assertEquals(SoulseekClientState.DISCONNECTED, fixture.client.getState());
         fixture.close();
     }
@@ -411,7 +412,7 @@ class EngineConnectTest {
                     throw synchronousConnectFailure;
                 }
                 if (fireConnected && factory.connected != null) {
-                    factory.connected.handle(proxy, null);
+                    factory.connected.accept(proxy);
                 }
                 // The configured outcome is raised as itself, which is what
                 // the blocking transport raises now.
@@ -446,7 +447,7 @@ class EngineConnectTest {
         private final MessageConnection connection;
         private InetSocketAddress endpoint;
         private dev.slsk.internal.options.ConnectionOptions options;
-        private ConnectionEventListener<Void> connected;
+        private ConnectionEventListener<Connection> connected;
         private ConnectionEventListener<ConnectionDisconnectedEvent> disconnected;
         private MessageConnectionEventListener<MessageEvent> messageRead;
         private MessageConnectionEventListener<MessageEvent> messageWritten;
@@ -462,7 +463,7 @@ class EngineConnectTest {
         private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("getServerConnection")) {
                 endpoint = (InetSocketAddress) arguments[0];
-                connected = (ConnectionEventListener<Void>) arguments[1];
+                connected = (ConnectionEventListener<Connection>) arguments[1];
                 disconnected = (ConnectionEventListener<ConnectionDisconnectedEvent>) arguments[2];
                 messageRead = (MessageConnectionEventListener<MessageEvent>) arguments[3];
                 messageWritten = (MessageConnectionEventListener<MessageEvent>) arguments[4];

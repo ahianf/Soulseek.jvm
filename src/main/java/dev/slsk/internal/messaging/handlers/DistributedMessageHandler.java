@@ -9,11 +9,11 @@ import dev.slsk.internal.network.MessageEvent;
 
 /** Handles messages on distributed parent and child connections. */
 public interface DistributedMessageHandler extends MessageHandler {
-    void handleChildMessageRead(MessageConnection sender, MessageEvent eventData);
+    void handleChildMessageRead(MessageEvent eventData);
 
     void handleChildMessageRead(MessageConnection sender, byte[] message);
 
-    void handleChildMessageWritten(MessageConnection sender, MessageEvent eventData);
+    void handleChildMessageWritten(MessageEvent eventData);
 
     void handleEmbeddedMessage(byte[] message);
 }

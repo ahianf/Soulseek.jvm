@@ -4,8 +4,8 @@
 
 package dev.slsk.internal.messaging.handlers;
 
+import java.util.function.Consumer;
+
 /** Handles a server-message-handler event. */
 @FunctionalInterface
-public interface ServerMessageHandlerEventListener<T> {
-    void handle(ServerMessageHandler sender, T eventData);
-}
+public interface ServerMessageHandlerEventListener<T> extends Consumer<T> {}

@@ -16,10 +16,10 @@ import java.util.concurrent.TimeoutException;
 /** Provides client connections for TCP network services. */
 public interface Connection extends AutoCloseable {
     /** Adds a connected-event listener. */
-    void addConnectedListener(ConnectionEventListener<Void> listener);
+    void addConnectedListener(ConnectionEventListener<Connection> listener);
 
     /** Removes a connected-event listener. */
-    void removeConnectedListener(ConnectionEventListener<Void> listener);
+    void removeConnectedListener(ConnectionEventListener<Connection> listener);
 
     /** Adds a data-read listener. */
     void addDataReadListener(ConnectionEventListener<ConnectionDataEvent> listener);

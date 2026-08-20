@@ -498,7 +498,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         demoteFromBranchRoot();
         DistributedParentEvent eventData = new DistributedParentEvent(
                 parentConnection.getUsername(), parentConnection.getIpEndpoint(), parentBranchLevel, parentBranchRoot);
-        parentAdoptedListeners.forEach(listener -> listener.handle(this, eventData));
+        parentAdoptedListeners.forEach(listener -> listener.accept(eventData));
         raiseStateChanged();
 
         parentCandidates = rejected.stream()
@@ -628,7 +628,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         if (branchRootNode) {
             branchRootNode = false;
             diagnostic.info("Demoted from distributed branch root.");
-            demotedListeners.forEach(listener -> listener.handle(this, null));
+            demotedListeners.forEach(listener -> listener.accept(null));
             raiseStateChanged();
         }
     }
@@ -681,7 +681,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         if (!branchRootNode && !hasParent()) {
             branchRootNode = true;
             diagnostic.info("Promoted to distributed branch root.");
-            promotedListeners.forEach(listener -> listener.handle(this, null));
+            promotedListeners.forEach(listener -> listener.accept(null));
             raiseStateChanged();
         }
     }
@@ -827,9 +827,10 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         }
     }
 
-    void handleParentCandidateMessage(MessageConnection connection, MessageEvent eventData) {
+    void handleParentCandidateMessage(MessageEvent eventData) {
+        MessageConnection connection = eventData.connection();
         try {
-            byte[] message = eventData.getMessage();
+            byte[] message = eventData.message();
             MessageCode.Distributed code = new MessageReader<>(message, MessageCode.Distributed.class).readCode();
             switch (code) {
                 case EMBEDDED_MESSAGE -> {
@@ -878,7 +879,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         incomingConnection.close();
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.DIRECT));
         attachChildMessageListeners(connection);
-        connection.addDisconnectedListener((sender, args) -> sender.close());
+        connection.addDisconnectedListener(event -> event.connection().close());
         boolean superseded = false;
 
         if (cached != null) {
@@ -939,7 +940,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 response.getUsername(), response.getIpEndpoint(), options.get().distributedConnectionOptions());
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.INDIRECT));
         attachChildMessageListeners(connection);
-        connection.addDisconnectedListener((sender, args) -> sender.close());
+        connection.addDisconnectedListener(event -> event.connection().close());
         CancellationController cancellation = new CancellationController();
         pendingInboundIndirectConnections.put(response.getUsername(), cancellation);
 
@@ -1166,49 +1167,49 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         connection.addMessageWrittenListener(handler::handleChildMessageWritten);
     }
 
-    private void childDisconnected(Connection sender, ConnectionDisconnectedEvent eventData) {
-        MessageConnection connection = (MessageConnection) sender;
+    private void childDisconnected(ConnectionDisconnectedEvent eventData) {
+        MessageConnection connection = (MessageConnection) eventData.connection();
         childConnections.remove(connection.getUsername());
         children.remove(connection.getUsername());
         diagnostic.debug("Child connection to " + connection.getUsername() + " ("
                 + connection.getIpEndpoint() + ") disconnected: "
-                + eventData.getMessage() + " (type: "
+                + eventData.message() + " (type: "
                 + connection.getType() + ", id: "
                 + connection.getId() + ")");
         diagnostic.info("Child connection to " + connection.getUsername() + " ("
                 + connection.getIpEndpoint() + ") disconnected"
-                + (eventData.getMessage() == null ? "." : ": " + eventData.getMessage()));
+                + (eventData.message() == null ? "." : ": " + eventData.message()));
         DistributedChildEvent childEvent =
                 new DistributedChildEvent(connection.getUsername(), connection.getIpEndpoint());
-        childDisconnectedListeners.forEach(listener -> listener.handle(this, childEvent));
+        childDisconnectedListeners.forEach(listener -> listener.accept(childEvent));
         raiseStateChanged();
         connection.close();
         updateStatusEventually();
     }
 
-    private void parentCandidateDisconnected(Connection sender, ConnectionDisconnectedEvent eventData) {
-        MessageConnection connection = (MessageConnection) sender;
+    private void parentCandidateDisconnected(ConnectionDisconnectedEvent eventData) {
+        MessageConnection connection = (MessageConnection) eventData.connection();
         diagnostic.debug("Parent candidate connection to " + connection.getUsername()
                 + " (" + connection.getIpEndpoint() + ") disconnected: "
-                + eventData.getMessage() + " (type: "
+                + eventData.message() + " (type: "
                 + connection.getType() + ", id: "
                 + connection.getId() + ")");
         connection.close();
     }
 
-    private void parentDisconnected(Connection sender, ConnectionDisconnectedEvent eventData) {
-        MessageConnection connection = (MessageConnection) sender;
+    private void parentDisconnected(ConnectionDisconnectedEvent eventData) {
+        MessageConnection connection = (MessageConnection) eventData.connection();
         diagnostic.debug("Parent connection to " + connection.getUsername() + " ("
                 + connection.getIpEndpoint() + ") disconnected: "
-                + eventData.getMessage() + " (type: "
+                + eventData.message() + " (type: "
                 + connection.getType() + ", id: "
                 + connection.getId() + ")");
         diagnostic.info("Parent connection to " + connection.getUsername() + " ("
                 + connection.getIpEndpoint() + ") disconnected"
-                + (eventData.getMessage() == null ? "." : ": " + eventData.getMessage()) + ".");
+                + (eventData.message() == null ? "." : ": " + eventData.message()) + ".");
         DistributedParentEvent parentEvent = new DistributedParentEvent(
                 connection.getUsername(), connection.getIpEndpoint(), parentBranchLevel, parentBranchRoot);
-        parentDisconnectedListeners.forEach(listener -> listener.handle(this, parentEvent));
+        parentDisconnectedListeners.forEach(listener -> listener.accept(parentEvent));
         parentConnection = null;
         parentBranchLevel = 0;
         parentBranchRoot = "";
@@ -1267,7 +1268,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     private void raiseChildAdded(MessageConnection connection) {
         DistributedChildEvent eventData =
                 new DistributedChildEvent(connection.getUsername(), connection.getIpEndpoint());
-        childAddedListeners.forEach(listener -> listener.handle(this, eventData));
+        childAddedListeners.forEach(listener -> listener.accept(eventData));
     }
 
     private void raiseStateChanged() {
@@ -1292,11 +1293,11 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                         .toList(),
                 new DistributedPeer(getParent().username(), getParent().ipEndpoint()),
                 hasParent());
-        stateChangedListeners.forEach(listener -> listener.handle(this, info));
+        stateChangedListeners.forEach(listener -> listener.accept(info));
     }
 
     private void raiseDiagnostic(DiagnosticEvent eventData) {
-        diagnosticListeners.forEach(listener -> listener.handle(this, eventData));
+        diagnosticListeners.forEach(listener -> listener.accept(eventData));
     }
 
     private static byte[] concatenate(byte[]... arrays) {
