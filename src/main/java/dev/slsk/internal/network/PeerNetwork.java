@@ -146,7 +146,7 @@ public final class PeerNetwork implements PeerConnectionManager {
         this.scheduler = scheduler == null ? new Scheduler("soulseek-peer-network") : scheduler;
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
-                : diagnosticFactory;
+                : diagnosticFactory.forSource(PeerNetwork.class);
     }
 
     @Override

@@ -84,7 +84,8 @@ public final class ServerLink {
 
     ServerLink(Waiter waiter, DiagnosticSink diagnostic, Supplier<SoulseekClientState> clientState) {
         this.waiter = java.util.Objects.requireNonNull(waiter, "waiter");
-        this.diagnostic = java.util.Objects.requireNonNull(diagnostic, "diagnostic");
+        this.diagnostic =
+                java.util.Objects.requireNonNull(diagnostic, "diagnostic").forSource(ServerLink.class);
         this.clientState = java.util.Objects.requireNonNull(clientState, "clientState");
     }
 

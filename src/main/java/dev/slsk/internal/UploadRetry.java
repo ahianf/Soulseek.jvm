@@ -78,7 +78,7 @@ final class UploadRetry {
         this.delay = Objects.requireNonNull(delay, "delay");
         this.maxAttempts = maxAttempts;
         this.reoffer = Objects.requireNonNull(reoffer, "reoffer");
-        this.diagnostic = Objects.requireNonNull(diagnostic, "diagnostic");
+        this.diagnostic = Objects.requireNonNull(diagnostic, "diagnostic").forSource(UploadRetry.class);
     }
 
     /**

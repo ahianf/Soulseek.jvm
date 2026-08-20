@@ -71,7 +71,7 @@ class DefaultDiagnosticsTest {
     }
 
     @Test
-    void diagnosticEventsPreserveTheEmittingClassForLoggerSelection() throws InterruptedException {
+    void diagnosticEventsUseTheOwningClassForLoggerSelection() throws InterruptedException {
         try (Soulseek slsk = client()) {
             AtomicReference<dev.slsk.events.DiagnosticEvent> observed = new AtomicReference<>();
             CountDownLatch received = new CountDownLatch(1);
@@ -82,8 +82,7 @@ class DefaultDiagnosticsTest {
                 ((DefaultSoulseek) slsk).client().getDiagnostic().info("select this logger by class");
 
                 assertTrue(received.await(5, TimeUnit.SECONDS), "the diagnostic was never published");
-                assertEquals(
-                        DefaultDiagnosticsTest.class.getName(), observed.get().source());
+                assertEquals(SoulseekEngine.class.getName(), observed.get().source());
             }
         }
     }

@@ -125,7 +125,7 @@ final class ReconnectSupervisor implements AutoCloseable {
             Duration minDelay) {
         this.connector = Objects.requireNonNull(connector, "connector");
         this.onStateChanged = Objects.requireNonNull(onStateChanged, "onStateChanged");
-        this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
+        this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics").forSource(ReconnectSupervisor.class);
         this.initialDelay = Objects.requireNonNull(initialDelay, "initialDelay");
         this.maxDelay = Objects.requireNonNull(maxDelay, "maxDelay");
         this.minDelay = Objects.requireNonNull(minDelay, "minDelay");

@@ -135,7 +135,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         this.responses = Objects.requireNonNull(responses, "responses");
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
-                : diagnosticFactory;
+                : diagnosticFactory.forSource(DefaultPeerMessageHandler.class);
     }
 
     @Override
@@ -183,11 +183,11 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
             // A newer peer client's message, not a broken connection. C#
             // parses tolerantly and ignores it in the switch default; throwing
             // here killed this peer's read loop.
-            diagnostic.debug(
+            diagnostic.debug(() ->
                     "Ignored an unknown peer message from " + connection.getUsername() + ": " + unknown.getMessage());
             return;
         }
-        diagnostic.debug("Peer message received: " + code + " from "
+        diagnostic.debug(() -> "Peer message received: " + code + " from "
                 + connection.getUsername() + " ("
                 + connection.getIpEndpoint() + ") (id: "
                 + connection.getId() + ")");
@@ -246,7 +246,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 }
                 case UPLOAD_FAILED -> handleUploadFailed(connection, message);
                 default ->
-                    diagnostic.debug("Unhandled peer message: " + code + " from "
+                    diagnostic.debug(() -> "Unhandled peer message: " + code + " from "
                             + connection.getUsername() + " ("
                             + connection.getIpEndpoint() + "); "
                             + message.length + " bytes");
@@ -282,7 +282,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     private void report(MessageCode.Peer code, MessageConnection connection, Throwable failure) {
         Throwable cause = failure;
         diagnostic.warning(
-                "Error handling peer message: " + code + " from "
+                () -> "Error handling peer message: " + code + " from "
                         + connection.getUsername() + " ("
                         + connection.getIpEndpoint() + "); "
                         + Failures.message(cause),
@@ -298,7 +298,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                     .order(ByteOrder.LITTLE_ENDIAN)
                     .getInt());
         } catch (IllegalArgumentException unknown) {
-            diagnostic.debug(
+            diagnostic.debug(() ->
                     "Ignored an unknown peer message from " + connection.getUsername() + ": " + unknown.getMessage());
             return;
         }
@@ -310,7 +310,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
             }
         } catch (Throwable failure) {
             diagnostic.warning(
-                    "Error handling peer message: " + code + " from "
+                    () -> "Error handling peer message: " + code + " from "
                             + connection.getUsername() + " ("
                             + connection.getIpEndpoint() + "); "
                             + Failures.message(failure),

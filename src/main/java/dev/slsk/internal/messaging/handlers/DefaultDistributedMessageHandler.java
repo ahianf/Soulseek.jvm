@@ -97,7 +97,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
         this.networkExecutor = Objects.requireNonNull(networkExecutor, "networkExecutor");
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
-                : diagnosticFactory;
+                : diagnosticFactory.forSource(DefaultDistributedMessageHandler.class);
     }
 
     @Override
@@ -117,12 +117,12 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
             code = new MessageReader<>(message, MessageCode.Distributed.class).readCode();
         } catch (IllegalArgumentException unknown) {
             // A newer client's message, not a broken connection; C# ignores it.
-            diagnostic.debug("Ignored an unknown distributed child message from " + connection.getUsername() + ": "
-                    + unknown.getMessage());
+            diagnostic.debug(() -> "Ignored an unknown distributed child message from " + connection.getUsername()
+                    + ": " + unknown.getMessage());
             return;
         }
         if (code != MessageCode.Distributed.PING) {
-            diagnostic.debug("Distributed child message received: " + code + " from "
+            diagnostic.debug(() -> "Distributed child message received: " + code + " from "
                     + connection.getUsername() + " ("
                     + connection.getIpEndpoint() + ") (id: "
                     + connection.getId() + ")");
@@ -141,7 +141,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                             () -> connection.write(new DistributedPingResponse(tokens.nextToken())),
                             failure -> warnChild(code, connection, failure));
                 default ->
-                    diagnostic.debug("Unhandled distributed child message: " + code
+                    diagnostic.debug(() -> "Unhandled distributed child message: " + code
                             + " from " + connection.getUsername() + " ("
                             + connection.getIpEndpoint() + "); "
                             + message.length + " bytes");
@@ -178,14 +178,14 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
             // A newer client's message, not a broken connection; C# ignores
             // it, and this is the parent's read loop — every inbound search
             // travels on it.
-            diagnostic.debug("Ignored an unknown distributed message from " + connection.getUsername() + ": "
+            diagnostic.debug(() -> "Ignored an unknown distributed message from " + connection.getUsername() + ": "
                     + unknown.getMessage());
             return;
         }
         if (code != MessageCode.Distributed.SEARCH_REQUEST
                 && code != MessageCode.Distributed.EMBEDDED_MESSAGE
                 && code != MessageCode.Distributed.PING) {
-            diagnostic.debug("Distributed message received: " + code + " from "
+            diagnostic.debug(() -> "Distributed message received: " + code + " from "
                     + connection.getUsername() + " ("
                     + connection.getIpEndpoint() + ") (id: "
                     + connection.getId() + ")");
@@ -223,7 +223,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                             new WaitKey(Constants.WaitKey.CHILD_DEPTH_MESSAGE, connection.getKey()), depth.getDepth());
                 }
                 default ->
-                    diagnostic.debug("Unhandled distributed message: " + code + " from "
+                    diagnostic.debug(() -> "Unhandled distributed message: " + code + " from "
                             + connection.getUsername() + " ("
                             + connection.getIpEndpoint() + "); "
                             + message.length + " bytes");
@@ -231,7 +231,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
         } catch (Throwable failure) {
             Throwable cause = failure;
             diagnostic.warning(
-                    "Error handling distributed message: " + code + " from "
+                    () -> "Error handling distributed message: " + code + " from "
                             + connection.getUsername() + " ("
                             + connection.getIpEndpoint() + "); "
                             + Failures.message(cause),

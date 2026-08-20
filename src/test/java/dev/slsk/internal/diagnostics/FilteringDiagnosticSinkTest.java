@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -70,6 +71,30 @@ class FilteringDiagnosticSinkTest {
 
         assertEquals(count, events.size());
         assertTrue(events.stream().allMatch(event -> event.level().ordinal() <= minimum.ordinal()));
+    }
+
+    @Test
+    void evaluatesSuppliersOnlyForEnabledLevels() {
+        List<DiagnosticEvent> events = new ArrayList<>();
+        AtomicInteger evaluations = new AtomicInteger();
+        FilteringDiagnosticSink factory = new FilteringDiagnosticSink(DiagnosticLevel.INFO, events::add);
+
+        factory.debug(() -> "debug-" + evaluations.incrementAndGet());
+        factory.info(() -> "info-" + evaluations.incrementAndGet());
+
+        assertEquals(1, evaluations.get());
+        assertEquals("info-1", events.getFirst().message());
+    }
+
+    @Test
+    void bindsEventsToAnOwningClass() {
+        List<DiagnosticEvent> events = new ArrayList<>();
+        DiagnosticSink factory =
+                new FilteringDiagnosticSink(DiagnosticLevel.INFO, events::add).forSource(DiagnosticEvent.class);
+
+        factory.info("owned");
+
+        assertEquals(DiagnosticEvent.class.getName(), events.getFirst().source());
     }
 
     static Stream<Arguments> filterCases() {

@@ -58,7 +58,7 @@ final class DefaultMe implements Me {
         this.users = client.users();
         this.username = Objects.requireNonNull(username, "username");
         this.events = Objects.requireNonNull(events, "events");
-        this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
+        this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics").forSource(DefaultMe.class);
         wire();
     }
 

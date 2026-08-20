@@ -108,7 +108,7 @@ public final class UploadAdmission {
         this.uploads = Objects.requireNonNull(uploads, "uploads");
         this.privileged = Objects.requireNonNull(privileged, "privileged");
         this.tokens = Objects.requireNonNull(tokens, "tokens");
-        this.diagnostic = Objects.requireNonNull(diagnostic, "diagnostic");
+        this.diagnostic = Objects.requireNonNull(diagnostic, "diagnostic").forSource(UploadAdmission.class);
     }
 
     /** Refuses a user until they are unbanned. Idempotent. */

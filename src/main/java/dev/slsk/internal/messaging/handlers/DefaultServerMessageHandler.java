@@ -188,7 +188,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         this.networkExecutor = Objects.requireNonNull(networkExecutor, "networkExecutor");
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
-                : diagnosticFactory;
+                : diagnosticFactory.forSource(DefaultServerMessageHandler.class);
         for (ServerMessageEvent event : ServerMessageEvent.values()) {
             listeners.put(event, new CopyOnWriteArrayList<>());
         }
@@ -222,11 +222,11 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
             // tolerantly and lands in the switch's default; throwing here
             // instead killed the read loop — for this connection, the whole
             // client.
-            diagnostic.debug("Ignored an unknown server message: " + unknown.getMessage());
+            diagnostic.debug(() -> "Ignored an unknown server message: " + unknown.getMessage());
             return;
         }
         if (code != MessageCode.Server.EMBEDDED_MESSAGE) {
-            diagnostic.debug("Server message received: " + code);
+            diagnostic.debug(() -> "Server message received: " + code);
         }
 
         try {
@@ -420,12 +420,12 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                     distributedMessages.get().handleEmbeddedMessage(message);
                 }
                 default -> {
-                    diagnostic.debug("Unhandled server message: " + code + "; " + message.length + " bytes");
+                    diagnostic.debug(() -> "Unhandled server message: " + code + "; " + message.length + " bytes");
                 }
             }
         } catch (Throwable failure) {
             Throwable cause = failure;
-            diagnostic.warning("Error handling server message: " + code + "; " + failureMessage(cause), cause);
+            diagnostic.warning(() -> "Error handling server message: " + code + "; " + failureMessage(cause), cause);
         }
     }
 

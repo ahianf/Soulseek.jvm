@@ -77,7 +77,7 @@ public final class DefaultListenerHandler implements ListenerHandler {
         this.searchResponses = Objects.requireNonNull(searchResponses, "searchResponses");
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
-                : diagnosticFactory;
+                : diagnosticFactory.forSource(DefaultListenerHandler.class);
     }
 
     @Override

@@ -194,7 +194,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         this.connectionFactory = Objects.requireNonNull(connectionFactory, "connectionFactory");
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
-                : diagnosticFactory;
+                : diagnosticFactory.forSource(DistributedNetwork.class);
         this.ownsScheduler = scheduler == null;
         this.scheduler = scheduler == null ? new Scheduler("soulseek-distributed-status") : scheduler;
         watchdog = this.scheduler.scheduleAtFixedRate(
