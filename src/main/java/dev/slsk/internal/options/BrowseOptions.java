@@ -8,7 +8,7 @@ import java.time.Duration;
 import java.util.function.Consumer;
 
 /** Options for a browse operation. */
-public record BrowseOptions(Duration responseTimeout, Consumer<BrowseProgress> progressUpdated) {
+public record BrowseOptions(Duration responseTimeout, Consumer<BrowseProgressUpdate> progressUpdated) {
     /** The default response timeout. */
     public static final Duration DEFAULT_RESPONSE_TIMEOUT = Duration.ofMinutes(1);
 
@@ -24,7 +24,7 @@ public record BrowseOptions(Duration responseTimeout, Consumer<BrowseProgress> p
 
     /** Builder for browse options. */
     public static final class Builder {
-        private Consumer<BrowseProgress> progressUpdated;
+        private Consumer<BrowseProgressUpdate> progressUpdated;
         private Duration responseTimeout = DEFAULT_RESPONSE_TIMEOUT;
 
         public Builder responseTimeout(Duration value) {
@@ -32,7 +32,7 @@ public record BrowseOptions(Duration responseTimeout, Consumer<BrowseProgress> p
             return this;
         }
 
-        public Builder progressUpdated(Consumer<BrowseProgress> value) {
+        public Builder progressUpdated(Consumer<BrowseProgressUpdate> value) {
             progressUpdated = value;
             return this;
         }

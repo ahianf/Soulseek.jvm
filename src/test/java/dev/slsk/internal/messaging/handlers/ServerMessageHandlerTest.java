@@ -21,7 +21,7 @@ import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationSignal;
-import dev.slsk.internal.connection.ServerInfo;
+import dev.slsk.internal.connection.ServerSessionInfo;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.PrivateMessageReceivedEvent;
 import dev.slsk.internal.events.PrivilegeNotificationReceivedEvent;
@@ -148,8 +148,8 @@ class ServerMessageHandlerTest {
     @Test
     void scalarServerInfoAndBasicWaitsUseSourceKeys() {
         Fixture fixture = new Fixture(options(false, false));
-        List<ServerInfo> info = new ArrayList<>();
-        fixture.handler.<ServerInfo>subscribe(ServerMessageEvent.SERVER_INFO_RECEIVED, value -> info.add(value));
+        List<ServerSessionInfo> info = new ArrayList<>();
+        fixture.handler.<ServerSessionInfo>subscribe(ServerMessageEvent.SERVER_INFO_RECEIVED, value -> info.add(value));
 
         fixture.handle(integer(MessageCode.Server.PARENT_MIN_SPEED, 11));
         fixture.handle(integer(MessageCode.Server.PARENT_SPEED_RATIO, 22));

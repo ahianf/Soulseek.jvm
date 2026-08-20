@@ -25,18 +25,18 @@ class FilteringDiagnosticSinkTest {
     @Test
     @DisplayName("Diagnostic factory retains constructor data")
     void constructs() {
-        Consumer<DiagnosticEvent> handler = ignored -> {};
-        FilteringDiagnosticSink factory = new FilteringDiagnosticSink(DiagnosticLevel.DEBUG, handler);
+        Consumer<DiagnosticMessage> handler = ignored -> {};
+        FilteringDiagnosticSink factory = new FilteringDiagnosticSink(DiagnosticSeverity.DEBUG, handler);
 
-        assertEquals(DiagnosticLevel.DEBUG, factory.getMinimumLevel());
+        assertEquals(DiagnosticSeverity.DEBUG, factory.getMinimumLevel());
         assertSame(handler, factory.getEventHandler());
     }
 
     @Test
     @DisplayName("Every diagnostic method preserves level and exception")
     void raisesEveryMessageForm() {
-        List<DiagnosticEvent> events = new ArrayList<>();
-        FilteringDiagnosticSink factory = new FilteringDiagnosticSink(DiagnosticLevel.TRACE, events::add);
+        List<DiagnosticMessage> events = new ArrayList<>();
+        FilteringDiagnosticSink factory = new FilteringDiagnosticSink(DiagnosticSeverity.TRACE, events::add);
         RuntimeException exception = new RuntimeException("broken");
 
         factory.trace("trace");
@@ -48,20 +48,20 @@ class FilteringDiagnosticSinkTest {
         factory.warning("warning-ex", exception);
 
         assertEquals(7, events.size());
-        assertEvent(events.get(0), DiagnosticLevel.TRACE, "trace", null);
-        assertEvent(events.get(1), DiagnosticLevel.TRACE, "trace-ex", exception);
-        assertEvent(events.get(2), DiagnosticLevel.DEBUG, "debug", null);
-        assertEvent(events.get(3), DiagnosticLevel.DEBUG, "debug-ex", exception);
-        assertEvent(events.get(4), DiagnosticLevel.INFO, "info", null);
-        assertEvent(events.get(5), DiagnosticLevel.WARNING, "warning", null);
-        assertEvent(events.get(6), DiagnosticLevel.WARNING, "warning-ex", exception);
+        assertEvent(events.get(0), DiagnosticSeverity.TRACE, "trace", null);
+        assertEvent(events.get(1), DiagnosticSeverity.TRACE, "trace-ex", exception);
+        assertEvent(events.get(2), DiagnosticSeverity.DEBUG, "debug", null);
+        assertEvent(events.get(3), DiagnosticSeverity.DEBUG, "debug-ex", exception);
+        assertEvent(events.get(4), DiagnosticSeverity.INFO, "info", null);
+        assertEvent(events.get(5), DiagnosticSeverity.WARNING, "warning", null);
+        assertEvent(events.get(6), DiagnosticSeverity.WARNING, "warning-ex", exception);
     }
 
     @ParameterizedTest(name = "{0} retains {1} levels")
     @MethodSource("filterCases")
     @DisplayName("Minimum level filters source ordering")
-    void filtersByMinimumLevel(DiagnosticLevel minimum, int count) {
-        List<DiagnosticEvent> events = new ArrayList<>();
+    void filtersByMinimumLevel(DiagnosticSeverity minimum, int count) {
+        List<DiagnosticMessage> events = new ArrayList<>();
         FilteringDiagnosticSink factory = new FilteringDiagnosticSink(minimum, events::add);
 
         factory.trace("message");
@@ -75,9 +75,9 @@ class FilteringDiagnosticSinkTest {
 
     @Test
     void evaluatesSuppliersOnlyForEnabledLevels() {
-        List<DiagnosticEvent> events = new ArrayList<>();
+        List<DiagnosticMessage> events = new ArrayList<>();
         AtomicInteger evaluations = new AtomicInteger();
-        FilteringDiagnosticSink factory = new FilteringDiagnosticSink(DiagnosticLevel.INFO, events::add);
+        FilteringDiagnosticSink factory = new FilteringDiagnosticSink(DiagnosticSeverity.INFO, events::add);
 
         factory.debug(() -> "debug-" + evaluations.incrementAndGet());
         factory.info(() -> "info-" + evaluations.incrementAndGet());
@@ -88,25 +88,26 @@ class FilteringDiagnosticSinkTest {
 
     @Test
     void bindsEventsToAnOwningClass() {
-        List<DiagnosticEvent> events = new ArrayList<>();
+        List<DiagnosticMessage> events = new ArrayList<>();
         DiagnosticSink factory =
-                new FilteringDiagnosticSink(DiagnosticLevel.INFO, events::add).forSource(DiagnosticEvent.class);
+                new FilteringDiagnosticSink(DiagnosticSeverity.INFO, events::add).forSource(DiagnosticMessage.class);
 
         factory.info("owned");
 
-        assertEquals(DiagnosticEvent.class.getName(), events.getFirst().source());
+        assertEquals(DiagnosticMessage.class.getName(), events.getFirst().source());
     }
 
     static Stream<Arguments> filterCases() {
         return Stream.of(
-                Arguments.of(DiagnosticLevel.NONE, 0),
-                Arguments.of(DiagnosticLevel.WARNING, 1),
-                Arguments.of(DiagnosticLevel.INFO, 2),
-                Arguments.of(DiagnosticLevel.DEBUG, 3),
-                Arguments.of(DiagnosticLevel.TRACE, 4));
+                Arguments.of(DiagnosticSeverity.NONE, 0),
+                Arguments.of(DiagnosticSeverity.WARNING, 1),
+                Arguments.of(DiagnosticSeverity.INFO, 2),
+                Arguments.of(DiagnosticSeverity.DEBUG, 3),
+                Arguments.of(DiagnosticSeverity.TRACE, 4));
     }
 
-    private static void assertEvent(DiagnosticEvent event, DiagnosticLevel level, String message, Throwable exception) {
+    private static void assertEvent(
+            DiagnosticMessage event, DiagnosticSeverity level, String message, Throwable exception) {
         assertEquals(level, event.level());
         assertEquals(FilteringDiagnosticSinkTest.class.getName(), event.source());
         assertEquals(message, event.message());

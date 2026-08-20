@@ -14,8 +14,8 @@ import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationSignal;
-import dev.slsk.internal.connection.ServerInfo;
-import dev.slsk.internal.diagnostics.DiagnosticEvent;
+import dev.slsk.internal.connection.ServerSessionInfo;
+import dev.slsk.internal.diagnostics.DiagnosticMessage;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.events.PrivateMessageReceivedEvent;
@@ -109,7 +109,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     private final Supplier<SearchResponder> searchResponses;
     private final NetworkExecutor networkExecutor;
     private final DiagnosticSink diagnostic;
-    private final CopyOnWriteArrayList<Consumer<? super DiagnosticEvent>> diagnosticListeners =
+    private final CopyOnWriteArrayList<Consumer<? super DiagnosticMessage>> diagnosticListeners =
             new CopyOnWriteArrayList<>();
     private final Map<ServerMessageEvent, CopyOnWriteArrayList<Consumer<?>>> listeners =
             new EnumMap<>(ServerMessageEvent.class);
@@ -196,7 +196,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     }
 
     @Override
-    public Subscription subscribe(Consumer<? super DiagnosticEvent> listener) {
+    public Subscription subscribe(Consumer<? super DiagnosticMessage> listener) {
         return Subscriptions.add(diagnosticListeners, listener);
     }
 
@@ -233,13 +233,15 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         try {
             switch (code) {
                 case PARENT_MIN_SPEED -> {
-                    publish(ServerMessageEvent.SERVER_INFO_RECEIVED, new ServerInfo(integer(message)));
+                    publish(ServerMessageEvent.SERVER_INFO_RECEIVED, new ServerSessionInfo(integer(message)));
                 }
                 case PARENT_SPEED_RATIO -> {
-                    publish(ServerMessageEvent.SERVER_INFO_RECEIVED, new ServerInfo(null, integer(message)));
+                    publish(ServerMessageEvent.SERVER_INFO_RECEIVED, new ServerSessionInfo(null, integer(message)));
                 }
                 case WISHLIST_INTERVAL -> {
-                    publish(ServerMessageEvent.SERVER_INFO_RECEIVED, new ServerInfo(null, null, integer(message)));
+                    publish(
+                            ServerMessageEvent.SERVER_INFO_RECEIVED,
+                            new ServerSessionInfo(null, null, integer(message)));
                 }
                 case CHECK_PRIVILEGES -> {
                     waiter.complete(new WaitKey(code), integer(message));
@@ -608,7 +610,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         }
     }
 
-    private void publishDiagnostic(DiagnosticEvent eventData) {
+    private void publishDiagnostic(DiagnosticMessage eventData) {
         diagnosticListeners.forEach(listener -> listener.accept(eventData));
     }
 

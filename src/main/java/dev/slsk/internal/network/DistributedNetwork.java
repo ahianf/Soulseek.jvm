@@ -19,7 +19,7 @@ import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.concurrent.CancellationSubscription;
 import dev.slsk.internal.concurrent.InterruptedOperationException;
 import dev.slsk.internal.connection.SoulseekClientState;
-import dev.slsk.internal.diagnostics.DiagnosticEvent;
+import dev.slsk.internal.diagnostics.DiagnosticMessage;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.events.DistributedChildEvent;
@@ -123,7 +123,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     private final CopyOnWriteArrayList<Consumer<? super Void>> promotedListeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<Consumer<? super DistributedNetworkInfo>> stateChangedListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<Consumer<? super DiagnosticEvent>> diagnosticListeners =
+    private final CopyOnWriteArrayList<Consumer<? super DiagnosticMessage>> diagnosticListeners =
             new CopyOnWriteArrayList<>();
     private final Consumer<ConnectionDisconnectedEvent> parentCandidateDisconnectedListener =
             this::parentCandidateDisconnected;
@@ -223,7 +223,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     }
 
     @Override
-    public Subscription subscribe(Consumer<? super DiagnosticEvent> listener) {
+    public Subscription subscribe(Consumer<? super DiagnosticMessage> listener) {
         return Subscriptions.add(diagnosticListeners, listener);
     }
 
@@ -1265,7 +1265,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         stateChangedListeners.forEach(listener -> listener.accept(info));
     }
 
-    private void publishDiagnostic(DiagnosticEvent eventData) {
+    private void publishDiagnostic(DiagnosticMessage eventData) {
         diagnosticListeners.forEach(listener -> listener.accept(eventData));
     }
 

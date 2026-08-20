@@ -16,7 +16,7 @@ import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Monitors;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.connection.SoulseekClientState;
-import dev.slsk.internal.diagnostics.DiagnosticLevel;
+import dev.slsk.internal.diagnostics.DiagnosticSeverity;
 import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.events.RoomJoinedEvent;
@@ -621,7 +621,7 @@ class PublicBlockingMatrixTest {
                 new InetSocketAddress("127.0.0.1", 1), new ConnectionOptions(), Integer.BYTES, tcp, Monitors.shared());
         private final SoulseekEngine engine;
         private final EventBus<ConnectionEvent> events =
-                new EventBus<>("connect-matrix", new FilteringDiagnosticSink(DiagnosticLevel.NONE, ignored -> {}));
+                new EventBus<>("connect-matrix", new FilteringDiagnosticSink(DiagnosticSeverity.NONE, ignored -> {}));
         private final DefaultConnection connection;
 
         private ConnectFixture() {

@@ -396,7 +396,7 @@ class EnginePeerRequestTest {
                 UserAddressResponse.class,
                 CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));
         List<BrowseProgressUpdatedEvent> events = new ArrayList<>();
-        List<dev.slsk.internal.options.BrowseProgress> callbacks = new ArrayList<>();
+        List<dev.slsk.internal.options.BrowseProgressUpdate> callbacks = new ArrayList<>();
         fixture.client
                 .events()
                 .on(

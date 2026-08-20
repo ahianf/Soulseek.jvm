@@ -41,7 +41,7 @@ import dev.slsk.internal.network.tcp.ConnectionReporter;
 import dev.slsk.internal.network.tcp.ConnectionState;
 import dev.slsk.internal.options.PositionableOutputStream;
 import dev.slsk.internal.options.TransferOptions;
-import dev.slsk.internal.transfer.DownloadRequest;
+import dev.slsk.internal.transfer.DownloadSpecification;
 import dev.slsk.internal.transfer.Transfer;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
@@ -87,33 +87,33 @@ class EngineDownloadTest {
                         IllegalArgumentException.class,
                         () -> fixture.client
                                 .transfers()
-                                .download(DownloadRequest.toStream(bad, "file", outputFactory())
+                                .download(DownloadSpecification.toStream(bad, "file", outputFactory())
                                         .build()));
                 assertThrows(
                         IllegalArgumentException.class,
                         () -> fixture.client
                                 .transfers()
-                                .download(DownloadRequest.toStream("alice", bad, outputFactory())
+                                .download(DownloadSpecification.toStream("alice", bad, outputFactory())
                                         .build()));
                 assertThrows(
                         IllegalArgumentException.class,
                         () -> fixture.client
                                 .transfers()
-                                .download(DownloadRequest.toFile("alice", "file", bad)
+                                .download(DownloadSpecification.toFile("alice", "file", bad)
                                         .build()));
             }
             assertThrows(
                     IllegalArgumentException.class,
                     () -> fixture.client
                             .transfers()
-                            .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                            .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                                     .size(-1L)
                                     .build()));
             assertThrows(
                     IllegalArgumentException.class,
                     () -> fixture.client
                             .transfers()
-                            .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                            .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                                     .size(1L)
                                     .startOffset(-1)
                                     .build()));
@@ -121,14 +121,14 @@ class EngineDownloadTest {
                     NullPointerException.class,
                     () -> fixture.client
                             .transfers()
-                            .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                            .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                                     .startOffset(1)
                                     .build()));
             assertThrows(
                     NullPointerException.class,
                     () -> fixture.client
                             .transfers()
-                            .download(DownloadRequest.toStream(
+                            .download(DownloadSpecification.toStream(
                                             "alice", "file", (java.util.function.Supplier<java.io.OutputStream>) null)
                                     .build()));
 
@@ -137,7 +137,7 @@ class EngineDownloadTest {
                     IllegalStateException.class,
                     () -> fixture.client
                             .transfers()
-                            .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                            .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                                     .build()));
         }
     }
@@ -150,7 +150,7 @@ class EngineDownloadTest {
                     DuplicateTokenException.class,
                     () -> fixture.client
                             .transfers()
-                            .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                            .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                                     .size(1L)
                                     .token(1)
                                     .build()));
@@ -161,7 +161,7 @@ class EngineDownloadTest {
                     DuplicateTokenException.class,
                     () -> fixture.client
                             .transfers()
-                            .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                            .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                                     .size(1L)
                                     .token(2)
                                     .build()));
@@ -172,7 +172,7 @@ class EngineDownloadTest {
                     DuplicateTransferException.class,
                     () -> fixture.client
                             .transfers()
-                            .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                            .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                                     .size(1L)
                                     .token(4)
                                     .build()));
@@ -183,7 +183,7 @@ class EngineDownloadTest {
                     DuplicateTransferException.class,
                     () -> fixture.client
                             .transfers()
-                            .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                            .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                                     .size(1L)
                                     .token(4)
                                     .build()));
@@ -211,7 +211,7 @@ class EngineDownloadTest {
 
             TransferOutcome outcome = fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "remote\\file", () -> output)
+                    .download(DownloadSpecification.toStream("alice", "remote\\file", () -> output)
                             .token(11)
                             .options(timeline.on(options()))
                             .build());
@@ -256,7 +256,7 @@ class EngineDownloadTest {
 
             TransferOutcome outcome = fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                    .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                             .size(4L)
                             .token(12)
                             .options(timeline.on(options()))
@@ -280,7 +280,7 @@ class EngineDownloadTest {
 
             TransferOutcome outcome = fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                    .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                             .size(5L)
                             .token(30)
                             .options(timeline.on(options()))
@@ -311,7 +311,7 @@ class EngineDownloadTest {
 
             TransferOutcome outcome = fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                    .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                             .size(1L)
                             .token(13)
                             .options(options())
@@ -337,7 +337,7 @@ class EngineDownloadTest {
 
             TransferOutcome outcome = fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                    .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                             .size(1L)
                             .token(33)
                             .options(options())
@@ -362,7 +362,7 @@ class EngineDownloadTest {
 
             fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", () -> output)
+                    .download(DownloadSpecification.toStream("alice", "file", () -> output)
                             .token(14)
                             .options(timeline.on(options()))
                             .build());
@@ -390,7 +390,7 @@ class EngineDownloadTest {
 
             TransferOutcome outcome = fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                    .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                             .size(1L)
                             .token(15)
                             .options(options())
@@ -421,7 +421,7 @@ class EngineDownloadTest {
 
             CompletableFuture<TransferOutcome> download = inBackground(() -> fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                    .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                             .token(16)
                             .options(options())
                             .build()));
@@ -452,7 +452,7 @@ class EngineDownloadTest {
 
             TransferOutcome outcome = fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                    .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                             .size(1L)
                             .token(17)
                             .options(timeline.on(options()))
@@ -477,7 +477,7 @@ class EngineDownloadTest {
 
             fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", () -> output)
+                    .download(DownloadSpecification.toStream("alice", "file", () -> output)
                             .size(5L)
                             .startOffset(2)
                             .token(18)
@@ -506,7 +506,7 @@ class EngineDownloadTest {
                     CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 19, "file", 2));
             TransferOutcome seekFailed = fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                    .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                             .size(2L)
                             .startOffset(1)
                             .token(19)
@@ -521,7 +521,7 @@ class EngineDownloadTest {
             Timeline timeline = new Timeline();
             fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "other", outputFactory())
+                    .download(DownloadSpecification.toStream("alice", "other", outputFactory())
                             .size(2L)
                             .startOffset(1)
                             .token(20)
@@ -559,7 +559,7 @@ class EngineDownloadTest {
 
             fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                    .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                             .size(5L)
                             .token(21)
                             .options(timeline.on(options))
@@ -587,7 +587,7 @@ class EngineDownloadTest {
 
             TransferOutcome outcome = fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                    .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                             .size(1L)
                             .token(22)
                             .options(timeline.on(options()))
@@ -616,7 +616,7 @@ class EngineDownloadTest {
 
             TransferOutcome outcome = fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                    .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                             .size(1L)
                             .token(31)
                             .options(timeline.on(options()))
@@ -640,7 +640,7 @@ class EngineDownloadTest {
 
             TransferOutcome outcome = fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                    .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                             .size(1L)
                             .token(23)
                             .options(options())
@@ -662,7 +662,7 @@ class EngineDownloadTest {
             TransferOutcome lapsed = timeoutFixture
                     .client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                    .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                             .size(1L)
                             .token(24)
                             .options(timedOut.on(options()))
@@ -680,7 +680,7 @@ class EngineDownloadTest {
             TransferOutcome stopped = cancellationFixture
                     .client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                    .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                             .size(1L)
                             .token(25)
                             .options(cancelled.on(options()))
@@ -703,7 +703,7 @@ class EngineDownloadTest {
                     TransferOutcome.Succeeded.class,
                     first.client
                             .transfers()
-                            .download(DownloadRequest.toFile("alice", "file", file.toString())
+                            .download(DownloadSpecification.toFile("alice", "file", file.toString())
                                     .size(2L)
                                     .token(26)
                                     .options(options())
@@ -719,7 +719,7 @@ class EngineDownloadTest {
                     TransferOutcome.Succeeded.class,
                     second.client
                             .transfers()
-                            .download(DownloadRequest.toFile("alice", "file", file.toString())
+                            .download(DownloadSpecification.toFile("alice", "file", file.toString())
                                     .size(4L)
                                     .startOffset(2)
                                     .token(27)
@@ -749,7 +749,7 @@ class EngineDownloadTest {
 
             TransferOutcome outcome = fixture.client
                     .transfers()
-                    .download(DownloadRequest.toFile("alice", "file", file.toString())
+                    .download(DownloadSpecification.toFile("alice", "file", file.toString())
                             .size(4L)
                             .startOffset(2)
                             .token(30)
@@ -772,7 +772,7 @@ class EngineDownloadTest {
             CloseTrackingOutputStream closeTracking = new CloseTrackingOutputStream();
             fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", () -> closeTracking)
+                    .download(DownloadSpecification.toStream("alice", "file", () -> closeTracking)
                             .size(1L)
                             .token(28)
                             .options(options().withCloseOptions(null, true))
@@ -784,7 +784,7 @@ class EngineDownloadTest {
             CloseTrackingOutputStream retained = new CloseTrackingOutputStream();
             fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "other", () -> retained)
+                    .download(DownloadSpecification.toStream("alice", "other", () -> retained)
                             .size(1L)
                             .token(29)
                             .options(options().withCloseOptions(null, false))
@@ -806,7 +806,7 @@ class EngineDownloadTest {
 
             TransferOutcome outcome = fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "folder/file", () -> output)
+                    .download(DownloadSpecification.toStream("alice", "folder/file", () -> output)
                             .size(1L)
                             .token(32)
                             .options(options().withCloseOptions(null, true))
@@ -913,7 +913,7 @@ class EngineDownloadTest {
 
             CompletableFuture<TransferOutcome> download = inBackground(() -> fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", outputFactory())
+                    .download(DownloadSpecification.toStream("alice", "file", outputFactory())
                             .size(1L)
                             .token(34)
                             .options(options())

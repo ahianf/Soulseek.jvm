@@ -17,7 +17,7 @@ import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationController;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.concurrent.CancellationSubscription;
-import dev.slsk.internal.diagnostics.DiagnosticEvent;
+import dev.slsk.internal.diagnostics.DiagnosticMessage;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.events.Subscriptions;
@@ -88,7 +88,7 @@ public final class PeerNetwork implements PeerConnectionManager {
     private final DiagnosticSink diagnostic;
     private final Scheduler scheduler;
     private final boolean ownsScheduler;
-    private final CopyOnWriteArrayList<Consumer<? super DiagnosticEvent>> diagnosticListeners =
+    private final CopyOnWriteArrayList<Consumer<? super DiagnosticMessage>> diagnosticListeners =
             new CopyOnWriteArrayList<>();
     private final ConcurrentHashMap<String, ConnectionCell> messageConnections = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, CancellationController> pendingInboundIndirectConnections =
@@ -150,7 +150,7 @@ public final class PeerNetwork implements PeerConnectionManager {
     }
 
     @Override
-    public Subscription subscribe(Consumer<? super DiagnosticEvent> listener) {
+    public Subscription subscribe(Consumer<? super DiagnosticMessage> listener) {
         return Subscriptions.add(diagnosticListeners, listener);
     }
 
@@ -1000,7 +1000,7 @@ public final class PeerNetwork implements PeerConnectionManager {
         connection.close();
     }
 
-    private void publishDiagnostic(DiagnosticEvent eventData) {
+    private void publishDiagnostic(DiagnosticMessage eventData) {
         diagnosticListeners.forEach(listener -> listener.accept(eventData));
     }
 

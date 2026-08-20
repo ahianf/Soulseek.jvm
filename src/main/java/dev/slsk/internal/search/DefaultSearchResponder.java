@@ -8,7 +8,7 @@ import dev.slsk.Subscription;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.concurrent.CancellationSignal;
-import dev.slsk.internal.diagnostics.DiagnosticEvent;
+import dev.slsk.internal.diagnostics.DiagnosticMessage;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.events.SearchRequestEvent;
@@ -60,7 +60,7 @@ public final class DefaultSearchResponder implements SearchResponder {
     private final java.util.function.IntSupplier advertisedUploadSpeed;
 
     private final DiagnosticSink diagnostic;
-    private final CopyOnWriteArrayList<Consumer<? super DiagnosticEvent>> diagnosticListeners =
+    private final CopyOnWriteArrayList<Consumer<? super DiagnosticMessage>> diagnosticListeners =
             new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<Consumer<? super SearchRequestEvent>> requestListeners =
             new CopyOnWriteArrayList<>();
@@ -106,7 +106,7 @@ public final class DefaultSearchResponder implements SearchResponder {
     }
 
     @Override
-    public Subscription subscribe(Consumer<? super DiagnosticEvent> listener) {
+    public Subscription subscribe(Consumer<? super DiagnosticMessage> listener) {
         return Subscriptions.add(diagnosticListeners, listener);
     }
 
@@ -331,7 +331,7 @@ public final class DefaultSearchResponder implements SearchResponder {
                 failure);
     }
 
-    private void publishDiagnostic(DiagnosticEvent eventData) {
+    private void publishDiagnostic(DiagnosticMessage eventData) {
         diagnosticListeners.forEach(listener -> listener.accept(eventData));
     }
 

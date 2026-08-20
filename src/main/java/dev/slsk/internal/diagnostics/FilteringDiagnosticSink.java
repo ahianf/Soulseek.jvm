@@ -13,17 +13,17 @@ import java.util.function.Supplier;
 public final class FilteringDiagnosticSink implements DiagnosticSink {
     private static final StackWalker CALLER = StackWalker.getInstance(Option.RETAIN_CLASS_REFERENCE);
 
-    private final Consumer<DiagnosticEvent> eventHandler;
-    private final DiagnosticLevel minimumLevel;
+    private final Consumer<DiagnosticMessage> eventHandler;
+    private final DiagnosticSeverity minimumLevel;
     private final String source;
 
     /** Creates a diagnostic factory. */
-    public FilteringDiagnosticSink(DiagnosticLevel minimumLevel, Consumer<DiagnosticEvent> eventHandler) {
+    public FilteringDiagnosticSink(DiagnosticSeverity minimumLevel, Consumer<DiagnosticMessage> eventHandler) {
         this(minimumLevel, eventHandler, CALLER.getCallerClass().getName());
     }
 
     private FilteringDiagnosticSink(
-            DiagnosticLevel minimumLevel, Consumer<DiagnosticEvent> eventHandler, String source) {
+            DiagnosticSeverity minimumLevel, Consumer<DiagnosticMessage> eventHandler, String source) {
         this.minimumLevel = Objects.requireNonNull(minimumLevel, "minimumLevel");
         this.eventHandler = Objects.requireNonNull(eventHandler, "eventHandler");
         this.source = Objects.requireNonNull(source, "source");
@@ -31,99 +31,99 @@ public final class FilteringDiagnosticSink implements DiagnosticSink {
 
     @Override
     public void trace(String message) {
-        if (enabled(DiagnosticLevel.TRACE)) {
-            publishEvent(DiagnosticLevel.TRACE, message, null);
+        if (enabled(DiagnosticSeverity.TRACE)) {
+            publishEvent(DiagnosticSeverity.TRACE, message, null);
         }
     }
 
     @Override
     public void trace(String message, Throwable exception) {
-        if (enabled(DiagnosticLevel.TRACE)) {
-            publishEvent(DiagnosticLevel.TRACE, message, exception);
+        if (enabled(DiagnosticSeverity.TRACE)) {
+            publishEvent(DiagnosticSeverity.TRACE, message, exception);
         }
     }
 
     @Override
     public void trace(Supplier<String> message) {
-        if (enabled(DiagnosticLevel.TRACE)) {
-            publishEvent(DiagnosticLevel.TRACE, message.get(), null);
+        if (enabled(DiagnosticSeverity.TRACE)) {
+            publishEvent(DiagnosticSeverity.TRACE, message.get(), null);
         }
     }
 
     @Override
     public void trace(Supplier<String> message, Throwable exception) {
-        if (enabled(DiagnosticLevel.TRACE)) {
-            publishEvent(DiagnosticLevel.TRACE, message.get(), exception);
+        if (enabled(DiagnosticSeverity.TRACE)) {
+            publishEvent(DiagnosticSeverity.TRACE, message.get(), exception);
         }
     }
 
     @Override
     public void debug(String message) {
-        if (enabled(DiagnosticLevel.DEBUG)) {
-            publishEvent(DiagnosticLevel.DEBUG, message, null);
+        if (enabled(DiagnosticSeverity.DEBUG)) {
+            publishEvent(DiagnosticSeverity.DEBUG, message, null);
         }
     }
 
     @Override
     public void debug(String message, Throwable exception) {
-        if (enabled(DiagnosticLevel.DEBUG)) {
-            publishEvent(DiagnosticLevel.DEBUG, message, exception);
+        if (enabled(DiagnosticSeverity.DEBUG)) {
+            publishEvent(DiagnosticSeverity.DEBUG, message, exception);
         }
     }
 
     @Override
     public void debug(Supplier<String> message) {
-        if (enabled(DiagnosticLevel.DEBUG)) {
-            publishEvent(DiagnosticLevel.DEBUG, message.get(), null);
+        if (enabled(DiagnosticSeverity.DEBUG)) {
+            publishEvent(DiagnosticSeverity.DEBUG, message.get(), null);
         }
     }
 
     @Override
     public void debug(Supplier<String> message, Throwable exception) {
-        if (enabled(DiagnosticLevel.DEBUG)) {
-            publishEvent(DiagnosticLevel.DEBUG, message.get(), exception);
+        if (enabled(DiagnosticSeverity.DEBUG)) {
+            publishEvent(DiagnosticSeverity.DEBUG, message.get(), exception);
         }
     }
 
     @Override
     public void info(String message) {
-        if (enabled(DiagnosticLevel.INFO)) {
-            publishEvent(DiagnosticLevel.INFO, message, null);
+        if (enabled(DiagnosticSeverity.INFO)) {
+            publishEvent(DiagnosticSeverity.INFO, message, null);
         }
     }
 
     @Override
     public void info(Supplier<String> message) {
-        if (enabled(DiagnosticLevel.INFO)) {
-            publishEvent(DiagnosticLevel.INFO, message.get(), null);
+        if (enabled(DiagnosticSeverity.INFO)) {
+            publishEvent(DiagnosticSeverity.INFO, message.get(), null);
         }
     }
 
     @Override
     public void warning(String message) {
-        if (enabled(DiagnosticLevel.WARNING)) {
-            publishEvent(DiagnosticLevel.WARNING, message, null);
+        if (enabled(DiagnosticSeverity.WARNING)) {
+            publishEvent(DiagnosticSeverity.WARNING, message, null);
         }
     }
 
     @Override
     public void warning(String message, Throwable exception) {
-        if (enabled(DiagnosticLevel.WARNING)) {
-            publishEvent(DiagnosticLevel.WARNING, message, exception);
+        if (enabled(DiagnosticSeverity.WARNING)) {
+            publishEvent(DiagnosticSeverity.WARNING, message, exception);
         }
     }
 
     @Override
     public void warning(Supplier<String> message) {
-        if (enabled(DiagnosticLevel.WARNING)) {
-            publishEvent(DiagnosticLevel.WARNING, message.get(), null);
+        if (enabled(DiagnosticSeverity.WARNING)) {
+            publishEvent(DiagnosticSeverity.WARNING, message.get(), null);
         }
     }
 
     @Override
     public void warning(Supplier<String> message, Throwable exception) {
-        if (enabled(DiagnosticLevel.WARNING)) {
-            publishEvent(DiagnosticLevel.WARNING, message.get(), exception);
+        if (enabled(DiagnosticSeverity.WARNING)) {
+            publishEvent(DiagnosticSeverity.WARNING, message.get(), exception);
         }
     }
 
@@ -131,19 +131,19 @@ public final class FilteringDiagnosticSink implements DiagnosticSink {
         return new FilteringDiagnosticSink(minimumLevel, eventHandler, source.getName());
     }
 
-    DiagnosticLevel getMinimumLevel() {
+    DiagnosticSeverity getMinimumLevel() {
         return minimumLevel;
     }
 
-    Consumer<DiagnosticEvent> getEventHandler() {
+    Consumer<DiagnosticMessage> getEventHandler() {
         return eventHandler;
     }
 
-    private boolean enabled(DiagnosticLevel level) {
+    private boolean enabled(DiagnosticSeverity level) {
         return level.ordinal() <= minimumLevel.ordinal();
     }
 
-    private void publishEvent(DiagnosticLevel level, String message, Throwable exception) {
-        eventHandler.accept(new DiagnosticEvent(level, source, message, exception));
+    private void publishEvent(DiagnosticSeverity level, String message, Throwable exception) {
+        eventHandler.accept(new DiagnosticMessage(level, source, message, exception));
     }
 }

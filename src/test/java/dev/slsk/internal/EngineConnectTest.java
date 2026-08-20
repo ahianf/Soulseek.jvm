@@ -196,11 +196,13 @@ class EngineConnectTest {
         Fixture fixture = new Fixture();
         fixture.waiter.response = new LoginResponse(true, "", null, null, true);
         List<String> sequence = new ArrayList<>();
-        fixture.client.events().on(Kind.SERVER_INFO_RECEIVED, (dev.slsk.internal.connection.ServerInfo eventData) -> {
-            assertTrue(eventData.supporter());
-            assertNull(fixture.client.getUsername());
-            sequence.add("server-info");
-        });
+        fixture.client
+                .events()
+                .on(Kind.SERVER_INFO_RECEIVED, (dev.slsk.internal.connection.ServerSessionInfo eventData) -> {
+                    assertTrue(eventData.supporter());
+                    assertNull(fixture.client.getUsername());
+                    sequence.add("server-info");
+                });
         fixture.client
                 .events()
                 .on(Kind.STATE_CHANGED, (dev.slsk.internal.events.SoulseekClientStateChangedEvent eventData) -> {

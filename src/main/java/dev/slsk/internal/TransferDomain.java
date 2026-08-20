@@ -29,13 +29,13 @@ import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.PeerConnectionManager;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.options.TransferOptions;
-import dev.slsk.internal.transfer.DownloadRequest;
+import dev.slsk.internal.transfer.DownloadSpecification;
 import dev.slsk.internal.transfer.Transfer;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.internal.transfer.TransferPhase;
 import dev.slsk.internal.transfer.TransferStreams;
-import dev.slsk.internal.transfer.UploadRequest;
+import dev.slsk.internal.transfer.UploadSpecification;
 import dev.slsk.spi.ResolvedFile;
 import dev.slsk.spi.ShareCatalog;
 import dev.slsk.spi.UploadPolicy;
@@ -567,7 +567,7 @@ final class TransferDomain implements PeerServices {
                     // waited for.
                     try {
                         TransferOutcome outcome =
-                                upload(UploadRequest.fromStream(user.value(), path, file.size(), offset -> {
+                                upload(UploadSpecification.fromStream(user.value(), path, file.size(), offset -> {
                                             try {
                                                 // Positioned rather than plain, so a resume can say
                                                 // where it starts; see TransferStreams.positionedStream.
@@ -811,7 +811,7 @@ final class TransferDomain implements PeerServices {
      * @param request the download to perform
      * @return how it ended
      */
-    TransferOutcome download(DownloadRequest request) {
+    TransferOutcome download(DownloadSpecification request) {
         Objects.requireNonNull(request, "request");
         return Transfers.outcomeOf(request.toStream() ? downloadToStream(request) : downloadToFile(request));
     }
@@ -819,12 +819,12 @@ final class TransferDomain implements PeerServices {
     /**
      * Uploads what the request describes.
      *
-     * <p>The counterpart to {@link #download(DownloadRequest)}; see there.
+     * <p>The counterpart to {@link #download(DownloadSpecification)}; see there.
      *
      * @param request the upload to perform
      * @return how it ended
      */
-    TransferOutcome upload(UploadRequest request) {
+    TransferOutcome upload(UploadSpecification request) {
         Objects.requireNonNull(request, "request");
         return Transfers.outcomeOf(request.fromStream() ? uploadFromStream(request) : uploadFromFile(request));
     }
@@ -839,7 +839,7 @@ final class TransferDomain implements PeerServices {
     }
 
     /** Downloads to a local path, opening it as the destination stream. */
-    private Transfer downloadToFile(DownloadRequest request) {
+    private Transfer downloadToFile(DownloadSpecification request) {
         String requestedUsername = request.username();
         String remoteFilename = request.remoteFilename();
         String localFilename = request.localFilename();
@@ -889,7 +889,7 @@ final class TransferDomain implements PeerServices {
     }
 
     /** Downloads to a caller-supplied stream. */
-    private Transfer downloadToStream(DownloadRequest request) {
+    private Transfer downloadToStream(DownloadSpecification request) {
         String requestedUsername = request.username();
         String remoteFilename = request.remoteFilename();
         CommonUtils.requireText(requestedUsername, "username");
@@ -912,7 +912,7 @@ final class TransferDomain implements PeerServices {
     }
 
     /** Uploads a local path, opening it as the source stream. */
-    private Transfer uploadFromFile(UploadRequest request) {
+    private Transfer uploadFromFile(UploadSpecification request) {
         String requestedUsername = request.username();
         String remoteFilename = request.remoteFilename();
         String localFilename = request.localFilename();
@@ -960,7 +960,7 @@ final class TransferDomain implements PeerServices {
     }
 
     /** Uploads from a caller-supplied stream. */
-    private Transfer uploadFromStream(UploadRequest request) {
+    private Transfer uploadFromStream(UploadSpecification request) {
         String requestedUsername = request.username();
         String remoteFilename = request.remoteFilename();
         CommonUtils.requireText(requestedUsername, "username");

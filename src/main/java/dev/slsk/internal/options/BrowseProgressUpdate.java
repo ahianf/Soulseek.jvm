@@ -13,5 +13,5 @@ package dev.slsk.internal.options;
  * @param percentComplete the completion percentage
  * @param size the total response size
  */
-public record BrowseProgress(
+public record BrowseProgressUpdate(
         String username, long bytesTransferred, long bytesRemaining, double percentComplete, long size) {}

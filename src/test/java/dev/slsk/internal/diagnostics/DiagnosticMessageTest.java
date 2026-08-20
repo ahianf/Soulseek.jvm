@@ -15,18 +15,18 @@ import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class DiagnosticEventTest {
+class DiagnosticMessageTest {
     @Test
-    @DisplayName("DiagnosticEvent instantiates with the given data")
+    @DisplayName("DiagnosticMessage instantiates with the given data")
     void instantiatesWithTheGivenData() {
         Instant before = Instant.now();
         RuntimeException exception = new RuntimeException("failure");
 
-        DiagnosticEvent args =
-                new DiagnosticEvent(DiagnosticLevel.WARNING, DiagnosticEventTest.class.getName(), "message", exception);
+        DiagnosticMessage args = new DiagnosticMessage(
+                DiagnosticSeverity.WARNING, DiagnosticMessageTest.class.getName(), "message", exception);
 
-        assertEquals(DiagnosticLevel.WARNING, args.level());
-        assertEquals(DiagnosticEventTest.class.getName(), args.source());
+        assertEquals(DiagnosticSeverity.WARNING, args.level());
+        assertEquals(DiagnosticMessageTest.class.getName(), args.source());
         assertEquals("message", args.message());
         assertSame(exception, args.exception());
         assertTrue(args.includesException());
@@ -35,11 +35,12 @@ class DiagnosticEventTest {
     }
 
     @Test
-    @DisplayName("DiagnosticEvent instantiates with null Exception given null")
+    @DisplayName("DiagnosticMessage instantiates with null Exception given null")
     void instantiatesWithNullExceptionGivenNull() {
-        DiagnosticEvent args = new DiagnosticEvent(DiagnosticLevel.INFO, DiagnosticEventTest.class.getName(), null);
+        DiagnosticMessage args =
+                new DiagnosticMessage(DiagnosticSeverity.INFO, DiagnosticMessageTest.class.getName(), null);
 
-        assertEquals(DiagnosticLevel.INFO, args.level());
+        assertEquals(DiagnosticSeverity.INFO, args.level());
         assertNull(args.message());
         assertNull(args.exception());
         assertFalse(args.includesException());
@@ -50,12 +51,12 @@ class DiagnosticEventTest {
     void rejectsNullLevel() {
         assertThrows(
                 NullPointerException.class,
-                () -> new DiagnosticEvent(null, DiagnosticEventTest.class.getName(), "message"));
+                () -> new DiagnosticMessage(null, DiagnosticMessageTest.class.getName(), "message"));
     }
 
     @Test
     @DisplayName("Rejects a null source because every diagnostic names its emitter")
     void rejectsNullSource() {
-        assertThrows(NullPointerException.class, () -> new DiagnosticEvent(DiagnosticLevel.INFO, null, "message"));
+        assertThrows(NullPointerException.class, () -> new DiagnosticMessage(DiagnosticSeverity.INFO, null, "message"));
     }
 }

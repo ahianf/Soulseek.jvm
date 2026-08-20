@@ -264,7 +264,7 @@ final class DefaultUsers implements Users {
         BrowseOptions options = BrowseOptions.builder()
                 .responseTimeout(request.timeout())
                 .progressUpdated(request.onProgress()
-                        .<Consumer<dev.slsk.internal.options.BrowseProgress>>map(
+                        .<Consumer<dev.slsk.internal.options.BrowseProgressUpdate>>map(
                                 listener -> progress -> listener.accept(new BrowseProgress(
                                         request.user(), progress.bytesTransferred(), progress.size())))
                         .orElse(null))

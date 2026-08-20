@@ -12,7 +12,7 @@ import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
-import dev.slsk.internal.diagnostics.DiagnosticEvent;
+import dev.slsk.internal.diagnostics.DiagnosticMessage;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.events.DownloadDeniedEvent;
@@ -68,7 +68,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     private final PeerServices services;
 
     private final DiagnosticSink diagnostic;
-    private final CopyOnWriteArrayList<Consumer<? super DiagnosticEvent>> diagnosticListeners =
+    private final CopyOnWriteArrayList<Consumer<? super DiagnosticMessage>> diagnosticListeners =
             new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<Consumer<? super DownloadDeniedEvent>> downloadDeniedListeners =
             new CopyOnWriteArrayList<>();
@@ -139,7 +139,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     @Override
-    public Subscription subscribe(Consumer<? super DiagnosticEvent> listener) {
+    public Subscription subscribe(Consumer<? super DiagnosticMessage> listener) {
         return Subscriptions.add(diagnosticListeners, listener);
     }
 
@@ -571,7 +571,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         }
     }
 
-    private void publishDiagnostic(DiagnosticEvent eventData) {
+    private void publishDiagnostic(DiagnosticMessage eventData) {
         diagnosticListeners.forEach(listener -> listener.accept(eventData));
     }
 

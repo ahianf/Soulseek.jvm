@@ -10,5 +10,5 @@ import java.util.function.Consumer;
 /** Generates diagnostic message events. */
 public interface DiagnosticSource {
     /** Subscribes to generated diagnostics. */
-    Subscription subscribe(Consumer<? super DiagnosticEvent> listener);
+    Subscription subscribe(Consumer<? super DiagnosticMessage> listener);
 }

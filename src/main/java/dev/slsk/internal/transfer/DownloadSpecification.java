@@ -10,7 +10,7 @@ import java.util.Objects;
 import java.util.function.Supplier;
 
 /** Everything one download needs, in one value. */
-public record DownloadRequest(
+public record DownloadSpecification(
         String username,
         String remoteFilename,
         String localFilename,
@@ -23,11 +23,11 @@ public record DownloadRequest(
         boolean toStream,
         dev.slsk.internal.messaging.messages.TransferRequest offer) {
 
-    public DownloadRequest {
+    public DownloadSpecification {
         cancellationSignal = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
     }
 
-    private DownloadRequest(Builder builder) {
+    private DownloadSpecification(Builder builder) {
         this(
                 builder.username,
                 builder.remoteFilename,
@@ -103,8 +103,8 @@ public record DownloadRequest(
             return this;
         }
 
-        public DownloadRequest build() {
-            return new DownloadRequest(this);
+        public DownloadSpecification build() {
+            return new DownloadSpecification(this);
         }
     }
 }

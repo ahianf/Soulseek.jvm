@@ -7,7 +7,7 @@ package dev.slsk.internal.diagnostics;
 /**
  * Diagnostic message level.
  */
-public enum DiagnosticLevel {
+public enum DiagnosticSeverity {
     /** No diagnostic messages. */
     NONE,
 

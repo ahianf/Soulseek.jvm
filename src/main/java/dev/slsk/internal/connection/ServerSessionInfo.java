@@ -5,31 +5,31 @@
 package dev.slsk.internal.connection;
 
 /** Session information from the server. */
-public record ServerInfo(
+public record ServerSessionInfo(
         Integer parentMinSpeed, Integer parentSpeedRatio, Integer wishlistInterval, Boolean supporter) {
 
-    public ServerInfo() {
+    public ServerSessionInfo() {
         this(null, null, null, null);
     }
 
-    public ServerInfo(Integer parentMinSpeed) {
+    public ServerSessionInfo(Integer parentMinSpeed) {
         this(parentMinSpeed, null, null, null);
     }
 
-    public ServerInfo(Integer parentMinSpeed, Integer parentSpeedRatio) {
+    public ServerSessionInfo(Integer parentMinSpeed, Integer parentSpeedRatio) {
         this(parentMinSpeed, parentSpeedRatio, null, null);
     }
 
-    public ServerInfo(Integer parentMinSpeed, Integer parentSpeedRatio, Integer wishlistInterval) {
+    public ServerSessionInfo(Integer parentMinSpeed, Integer parentSpeedRatio, Integer wishlistInterval) {
         this(parentMinSpeed, parentSpeedRatio, wishlistInterval, null);
     }
 
-    public ServerInfo with(
+    public ServerSessionInfo with(
             Integer replacementParentMinSpeed,
             Integer replacementParentSpeedRatio,
             Integer replacementWishlistInterval,
             Boolean replacementSupporter) {
-        return new ServerInfo(
+        return new ServerSessionInfo(
                 replacementParentMinSpeed != null ? replacementParentMinSpeed : parentMinSpeed,
                 replacementParentSpeedRatio != null ? replacementParentSpeedRatio : parentSpeedRatio,
                 replacementWishlistInterval != null ? replacementWishlistInterval : wishlistInterval,

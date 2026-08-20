@@ -79,7 +79,7 @@ class PeerNetworkTest {
         Fixture fixture = new Fixture();
         PeerNetwork manager = fixture.manager();
         AtomicInteger events = new AtomicInteger();
-        java.util.function.Consumer<dev.slsk.internal.diagnostics.DiagnosticEvent> listener =
+        java.util.function.Consumer<dev.slsk.internal.diagnostics.DiagnosticMessage> listener =
                 args -> events.incrementAndGet();
         manager.subscribe(listener);
 

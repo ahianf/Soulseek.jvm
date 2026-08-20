@@ -25,7 +25,7 @@ import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.concurrent.InterruptedOperationException;
-import dev.slsk.internal.connection.ServerInfo;
+import dev.slsk.internal.connection.ServerSessionInfo;
 import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
@@ -59,7 +59,7 @@ import dev.slsk.internal.network.tcp.ConnectionMonitor;
 import dev.slsk.internal.network.tcp.Listener;
 import dev.slsk.internal.network.tcp.SocketListener;
 import dev.slsk.internal.options.BrowseOptions;
-import dev.slsk.internal.options.BrowseProgress;
+import dev.slsk.internal.options.BrowseProgressUpdate;
 import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.options.SoulseekClientOptionsPatch;
@@ -181,7 +181,7 @@ final class SoulseekEngine implements AutoCloseable {
     volatile Listener listener;
     volatile String address;
     volatile InetSocketAddress ipEndpoint;
-    private volatile ServerInfo serverInfo = new ServerInfo();
+    private volatile ServerSessionInfo serverInfo = new ServerSessionInfo();
     volatile SoulseekClientState state = SoulseekClientState.DISCONNECTED;
 
     /** Serializes {@link #changeState}; see its javadoc. */
@@ -483,7 +483,7 @@ final class SoulseekEngine implements AutoCloseable {
     }
 
     /** Returns the accumulated server information. */
-    public final ServerInfo getServerInfo() {
+    public final ServerSessionInfo getServerInfo() {
         return serverInfo;
     }
 
@@ -910,7 +910,7 @@ final class SoulseekEngine implements AutoCloseable {
         forwardServer(ServerMessageEvent.GLOBAL_MESSAGE_RECEIVED, Kind.GLOBAL_MESSAGE_RECEIVED);
         forwardServer(ServerMessageEvent.DISTRIBUTED_NETWORK_RESET, Kind.DISTRIBUTED_NETWORK_RESET);
         forwardServer(ServerMessageEvent.EXCLUDED_SEARCH_PHRASES_RECEIVED, Kind.EXCLUDED_SEARCH_PHRASES_RECEIVED);
-        serverMessageHandler.<ServerInfo>subscribe(ServerMessageEvent.SERVER_INFO_RECEIVED, eventData -> {
+        serverMessageHandler.<ServerSessionInfo>subscribe(ServerMessageEvent.SERVER_INFO_RECEIVED, eventData -> {
             serverInfo = serverInfo.with(
                     eventData.parentMinSpeed(),
                     eventData.parentSpeedRatio(),
@@ -1213,7 +1213,7 @@ final class SoulseekEngine implements AutoCloseable {
         if (operationOptions.progressUpdated() != null) {
             operationOptions
                     .progressUpdated()
-                    .accept(new BrowseProgress(
+                    .accept(new BrowseProgressUpdate(
                             eventData.username(),
                             eventData.bytesTransferred(),
                             eventData.bytesRemaining(),

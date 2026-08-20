@@ -89,7 +89,7 @@ final class DefaultDiagnostics implements Diagnostics {
     }
 
     /** The internal record carries boxed nulls; the published one does not. */
-    private void onDiagnostic(dev.slsk.internal.diagnostics.DiagnosticEvent event) {
+    private void onDiagnostic(dev.slsk.internal.diagnostics.DiagnosticMessage event) {
         if (event == null) {
             return;
         }
@@ -120,7 +120,7 @@ final class DefaultDiagnostics implements Diagnostics {
         });
     }
 
-    private static DiagnosticLevel level(dev.slsk.internal.diagnostics.DiagnosticLevel source) {
+    private static DiagnosticLevel level(dev.slsk.internal.diagnostics.DiagnosticSeverity source) {
         if (source == null) {
             return DiagnosticLevel.INFO;
         }

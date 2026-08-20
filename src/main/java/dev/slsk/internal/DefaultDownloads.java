@@ -146,33 +146,34 @@ final class DefaultDownloads implements Downloads {
         // and the sink is opened there, so a download interrupted at ninety
         // percent costs ten percent to finish rather than another whole file.
         long resumeFrom = entry.resumeOffset();
-        dev.slsk.internal.transfer.DownloadRequest internal = dev.slsk.internal.transfer.DownloadRequest.toStream(
-                        request.user().value(), request.path(), () -> {
-                            try {
-                                SinkOutputStream opened = new SinkOutputStream(request.sink(), resumeFrom);
-                                stream.set(opened);
-                                return opened;
-                            } catch (IOException failure) {
-                                // The transfer path treats a stream it cannot
-                                // open as a failed transfer, which is what this
-                                // is; there is no separate "could not start".
-                                throw new dev.slsk.exceptions.TransferStreamException(
-                                        "Failed to open the transfer sink", failure);
-                            }
-                        })
-                .size(request.expectedSize() == 0 ? null : request.expectedSize())
-                .startOffset(resumeFrom)
-                .token(client.getNextToken())
-                // Present only when this attempt exists because a peer offered
-                // the file; the transfer then skips asking for what it has
-                // already been given.
-                .offer(offers.remove(new PeerFile(request.user(), request.path())))
-                .cancellation(entry.signal())
-                .options(TransferOptions.builder()
-                        .stateChanged(change -> observed(id, change.transfer()))
-                        .progressUpdated(update -> progressed(id, update.transfer()))
-                        .build())
-                .build();
+        dev.slsk.internal.transfer.DownloadSpecification internal =
+                dev.slsk.internal.transfer.DownloadSpecification.toStream(
+                                request.user().value(), request.path(), () -> {
+                                    try {
+                                        SinkOutputStream opened = new SinkOutputStream(request.sink(), resumeFrom);
+                                        stream.set(opened);
+                                        return opened;
+                                    } catch (IOException failure) {
+                                        // The transfer path treats a stream it cannot
+                                        // open as a failed transfer, which is what this
+                                        // is; there is no separate "could not start".
+                                        throw new dev.slsk.exceptions.TransferStreamException(
+                                                "Failed to open the transfer sink", failure);
+                                    }
+                                })
+                        .size(request.expectedSize() == 0 ? null : request.expectedSize())
+                        .startOffset(resumeFrom)
+                        .token(client.getNextToken())
+                        // Present only when this attempt exists because a peer offered
+                        // the file; the transfer then skips asking for what it has
+                        // already been given.
+                        .offer(offers.remove(new PeerFile(request.user(), request.path())))
+                        .cancellation(entry.signal())
+                        .options(TransferOptions.builder()
+                                .stateChanged(change -> observed(id, change.transfer()))
+                                .progressUpdated(update -> progressed(id, update.transfer()))
+                                .build())
+                        .build();
 
         try {
             TransferOutcome outcome = client.transfers().download(internal);

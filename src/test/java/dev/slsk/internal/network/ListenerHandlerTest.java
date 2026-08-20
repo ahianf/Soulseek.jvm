@@ -18,8 +18,8 @@ import dev.slsk.internal.common.DefaultWaiter;
 import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
-import dev.slsk.internal.diagnostics.DiagnosticEvent;
-import dev.slsk.internal.diagnostics.DiagnosticLevel;
+import dev.slsk.internal.diagnostics.DiagnosticMessage;
+import dev.slsk.internal.diagnostics.DiagnosticSeverity;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.messaging.messages.PeerInit;
 import dev.slsk.internal.messaging.messages.PierceFirewall;
@@ -51,7 +51,7 @@ class ListenerHandlerTest {
         }
         try (Fixture fixture = fixture(null)) {
             DefaultListenerHandler handler = handler(fixture, fixture.options);
-            AtomicReference<DiagnosticEvent> event = new AtomicReference<>();
+            AtomicReference<DiagnosticMessage> event = new AtomicReference<>();
             handler.subscribe(args -> event.set(args));
             handler.getDiagnostic().info("test");
             assertEquals("test", event.get().message());
@@ -245,7 +245,7 @@ class ListenerHandlerTest {
 
     private static SoulseekClientOptions options(SearchResponseCache cache) {
         return SoulseekClientOptions.builder()
-                .minimumDiagnosticLevel(DiagnosticLevel.TRACE)
+                .minimumDiagnosticLevel(DiagnosticSeverity.TRACE)
                 .searchResponseCache(cache)
                 .build();
     }

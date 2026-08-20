@@ -23,9 +23,9 @@ import dev.slsk.internal.common.TokenBucket;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationSignal;
-import dev.slsk.internal.connection.ServerInfo;
+import dev.slsk.internal.connection.ServerSessionInfo;
 import dev.slsk.internal.connection.SoulseekClientState;
-import dev.slsk.internal.diagnostics.DiagnosticEvent;
+import dev.slsk.internal.diagnostics.DiagnosticMessage;
 import dev.slsk.internal.events.DistributedChildEvent;
 import dev.slsk.internal.events.DownloadDeniedEvent;
 import dev.slsk.internal.events.DownloadFailedEvent;
@@ -224,18 +224,18 @@ class EngineTest {
     void serverEventsForwardUpdateInfoAndKickDisconnects() {
         Fixture fixture = new Fixture();
         AtomicReference<String> global = new AtomicReference<>();
-        AtomicReference<ServerInfo> serverInfo = new AtomicReference<>();
+        AtomicReference<ServerSessionInfo> serverInfo = new AtomicReference<>();
         AtomicInteger kicked = new AtomicInteger();
         fixture.client.events().on(Kind.GLOBAL_MESSAGE_RECEIVED, (String value) -> global.set(value));
         fixture.client
                 .events()
                 .on(
                         Kind.SERVER_INFO_RECEIVED,
-                        (dev.slsk.internal.connection.ServerInfo value) -> serverInfo.set(value));
+                        (dev.slsk.internal.connection.ServerSessionInfo value) -> serverInfo.set(value));
         fixture.client.events().on(Kind.KICKED_FROM_SERVER, (Void value) -> kicked.incrementAndGet());
 
         fixture.server.raise(ServerMessageEvent.GLOBAL_MESSAGE_RECEIVED, "global");
-        fixture.server.raise(ServerMessageEvent.SERVER_INFO_RECEIVED, new ServerInfo(1, 2, 3, true));
+        fixture.server.raise(ServerMessageEvent.SERVER_INFO_RECEIVED, new ServerSessionInfo(1, 2, 3, true));
         fixture.client.setStateForTest(SoulseekClientState.LOGGED_IN);
         fixture.server.raise(ServerMessageEvent.KICKED_FROM_SERVER, null);
 
@@ -259,18 +259,18 @@ class EngineTest {
     @Test
     void subsystemEventsForwardPayloadAndSubscriptionsCanBeClosed() {
         Fixture fixture = new Fixture();
-        AtomicReference<DiagnosticEvent> diagnostic = new AtomicReference<>();
+        AtomicReference<DiagnosticMessage> diagnostic = new AtomicReference<>();
         Subscription subscription = fixture.client.events().on(Kind.DIAGNOSTIC_GENERATED, diagnostic::set);
 
-        DiagnosticEvent expected = new DiagnosticEvent(
-                dev.slsk.internal.diagnostics.DiagnosticLevel.INFO, EngineTest.class.getName(), "message");
+        DiagnosticMessage expected = new DiagnosticMessage(
+                dev.slsk.internal.diagnostics.DiagnosticSeverity.INFO, EngineTest.class.getName(), "message");
         fixture.search.publishDiagnostic(expected);
         assertSame(expected, diagnostic.get());
 
         subscription.close();
         diagnostic.set(null);
-        fixture.search.publishDiagnostic(new DiagnosticEvent(
-                dev.slsk.internal.diagnostics.DiagnosticLevel.INFO, EngineTest.class.getName(), "after"));
+        fixture.search.publishDiagnostic(new DiagnosticMessage(
+                dev.slsk.internal.diagnostics.DiagnosticSeverity.INFO, EngineTest.class.getName(), "after"));
         assertNull(diagnostic.get(), "a closed subscription receives nothing");
 
         AtomicReference<DistributedChildEvent> child = new AtomicReference<>();
@@ -569,19 +569,20 @@ class EngineTest {
     }
 
     private static final class SearchResponderProbe {
-        private java.util.function.Consumer<dev.slsk.internal.diagnostics.DiagnosticEvent> diagnostic;
+        private java.util.function.Consumer<dev.slsk.internal.diagnostics.DiagnosticMessage> diagnostic;
         private final SearchResponder proxy = (SearchResponder) Proxy.newProxyInstance(
                 SearchResponder.class.getClassLoader(), new Class<?>[] {SearchResponder.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             if (method.getName().equals("subscribe") && arguments.length == 1) {
-                diagnostic = (java.util.function.Consumer<dev.slsk.internal.diagnostics.DiagnosticEvent>) arguments[0];
+                diagnostic =
+                        (java.util.function.Consumer<dev.slsk.internal.diagnostics.DiagnosticMessage>) arguments[0];
                 return (dev.slsk.Subscription) () -> diagnostic = null;
             }
             return defaultValue(method.getReturnType());
         }
 
-        private void publishDiagnostic(DiagnosticEvent eventData) {
+        private void publishDiagnostic(DiagnosticMessage eventData) {
             diagnostic.accept(eventData);
         }
     }

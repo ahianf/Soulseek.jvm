@@ -126,7 +126,7 @@ final class DefaultConnection implements Connection {
         client.events()
                 .on(
                         Kind.SERVER_INFO_RECEIVED,
-                        (dev.slsk.internal.connection.ServerInfo event) ->
+                        (dev.slsk.internal.connection.ServerSessionInfo event) ->
                                 events.publish(new ConnectionEvent.ServerInfoReceived(serverInfo(), Instant.now())));
         client.events()
                 .on(
@@ -282,7 +282,7 @@ final class DefaultConnection implements Connection {
     }
 
     private ServerInfo serverInfo() {
-        dev.slsk.internal.connection.ServerInfo source = client.getServerInfo();
+        dev.slsk.internal.connection.ServerSessionInfo source = client.getServerInfo();
         if (source == null) {
             return ServerInfo.empty();
         }

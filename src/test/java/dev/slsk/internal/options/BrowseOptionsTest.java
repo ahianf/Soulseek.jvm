@@ -18,7 +18,7 @@ class BrowseOptionsTest {
     @Test
     @DisplayName("Instantiates properly")
     void instantiatesProperly() {
-        Consumer<BrowseProgress> callback = progress -> {};
+        Consumer<BrowseProgressUpdate> callback = progress -> {};
 
         BrowseOptions options = BrowseOptions.builder()
                 .responseTimeout(Duration.ofMillis(-1))
@@ -51,16 +51,16 @@ class BrowseOptionsTest {
     @Test
     @DisplayName("Named callback and progress record preserve tuple behavior")
     void namedCallbackAndProgressRecordPreserveTupleBehavior() {
-        AtomicReference<BrowseProgress> received = new AtomicReference<>();
+        AtomicReference<BrowseProgressUpdate> received = new AtomicReference<>();
         BrowseOptions options = BrowseOptions.builder()
                 .responseTimeout(Duration.ofMillis(1))
                 .progressUpdated(received::set)
                 .build();
-        BrowseProgress progress = new BrowseProgress("alice", 2, 3, 40, 5);
+        BrowseProgressUpdate progress = new BrowseProgressUpdate("alice", 2, 3, 40, 5);
 
         options.progressUpdated().accept(progress);
 
         assertSame(progress, received.get());
-        assertEquals(new BrowseProgress("alice", 2, 3, 40, 5), received.get());
+        assertEquals(new BrowseProgressUpdate("alice", 2, 3, 40, 5), received.get());
     }
 }

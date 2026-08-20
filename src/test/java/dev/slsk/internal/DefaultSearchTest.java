@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.events.SearchEvent;
 import dev.slsk.internal.connection.SoulseekClientState;
-import dev.slsk.internal.diagnostics.DiagnosticLevel;
+import dev.slsk.internal.diagnostics.DiagnosticSeverity;
 import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.network.MessageConnection;
@@ -302,7 +302,7 @@ class DefaultSearchTest {
                 null,
                 null);
         private final EventBus<SearchEvent> events =
-                new EventBus<>("search", new FilteringDiagnosticSink(DiagnosticLevel.NONE, event -> {}));
+                new EventBus<>("search", new FilteringDiagnosticSink(DiagnosticSeverity.NONE, event -> {}));
         private final DefaultSearch search = new DefaultSearch(client, events);
 
         private Fixture() {

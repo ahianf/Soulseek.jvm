@@ -10,7 +10,7 @@ import java.util.Objects;
 import java.util.function.LongFunction;
 
 /** Everything one upload needs, in one value. */
-public record UploadRequest(
+public record UploadSpecification(
         String username,
         String remoteFilename,
         String localFilename,
@@ -21,11 +21,11 @@ public record UploadRequest(
         CancellationSignal cancellationSignal,
         boolean fromStream) {
 
-    public UploadRequest {
+    public UploadSpecification {
         cancellationSignal = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
     }
 
-    private UploadRequest(Builder builder) {
+    private UploadSpecification(Builder builder) {
         this(
                 builder.username,
                 builder.remoteFilename,
@@ -89,8 +89,8 @@ public record UploadRequest(
             return this;
         }
 
-        public UploadRequest build() {
-            return new UploadRequest(this);
+        public UploadSpecification build() {
+            return new UploadSpecification(this);
         }
     }
 }

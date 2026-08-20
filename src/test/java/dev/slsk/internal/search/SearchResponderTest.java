@@ -16,8 +16,8 @@ import dev.slsk.Subscription;
 import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.concurrent.CancellationSignal;
-import dev.slsk.internal.diagnostics.DiagnosticEvent;
-import dev.slsk.internal.diagnostics.DiagnosticLevel;
+import dev.slsk.internal.diagnostics.DiagnosticMessage;
+import dev.slsk.internal.diagnostics.DiagnosticSeverity;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.SearchRequestEvent;
 import dev.slsk.internal.events.SearchRequestResponseEvent;
@@ -80,8 +80,8 @@ class SearchResponderTest {
     void defaultDiagnosticRaisesTypedEventsAndAllowsNoListeners() {
         Fixture fixture = fixture(null);
         DefaultSearchResponder responder = responder(fixture.client, null);
-        AtomicReference<DiagnosticEvent> event = new AtomicReference<>();
-        Consumer<dev.slsk.internal.diagnostics.DiagnosticEvent> listener = args -> event.set(args);
+        AtomicReference<DiagnosticMessage> event = new AtomicReference<>();
+        Consumer<dev.slsk.internal.diagnostics.DiagnosticMessage> listener = args -> event.set(args);
         Subscription subscription = responder.subscribe(listener);
         responder.getDiagnostic().info("test");
         assertEquals("test", event.get().message());
@@ -312,7 +312,7 @@ class SearchResponderTest {
 
     private static SoulseekClientOptions options(SearchResponseCache cache) {
         return SoulseekClientOptions.builder()
-                .minimumDiagnosticLevel(DiagnosticLevel.TRACE)
+                .minimumDiagnosticLevel(DiagnosticSeverity.TRACE)
                 .searchResponseCache(cache)
                 .build();
     }
@@ -557,7 +557,7 @@ class SearchResponderTest {
         }
 
         @Override
-        public Subscription subscribe(Consumer<? super DiagnosticEvent> listener) {
+        public Subscription subscribe(Consumer<? super DiagnosticMessage> listener) {
             return () -> {};
         }
 

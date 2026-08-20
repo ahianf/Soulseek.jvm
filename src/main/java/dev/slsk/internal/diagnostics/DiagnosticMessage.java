@@ -8,19 +8,19 @@ import java.time.Instant;
 import java.util.Objects;
 
 /** Event payload for a diagnostic message. */
-public record DiagnosticEvent(
-        DiagnosticLevel level, String source, String message, Throwable exception, Instant timestamp) {
+public record DiagnosticMessage(
+        DiagnosticSeverity level, String source, String message, Throwable exception, Instant timestamp) {
 
-    public DiagnosticEvent {
+    public DiagnosticMessage {
         level = Objects.requireNonNull(level, "level");
         source = Objects.requireNonNull(source, "source");
     }
 
-    public DiagnosticEvent(DiagnosticLevel level, String source, String message) {
+    public DiagnosticMessage(DiagnosticSeverity level, String source, String message) {
         this(level, source, message, null);
     }
 
-    public DiagnosticEvent(DiagnosticLevel level, String source, String message, Throwable exception) {
+    public DiagnosticMessage(DiagnosticSeverity level, String source, String message, Throwable exception) {
         this(level, source, message, exception, Instant.now());
     }
 

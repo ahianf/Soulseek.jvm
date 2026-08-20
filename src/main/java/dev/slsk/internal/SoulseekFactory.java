@@ -104,13 +104,13 @@ public final class SoulseekFactory {
     }
 
     /** The public level, as the internal sink spells it. */
-    private static dev.slsk.internal.diagnostics.DiagnosticLevel level(DiagnosticLevel level) {
+    private static dev.slsk.internal.diagnostics.DiagnosticSeverity level(DiagnosticLevel level) {
         return switch (level) {
-            case NONE -> dev.slsk.internal.diagnostics.DiagnosticLevel.NONE;
-            case WARNING -> dev.slsk.internal.diagnostics.DiagnosticLevel.WARNING;
-            case INFO -> dev.slsk.internal.diagnostics.DiagnosticLevel.INFO;
-            case DEBUG -> dev.slsk.internal.diagnostics.DiagnosticLevel.DEBUG;
-            case TRACE -> dev.slsk.internal.diagnostics.DiagnosticLevel.TRACE;
+            case NONE -> dev.slsk.internal.diagnostics.DiagnosticSeverity.NONE;
+            case WARNING -> dev.slsk.internal.diagnostics.DiagnosticSeverity.WARNING;
+            case INFO -> dev.slsk.internal.diagnostics.DiagnosticSeverity.INFO;
+            case DEBUG -> dev.slsk.internal.diagnostics.DiagnosticSeverity.DEBUG;
+            case TRACE -> dev.slsk.internal.diagnostics.DiagnosticSeverity.TRACE;
         };
     }
 }

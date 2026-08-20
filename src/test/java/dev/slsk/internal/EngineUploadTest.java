@@ -49,7 +49,7 @@ import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.internal.transfer.TransferPhase;
 import dev.slsk.internal.transfer.TransferQueueLocation;
 import dev.slsk.internal.transfer.TransferTermination;
-import dev.slsk.internal.transfer.UploadRequest;
+import dev.slsk.internal.transfer.UploadSpecification;
 import dev.slsk.transfer.TransferOutcome;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -91,40 +91,41 @@ class EngineUploadTest {
                         IllegalArgumentException.class,
                         () -> fixture.client
                                 .transfers()
-                                .upload(UploadRequest.fromStream(bad, "file", 0, offset -> completedStream(new byte[0]))
+                                .upload(UploadSpecification.fromStream(
+                                                bad, "file", 0, offset -> completedStream(new byte[0]))
                                         .build()));
                 assertThrows(
                         IllegalArgumentException.class,
                         () -> fixture.client
                                 .transfers()
-                                .upload(UploadRequest.fromStream(
+                                .upload(UploadSpecification.fromStream(
                                                 "alice", bad, 0, offset -> completedStream(new byte[0]))
                                         .build()));
                 assertThrows(
                         IllegalArgumentException.class,
                         () -> fixture.client
                                 .transfers()
-                                .upload(UploadRequest.fromFile("alice", "file", bad)
+                                .upload(UploadSpecification.fromFile("alice", "file", bad)
                                         .build()));
             }
             assertThrows(
                     IllegalArgumentException.class,
                     () -> fixture.client
                             .transfers()
-                            .upload(UploadRequest.fromStream(
+                            .upload(UploadSpecification.fromStream(
                                             "alice", "file", -1, offset -> completedStream(new byte[0]))
                                     .build()));
             assertThrows(
                     NullPointerException.class,
                     () -> fixture.client
                             .transfers()
-                            .upload(UploadRequest.fromStream("alice", "file", 0, null)
+                            .upload(UploadSpecification.fromStream("alice", "file", 0, null)
                                     .build()));
             assertThrows(
                     UncheckedIOException.class,
                     () -> fixture.client
                             .transfers()
-                            .upload(UploadRequest.fromFile("alice", "file", "/missing/upload-file")
+                            .upload(UploadSpecification.fromFile("alice", "file", "/missing/upload-file")
                                     .build()));
 
             fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
@@ -132,7 +133,8 @@ class EngineUploadTest {
                     IllegalStateException.class,
                     () -> fixture.client
                             .transfers()
-                            .upload(UploadRequest.fromStream("alice", "file", 0, offset -> completedStream(new byte[0]))
+                            .upload(UploadSpecification.fromStream(
+                                            "alice", "file", 0, offset -> completedStream(new byte[0]))
                                     .build()));
         }
     }
@@ -147,7 +149,7 @@ class EngineUploadTest {
 
             TransferOutcome outcome = fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream("alice", "empty", 0, offset -> completedStream(new byte[0]))
+                    .upload(UploadSpecification.fromStream("alice", "empty", 0, offset -> completedStream(new byte[0]))
                             .token(41)
                             .options(timeline.on(options(20)))
                             .cancellation(source.getSignal())
@@ -170,7 +172,7 @@ class EngineUploadTest {
 
             fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromFile("alice", "remote", file.toString())
+                    .upload(UploadSpecification.fromFile("alice", "remote", file.toString())
                             .token(7)
                             .options(timeline.on(options(20)))
                             .build());
@@ -268,7 +270,7 @@ class EngineUploadTest {
                     DuplicateTokenException.class,
                     () -> fixture.client
                             .transfers()
-                            .upload(UploadRequest.fromStream(
+                            .upload(UploadSpecification.fromStream(
                                             "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                                     .token(8)
                                     .build()));
@@ -279,7 +281,7 @@ class EngineUploadTest {
                     DuplicateTokenException.class,
                     () -> fixture.client
                             .transfers()
-                            .upload(UploadRequest.fromStream(
+                            .upload(UploadSpecification.fromStream(
                                             "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                                     .token(9)
                                     .build()));
@@ -294,7 +296,7 @@ class EngineUploadTest {
                     DuplicateTransferException.class,
                     () -> fixture.client
                             .transfers()
-                            .upload(UploadRequest.fromStream(
+                            .upload(UploadSpecification.fromStream(
                                             "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                                     .token(9)
                                     .build()));
@@ -305,7 +307,7 @@ class EngineUploadTest {
                     DuplicateTransferException.class,
                     () -> fixture.client
                             .transfers()
-                            .upload(UploadRequest.fromStream(
+                            .upload(UploadSpecification.fromStream(
                                             "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                                     .token(9)
                                     .build()));
@@ -320,7 +322,8 @@ class EngineUploadTest {
 
             TransferOutcome outcome = fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+                    .upload(UploadSpecification.fromStream(
+                                    "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(10)
                             .options(options(20))
                             .build());
@@ -357,7 +360,8 @@ class EngineUploadTest {
 
             CompletableFuture<TransferOutcome> upload = inBackground(() -> fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+                    .upload(UploadSpecification.fromStream(
+                                    "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(12)
                             .options(options)
                             .build()));
@@ -383,7 +387,7 @@ class EngineUploadTest {
 
             fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream(
+                    .upload(UploadSpecification.fromStream(
                                     "alice", "remote\\file", bytes.length, offset -> completedStream(bytes))
                             .token(22)
                             .options(options)
@@ -425,7 +429,8 @@ class EngineUploadTest {
 
             fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream("alice", "file", bytes.length, offset -> completedStream(bytes))
+                    .upload(UploadSpecification.fromStream(
+                                    "alice", "file", bytes.length, offset -> completedStream(bytes))
                             .token(31)
                             .options(timeline.on(options(20)))
                             .build());
@@ -446,7 +451,7 @@ class EngineUploadTest {
 
             fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream(
+                    .upload(UploadSpecification.fromStream(
                                     "alice", "file", 3, offset -> completedStream(new byte[] {1, 2, 3}))
                             .token(32)
                             .options(timeline.on(options(20)))
@@ -463,7 +468,7 @@ class EngineUploadTest {
             fixture.transfer.offset = 4;
             TransferOutcome tooLong = fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream(
+                    .upload(UploadSpecification.fromStream(
                                     "alice", "file", 3, offset -> completedStream(new byte[] {1, 2, 3}))
                             .token(33)
                             .options(options(20))
@@ -479,7 +484,7 @@ class EngineUploadTest {
             fixture.transfer.offset = 1;
             TransferOutcome notSeekable = fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream("alice", "other", 2, offset -> (new InputStream() {
+                    .upload(UploadSpecification.fromStream("alice", "other", 2, offset -> (new InputStream() {
                                 @Override
                                 public int read() {
                                     return -1;
@@ -505,7 +510,7 @@ class EngineUploadTest {
 
             fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream(
+                    .upload(UploadSpecification.fromStream(
                                     "alice", "file", 3, offset -> completedStream(new byte[] {9, 8, 7}))
                             .token(35)
                             .options(timeline.on(options))
@@ -529,7 +534,7 @@ class EngineUploadTest {
 
             fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream(
+                    .upload(UploadSpecification.fromStream(
                                     "alice", "file", 5, offset -> completedStream(new byte[] {1, 2, 3, 4, 5}))
                             .token(36)
                             .options(options)
@@ -548,7 +553,8 @@ class EngineUploadTest {
 
             TransferOutcome outcome = fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+                    .upload(UploadSpecification.fromStream(
+                                    "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(40)
                             .options(timeline.on(options(20)))
                             .build());
@@ -588,7 +594,8 @@ class EngineUploadTest {
 
             TransferOutcome outcome = fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+                    .upload(UploadSpecification.fromStream(
+                                    "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(41)
                             .options(options)
                             .cancellation(cancelled.getSignal())
@@ -633,7 +640,8 @@ class EngineUploadTest {
 
             TransferOutcome outcome = fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+                    .upload(UploadSpecification.fromStream(
+                                    "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(44)
                             .options(options)
                             .build());
@@ -665,7 +673,8 @@ class EngineUploadTest {
 
             fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+                    .upload(UploadSpecification.fromStream(
+                                    "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(45)
                             .options(options)
                             .build());
@@ -694,7 +703,8 @@ class EngineUploadTest {
 
             TransferOutcome outcome = fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+                    .upload(UploadSpecification.fromStream(
+                                    "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(42)
                             .options(options)
                             .build());
@@ -717,7 +727,7 @@ class EngineUploadTest {
         try (Fixture fixture = new Fixture()) {
             TransferOutcome outcome = fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> {
+                    .upload(UploadSpecification.fromStream("alice", "file", 1, offset -> {
                                 throw new java.io.UncheckedIOException(new java.io.IOException("source is gone"));
                             })
                             .token(43)
@@ -728,7 +738,8 @@ class EngineUploadTest {
             AtomicInteger released = new AtomicInteger();
             fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream("alice", "other", 1, offset -> completedStream(new byte[] {1}))
+                    .upload(UploadSpecification.fromStream(
+                                    "alice", "other", 1, offset -> completedStream(new byte[] {1}))
                             .token(44)
                             .options(options(20, null, null, transfer -> {
                                 released.incrementAndGet();
@@ -745,7 +756,7 @@ class EngineUploadTest {
             CloseTrackingInputStream closeTracking = new CloseTrackingInputStream(new byte[] {1});
             fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> closeTracking)
+                    .upload(UploadSpecification.fromStream("alice", "file", 1, offset -> closeTracking)
                             .token(45)
                             .options(options(20).withCloseOptions(true))
                             .build());
@@ -754,7 +765,7 @@ class EngineUploadTest {
             CloseTrackingInputStream retained = new CloseTrackingInputStream(new byte[] {2});
             fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream("alice", "other", 1, offset -> retained)
+                    .upload(UploadSpecification.fromStream("alice", "other", 1, offset -> retained)
                             .token(46)
                             .options(options(20).withCloseOptions(false))
                             .build());
@@ -768,7 +779,8 @@ class EngineUploadTest {
             fixture.transfer.offsetBytes = new byte[] {1, 2};
             TransferOutcome malformed = fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+                    .upload(UploadSpecification.fromStream(
+                                    "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(47)
                             .options(options(20))
                             .build());
@@ -782,7 +794,8 @@ class EngineUploadTest {
                     new dev.slsk.exceptions.ConnectionWriteException("write failed", new IOException("broken pipe"));
             TransferOutcome write = fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream("alice", "other", 1, offset -> completedStream(new byte[] {1}))
+                    .upload(UploadSpecification.fromStream(
+                                    "alice", "other", 1, offset -> completedStream(new byte[] {1}))
                             .token(48)
                             .options(options(20))
                             .build());
@@ -800,7 +813,8 @@ class EngineUploadTest {
 
             TransferOutcome outcome = fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> completedStream(new byte[] {1}))
+                    .upload(UploadSpecification.fromStream(
+                                    "alice", "file", 1, offset -> completedStream(new byte[] {1}))
                             .token(49)
                             .options(timeline.on(options(20)))
                             .build());

@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.options;
 
-import dev.slsk.internal.diagnostics.DiagnosticLevel;
+import dev.slsk.internal.diagnostics.DiagnosticSeverity;
 import dev.slsk.internal.search.BoundedSearchResponseCache;
 import dev.slsk.internal.search.SearchResponseCache;
 import dev.slsk.internal.user.BoundedUserEndpointCache;
@@ -32,7 +32,7 @@ public record SoulseekClientOptions(
         boolean autoAcknowledgePrivateMessages,
         boolean autoAcknowledgePrivilegeNotifications,
         boolean acceptPrivateRoomInvitations,
-        DiagnosticLevel minimumDiagnosticLevel,
+        DiagnosticSeverity minimumDiagnosticLevel,
         int startingToken,
         ConnectionOptions serverConnectionOptions,
         ConnectionOptions peerConnectionOptions,
@@ -115,7 +115,7 @@ public record SoulseekClientOptions(
                 true,
                 true,
                 false,
-                DiagnosticLevel.INFO,
+                DiagnosticSeverity.INFO,
                 0,
                 null,
                 null,
@@ -187,7 +187,7 @@ public record SoulseekClientOptions(
         private int maximumDownloadSpeed = Integer.MAX_VALUE;
         private int maximumUploadSpeed = Integer.MAX_VALUE;
         private Duration messageTimeout = DEFAULT_MESSAGE_TIMEOUT;
-        private DiagnosticLevel minimumDiagnosticLevel = DiagnosticLevel.INFO;
+        private DiagnosticSeverity minimumDiagnosticLevel = DiagnosticSeverity.INFO;
         private ConnectionOptions peerConnectionOptions;
         private SearchResponseCache searchResponseCache;
         private ConnectionOptions serverConnectionOptions;
@@ -306,7 +306,7 @@ public record SoulseekClientOptions(
             return this;
         }
 
-        public Builder minimumDiagnosticLevel(DiagnosticLevel value) {
+        public Builder minimumDiagnosticLevel(DiagnosticSeverity value) {
             minimumDiagnosticLevel = value;
             return this;
         }

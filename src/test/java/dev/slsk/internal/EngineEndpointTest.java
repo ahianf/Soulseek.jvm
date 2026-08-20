@@ -20,7 +20,7 @@ import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationController;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.connection.SoulseekClientState;
-import dev.slsk.internal.diagnostics.DiagnosticLevel;
+import dev.slsk.internal.diagnostics.DiagnosticSeverity;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.messaging.messages.UserAddressRequest;
@@ -278,7 +278,7 @@ class EngineEndpointTest {
                 .listenIpAddress(InetAddress.getLoopbackAddress())
                 .maximumConcurrentSearches(50)
                 .maximumConcurrentUploads(1)
-                .minimumDiagnosticLevel(DiagnosticLevel.NONE)
+                .minimumDiagnosticLevel(DiagnosticSeverity.NONE)
                 .userEndpointCache(cache)
                 .build();
     }

@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.internal.diagnostics.DiagnosticLevel;
+import dev.slsk.internal.diagnostics.DiagnosticSeverity;
 import dev.slsk.internal.search.SearchResponseCache;
 import dev.slsk.internal.search.SearchResponseCacheRecord;
 import dev.slsk.internal.user.UserEndpointCache;
@@ -55,7 +55,7 @@ class SoulseekClientOptionsTest {
                 .autoAcknowledgePrivateMessages(false)
                 .autoAcknowledgePrivilegeNotifications(false)
                 .acceptPrivateRoomInvitations(true)
-                .minimumDiagnosticLevel(DiagnosticLevel.TRACE)
+                .minimumDiagnosticLevel(DiagnosticSeverity.TRACE)
                 .startingToken(13)
                 .serverConnectionOptions(server)
                 .peerConnectionOptions(peer)
@@ -82,7 +82,7 @@ class SoulseekClientOptionsTest {
         assertFalse(options.autoAcknowledgePrivateMessages());
         assertFalse(options.autoAcknowledgePrivilegeNotifications());
         assertTrue(options.acceptPrivateRoomInvitations());
-        assertEquals(DiagnosticLevel.TRACE, options.minimumDiagnosticLevel());
+        assertEquals(DiagnosticSeverity.TRACE, options.minimumDiagnosticLevel());
         assertEquals(13, options.startingToken());
         assertNull(options.serverConnectionOptions().inactivityTimeout());
         assertSame(peer, options.peerConnectionOptions());
@@ -114,7 +114,7 @@ class SoulseekClientOptionsTest {
         assertTrue(options.autoAcknowledgePrivateMessages());
         assertTrue(options.autoAcknowledgePrivilegeNotifications());
         assertFalse(options.acceptPrivateRoomInvitations());
-        assertEquals(DiagnosticLevel.INFO, options.minimumDiagnosticLevel());
+        assertEquals(DiagnosticSeverity.INFO, options.minimumDiagnosticLevel());
         assertNotNull(options.serverConnectionOptions());
         assertNull(options.serverConnectionOptions().inactivityTimeout());
         assertNotNull(options.peerConnectionOptions());
@@ -143,9 +143,9 @@ class SoulseekClientOptionsTest {
         SoulseekClientOptions traced = SoulseekClientOptions.builder()
                 .listenPort(50_001)
                 .messageTimeout(Duration.ofSeconds(15))
-                .minimumDiagnosticLevel(DiagnosticLevel.DEBUG)
+                .minimumDiagnosticLevel(DiagnosticSeverity.DEBUG)
                 .build();
-        assertEquals(DiagnosticLevel.DEBUG, traced.minimumDiagnosticLevel());
+        assertEquals(DiagnosticSeverity.DEBUG, traced.minimumDiagnosticLevel());
     }
 
     @Test
@@ -206,7 +206,7 @@ class SoulseekClientOptionsTest {
         assertSame(peer, copy.peerConnectionOptions());
         assertEquals(42, copy.maximumConcurrentUploads());
         assertEquals(24, copy.maximumConcurrentDownloads());
-        assertEquals(DiagnosticLevel.NONE, copy.minimumDiagnosticLevel());
+        assertEquals(DiagnosticSeverity.NONE, copy.minimumDiagnosticLevel());
 
         // Not patchable, so a customized limit must survive an unrelated patch.
         assertEquals(44, copy.maximumConcurrentSearches());
@@ -256,7 +256,7 @@ class SoulseekClientOptionsTest {
                 .maximumConcurrentSearches(searches)
                 .maximumConcurrentUploads(uploads)
                 .maximumConcurrentDownloads(downloads)
-                .minimumDiagnosticLevel(DiagnosticLevel.NONE)
+                .minimumDiagnosticLevel(DiagnosticSeverity.NONE)
                 .build();
     }
 
