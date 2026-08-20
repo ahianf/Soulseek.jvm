@@ -571,10 +571,10 @@ final class SoulseekEngine implements AutoCloseable {
         }
         CommonUtils.requireNonEmpty(requestedUsername, "username");
         CommonUtils.requireNonEmpty(password, "password");
-        if (state.contains(SoulseekClientState.CONNECTING) || state.contains(SoulseekClientState.LOGGING_IN)) {
+        if (state == SoulseekClientState.CONNECTING || state == SoulseekClientState.LOGGING_IN) {
             throw new IllegalStateException("A connection is already in the process of " + "being established");
         }
-        if (state.contains(SoulseekClientState.CONNECTED)) {
+        if (state.isConnected()) {
             throw new IllegalStateException("The client is already connected");
         }
 
@@ -802,7 +802,7 @@ final class SoulseekEngine implements AutoCloseable {
                     Kind.STATE_CHANGED, new SoulseekClientStateChangedEvent(previousState, state, message, exception));
             if (state.equals(SoulseekClientState.CONNECTED)) {
                 events.publish(Kind.CONNECTED, null);
-            } else if (state.equals(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN))) {
+            } else if (state == SoulseekClientState.LOGGED_IN) {
                 events.publish(Kind.LOGGED_IN, null);
             } else if (state.equals(SoulseekClientState.DISCONNECTED)) {
                 events.publish(Kind.DISCONNECTED, new SoulseekClientDisconnectedEvent(message, exception));
@@ -951,7 +951,7 @@ final class SoulseekEngine implements AutoCloseable {
         }
 
         try {
-            if (!state.contains(SoulseekClientState.CONNECTED) || !state.contains(SoulseekClientState.LOGGED_IN)) {
+            if (!state.isLoggedIn()) {
                 performConnect(requestedAddress, requestedEndpoint, requestedUsername, password, cancellationSignal);
             }
         } catch (Throwable failure) {
@@ -1005,7 +1005,7 @@ final class SoulseekEngine implements AutoCloseable {
         connection.connect(cancellationSignal);
         address = requestedAddress;
         ipEndpoint = requestedEndpoint;
-        changeState(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGING_IN), "Logging in", null);
+        changeState(SoulseekClientState.LOGGING_IN, "Logging in", null);
         login(requestedUsername, password, cancellationSignal);
     }
 
@@ -1031,7 +1031,7 @@ final class SoulseekEngine implements AutoCloseable {
         serverInfo = serverInfo.with(null, null, null, response.isSupporter());
         events.publish(Kind.SERVER_INFO_RECEIVED, serverInfo);
         server.username(requestedUsername);
-        changeState(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN), "Logged in", null);
+        changeState(SoulseekClientState.LOGGED_IN, "Logged in", null);
         sendConfigurationMessages(cancellationSignal);
     }
 
@@ -1186,7 +1186,7 @@ final class SoulseekEngine implements AutoCloseable {
     }
 
     boolean isConnectedAndLoggedIn() {
-        return state.contains(SoulseekClientState.CONNECTED) && state.contains(SoulseekClientState.LOGGED_IN);
+        return state.isLoggedIn();
     }
 
     private static Exception asException(Throwable failure) {

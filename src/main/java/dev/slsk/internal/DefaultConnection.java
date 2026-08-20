@@ -34,8 +34,8 @@ import java.util.function.Consumer;
  * {@link Connection}, over the engine.
  *
  * <p>Most of what this does is translate two bit-flag sets into types that name
- * themselves. {@code SoulseekClientState} is a set of bits where {@code CONNECTED
- * | LOGGED_IN} means online and a caller has to know it; {@link ConnectionState}
+ * themselves. {@code SoulseekClientState} is the engine's lifecycle phase;
+ * {@link ConnectionState}
  * says {@code Online}. The internal {@code ServerInfo} uses boxed {@code
  * Integer} and {@code Boolean} to mean "the server has not told us yet", which
  * is a {@code NullPointerException} waiting for the caller who forgets; the
@@ -163,18 +163,18 @@ final class DefaultConnection implements Connection {
 
     private ConnectionState mapState() {
         SoulseekClientState state = client.getState();
-        if (state.contains(SoulseekClientState.LOGGED_IN)) {
+        if (state.isLoggedIn()) {
             Instant since = onlineSince.updateAndGet(existing -> existing == null ? Instant.now() : existing);
             return new ConnectionState.Online(since, serverInfo());
         }
         onlineSince.set(null);
-        if (state.contains(SoulseekClientState.DISCONNECTING)) {
+        if (state == SoulseekClientState.DISCONNECTING) {
             return new ConnectionState.Disconnecting();
         }
-        if (state.contains(SoulseekClientState.LOGGING_IN) || state.contains(SoulseekClientState.CONNECTED)) {
+        if (state == SoulseekClientState.LOGGING_IN || state == SoulseekClientState.CONNECTED) {
             return new ConnectionState.Authenticating();
         }
-        if (state.contains(SoulseekClientState.CONNECTING)) {
+        if (state == SoulseekClientState.CONNECTING) {
             return new ConnectionState.Connecting(reconnects.attempt());
         }
         // The engine has no bit for "waiting to try again", so the supervisor

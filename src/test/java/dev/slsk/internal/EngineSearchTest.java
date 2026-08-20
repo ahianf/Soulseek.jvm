@@ -422,7 +422,7 @@ class EngineSearchTest {
     }
 
     private static SoulseekClientState loggedIn() {
-        return SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN);
+        return SoulseekClientState.LOGGED_IN;
     }
 
     /**

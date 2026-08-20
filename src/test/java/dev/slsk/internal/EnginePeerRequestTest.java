@@ -444,7 +444,7 @@ class EnginePeerRequestTest {
         }
         fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
         assertThrows(IllegalStateException.class, () -> fixture.client.users().browse("alice"));
-        fixture.client.setStateForTest(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
+        fixture.client.setStateForTest(SoulseekClientState.LOGGED_IN);
 
         fixture.waiter.results.put(BrowseResponse.class, new CompletableFuture<>());
         TimeoutException timeout = new TimeoutException("header timed out");
@@ -618,7 +618,7 @@ class EnginePeerRequestTest {
                 null);
 
         private Fixture() {
-            client.setStateForTest(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
+            client.setStateForTest(SoulseekClientState.LOGGED_IN);
         }
 
         @Override

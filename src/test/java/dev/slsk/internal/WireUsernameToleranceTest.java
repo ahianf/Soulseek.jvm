@@ -146,7 +146,7 @@ class WireUsernameToleranceTest {
                     null,
                     null,
                     null);
-            client.setStateForTest(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
+            client.setStateForTest(SoulseekClientState.LOGGED_IN);
             me = new DefaultMe(client, Username.of("me"), new EventBus<>("me", diagnostics.proxy), diagnostics.proxy);
             chat = new DefaultChat(client, new EventBus<>("chat", diagnostics.proxy), diagnostics.proxy);
         }

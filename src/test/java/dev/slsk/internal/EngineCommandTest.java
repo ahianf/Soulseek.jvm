@@ -180,7 +180,7 @@ class EngineCommandTest {
     private static SoulseekEngine loggedInClient(ConnectionProbe connection) {
         SoulseekEngine client = new SoulseekEngine(9999);
         client.setServerConnectionForTest(connection.proxy);
-        client.setStateForTest(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
+        client.setStateForTest(SoulseekClientState.LOGGED_IN);
         return client;
     }
 

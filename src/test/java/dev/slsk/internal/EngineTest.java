@@ -144,13 +144,11 @@ class EngineTest {
                                 disconnected.set(eventData));
 
         fixture.client.changeState(SoulseekClientState.CONNECTED, "connected", null);
-        fixture.client.changeState(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN), "logged", null);
+        fixture.client.changeState(SoulseekClientState.LOGGED_IN, "logged", null);
         RuntimeException cause = new RuntimeException("bye");
         fixture.client.changeState(SoulseekClientState.DISCONNECTED, "bye", cause);
 
-        assertEquals(
-                List.of("state:CONNECTED", "connected", "state:CONNECTED | LOGGED_IN", "logged", "state:DISCONNECTED"),
-                order);
+        assertEquals(List.of("state:CONNECTED", "connected", "state:LOGGED_IN", "logged", "state:DISCONNECTED"), order);
         assertEquals("bye", disconnected.get().message());
         assertSame(cause, disconnected.get().exception());
         fixture.close();
@@ -159,7 +157,7 @@ class EngineTest {
     @Test
     void disconnectUsesSourceReasonsCancelsSearchesAndRetainsDownloads() {
         Fixture fixture = new Fixture();
-        fixture.client.setStateForTest(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
+        fixture.client.setStateForTest(SoulseekClientState.LOGGED_IN);
         SearchInternal search = new SearchInternal(SearchQuery.fromText("query"), SearchScope.getNetwork(), 1);
         Map<Integer, SearchInternal> searches = new HashMap<>();
         searches.put(1, search);
@@ -238,7 +236,7 @@ class EngineTest {
 
         fixture.server.raise(ServerMessageEvent.GLOBAL_MESSAGE_RECEIVED, "global");
         fixture.server.raise(ServerMessageEvent.SERVER_INFO_RECEIVED, new ServerInfo(1, 2, 3, true));
-        fixture.client.setStateForTest(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
+        fixture.client.setStateForTest(SoulseekClientState.LOGGED_IN);
         fixture.server.raise(ServerMessageEvent.KICKED_FROM_SERVER, null);
 
         assertEquals("global", global.get());

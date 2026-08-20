@@ -17,16 +17,15 @@ import org.junit.jupiter.api.Test;
 
 class FlagStatesTest {
     @Test
-    @DisplayName("Combines and tests client state flags")
-    void combinesAndTestsClientStateFlags() {
-        SoulseekClientState state = SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN);
+    @DisplayName("Client lifecycle exposes connected and authenticated phases")
+    void clientLifecycleExposesSemanticPhases() {
+        SoulseekClientState state = SoulseekClientState.LOGGED_IN;
 
-        assertEquals(6, state.getValue());
-        assertTrue(state.contains(SoulseekClientState.CONNECTED));
-        assertTrue(state.contains(SoulseekClientState.LOGGED_IN));
-        assertFalse(state.contains(SoulseekClientState.CONNECTING));
-        assertEquals(state, SoulseekClientState.fromValue(6));
-        assertEquals("CONNECTED | LOGGED_IN", state.toString());
+        assertTrue(state.isConnected());
+        assertTrue(state.isLoggedIn());
+        assertTrue(SoulseekClientState.CONNECTED.isConnected());
+        assertFalse(SoulseekClientState.CONNECTED.isLoggedIn());
+        assertFalse(SoulseekClientState.CONNECTING.isConnected());
     }
 
     @Test
@@ -77,7 +76,6 @@ class FlagStatesTest {
     @Test
     @DisplayName("Returns canonical instances for declared single states")
     void returnsCanonicalInstancesForDeclaredStates() {
-        assertSame(SoulseekClientState.CONNECTED, SoulseekClientState.fromValue(2));
         assertSame(SearchState.QUEUED, SearchState.fromValue(256));
         assertSame(TransferState.REJECTED, TransferState.fromValue(512));
     }
@@ -96,7 +94,6 @@ class FlagStatesTest {
     @Test
     @DisplayName("None is present in every flags value like Enum.HasFlag")
     void noneIsPresentInEveryFlagsValue() {
-        assertTrue(SoulseekClientState.CONNECTED.contains(SoulseekClientState.NONE));
         assertTrue(SearchState.COMPLETED.contains(SearchState.NONE));
         assertTrue(TransferState.IN_PROGRESS.contains(TransferState.NONE));
     }

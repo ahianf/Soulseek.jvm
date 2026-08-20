@@ -625,7 +625,7 @@ class DistributedNetworkTest {
                         DistributedMessageHandler.class.getClassLoader(),
                         new Class<?>[] {DistributedMessageHandler.class},
                         (proxy, method, arguments) -> defaultValue(method.getReturnType()));
-        private SoulseekClientState state = SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN);
+        private SoulseekClientState state = SoulseekClientState.LOGGED_IN;
         private final ServerLink server =
                 ServerLinks.over(waiter, diagnostic, serverConnection.messageConnection(), LOCAL_USER, () -> state);
         private final DistributedNetwork manager = new DistributedNetwork(

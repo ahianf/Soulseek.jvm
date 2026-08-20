@@ -343,7 +343,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             return;
         }
         SoulseekClientState state = server.state();
-        if (state.contains(SoulseekClientState.DISCONNECTED) || state.contains(SoulseekClientState.DISCONNECTING)) {
+        if (state == SoulseekClientState.DISCONNECTED || state == SoulseekClientState.DISCONNECTING) {
             return;
         }
 
@@ -677,7 +677,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     @Override
     public void updateStatus(CancellationSignal cancellationSignal) {
         SoulseekClientState state = server.state();
-        if (!state.contains(SoulseekClientState.CONNECTED) || !state.contains(SoulseekClientState.LOGGED_IN)) {
+        if (!state.isLoggedIn()) {
             return;
         }
         while (true) {
@@ -769,11 +769,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
 
     void watchdogElapsed() {
         SoulseekClientState state = server.state();
-        if (isEnabled()
-                && !hasParent()
-                && !isBranchRoot()
-                && state.contains(SoulseekClientState.CONNECTED)
-                && state.contains(SoulseekClientState.LOGGED_IN)) {
+        if (isEnabled() && !hasParent() && !isBranchRoot() && state.isLoggedIn()) {
             diagnostic.warning("No distributed parent connected.  Requesting a list of " + "candidates.");
             updateStatus();
         }

@@ -221,7 +221,7 @@ class EnginePrivateRoomTest {
                 null,
                 null,
                 null);
-        client.setStateForTest(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
+        client.setStateForTest(SoulseekClientState.LOGGED_IN);
         return client;
     }
 

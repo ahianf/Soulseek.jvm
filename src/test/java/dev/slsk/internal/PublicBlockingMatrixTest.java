@@ -463,7 +463,7 @@ class PublicBlockingMatrixTest {
                     null,
                     null,
                     null);
-            engine.setStateForTest(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
+            engine.setStateForTest(SoulseekClientState.LOGGED_IN);
             slsk = DefaultSoulseek.over(engine, "alice", "password");
         }
 
@@ -669,7 +669,7 @@ class PublicBlockingMatrixTest {
             assertTrue(tcp.closed.get(), "the abandoned connect socket stayed open");
             assertTrue(tcp.connectExited.await(5, TimeUnit.SECONDS), "the transport connect worker was orphaned");
             assertEquals(ConnectionState.DISCONNECTED, server.getState());
-            assertFalse(engine.getState().contains(SoulseekClientState.CONNECTING));
+            assertFalse(engine.getState() == SoulseekClientState.CONNECTING);
         }
 
         @Override

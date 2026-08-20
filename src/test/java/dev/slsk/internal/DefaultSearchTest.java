@@ -306,7 +306,7 @@ class DefaultSearchTest {
         private final DefaultSearch search = new DefaultSearch(client, events);
 
         private Fixture() {
-            client.setStateForTest(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
+            client.setStateForTest(SoulseekClientState.LOGGED_IN);
         }
 
         private void waitUntil(BooleanSupplier condition) {

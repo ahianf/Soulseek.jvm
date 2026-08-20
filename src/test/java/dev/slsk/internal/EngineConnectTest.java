@@ -150,7 +150,7 @@ class EngineConnectTest {
                 List.of(
                         SoulseekClientState.CONNECTING,
                         SoulseekClientState.CONNECTED,
-                        SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGING_IN),
+                        SoulseekClientState.LOGGING_IN,
                         loggedIn()),
                 states);
         assertEquals(List.of("wait", "raw", "message", "message", "message", "distributed"), fixture.sequence);
@@ -298,7 +298,7 @@ class EngineConnectTest {
     }
 
     private static SoulseekClientState loggedIn() {
-        return SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN);
+        return SoulseekClientState.LOGGED_IN;
     }
 
     /**

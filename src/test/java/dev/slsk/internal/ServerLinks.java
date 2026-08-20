@@ -34,12 +34,7 @@ public final class ServerLinks {
      */
     public static ServerLink loggedIn(
             Waiter waiter, DiagnosticSink diagnostic, MessageConnection connection, String username) {
-        return over(
-                waiter,
-                diagnostic,
-                connection,
-                username,
-                () -> SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN));
+        return over(waiter, diagnostic, connection, username, () -> SoulseekClientState.LOGGED_IN);
     }
 
     /**

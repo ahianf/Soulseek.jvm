@@ -140,7 +140,7 @@ public final class ServerLink {
      */
     public void requireLoggedIn(String operation) {
         SoulseekClientState state = clientState.get();
-        if (!state.contains(SoulseekClientState.CONNECTED) || !state.contains(SoulseekClientState.LOGGED_IN)) {
+        if (!state.isLoggedIn()) {
             throw new IllegalStateException("The server connection must be connected and logged in to " + operation
                     + " (currently: " + state + ")");
         }
