@@ -43,7 +43,12 @@ public final class Catalogs {
      * @return the wire file
      */
     public static File file(SearchFile file) {
-        return new File(1, file.path(), file.size(), file.extension(), List.of());
+        List<FileAttribute> attributes = file.attributes().raw().entrySet().stream()
+                .map(attribute -> new FileAttribute(
+                        WireFileAttribute.fromValue(attribute.getKey().code()),
+                        attribute.getValue()))
+                .toList();
+        return new File(1, file.path(), file.size(), file.extension(), attributes);
     }
 
     /**
