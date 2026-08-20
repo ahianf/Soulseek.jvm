@@ -8,99 +8,50 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-/**
- * Search scope definition.
- */
-public class SearchScope {
-    private final List<String> subjects;
-    private final SearchScopeType type;
+/** Search scope definition. */
+public record SearchScope(SearchScopeType type, List<String> subjects) {
 
-    /**
-     * Creates a search scope.
-     *
-     * @param type the scope type
-     * @param subjects the scope subjects, if applicable
-     * @throws IllegalArgumentException when the subjects are invalid for the
-     *     selected scope
-     */
-    public SearchScope(SearchScopeType type, String... subjects) {
-        this.type = Objects.requireNonNull(type, "type");
-        String[] suppliedSubjects = subjects == null ? new String[0] : subjects;
-
-        if ((type == SearchScopeType.NETWORK || type == SearchScopeType.WISHLIST) && suppliedSubjects.length > 0) {
+    public SearchScope {
+        type = Objects.requireNonNull(type, "type");
+        List<String> suppliedSubjects = subjects == null ? List.of() : subjects;
+        if ((type == SearchScopeType.NETWORK || type == SearchScopeType.WISHLIST) && !suppliedSubjects.isEmpty()) {
             throw new IllegalArgumentException(
                     "The " + displayName(type) + " search scope can not be used with subjects");
         }
-
         if (type == SearchScopeType.ROOM
-                && (suppliedSubjects.length != 1 || suppliedSubjects[0] == null || suppliedSubjects[0].isEmpty())) {
+                && (suppliedSubjects.size() != 1
+                        || suppliedSubjects.getFirst() == null
+                        || suppliedSubjects.getFirst().isEmpty())) {
             throw new IllegalArgumentException(
                     "The Room search scope requires a single, non null and non empty subject");
         }
-
         if (type == SearchScopeType.USER) {
-            if (suppliedSubjects.length == 0) {
+            if (suppliedSubjects.isEmpty()) {
                 throw new IllegalArgumentException("The User search scope requires at least one subject");
             }
-            if (Arrays.stream(suppliedSubjects).anyMatch(value -> value == null || value.isEmpty())) {
+            if (suppliedSubjects.stream().anyMatch(value -> value == null || value.isEmpty())) {
                 throw new IllegalArgumentException("One or more of the supplied User scope subjects is null or empty");
             }
         }
-        this.subjects = List.copyOf(Arrays.asList(suppliedSubjects));
+        subjects = List.copyOf(suppliedSubjects);
     }
 
-    /**
-     * Returns a new network search scope.
-     *
-     * @return a network search scope
-     */
+    public SearchScope(SearchScopeType type, String... subjects) {
+        this(type, subjects == null ? List.of() : Arrays.asList(subjects));
+    }
+
     public static SearchScope getNetwork() {
         return new SearchScope(SearchScopeType.NETWORK);
     }
 
-    /**
-     * Returns a new wishlist search scope.
-     *
-     * @return a wishlist search scope
-     */
     public static SearchScope getWishlist() {
         return new SearchScope(SearchScopeType.WISHLIST);
     }
 
-    /**
-     * Returns the scope subjects.
-     *
-     * @return the scope subjects
-     */
-    public final List<String> getSubjects() {
-        return subjects;
-    }
-
-    /**
-     * Returns the scope type.
-     *
-     * @return the scope type
-     */
-    public final SearchScopeType getType() {
-        return type;
-    }
-
-    /**
-     * Returns a room scope.
-     *
-     * @param roomName the room to search
-     * @return the room scope
-     */
     public static SearchScope room(String roomName) {
         return new SearchScope(SearchScopeType.ROOM, roomName);
     }
 
-    /**
-     * Returns a user scope.
-     *
-     * @param usernames the users to search
-     * @return the user scope
-     */
     public static SearchScope user(String... usernames) {
         return new SearchScope(SearchScopeType.USER, usernames);
     }

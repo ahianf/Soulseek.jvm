@@ -25,13 +25,13 @@ class DiagnosticEventTest {
         DiagnosticEvent args =
                 new DiagnosticEvent(DiagnosticLevel.WARNING, DiagnosticEventTest.class.getName(), "message", exception);
 
-        assertEquals(DiagnosticLevel.WARNING, args.getLevel());
-        assertEquals(DiagnosticEventTest.class.getName(), args.getSource());
-        assertEquals("message", args.getMessage());
-        assertSame(exception, args.getException());
-        assertTrue(args.isIncludesException());
-        assertFalse(args.getTimestamp().isBefore(before));
-        assertFalse(args.getTimestamp().isAfter(Instant.now()));
+        assertEquals(DiagnosticLevel.WARNING, args.level());
+        assertEquals(DiagnosticEventTest.class.getName(), args.source());
+        assertEquals("message", args.message());
+        assertSame(exception, args.exception());
+        assertTrue(args.includesException());
+        assertFalse(args.timestamp().isBefore(before));
+        assertFalse(args.timestamp().isAfter(Instant.now()));
     }
 
     @Test
@@ -39,10 +39,10 @@ class DiagnosticEventTest {
     void instantiatesWithNullExceptionGivenNull() {
         DiagnosticEvent args = new DiagnosticEvent(DiagnosticLevel.INFO, DiagnosticEventTest.class.getName(), null);
 
-        assertEquals(DiagnosticLevel.INFO, args.getLevel());
-        assertNull(args.getMessage());
-        assertNull(args.getException());
-        assertFalse(args.isIncludesException());
+        assertEquals(DiagnosticLevel.INFO, args.level());
+        assertNull(args.message());
+        assertNull(args.exception());
+        assertFalse(args.includesException());
     }
 
     @Test

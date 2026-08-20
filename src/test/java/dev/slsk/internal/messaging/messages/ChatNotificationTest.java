@@ -116,11 +116,10 @@ class ChatNotificationTest {
         RoomTickerListNotification direct = new RoomTickerListNotification("room", 7, source);
         source.clear();
 
-        assertEquals("room", direct.getRoomName());
-        assertEquals(7, direct.getTickerCount());
-        assertEquals(List.of(ticker), direct.getTickers());
-        assertThrows(
-                UnsupportedOperationException.class, () -> direct.getTickers().clear());
+        assertEquals("room", direct.roomName());
+        assertEquals(7, direct.tickerCount());
+        assertEquals(List.of(ticker), direct.tickers());
+        assertThrows(UnsupportedOperationException.class, () -> direct.tickers().clear());
 
         RoomTickerListNotification parsed = RoomTickerListNotification.fromByteArray(new MessageBuilder()
                 .writeCode(MessageCode.Server.ROOM_TICKERS)
@@ -131,8 +130,8 @@ class ChatNotificationTest {
                 .writeString("bob")
                 .writeString("bye")
                 .build());
-        assertEquals(2, parsed.getTickerCount());
-        assertEquals("bob", parsed.getTickers().get(1).username());
+        assertEquals(2, parsed.tickerCount());
+        assertEquals("bob", parsed.tickers().get(1).username());
     }
 
     @Test

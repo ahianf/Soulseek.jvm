@@ -314,12 +314,12 @@ final class SearchDomain {
 
     static byte[] buildSearchMessage(SearchScope scope, SearchInternal search) {
         String text = search.getQuery().searchText();
-        return switch (scope.getType()) {
+        return switch (scope.type()) {
             case ROOM ->
-                new RoomSearchRequest(scope.getSubjects().iterator().next(), text, search.getToken()).toByteArray();
+                new RoomSearchRequest(scope.subjects().iterator().next(), text, search.getToken()).toByteArray();
             case USER -> {
                 ByteArrayOutputStream messages = new ByteArrayOutputStream();
-                for (String subject : scope.getSubjects()) {
+                for (String subject : scope.subjects()) {
                     messages.writeBytes(new UserSearchRequest(subject, text, search.getToken()).toByteArray());
                 }
                 yield messages.toByteArray();

@@ -84,7 +84,7 @@ class SearchResponderTest {
         DiagnosticEventListener listener = (sender, args) -> event.set(args);
         responder.addDiagnosticGeneratedListener(listener);
         responder.getDiagnostic().info("test");
-        assertEquals("test", event.get().getMessage());
+        assertEquals("test", event.get().message());
         responder.removeDiagnosticGeneratedListener(listener);
         responder.getDiagnostic().info("unbound");
     }

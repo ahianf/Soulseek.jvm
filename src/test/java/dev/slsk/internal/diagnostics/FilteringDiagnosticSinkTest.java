@@ -69,7 +69,7 @@ class FilteringDiagnosticSinkTest {
         factory.warning("message");
 
         assertEquals(count, events.size());
-        assertTrue(events.stream().allMatch(event -> event.getLevel().getValue() <= minimum.getValue()));
+        assertTrue(events.stream().allMatch(event -> event.level().getValue() <= minimum.getValue()));
     }
 
     static Stream<Arguments> filterCases() {
@@ -82,16 +82,16 @@ class FilteringDiagnosticSinkTest {
     }
 
     private static void assertEvent(DiagnosticEvent event, DiagnosticLevel level, String message, Throwable exception) {
-        assertEquals(level, event.getLevel());
-        assertEquals(FilteringDiagnosticSinkTest.class.getName(), event.getSource());
-        assertEquals(message, event.getMessage());
-        assertSame(exception, event.getException());
-        assertEquals(exception != null, event.isIncludesException());
+        assertEquals(level, event.level());
+        assertEquals(FilteringDiagnosticSinkTest.class.getName(), event.source());
+        assertEquals(message, event.message());
+        assertSame(exception, event.exception());
+        assertEquals(exception != null, event.includesException());
         if (exception == null) {
-            assertFalse(event.isIncludesException());
-            assertNull(event.getException());
+            assertFalse(event.includesException());
+            assertNull(event.exception());
         } else {
-            assertTrue(event.isIncludesException());
+            assertTrue(event.includesException());
         }
     }
 }

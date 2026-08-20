@@ -98,10 +98,9 @@ class ConnectionServerResponseTest {
         List<NetInfoParent> source = new ArrayList<>(List.of(first));
         NetInfoNotification direct = new NetInfoNotification(7, source);
         source.clear();
-        assertEquals(7, direct.getParentCount());
-        assertEquals(List.of(first), direct.getParents());
-        assertThrows(
-                UnsupportedOperationException.class, () -> direct.getParents().clear());
+        assertEquals(7, direct.parentCount());
+        assertEquals(List.of(first), direct.parents());
+        assertThrows(UnsupportedOperationException.class, () -> direct.parents().clear());
 
         NetInfoNotification parsed = NetInfoNotification.fromByteArray(new MessageBuilder()
                 .writeCode(MessageCode.Server.NET_INFO)
@@ -110,8 +109,8 @@ class ConnectionServerResponseTest {
                 .writeBytes(new byte[] {3, 2, 1, 127})
                 .writeInteger(2234)
                 .build());
-        assertEquals(1, parsed.getParentCount());
-        assertEquals(first, parsed.getParents().get(0));
+        assertEquals(1, parsed.parentCount());
+        assertEquals(first, parsed.parents().get(0));
     }
 
     @Test

@@ -8,33 +8,15 @@ import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
 import java.net.InetAddress;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
 /** An incoming list of distributed parent candidates. */
-public final class NetInfoNotification implements IncomingMessage {
-    private final int parentCount;
-    private final List<NetInfoParent> parents;
+public record NetInfoNotification(int parentCount, List<NetInfoParent> parents) implements IncomingMessage {
 
-    /** Creates a network-info notification. */
-    public NetInfoNotification(int parentCount, Iterable<? extends NetInfoParent> parents) {
-        this.parentCount = parentCount;
-        Objects.requireNonNull(parents, "parents");
-        List<NetInfoParent> copy = new ArrayList<>();
-        parents.forEach(copy::add);
-        this.parents = Collections.unmodifiableList(copy);
+    public NetInfoNotification {
+        parents = List.copyOf(parents);
     }
 
-    public int getParentCount() {
-        return parentCount;
-    }
-
-    public List<NetInfoParent> getParents() {
-        return parents;
-    }
-
-    /** Parses a network-info notification. */
     public static NetInfoNotification fromByteArray(byte[] bytes) {
         MessageReader<MessageCode.Server> reader =
                 ServerMessageParser.reader(bytes, MessageCode.Server.NET_INFO, "NetInfoNotification");

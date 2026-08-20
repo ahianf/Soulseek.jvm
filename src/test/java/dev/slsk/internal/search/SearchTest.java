@@ -22,7 +22,7 @@ class SearchTest {
         Search search = new Search(query, scope, 42, state, 3, 4, 5);
 
         assertEquals("foo bar", search.query().searchText());
-        assertEquals(SearchScopeType.NETWORK, search.scope().getType());
+        assertEquals(SearchScopeType.NETWORK, search.scope().type());
         assertEquals(42, search.token());
         assertEquals(state, search.state());
         assertEquals(3, search.responseCount());

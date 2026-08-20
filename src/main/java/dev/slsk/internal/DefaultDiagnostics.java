@@ -94,11 +94,11 @@ final class DefaultDiagnostics implements Diagnostics {
             return;
         }
         events.publish(new DiagnosticEvent(
-                level(event.getLevel()),
-                event.getSource(),
-                event.getMessage(),
-                Optional.ofNullable(event.getException()),
-                event.getTimestamp() == null ? Instant.now() : event.getTimestamp()));
+                level(event.level()),
+                event.source(),
+                event.message(),
+                Optional.ofNullable(event.exception()),
+                event.timestamp() == null ? Instant.now() : event.timestamp()));
     }
 
     /**

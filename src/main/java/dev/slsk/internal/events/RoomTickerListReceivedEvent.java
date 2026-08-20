@@ -40,7 +40,7 @@ public class RoomTickerListReceivedEvent extends RoomTickerEvent {
      * @param notification the notification that raised the event
      */
     public RoomTickerListReceivedEvent(RoomTickerListNotification notification) {
-        this(notification.getRoomName(), notification.getTickers());
+        this(notification.roomName(), notification.tickers());
     }
 
     /**

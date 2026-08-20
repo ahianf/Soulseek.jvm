@@ -466,7 +466,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
 
     private void handleNetInfo(byte[] message) {
         NetInfoNotification notification = NetInfoNotification.fromByteArray(message);
-        List<PeerEndpoint> parents = notification.getParents().stream()
+        List<PeerEndpoint> parents = notification.parents().stream()
                 .map(parent ->
                         new PeerEndpoint(parent.username(), new InetSocketAddress(parent.ipAddress(), parent.port())))
                 .toList();
@@ -591,10 +591,10 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     }
 
     private boolean deliberatelySearchesSelf(SearchInternal search, int token) {
-        if (search.getToken() != token || search.getScope().getType() != SearchScopeType.USER) {
+        if (search.getToken() != token || search.getScope().type() != SearchScopeType.USER) {
             return false;
         }
-        for (String subject : search.getScope().getSubjects()) {
+        for (String subject : search.getScope().subjects()) {
             if (subject.equalsIgnoreCase(server.username())) {
                 return true;
             }

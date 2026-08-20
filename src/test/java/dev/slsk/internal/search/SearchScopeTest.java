@@ -19,7 +19,7 @@ class SearchScopeTest {
     void instantiatesNetworkDefault() {
         SearchScope scope = new SearchScope(SearchScopeType.NETWORK);
 
-        assertEquals(SearchScopeType.NETWORK, scope.getType());
+        assertEquals(SearchScopeType.NETWORK, scope.type());
         assertTrue(subjects(scope).isEmpty());
     }
 
@@ -46,7 +46,7 @@ class SearchScopeTest {
     void instantiatesRoom() {
         SearchScope scope = new SearchScope(SearchScopeType.ROOM, "room");
 
-        assertEquals(SearchScopeType.ROOM, scope.getType());
+        assertEquals(SearchScopeType.ROOM, scope.type());
         assertEquals(List.of("room"), subjects(scope));
     }
 
@@ -79,7 +79,7 @@ class SearchScopeTest {
     void instantiatesUser() {
         SearchScope scope = new SearchScope(SearchScopeType.USER, "alice");
 
-        assertEquals(SearchScopeType.USER, scope.getType());
+        assertEquals(SearchScopeType.USER, scope.type());
         assertEquals(List.of("alice"), subjects(scope));
     }
 
@@ -117,7 +117,7 @@ class SearchScopeTest {
     void networkReturnsNetworkScope() {
         SearchScope scope = SearchScope.getNetwork();
 
-        assertEquals(SearchScopeType.NETWORK, scope.getType());
+        assertEquals(SearchScopeType.NETWORK, scope.type());
         assertTrue(subjects(scope).isEmpty());
     }
 
@@ -126,7 +126,7 @@ class SearchScopeTest {
     void wishlistReturnsWishlistScope() {
         SearchScope scope = SearchScope.getWishlist();
 
-        assertEquals(SearchScopeType.WISHLIST, scope.getType());
+        assertEquals(SearchScopeType.WISHLIST, scope.type());
         assertTrue(subjects(scope).isEmpty());
     }
 
@@ -135,7 +135,7 @@ class SearchScopeTest {
     void roomReturnsRoomScope() {
         SearchScope scope = SearchScope.room("room");
 
-        assertEquals(SearchScopeType.ROOM, scope.getType());
+        assertEquals(SearchScopeType.ROOM, scope.type());
         assertEquals(List.of("room"), subjects(scope));
     }
 
@@ -144,7 +144,7 @@ class SearchScopeTest {
     void userReturnsUserScope() {
         SearchScope scope = SearchScope.user("alice", "bob");
 
-        assertEquals(SearchScopeType.USER, scope.getType());
+        assertEquals(SearchScopeType.USER, scope.type());
         assertEquals(List.of("alice", "bob"), subjects(scope));
     }
 
@@ -176,6 +176,6 @@ class SearchScopeTest {
     }
 
     private static List<String> subjects(SearchScope scope) {
-        return StreamSupport.stream(scope.getSubjects().spliterator(), false).toList();
+        return StreamSupport.stream(scope.subjects().spliterator(), false).toList();
     }
 }

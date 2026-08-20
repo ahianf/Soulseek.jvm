@@ -54,7 +54,7 @@ class ListenerHandlerTest {
             AtomicReference<DiagnosticEvent> event = new AtomicReference<>();
             handler.addDiagnosticGeneratedListener((sender, args) -> event.set(args));
             handler.getDiagnostic().info("test");
-            assertEquals("test", event.get().getMessage());
+            assertEquals("test", event.get().message());
         }
     }
 
