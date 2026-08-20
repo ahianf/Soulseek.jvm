@@ -55,7 +55,7 @@ instead (see [3.2](#32-blocking-calls-virtual-threads-interruption)).
 
 | Fact | Value |
 |---|---|
-| Maven coordinates | `dev.slsk:slsk-jvm:2.0.0` |
+| Maven coordinates | `dev.slsk:slsk-jvm:2.1.0` |
 | Distribution | Local Maven repository only. Run `mvn install` in the library checkout. Not published to Maven Central. |
 | Java version | 25 or later |
 | JPMS module | `dev.slsk.soulseek` |
