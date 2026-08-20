@@ -4,6 +4,8 @@
 
 package dev.slsk.internal.share;
 
+import java.util.Optional;
+
 /**
  * File attribute type.
  */
@@ -46,30 +48,27 @@ public enum FileAttributeType {
      * @throws IllegalArgumentException when the value is unknown
      */
     public static FileAttributeType fromValue(int value) {
-        FileAttributeType type = tryFromValue(value);
-        if (type == null) {
-            throw new IllegalArgumentException("Unknown file attribute type: " + value);
-        }
-        return type;
+        return tryFromValue(value)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown file attribute type: " + value));
     }
 
     /**
-     * Returns the type represented by a protocol value, or {@code null} for a
-     * value this client does not know.
+     * Returns the type represented by a protocol value, if this client knows
+     * it.
      *
      * <p>Peers run clients newer than this one, and the C# source reads their
      * attribute types tolerantly. Throwing instead meant one nonstandard
      * attribute discarded the entire search or browse response it arrived in.
      *
      * @param value the protocol value
-     * @return the matching type, or {@code null}
+     * @return the matching type
      */
-    public static FileAttributeType tryFromValue(int value) {
+    public static Optional<FileAttributeType> tryFromValue(int value) {
         for (FileAttributeType type : values()) {
             if (type.value == value) {
-                return type;
+                return Optional.of(type);
             }
         }
-        return null;
+        return Optional.empty();
     }
 }

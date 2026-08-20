@@ -276,10 +276,7 @@ public final class MessageReader<T extends Enum<T> & ProtocolCode> {
             // is dropped, not the file and not the response it arrived in.
             int type = readInteger();
             int value = readInteger();
-            FileAttributeType known = FileAttributeType.tryFromValue(type);
-            if (known != null) {
-                attributes.add(new FileAttribute(known, value));
-            }
+            FileAttributeType.tryFromValue(type).ifPresent(known -> attributes.add(new FileAttribute(known, value)));
         }
         return new File(code, filename, size, extension, attributes);
     }
