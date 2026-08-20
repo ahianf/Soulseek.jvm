@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.internal.concurrent.CancellationController;
 import dev.slsk.internal.options.SearchOptions;
 import dev.slsk.internal.share.File;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -67,10 +68,10 @@ class SearchInternalTest {
 
     @Test
     void criteriaRespectFilterSwitchAndEveryThreshold() {
-        assertAccepted(new SearchOptions(1000, 250, false, 99, 0, 99), response(42, 0, 0, List.of(), List.of()));
-        assertRejected(new SearchOptions(1000, 250, true, 1, 2, 3), response(42, 3, 1, List.of(), List.of()));
-        assertRejected(new SearchOptions(1000, 250, true, 1, 2, 3), response(42, 2, 2, List.of(FILE), List.of()));
-        assertAccepted(new SearchOptions(1000, 250, true, 1, 2, 3), response(42, 3, 1, List.of(FILE), List.of()));
+        assertAccepted(options(1000, 250, false, 99, 0, 99), response(42, 0, 0, List.of(), List.of()));
+        assertRejected(options(1000, 250, true, 1, 2, 3), response(42, 3, 1, List.of(), List.of()));
+        assertRejected(options(1000, 250, true, 1, 2, 3), response(42, 2, 2, List.of(FILE), List.of()));
+        assertAccepted(options(1000, 250, true, 1, 2, 3), response(42, 3, 1, List.of(FILE), List.of()));
     }
 
     @Test
@@ -83,8 +84,10 @@ class SearchInternalTest {
             assertEquals(0, received.get());
         }
 
-        SearchOptions options =
-                new SearchOptions(1000, 250, true, 0, Integer.MAX_VALUE, 0, 25_000, true, response -> false);
+        SearchOptions options = options(1000)
+                .minimumResponseFileCount(0)
+                .responseFilter(response -> false)
+                .build();
         assertRejected(options, response(42, 1, 0, List.of(FILE), List.of()));
     }
 
@@ -104,8 +107,7 @@ class SearchInternalTest {
     void filtersUnlockedAndLockedFilesBeforeAccepting() {
         File keep = new File(1, "keep", 1, "x");
         File remove = new File(1, "remove", 1, "x");
-        SearchOptions options =
-                new SearchOptions(1000, 250, true, 1, Integer.MAX_VALUE, 0, 25_000, true, null, file -> file == keep);
+        SearchOptions options = options(1000).fileFilter(file -> file == keep).build();
         AtomicReference<SearchResponse> accepted = new AtomicReference<>();
 
         try (SearchInternal search = search(42, options)) {
@@ -123,15 +125,14 @@ class SearchInternalTest {
 
     @Test
     void rejectsResponseWhenFileFilterDropsBelowMinimum() {
-        SearchOptions options =
-                new SearchOptions(1000, 250, true, 1, Integer.MAX_VALUE, 0, 25_000, true, null, file -> false);
+        SearchOptions options = options(1000).fileFilter(file -> false).build();
         assertRejected(options, response(42, 1, 0, List.of(), List.of(FILE)));
     }
 
     @Test
     void invokesComposedCallbacksInOrderAndResetsTimeout() {
         StringBuilder order = new StringBuilder();
-        try (SearchInternal search = search(42, new SearchOptions(1000))) {
+        try (SearchInternal search = search(42, options(1000).build())) {
             search.setState(SearchState.IN_PROGRESS);
             search.addResponseReceived(response -> order.append('a'));
             search.addResponseReceived(response -> order.append('b'));
@@ -166,7 +167,11 @@ class SearchInternalTest {
 
     @Test
     void responseLimitWinsWhenBothLimitsAreReached() throws Exception {
-        SearchOptions options = new SearchOptions(1000, 1, false, 1, Integer.MAX_VALUE, 0, 1);
+        SearchOptions options = options(1000)
+                .responseLimit(1)
+                .filterResponses(false)
+                .fileLimit(1)
+                .build();
         try (SearchInternal search = search(42, options)) {
             search.setState(SearchState.IN_PROGRESS);
             search.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of()));
@@ -178,7 +183,11 @@ class SearchInternalTest {
 
     @Test
     void fileLimitCompletesSearch() throws Exception {
-        SearchOptions options = new SearchOptions(1000, 2, false, 1, Integer.MAX_VALUE, 0, 1);
+        SearchOptions options = options(1000)
+                .responseLimit(2)
+                .filterResponses(false)
+                .fileLimit(1)
+                .build();
         try (SearchInternal search = search(42, options)) {
             search.setState(SearchState.IN_PROGRESS);
             search.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of()));
@@ -206,7 +215,7 @@ class SearchInternalTest {
 
     @Test
     void timerStartsOnlyOnTransitionsIntoInProgressAndTimesOut() throws Exception {
-        SearchOptions options = new SearchOptions(40);
+        SearchOptions options = options(40).build();
         try (SearchInternal search = search(42, options)) {
             assertFalse(search.isTimeoutActive());
             search.setState(SearchState.REQUESTED);
@@ -241,11 +250,31 @@ class SearchInternalTest {
 
     @Test
     void rejectsNonpositiveTimeoutLikeSystemTimer() {
-        assertThrows(IllegalArgumentException.class, () -> search(42, new SearchOptions(0)));
+        assertThrows(IllegalArgumentException.class, () -> search(42, options(0).build()));
     }
 
     private static SearchInternal search(int token, SearchOptions options) {
         return new SearchInternal(new SearchQuery("foo"), SearchScope.getNetwork(), token, options);
+    }
+
+    private static SearchOptions.Builder options(int timeoutMillis) {
+        return SearchOptions.builder().searchTimeout(Duration.ofMillis(timeoutMillis));
+    }
+
+    private static SearchOptions options(
+            int timeoutMillis,
+            int responseLimit,
+            boolean filterResponses,
+            int minimumResponseFileCount,
+            int maximumPeerQueueLength,
+            int minimumPeerUploadSpeed) {
+        return options(timeoutMillis)
+                .responseLimit(responseLimit)
+                .filterResponses(filterResponses)
+                .minimumResponseFileCount(minimumResponseFileCount)
+                .maximumPeerQueueLength(maximumPeerQueueLength)
+                .minimumPeerUploadSpeed(minimumPeerUploadSpeed)
+                .build();
     }
 
     private static SearchResponse response(

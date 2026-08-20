@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.internal.transfer.TransferState;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -27,18 +28,27 @@ class TransferOptionsTest {
         TransferSlotReleasedCallback slotReleased = transfer -> {};
         TransferReporter reporter = (transfer, attempted, granted, transferred) -> {};
 
-        TransferOptions options = new TransferOptions(
-                stateChanged, progressUpdated, slotReleased, reporter, 42, false, false, false, false);
+        TransferOptions options = TransferOptions.builder()
+                .stateChanged(stateChanged)
+                .progressUpdated(progressUpdated)
+                .slotReleased(slotReleased)
+                .reporter(reporter)
+                .maximumLingerTime(Duration.ofMillis(42))
+                .seekInputStreamAutomatically(false)
+                .seekOutputStreamAutomatically(false)
+                .disposeInputStreamOnCompletion(false)
+                .disposeOutputStreamOnCompletion(false)
+                .build();
 
-        assertSame(stateChanged, options.getStateChanged());
-        assertSame(progressUpdated, options.getProgressUpdated());
-        assertSame(slotReleased, options.getSlotReleased());
-        assertSame(reporter, options.getReporter());
-        assertEquals(42, options.getMaximumLingerTime());
-        assertFalse(options.isSeekInputStreamAutomatically());
-        assertFalse(options.isSeekOutputStreamAutomatically());
-        assertFalse(options.isDisposeInputStreamOnCompletion());
-        assertFalse(options.isDisposeOutputStreamOnCompletion());
+        assertSame(stateChanged, options.stateChanged());
+        assertSame(progressUpdated, options.progressUpdated());
+        assertSame(slotReleased, options.slotReleased());
+        assertSame(reporter, options.reporter());
+        assertEquals(Duration.ofMillis(42), options.maximumLingerTime());
+        assertFalse(options.seekInputStreamAutomatically());
+        assertFalse(options.seekOutputStreamAutomatically());
+        assertFalse(options.disposeInputStreamOnCompletion());
+        assertFalse(options.disposeOutputStreamOnCompletion());
     }
 
     @Test
@@ -46,15 +56,15 @@ class TransferOptionsTest {
     void instantiatesWithDefaults() {
         TransferOptions options = new TransferOptions();
 
-        assertTrue(options.isSeekInputStreamAutomatically());
-        assertTrue(options.isSeekOutputStreamAutomatically());
-        assertTrue(options.isDisposeInputStreamOnCompletion());
-        assertTrue(options.isDisposeOutputStreamOnCompletion());
-        assertEquals(TransferOptions.DEFAULT_MAXIMUM_LINGER_TIME, options.getMaximumLingerTime());
-        assertNull(options.getStateChanged());
-        assertNull(options.getProgressUpdated());
-        assertNull(options.getSlotReleased());
-        assertNull(options.getReporter());
+        assertTrue(options.seekInputStreamAutomatically());
+        assertTrue(options.seekOutputStreamAutomatically());
+        assertTrue(options.disposeInputStreamOnCompletion());
+        assertTrue(options.disposeOutputStreamOnCompletion());
+        assertEquals(TransferOptions.DEFAULT_MAXIMUM_LINGER_TIME, options.maximumLingerTime());
+        assertNull(options.stateChanged());
+        assertNull(options.progressUpdated());
+        assertNull(options.slotReleased());
+        assertNull(options.reporter());
     }
 
     @Test
@@ -63,31 +73,38 @@ class TransferOptionsTest {
         TransferProgressUpdatedCallback progress = update -> {};
         TransferSlotReleasedCallback released = transfer -> {};
         TransferReporter reporter = (transfer, attempted, granted, transferred) -> {};
-        TransferOptions original =
-                new TransferOptions(null, progress, released, reporter, 42, false, true, false, true);
+        TransferOptions original = TransferOptions.builder()
+                .progressUpdated(progress)
+                .slotReleased(released)
+                .reporter(reporter)
+                .maximumLingerTime(Duration.ofMillis(42))
+                .seekInputStreamAutomatically(false)
+                .disposeInputStreamOnCompletion(false)
+                .build();
 
         TransferOptions copy = original.withAdditionalStateChanged(null);
 
-        assertSame(progress, copy.getProgressUpdated());
-        assertSame(released, copy.getSlotReleased());
-        assertSame(reporter, copy.getReporter());
-        assertEquals(42, copy.getMaximumLingerTime());
-        assertFalse(copy.isSeekInputStreamAutomatically());
-        assertTrue(copy.isSeekOutputStreamAutomatically());
-        assertFalse(copy.isDisposeInputStreamOnCompletion());
-        assertTrue(copy.isDisposeOutputStreamOnCompletion());
-        assertNotSame(original.getStateChanged(), copy.getStateChanged());
-        copy.getStateChanged().onStateChanged(new TransferStateChange(TransferState.NONE, null));
+        assertSame(progress, copy.progressUpdated());
+        assertSame(released, copy.slotReleased());
+        assertSame(reporter, copy.reporter());
+        assertEquals(Duration.ofMillis(42), copy.maximumLingerTime());
+        assertFalse(copy.seekInputStreamAutomatically());
+        assertTrue(copy.seekOutputStreamAutomatically());
+        assertFalse(copy.disposeInputStreamOnCompletion());
+        assertTrue(copy.disposeOutputStreamOnCompletion());
+        assertNotSame(original.stateChanged(), copy.stateChanged());
+        copy.stateChanged().onStateChanged(new TransferStateChange(TransferState.NONE, null));
     }
 
     @Test
     @DisplayName("WithAdditionalStateChanged executes new callback before existing")
     void withAdditionalStateChangedExecutesBothInOrder() {
         List<Integer> order = new ArrayList<>();
-        TransferOptions original = new TransferOptions(change -> order.add(2));
+        TransferOptions original =
+                TransferOptions.builder().stateChanged(change -> order.add(2)).build();
         TransferOptions copy = original.withAdditionalStateChanged(change -> order.add(1));
 
-        copy.getStateChanged().onStateChanged(new TransferStateChange(TransferState.NONE, null));
+        copy.stateChanged().onStateChanged(new TransferStateChange(TransferState.NONE, null));
 
         assertEquals(List.of(1, 2), order);
     }
@@ -97,7 +114,9 @@ class TransferOptionsTest {
     void withAdditionalStateChangedStopsIfNewCallbackThrows() {
         List<Integer> order = new ArrayList<>();
         RuntimeException failure = new RuntimeException("failure");
-        TransferOptions original = new TransferOptions(null, change -> order.add(2));
+        TransferOptions original = TransferOptions.builder()
+                .progressUpdated(change -> order.add(2))
+                .build();
         TransferOptions copy = original.withAdditionalStateChanged(change -> {
             order.add(1);
             throw failure;
@@ -105,7 +124,7 @@ class TransferOptionsTest {
 
         RuntimeException thrown = assertThrows(
                 RuntimeException.class,
-                () -> copy.getStateChanged().onStateChanged(new TransferStateChange(TransferState.NONE, null)));
+                () -> copy.stateChanged().onStateChanged(new TransferStateChange(TransferState.NONE, null)));
 
         assertSame(failure, thrown);
         assertEquals(List.of(1), order);
@@ -114,13 +133,18 @@ class TransferOptionsTest {
     @Test
     @DisplayName("WithDisposalOptions retains null overrides")
     void withDisposalOptionsRetainsNullOverrides() {
-        TransferOptions original = new TransferOptions(null, null, null, null, 42, false, false, false, true);
+        TransferOptions original = TransferOptions.builder()
+                .maximumLingerTime(Duration.ofMillis(42))
+                .seekInputStreamAutomatically(false)
+                .seekOutputStreamAutomatically(false)
+                .disposeInputStreamOnCompletion(false)
+                .build();
 
         TransferOptions copy = original.withDisposalOptions();
 
-        assertFalse(copy.isDisposeInputStreamOnCompletion());
-        assertTrue(copy.isDisposeOutputStreamOnCompletion());
-        assertEquals(42, copy.getMaximumLingerTime());
+        assertFalse(copy.disposeInputStreamOnCompletion());
+        assertTrue(copy.disposeOutputStreamOnCompletion());
+        assertEquals(Duration.ofMillis(42), copy.maximumLingerTime());
     }
 
     @Test
@@ -131,10 +155,10 @@ class TransferOptionsTest {
         TransferOptions copy = original.withDisposalOptions(false, false);
         TransferOptions outputOnly = original.withDisposalOptions(null, false);
 
-        assertFalse(copy.isDisposeInputStreamOnCompletion());
-        assertFalse(copy.isDisposeOutputStreamOnCompletion());
-        assertTrue(outputOnly.isDisposeInputStreamOnCompletion());
-        assertFalse(outputOnly.isDisposeOutputStreamOnCompletion());
+        assertFalse(copy.disposeInputStreamOnCompletion());
+        assertFalse(copy.disposeOutputStreamOnCompletion());
+        assertTrue(outputOnly.disposeInputStreamOnCompletion());
+        assertFalse(outputOnly.disposeOutputStreamOnCompletion());
     }
 
     @Test

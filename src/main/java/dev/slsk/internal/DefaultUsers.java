@@ -260,12 +260,13 @@ final class DefaultUsers implements Users {
 
     private Browse browse(BrowseRequest request, CancellationSignal signal) throws InterruptedException {
         Objects.requireNonNull(request, "request");
-        BrowseOptions options = new BrowseOptions(
-                (int) request.timeout().toMillis(),
-                request.onProgress()
+        BrowseOptions options = BrowseOptions.builder()
+                .responseTimeout(request.timeout())
+                .progressUpdated(request.onProgress()
                         .<BrowseProgressCallback>map(listener -> progress -> listener.accept(
                                 new BrowseProgress(request.user(), progress.bytesTransferred(), progress.size())))
-                        .orElse(null));
+                        .orElse(null))
+                .build();
         dev.slsk.internal.share.BrowseResponse response =
                 directory.browse(request.user().value(), options, signal);
         return new Browse(

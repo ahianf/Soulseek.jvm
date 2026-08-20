@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,10 +19,13 @@ class BrowseOptionsTest {
     void instantiatesProperly() {
         BrowseProgressCallback callback = progress -> {};
 
-        BrowseOptions options = new BrowseOptions(-1, callback);
+        BrowseOptions options = BrowseOptions.builder()
+                .responseTimeout(Duration.ofMillis(-1))
+                .progressUpdated(callback)
+                .build();
 
-        assertEquals(-1, options.getResponseTimeout());
-        assertSame(callback, options.getProgressUpdated());
+        assertEquals(Duration.ofMillis(-1), options.responseTimeout());
+        assertSame(callback, options.progressUpdated());
     }
 
     @Test
@@ -29,27 +33,31 @@ class BrowseOptionsTest {
     void usesSourceDefaults() {
         BrowseOptions options = new BrowseOptions();
 
-        assertEquals(60_000, options.getResponseTimeout());
-        assertNull(options.getProgressUpdated());
+        assertEquals(Duration.ofMinutes(1), options.responseTimeout());
+        assertNull(options.progressUpdated());
     }
 
     @Test
     @DisplayName("Timeout-only overload leaves callback null")
     void timeoutOnlyOverloadLeavesCallbackNull() {
-        BrowseOptions options = new BrowseOptions(123);
+        BrowseOptions options =
+                BrowseOptions.builder().responseTimeout(Duration.ofMillis(123)).build();
 
-        assertEquals(123, options.getResponseTimeout());
-        assertNull(options.getProgressUpdated());
+        assertEquals(Duration.ofMillis(123), options.responseTimeout());
+        assertNull(options.progressUpdated());
     }
 
     @Test
     @DisplayName("Named callback and progress record preserve tuple behavior")
     void namedCallbackAndProgressRecordPreserveTupleBehavior() {
         AtomicReference<BrowseProgress> received = new AtomicReference<>();
-        BrowseOptions options = new BrowseOptions(1, received::set);
+        BrowseOptions options = BrowseOptions.builder()
+                .responseTimeout(Duration.ofMillis(1))
+                .progressUpdated(received::set)
+                .build();
         BrowseProgress progress = new BrowseProgress("alice", 2, 3, 40, 5);
 
-        options.getProgressUpdated().onProgressUpdated(progress);
+        options.progressUpdated().onProgressUpdated(progress);
 
         assertSame(progress, received.get());
         assertEquals(new BrowseProgress("alice", 2, 3, 40, 5), received.get());

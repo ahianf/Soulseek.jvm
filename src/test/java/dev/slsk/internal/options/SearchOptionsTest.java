@@ -14,6 +14,7 @@ import dev.slsk.internal.search.Search;
 import dev.slsk.internal.search.SearchResponse;
 import dev.slsk.internal.search.SearchState;
 import dev.slsk.internal.share.File;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -26,79 +27,92 @@ class SearchOptionsTest {
         SearchStateChangedCallback stateChanged = change -> {};
         SearchResponseReceivedCallback responseReceived = received -> {};
 
-        SearchOptions options = new SearchOptions(
-                -1, -2, false, -3, -4, -5, -6, false, responseFilter, fileFilter, stateChanged, responseReceived);
+        SearchOptions options = SearchOptions.builder()
+                .searchTimeout(Duration.ofMillis(-1))
+                .responseLimit(-2)
+                .filterResponses(false)
+                .minimumResponseFileCount(-3)
+                .maximumPeerQueueLength(-4)
+                .minimumPeerUploadSpeed(-5)
+                .fileLimit(-6)
+                .removeSingleCharacterSearchTerms(false)
+                .responseFilter(responseFilter)
+                .fileFilter(fileFilter)
+                .stateChanged(stateChanged)
+                .responseReceived(responseReceived)
+                .build();
 
-        assertEquals(-1, options.getSearchTimeout());
-        assertEquals(-2, options.getResponseLimit());
-        assertFalse(options.isFilterResponses());
-        assertEquals(-3, options.getMinimumResponseFileCount());
-        assertEquals(-4, options.getMaximumPeerQueueLength());
-        assertEquals(-5, options.getMinimumPeerUploadSpeed());
-        assertEquals(-6, options.getFileLimit());
-        assertFalse(options.isRemoveSingleCharacterSearchTerms());
-        assertSame(responseFilter, options.getResponseFilter());
-        assertSame(fileFilter, options.getFileFilter());
-        assertSame(stateChanged, options.getStateChanged());
-        assertSame(responseReceived, options.getResponseReceived());
+        assertEquals(Duration.ofMillis(-1), options.searchTimeout());
+        assertEquals(-2, options.responseLimit());
+        assertFalse(options.filterResponses());
+        assertEquals(-3, options.minimumResponseFileCount());
+        assertEquals(-4, options.maximumPeerQueueLength());
+        assertEquals(-5, options.minimumPeerUploadSpeed());
+        assertEquals(-6, options.fileLimit());
+        assertFalse(options.removeSingleCharacterSearchTerms());
+        assertSame(responseFilter, options.responseFilter());
+        assertSame(fileFilter, options.fileFilter());
+        assertSame(stateChanged, options.stateChanged());
+        assertSame(responseReceived, options.responseReceived());
     }
 
     @Test
     void usesSourceDefaults() {
         SearchOptions options = new SearchOptions();
 
-        assertEquals(15_000, options.getSearchTimeout());
-        assertEquals(250, options.getResponseLimit());
-        assertTrue(options.isFilterResponses());
-        assertEquals(1, options.getMinimumResponseFileCount());
-        assertEquals(Integer.MAX_VALUE, options.getMaximumPeerQueueLength());
-        assertEquals(0, options.getMinimumPeerUploadSpeed());
-        assertEquals(25_000, options.getFileLimit());
-        assertTrue(options.isRemoveSingleCharacterSearchTerms());
-        assertNull(options.getResponseFilter());
-        assertNull(options.getFileFilter());
-        assertNull(options.getStateChanged());
-        assertNull(options.getResponseReceived());
+        assertEquals(Duration.ofSeconds(15), options.searchTimeout());
+        assertEquals(250, options.responseLimit());
+        assertTrue(options.filterResponses());
+        assertEquals(1, options.minimumResponseFileCount());
+        assertEquals(Integer.MAX_VALUE, options.maximumPeerQueueLength());
+        assertEquals(0, options.minimumPeerUploadSpeed());
+        assertEquals(25_000, options.fileLimit());
+        assertTrue(options.removeSingleCharacterSearchTerms());
+        assertNull(options.responseFilter());
+        assertNull(options.fileFilter());
+        assertNull(options.stateChanged());
+        assertNull(options.responseReceived());
     }
 
     @Test
-    void optionalOverloadsPreserveEveryTrailingDefault() {
-        assertEquals(250, new SearchOptions(1).getResponseLimit());
-        assertTrue(new SearchOptions(1, 2).isFilterResponses());
-        assertEquals(1, new SearchOptions(1, 2, false).getMinimumResponseFileCount());
-        assertEquals(Integer.MAX_VALUE, new SearchOptions(1, 2, false, 3).getMaximumPeerQueueLength());
-        assertEquals(0, new SearchOptions(1, 2, false, 3, 4).getMinimumPeerUploadSpeed());
-        assertEquals(25_000, new SearchOptions(1, 2, false, 3, 4, 5).getFileLimit());
-        assertTrue(new SearchOptions(1, 2, false, 3, 4, 5, 6).isRemoveSingleCharacterSearchTerms());
-        assertNull(new SearchOptions(1, 2, false, 3, 4, 5, 6, false).getResponseFilter());
+    void builderPreservesEveryUnnamedDefault() {
+        SearchOptions options = SearchOptions.builder().responseLimit(2).build();
+
+        assertEquals(Duration.ofSeconds(15), options.searchTimeout());
+        assertTrue(options.filterResponses());
+        assertEquals(1, options.minimumResponseFileCount());
+        assertEquals(Integer.MAX_VALUE, options.maximumPeerQueueLength());
+        assertEquals(0, options.minimumPeerUploadSpeed());
+        assertEquals(25_000, options.fileLimit());
+        assertTrue(options.removeSingleCharacterSearchTerms());
+        assertNull(options.responseFilter());
     }
 
     @Test
     void callbacksAndNamedTupleRecordsAreUsable() {
         AtomicReference<SearchStateChange> state = new AtomicReference<>();
         AtomicReference<SearchResponseReceived> received = new AtomicReference<>();
-        SearchOptions options = new SearchOptions(
-                1,
-                2,
-                true,
-                3,
-                4,
-                5,
-                6,
-                true,
-                response -> response.getQueueLength() == 7,
-                file -> "x".equals(file.getFilename()),
-                state::set,
-                received::set);
+        SearchOptions options = SearchOptions.builder()
+                .searchTimeout(Duration.ofMillis(1))
+                .responseLimit(2)
+                .minimumResponseFileCount(3)
+                .maximumPeerQueueLength(4)
+                .minimumPeerUploadSpeed(5)
+                .fileLimit(6)
+                .responseFilter(response -> response.getQueueLength() == 7)
+                .fileFilter(file -> "x".equals(file.getFilename()))
+                .stateChanged(state::set)
+                .responseReceived(received::set)
+                .build();
         Search search = new Search(null, null, 9, SearchState.COMPLETED, 0, 0, 0);
         SearchResponse response = new SearchResponse("u", 8, true, 1, 7, List.of());
         File file = new File(1, "x", 2, "ext");
 
-        options.getStateChanged().onStateChanged(new SearchStateChange(SearchState.IN_PROGRESS, search));
-        options.getResponseReceived().onResponseReceived(new SearchResponseReceived(search, response));
+        options.stateChanged().onStateChanged(new SearchStateChange(SearchState.IN_PROGRESS, search));
+        options.responseReceived().onResponseReceived(new SearchResponseReceived(search, response));
 
-        assertTrue(options.getResponseFilter().test(response));
-        assertTrue(options.getFileFilter().test(file));
+        assertTrue(options.responseFilter().test(response));
+        assertTrue(options.fileFilter().test(file));
         assertEquals(new SearchStateChange(SearchState.IN_PROGRESS, search), state.get());
         assertEquals(new SearchResponseReceived(search, response), received.get());
     }

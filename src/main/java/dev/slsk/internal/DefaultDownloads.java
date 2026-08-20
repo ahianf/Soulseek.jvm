@@ -169,8 +169,10 @@ final class DefaultDownloads implements Downloads {
                 // already been given.
                 .offer(offers.remove(new PeerFile(request.user(), request.path())))
                 .cancellation(entry.signal())
-                .options(new TransferOptions(
-                        change -> observed(id, change.transfer()), update -> progressed(id, update.transfer())))
+                .options(TransferOptions.builder()
+                        .stateChanged(change -> observed(id, change.transfer()))
+                        .progressUpdated(update -> progressed(id, update.transfer()))
+                        .build())
                 .build();
 
         try {

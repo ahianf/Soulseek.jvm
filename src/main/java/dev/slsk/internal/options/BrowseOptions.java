@@ -4,58 +4,40 @@
 
 package dev.slsk.internal.options;
 
-/**
- * Options for a browse operation.
- */
-public class BrowseOptions {
-    /** The default response timeout in milliseconds. */
-    public static final int DEFAULT_RESPONSE_TIMEOUT = 60_000;
+import java.time.Duration;
 
-    private final BrowseProgressCallback progressUpdated;
-    private final int responseTimeout;
+/** Options for a browse operation. */
+public record BrowseOptions(Duration responseTimeout, BrowseProgressCallback progressUpdated) {
+    /** The default response timeout. */
+    public static final Duration DEFAULT_RESPONSE_TIMEOUT = Duration.ofMinutes(1);
 
-    /**
-     * Creates browse options with source defaults.
-     */
+    /** Creates browse options with defaults. */
     public BrowseOptions() {
         this(DEFAULT_RESPONSE_TIMEOUT, null);
     }
 
-    /**
-     * Creates browse options with a response timeout.
-     *
-     * @param responseTimeout the response timeout in milliseconds
-     */
-    public BrowseOptions(int responseTimeout) {
-        this(responseTimeout, null);
+    /** Starts a field-named browse-options builder. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /**
-     * Creates browse options.
-     *
-     * @param responseTimeout the response timeout in milliseconds
-     * @param progressUpdated the browse progress callback
-     */
-    public BrowseOptions(int responseTimeout, BrowseProgressCallback progressUpdated) {
-        this.responseTimeout = responseTimeout;
-        this.progressUpdated = progressUpdated;
-    }
+    /** Builder for browse options. */
+    public static final class Builder {
+        private BrowseProgressCallback progressUpdated;
+        private Duration responseTimeout = DEFAULT_RESPONSE_TIMEOUT;
 
-    /**
-     * Returns the browse progress callback.
-     *
-     * @return the callback, or {@code null}
-     */
-    public final BrowseProgressCallback getProgressUpdated() {
-        return progressUpdated;
-    }
+        public Builder responseTimeout(Duration value) {
+            responseTimeout = value;
+            return this;
+        }
 
-    /**
-     * Returns the response timeout in milliseconds.
-     *
-     * @return the response timeout
-     */
-    public final int getResponseTimeout() {
-        return responseTimeout;
+        public Builder progressUpdated(BrowseProgressCallback value) {
+            progressUpdated = value;
+            return this;
+        }
+
+        public BrowseOptions build() {
+            return new BrowseOptions(responseTimeout, progressUpdated);
+        }
     }
 }

@@ -231,8 +231,11 @@ final class DefaultSearch implements Search {
     }
 
     private static dev.slsk.internal.options.SearchOptions options(SearchQuery query) {
-        return new dev.slsk.internal.options.SearchOptions(
-                (int) query.limits().overall().toMillis(), query.limits().maxResponses(), false, 1);
+        return dev.slsk.internal.options.SearchOptions.builder()
+                .searchTimeout(query.limits().overall())
+                .responseLimit(query.limits().maxResponses())
+                .filterResponses(false)
+                .build();
     }
 
     // --- operations --------------------------------------------------------

@@ -191,7 +191,7 @@ final class SearchDomain {
 
         SearchScope scope = initialScope == null ? SearchScope.getNetwork() : initialScope;
         SearchOptions searchOptions = initialOptions == null ? new SearchOptions() : initialOptions;
-        if (searchOptions.isRemoveSingleCharacterSearchTerms()) {
+        if (searchOptions.removeSingleCharacterSearchTerms()) {
             query = new SearchQuery(
                     query.getTerms().stream().filter(term -> term.length() > 1).toList(), query.getExclusions());
         }
@@ -231,10 +231,10 @@ final class SearchDomain {
             Search snapshot = search.toSearch();
             SearchStateChangedEvent eventData = new SearchStateChangedEvent(previousState[0], snapshot);
             previousState[0] = newState;
-            if (invocation.options().getStateChanged() != null) {
+            if (invocation.options().stateChanged() != null) {
                 invocation
                         .options()
-                        .getStateChanged()
+                        .stateChanged()
                         .onStateChanged(new SearchStateChange(eventData.getPreviousState(), eventData.getSearch()));
             }
             context.raiseEvent(Kind.SEARCH_STATE_CHANGED, eventData);
@@ -264,10 +264,10 @@ final class SearchDomain {
                     responseHandler.accept(response);
                     SearchResponseReceivedEvent eventData =
                             new SearchResponseReceivedEvent(response, search.toSearch());
-                    if (invocation.options().getResponseReceived() != null) {
+                    if (invocation.options().responseReceived() != null) {
                         invocation
                                 .options()
-                                .getResponseReceived()
+                                .responseReceived()
                                 .onResponseReceived(
                                         new SearchResponseReceived(eventData.getSearch(), eventData.getResponse()));
                     }

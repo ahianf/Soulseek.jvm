@@ -505,7 +505,9 @@ class EngineDownloadTest {
                             .build());
             assertInstanceOf(TransferStreamException.class, causeOf(seekFailed));
 
-            TransferOptions noSeek = new TransferOptions(null, null, null, null, 3_000, true, false);
+            TransferOptions noSeek = TransferOptions.builder()
+                    .seekOutputStreamAutomatically(false)
+                    .build();
             fixture.transfer.data = new byte[] {2};
             Timeline timeline = new Timeline();
             fixture.client
@@ -539,10 +541,12 @@ class EngineDownloadTest {
             List<Integer> grants = new ArrayList<>();
             List<List<Integer>> reports = new ArrayList<>();
             Timeline timeline = new Timeline();
-            TransferOptions options = new TransferOptions(null, null, null, (transfer, attempted, granted, actual) -> {
-                grants.add(granted);
-                reports.add(List.of(attempted, granted, actual));
-            });
+            TransferOptions options = TransferOptions.builder()
+                    .reporter((transfer, attempted, granted, actual) -> {
+                        grants.add(granted);
+                        reports.add(List.of(attempted, granted, actual));
+                    })
+                    .build();
 
             fixture.client
                     .transfers()
@@ -824,26 +828,20 @@ class EngineDownloadTest {
         private final List<Long> progress = new ArrayList<>();
 
         private TransferOptions on(TransferOptions base) {
-            return new TransferOptions(
-                    change -> {
+            return TransferOptions.builder(base)
+                    .stateChanged(change -> {
                         snapshots.add(change.transfer());
-                        if (base.getStateChanged() != null) {
-                            base.getStateChanged().onStateChanged(change);
+                        if (base.stateChanged() != null) {
+                            base.stateChanged().onStateChanged(change);
                         }
-                    },
-                    update -> {
+                    })
+                    .progressUpdated(update -> {
                         progress.add(update.transfer().getBytesTransferred());
-                        if (base.getProgressUpdated() != null) {
-                            base.getProgressUpdated().onProgressUpdated(update);
+                        if (base.progressUpdated() != null) {
+                            base.progressUpdated().onProgressUpdated(update);
                         }
-                    },
-                    base.getSlotReleased(),
-                    base.getReporter(),
-                    base.getMaximumLingerTime(),
-                    base.isSeekInputStreamAutomatically(),
-                    base.isSeekOutputStreamAutomatically(),
-                    base.isDisposeInputStreamOnCompletion(),
-                    base.isDisposeOutputStreamOnCompletion());
+                    })
+                    .build();
         }
 
         private List<TransferState> states() {

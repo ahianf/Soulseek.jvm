@@ -410,19 +410,13 @@ class EngineSearchTest {
             boolean removeSingleCharacterTerms,
             dev.slsk.internal.options.SearchStateChangedCallback stateChanged,
             dev.slsk.internal.options.SearchResponseReceivedCallback responseReceived) {
-        return new SearchOptions(
-                timeout,
-                responseLimit,
-                true,
-                1,
-                Integer.MAX_VALUE,
-                0,
-                SearchOptions.DEFAULT_FILE_LIMIT,
-                removeSingleCharacterTerms,
-                null,
-                null,
-                stateChanged,
-                responseReceived);
+        return SearchOptions.builder()
+                .searchTimeout(java.time.Duration.ofMillis(timeout))
+                .responseLimit(responseLimit)
+                .removeSingleCharacterSearchTerms(removeSingleCharacterTerms)
+                .stateChanged(stateChanged)
+                .responseReceived(responseReceived)
+                .build();
     }
 
     private static SoulseekClientState loggedIn() {

@@ -204,8 +204,7 @@ final class DownloadRun {
         trackingStream = new TransferStreams.PositionTrackingOutputStream(
                 outputStream,
                 determineOutputPosition(
-                        outputStream,
-                        transferOptions.isSeekOutputStreamAutomatically() ? download.getStartOffset() : 0));
+                        outputStream, transferOptions.seekOutputStreamAutomatically() ? download.getStartOffset() : 0));
         readTransfer();
 
         updateProgress(currentOutputPosition());
@@ -326,7 +325,7 @@ final class DownloadRun {
     }
 
     private void positionOutputStream() {
-        if (download.getStartOffset() <= 0 || !transferOptions.isSeekOutputStreamAutomatically()) {
+        if (download.getStartOffset() <= 0 || !transferOptions.seekOutputStreamAutomatically()) {
             return;
         }
         domain.diagnostic.debug("Seeking output stream for download of "
@@ -375,9 +374,9 @@ final class DownloadRun {
                             (requestedBytes, governorToken) ->
                                     domain.downloadTokenBucket.get(requestedBytes, governorToken),
                             (attemptedBytes, grantedBytes, transferredBytes) -> {
-                                if (transferOptions.getReporter() != null) {
+                                if (transferOptions.reporter() != null) {
                                     transferOptions
-                                            .getReporter()
+                                            .reporter()
                                             .report(
                                                     download.toTransfer(),
                                                     attemptedBytes,
@@ -509,7 +508,7 @@ final class DownloadRun {
                 }
             }
             determineFinalOutputPosition();
-            if (transferOptions.isDisposeOutputStreamOnCompletion() && outputStream != null) {
+            if (transferOptions.disposeOutputStreamOnCompletion() && outputStream != null) {
                 try {
                     try {
                         outputStream.flush();
@@ -570,8 +569,8 @@ final class DownloadRun {
         Transfer transfer = download.toTransfer();
         TransferState previous = lastState;
         lastState = state;
-        if (transferOptions.getStateChanged() != null) {
-            transferOptions.getStateChanged().onStateChanged(new TransferStateChange(previous, transfer));
+        if (transferOptions.stateChanged() != null) {
+            transferOptions.stateChanged().onStateChanged(new TransferStateChange(previous, transfer));
         }
     }
 
@@ -579,8 +578,8 @@ final class DownloadRun {
         long previous = download.getBytesTransferred();
         download.updateProgress(bytesDownloaded);
         Transfer transfer = download.toTransfer();
-        if (transferOptions.getProgressUpdated() != null) {
-            transferOptions.getProgressUpdated().onProgressUpdated(new TransferProgressUpdate(previous, transfer));
+        if (transferOptions.progressUpdated() != null) {
+            transferOptions.progressUpdated().onProgressUpdated(new TransferProgressUpdate(previous, transfer));
         }
     }
 

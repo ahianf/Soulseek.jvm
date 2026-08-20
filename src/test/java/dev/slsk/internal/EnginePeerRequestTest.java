@@ -406,7 +406,15 @@ class EnginePeerRequestTest {
         CancellationController source = new CancellationController();
         CancellationSignal token = source.getSignal();
 
-        BrowseResponse actual = fixture.client.users().browse("alice", new BrowseOptions(1234, callbacks::add), token);
+        BrowseResponse actual = fixture.client
+                .users()
+                .browse(
+                        "alice",
+                        BrowseOptions.builder()
+                                .responseTimeout(Duration.ofMillis(1234))
+                                .progressUpdated(callbacks::add)
+                                .build(),
+                        token);
 
         assertSame(response, actual);
         assertInstanceOf(BrowseRequest.class, fixture.peer.message);

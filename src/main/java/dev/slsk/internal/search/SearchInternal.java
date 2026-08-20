@@ -83,7 +83,8 @@ public final class SearchInternal implements AutoCloseable {
         this.scope = scope;
         this.token = token;
         this.options = options == null ? new SearchOptions() : options;
-        if (this.options.getSearchTimeout() <= 0) {
+        if (this.options.searchTimeout() == null
+                || !this.options.searchTimeout().isPositive()) {
             throw new IllegalArgumentException("searchTimeout must be greater than zero");
         }
         this.ownsScheduler = scheduler == null;
@@ -214,19 +215,19 @@ public final class SearchInternal implements AutoCloseable {
                     return;
                 }
 
-                if (options.isFilterResponses()) {
-                    if (options.getResponseFilter() != null
-                            && !options.getResponseFilter().test(response)) {
+                if (options.filterResponses()) {
+                    if (options.responseFilter() != null
+                            && !options.responseFilter().test(response)) {
                         return;
                     }
 
                     List<dev.slsk.internal.share.File> files = stream(response.getFiles())
-                            .filter(file -> options.getFileFilter() == null
-                                    || options.getFileFilter().test(file))
+                            .filter(file -> options.fileFilter() == null
+                                    || options.fileFilter().test(file))
                             .toList();
                     List<dev.slsk.internal.share.File> lockedFiles = stream(response.getLockedFiles())
-                            .filter(file -> options.getFileFilter() == null
-                                    || options.getFileFilter().test(file))
+                            .filter(file -> options.fileFilter() == null
+                                    || options.fileFilter().test(file))
                             .toList();
                     response = new SearchResponse(
                             response.getUsername(),
@@ -237,8 +238,7 @@ public final class SearchInternal implements AutoCloseable {
                             files,
                             lockedFiles);
 
-                    if (response.getFileCount() + response.getLockedFileCount()
-                            < options.getMinimumResponseFileCount()) {
+                    if (response.getFileCount() + response.getLockedFileCount() < options.minimumResponseFileCount()) {
                         return;
                     }
                 }
@@ -252,9 +252,9 @@ public final class SearchInternal implements AutoCloseable {
                     callback.accept(response);
                 }
                 resetTimeout();
-                if (responseCount >= options.getResponseLimit()) {
+                if (responseCount >= options.responseLimit()) {
                     complete(SearchState.RESPONSE_LIMIT_REACHED);
-                } else if (fileCount >= options.getFileLimit()) {
+                } else if (fileCount >= options.fileLimit()) {
                     complete(SearchState.FILE_LIMIT_REACHED);
                 }
             }
@@ -348,17 +348,21 @@ public final class SearchInternal implements AutoCloseable {
     }
 
     private boolean responseMeetsOptionCriteria(SearchResponse response) {
-        return !options.isFilterResponses()
-                || (response.getFileCount() + response.getLockedFileCount() >= options.getMinimumResponseFileCount()
-                        && response.getUploadSpeed() >= options.getMinimumPeerUploadSpeed()
-                        && response.getQueueLength() < options.getMaximumPeerQueueLength());
+        return !options.filterResponses()
+                || (response.getFileCount() + response.getLockedFileCount() >= options.minimumResponseFileCount()
+                        && response.getUploadSpeed() >= options.minimumPeerUploadSpeed()
+                        && response.getQueueLength() < options.maximumPeerQueueLength());
     }
 
     private void resetTimeout() {
         synchronized (timeoutLock) {
-            timeoutDeadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(options.getSearchTimeout());
+            timeoutDeadlineNanos = System.nanoTime() + options.searchTimeout().toNanos();
             if (timeoutTask == null || timeoutTask.isDone()) {
-                long cadence = Math.max(1, Math.min(MAX_TIMEOUT_CHECK_MILLIS, options.getSearchTimeout()));
+                long cadence = Math.max(
+                        1,
+                        Math.min(
+                                MAX_TIMEOUT_CHECK_MILLIS,
+                                options.searchTimeout().toMillis()));
                 timeoutTask =
                         timerExecutor.scheduleAtFixedRate(this::checkTimeout, cadence, cadence, TimeUnit.MILLISECONDS);
             }

@@ -578,8 +578,10 @@ final class TransferDomain implements PeerServices {
                                         })
                                         .token(token)
                                         .cancellation(cancellation.getSignal())
-                                        .options(new dev.slsk.internal.options.TransferOptions(
-                                                this::notifyUploadState, this::notifyUploadProgress))
+                                        .options(dev.slsk.internal.options.TransferOptions.builder()
+                                                .stateChanged(this::notifyUploadState)
+                                                .progressUpdated(this::notifyUploadProgress)
+                                                .build())
                                         .build());
                         if (outcome instanceof TransferOutcome.Succeeded succeeded) {
                             admission.served(user, succeeded.bytes());

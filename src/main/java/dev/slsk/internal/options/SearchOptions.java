@@ -4,286 +4,140 @@
 
 package dev.slsk.internal.options;
 
+import java.time.Duration;
+
 /** Options for a search operation. */
-public class SearchOptions {
-    /** Default search timeout in milliseconds. */
-    public static final int DEFAULT_SEARCH_TIMEOUT = 15_000;
+public record SearchOptions(
+        Duration searchTimeout,
+        int responseLimit,
+        boolean filterResponses,
+        int minimumResponseFileCount,
+        int maximumPeerQueueLength,
+        int minimumPeerUploadSpeed,
+        int fileLimit,
+        boolean removeSingleCharacterSearchTerms,
+        SearchResponseFilter responseFilter,
+        SearchFileFilter fileFilter,
+        SearchStateChangedCallback stateChanged,
+        SearchResponseReceivedCallback responseReceived) {
+    /** Default search timeout. */
+    public static final Duration DEFAULT_SEARCH_TIMEOUT = Duration.ofSeconds(15);
     /** Default response limit. */
     public static final int DEFAULT_RESPONSE_LIMIT = 250;
     /** Default file limit. */
     public static final int DEFAULT_FILE_LIMIT = 25_000;
 
-    private final SearchFileFilter fileFilter;
-    private final int fileLimit;
-    private final boolean filterResponses;
-    private final int maximumPeerQueueLength;
-    private final int minimumPeerUploadSpeed;
-    private final int minimumResponseFileCount;
-    private final boolean removeSingleCharacterSearchTerms;
-    private final SearchResponseFilter responseFilter;
-    private final int responseLimit;
-    private final SearchResponseReceivedCallback responseReceived;
-    private final int searchTimeout;
-    private final SearchStateChangedCallback stateChanged;
-
-    /** Creates search options with source defaults. */
+    /** Creates search options with defaults. */
     public SearchOptions() {
-        this(DEFAULT_SEARCH_TIMEOUT);
-    }
-
-    /** Creates options through the search timeout. */
-    public SearchOptions(int searchTimeout) {
-        this(searchTimeout, DEFAULT_RESPONSE_LIMIT);
-    }
-
-    /** Creates options through the response limit. */
-    public SearchOptions(int searchTimeout, int responseLimit) {
-        this(searchTimeout, responseLimit, true);
-    }
-
-    /** Creates options through response filtering. */
-    public SearchOptions(int searchTimeout, int responseLimit, boolean filterResponses) {
-        this(searchTimeout, responseLimit, filterResponses, 1);
-    }
-
-    /** Creates options through the minimum response file count. */
-    public SearchOptions(int searchTimeout, int responseLimit, boolean filterResponses, int minimumResponseFileCount) {
-        this(searchTimeout, responseLimit, filterResponses, minimumResponseFileCount, Integer.MAX_VALUE);
-    }
-
-    /** Creates options through the maximum peer queue length. */
-    public SearchOptions(
-            int searchTimeout,
-            int responseLimit,
-            boolean filterResponses,
-            int minimumResponseFileCount,
-            int maximumPeerQueueLength) {
-        this(searchTimeout, responseLimit, filterResponses, minimumResponseFileCount, maximumPeerQueueLength, 0);
-    }
-
-    /** Creates options through the minimum peer upload speed. */
-    public SearchOptions(
-            int searchTimeout,
-            int responseLimit,
-            boolean filterResponses,
-            int minimumResponseFileCount,
-            int maximumPeerQueueLength,
-            int minimumPeerUploadSpeed) {
         this(
-                searchTimeout,
-                responseLimit,
-                filterResponses,
-                minimumResponseFileCount,
-                maximumPeerQueueLength,
-                minimumPeerUploadSpeed,
-                DEFAULT_FILE_LIMIT);
-    }
-
-    /** Creates options through the file limit. */
-    public SearchOptions(
-            int searchTimeout,
-            int responseLimit,
-            boolean filterResponses,
-            int minimumResponseFileCount,
-            int maximumPeerQueueLength,
-            int minimumPeerUploadSpeed,
-            int fileLimit) {
-        this(
-                searchTimeout,
-                responseLimit,
-                filterResponses,
-                minimumResponseFileCount,
-                maximumPeerQueueLength,
-                minimumPeerUploadSpeed,
-                fileLimit,
-                true);
-    }
-
-    /** Creates options through single-character-term removal. */
-    public SearchOptions(
-            int searchTimeout,
-            int responseLimit,
-            boolean filterResponses,
-            int minimumResponseFileCount,
-            int maximumPeerQueueLength,
-            int minimumPeerUploadSpeed,
-            int fileLimit,
-            boolean removeSingleCharacterSearchTerms) {
-        this(
-                searchTimeout,
-                responseLimit,
-                filterResponses,
-                minimumResponseFileCount,
-                maximumPeerQueueLength,
-                minimumPeerUploadSpeed,
-                fileLimit,
-                removeSingleCharacterSearchTerms,
+                DEFAULT_SEARCH_TIMEOUT,
+                DEFAULT_RESPONSE_LIMIT,
+                true,
+                1,
+                Integer.MAX_VALUE,
+                0,
+                DEFAULT_FILE_LIMIT,
+                true,
+                null,
+                null,
+                null,
                 null);
     }
 
-    /** Creates options through the response filter. */
-    public SearchOptions(
-            int searchTimeout,
-            int responseLimit,
-            boolean filterResponses,
-            int minimumResponseFileCount,
-            int maximumPeerQueueLength,
-            int minimumPeerUploadSpeed,
-            int fileLimit,
-            boolean removeSingleCharacterSearchTerms,
-            SearchResponseFilter responseFilter) {
-        this(
-                searchTimeout,
-                responseLimit,
-                filterResponses,
-                minimumResponseFileCount,
-                maximumPeerQueueLength,
-                minimumPeerUploadSpeed,
-                fileLimit,
-                removeSingleCharacterSearchTerms,
-                responseFilter,
-                null);
+    /** Starts a field-named search-options builder. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Creates options through the file filter. */
-    public SearchOptions(
-            int searchTimeout,
-            int responseLimit,
-            boolean filterResponses,
-            int minimumResponseFileCount,
-            int maximumPeerQueueLength,
-            int minimumPeerUploadSpeed,
-            int fileLimit,
-            boolean removeSingleCharacterSearchTerms,
-            SearchResponseFilter responseFilter,
-            SearchFileFilter fileFilter) {
-        this(
-                searchTimeout,
-                responseLimit,
-                filterResponses,
-                minimumResponseFileCount,
-                maximumPeerQueueLength,
-                minimumPeerUploadSpeed,
-                fileLimit,
-                removeSingleCharacterSearchTerms,
-                responseFilter,
-                fileFilter,
-                null);
-    }
+    /** Builder for search options. */
+    public static final class Builder {
+        private SearchFileFilter fileFilter;
+        private int fileLimit = DEFAULT_FILE_LIMIT;
+        private boolean filterResponses = true;
+        private int maximumPeerQueueLength = Integer.MAX_VALUE;
+        private int minimumPeerUploadSpeed;
+        private int minimumResponseFileCount = 1;
+        private boolean removeSingleCharacterSearchTerms = true;
+        private SearchResponseFilter responseFilter;
+        private SearchResponseReceivedCallback responseReceived;
+        private int responseLimit = DEFAULT_RESPONSE_LIMIT;
+        private Duration searchTimeout = DEFAULT_SEARCH_TIMEOUT;
+        private SearchStateChangedCallback stateChanged;
 
-    /** Creates options through the state-change callback. */
-    public SearchOptions(
-            int searchTimeout,
-            int responseLimit,
-            boolean filterResponses,
-            int minimumResponseFileCount,
-            int maximumPeerQueueLength,
-            int minimumPeerUploadSpeed,
-            int fileLimit,
-            boolean removeSingleCharacterSearchTerms,
-            SearchResponseFilter responseFilter,
-            SearchFileFilter fileFilter,
-            SearchStateChangedCallback stateChanged) {
-        this(
-                searchTimeout,
-                responseLimit,
-                filterResponses,
-                minimumResponseFileCount,
-                maximumPeerQueueLength,
-                minimumPeerUploadSpeed,
-                fileLimit,
-                removeSingleCharacterSearchTerms,
-                responseFilter,
-                fileFilter,
-                stateChanged,
-                null);
-    }
+        public Builder searchTimeout(Duration value) {
+            searchTimeout = value;
+            return this;
+        }
 
-    /** Creates search options. */
-    public SearchOptions(
-            int searchTimeout,
-            int responseLimit,
-            boolean filterResponses,
-            int minimumResponseFileCount,
-            int maximumPeerQueueLength,
-            int minimumPeerUploadSpeed,
-            int fileLimit,
-            boolean removeSingleCharacterSearchTerms,
-            SearchResponseFilter responseFilter,
-            SearchFileFilter fileFilter,
-            SearchStateChangedCallback stateChanged,
-            SearchResponseReceivedCallback responseReceived) {
-        this.searchTimeout = searchTimeout;
-        this.responseLimit = responseLimit;
-        this.fileLimit = fileLimit;
-        this.filterResponses = filterResponses;
-        this.minimumResponseFileCount = minimumResponseFileCount;
-        this.maximumPeerQueueLength = maximumPeerQueueLength;
-        this.minimumPeerUploadSpeed = minimumPeerUploadSpeed;
-        this.responseFilter = responseFilter;
-        this.fileFilter = fileFilter;
-        this.stateChanged = stateChanged;
-        this.responseReceived = responseReceived;
-        this.removeSingleCharacterSearchTerms = removeSingleCharacterSearchTerms;
-    }
+        public Builder responseLimit(int value) {
+            responseLimit = value;
+            return this;
+        }
 
-    /** Returns the file filter, or {@code null}. */
-    public final SearchFileFilter getFileFilter() {
-        return fileFilter;
-    }
+        public Builder filterResponses(boolean value) {
+            filterResponses = value;
+            return this;
+        }
 
-    /** Returns the maximum accepted file count. */
-    public final int getFileLimit() {
-        return fileLimit;
-    }
+        public Builder minimumResponseFileCount(int value) {
+            minimumResponseFileCount = value;
+            return this;
+        }
 
-    /** Returns whether responses are filtered. */
-    public final boolean isFilterResponses() {
-        return filterResponses;
-    }
+        public Builder maximumPeerQueueLength(int value) {
+            maximumPeerQueueLength = value;
+            return this;
+        }
 
-    /** Returns the maximum accepted peer queue length. */
-    public final int getMaximumPeerQueueLength() {
-        return maximumPeerQueueLength;
-    }
+        public Builder minimumPeerUploadSpeed(int value) {
+            minimumPeerUploadSpeed = value;
+            return this;
+        }
 
-    /** Returns the minimum accepted peer upload speed. */
-    public final int getMinimumPeerUploadSpeed() {
-        return minimumPeerUploadSpeed;
-    }
+        public Builder fileLimit(int value) {
+            fileLimit = value;
+            return this;
+        }
 
-    /** Returns the minimum accepted response file count. */
-    public final int getMinimumResponseFileCount() {
-        return minimumResponseFileCount;
-    }
+        public Builder removeSingleCharacterSearchTerms(boolean value) {
+            removeSingleCharacterSearchTerms = value;
+            return this;
+        }
 
-    /** Returns whether single-character terms are removed. */
-    public final boolean isRemoveSingleCharacterSearchTerms() {
-        return removeSingleCharacterSearchTerms;
-    }
+        public Builder responseFilter(SearchResponseFilter value) {
+            responseFilter = value;
+            return this;
+        }
 
-    /** Returns the response filter, or {@code null}. */
-    public final SearchResponseFilter getResponseFilter() {
-        return responseFilter;
-    }
+        public Builder fileFilter(SearchFileFilter value) {
+            fileFilter = value;
+            return this;
+        }
 
-    /** Returns the maximum accepted response count. */
-    public final int getResponseLimit() {
-        return responseLimit;
-    }
+        public Builder stateChanged(SearchStateChangedCallback value) {
+            stateChanged = value;
+            return this;
+        }
 
-    /** Returns the response callback, or {@code null}. */
-    public final SearchResponseReceivedCallback getResponseReceived() {
-        return responseReceived;
-    }
+        public Builder responseReceived(SearchResponseReceivedCallback value) {
+            responseReceived = value;
+            return this;
+        }
 
-    /** Returns the search timeout in milliseconds. */
-    public final int getSearchTimeout() {
-        return searchTimeout;
-    }
-
-    /** Returns the state-change callback, or {@code null}. */
-    public final SearchStateChangedCallback getStateChanged() {
-        return stateChanged;
+        public SearchOptions build() {
+            return new SearchOptions(
+                    searchTimeout,
+                    responseLimit,
+                    filterResponses,
+                    minimumResponseFileCount,
+                    maximumPeerQueueLength,
+                    minimumPeerUploadSpeed,
+                    fileLimit,
+                    removeSingleCharacterSearchTerms,
+                    responseFilter,
+                    fileFilter,
+                    stateChanged,
+                    responseReceived);
+        }
     }
 }

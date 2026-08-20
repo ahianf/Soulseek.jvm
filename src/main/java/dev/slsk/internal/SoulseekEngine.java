@@ -1213,9 +1213,9 @@ final class SoulseekEngine implements AutoCloseable {
         if (Double.compare(eventData.getPercentComplete(), 100.0) == 0) {
             completionEventFired.set(true);
         }
-        if (operationOptions.getProgressUpdated() != null) {
+        if (operationOptions.progressUpdated() != null) {
             operationOptions
-                    .getProgressUpdated()
+                    .progressUpdated()
                     .onProgressUpdated(new BrowseProgress(
                             eventData.getUsername(),
                             eventData.getBytesTransferred(),

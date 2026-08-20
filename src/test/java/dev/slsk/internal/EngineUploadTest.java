@@ -490,7 +490,10 @@ class EngineUploadTest {
     void canDisableAutomaticSeeking() {
         try (Fixture fixture = new Fixture()) {
             fixture.transfer.offset = 1;
-            TransferOptions options = new TransferOptions(null, null, null, null, 20, false);
+            TransferOptions options = TransferOptions.builder()
+                    .maximumLingerTime(Duration.ofMillis(20))
+                    .seekInputStreamAutomatically(false)
+                    .build();
 
             Timeline timeline = new Timeline();
 
@@ -812,26 +815,20 @@ class EngineUploadTest {
         private final List<Long> progress = new ArrayList<>();
 
         private TransferOptions on(TransferOptions base) {
-            return new TransferOptions(
-                    change -> {
+            return TransferOptions.builder(base)
+                    .stateChanged(change -> {
                         snapshots.add(change.transfer());
-                        if (base.getStateChanged() != null) {
-                            base.getStateChanged().onStateChanged(change);
+                        if (base.stateChanged() != null) {
+                            base.stateChanged().onStateChanged(change);
                         }
-                    },
-                    update -> {
+                    })
+                    .progressUpdated(update -> {
                         progress.add(update.transfer().getBytesTransferred());
-                        if (base.getProgressUpdated() != null) {
-                            base.getProgressUpdated().onProgressUpdated(update);
+                        if (base.progressUpdated() != null) {
+                            base.progressUpdated().onProgressUpdated(update);
                         }
-                    },
-                    base.getSlotReleased(),
-                    base.getReporter(),
-                    base.getMaximumLingerTime(),
-                    base.isSeekInputStreamAutomatically(),
-                    base.isSeekOutputStreamAutomatically(),
-                    base.isDisposeInputStreamOnCompletion(),
-                    base.isDisposeOutputStreamOnCompletion());
+                    })
+                    .build();
         }
 
         private List<TransferState> states() {
@@ -873,7 +870,12 @@ class EngineUploadTest {
             dev.slsk.internal.options.TransferReporter reporter,
             dev.slsk.internal.options.TransferStateChangedCallback stateChanged,
             dev.slsk.internal.options.TransferSlotReleasedCallback slotReleased) {
-        return new TransferOptions(stateChanged, null, slotReleased, reporter, linger);
+        return TransferOptions.builder()
+                .stateChanged(stateChanged)
+                .slotReleased(slotReleased)
+                .reporter(reporter)
+                .maximumLingerTime(Duration.ofMillis(linger))
+                .build();
     }
 
     /**

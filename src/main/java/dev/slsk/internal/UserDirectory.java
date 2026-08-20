@@ -42,7 +42,6 @@ import dev.slsk.internal.user.UserInfo;
 import dev.slsk.internal.user.UserStatistics;
 import dev.slsk.internal.user.UserStatus;
 import java.net.InetSocketAddress;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -242,7 +241,7 @@ final class UserDirectory {
                     .register(
                             new WaitKey(Constants.WaitKey.BROWSE_RESPONSE_CONNECTION, requestedUsername),
                             BrowseResponseConnection.class,
-                            Duration.ofMillis(operationOptions.getResponseTimeout()),
+                            operationOptions.responseTimeout(),
                             token);
 
             BrowseResponseConnection responseConnection;

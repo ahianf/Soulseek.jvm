@@ -242,7 +242,7 @@ final class UploadRun {
     }
 
     private void positionInputStream() {
-        if (upload.getStartOffset() <= 0 || !transferOptions.isSeekInputStreamAutomatically()) {
+        if (upload.getStartOffset() <= 0 || !transferOptions.seekInputStreamAutomatically()) {
             return;
         }
         domain.diagnostic.debug("Seeking input stream for upload of "
@@ -276,9 +276,9 @@ final class UploadRun {
                             (requestedBytes, governorToken) ->
                                     domain.uploadTokenBucket.get(requestedBytes, cancellationSignal),
                             (attemptedBytes, grantedBytes, transferredBytes) -> {
-                                if (transferOptions.getReporter() != null) {
+                                if (transferOptions.reporter() != null) {
                                     transferOptions
-                                            .getReporter()
+                                            .reporter()
                                             .report(
                                                     upload.toTransfer(),
                                                     attemptedBytes,
@@ -310,8 +310,8 @@ final class UploadRun {
      * linger budget lapses.
      */
     private void linger() throws TimeoutException {
-        long deadline =
-                System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(Math.max(0, transferOptions.getMaximumLingerTime()));
+        long deadline = System.nanoTime()
+                + Math.max(0, transferOptions.maximumLingerTime().toNanos());
         try {
             while (!cancellationSignal.isCancellationRequested()) {
                 long remainingNanos = deadline - System.nanoTime();
@@ -441,7 +441,7 @@ final class UploadRun {
                 }
             }
             currentStreamPosition();
-            if (transferOptions.isDisposeInputStreamOnCompletion() && inputStream != null) {
+            if (transferOptions.disposeInputStreamOnCompletion() && inputStream != null) {
                 try {
                     inputStream.close();
                 } catch (Throwable ignored) {
@@ -522,9 +522,9 @@ final class UploadRun {
             domain.diagnostic.debug("Upload slot for file "
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + " released");
-            if (transferOptions.getSlotReleased() != null) {
+            if (transferOptions.slotReleased() != null) {
                 try {
-                    transferOptions.getSlotReleased().onSlotReleased(upload.toTransfer());
+                    transferOptions.slotReleased().onSlotReleased(upload.toTransfer());
                 } catch (Throwable ignored) {
                     // Slot-release callbacks cannot block cleanup.
                 }
@@ -544,8 +544,8 @@ final class UploadRun {
         Transfer transfer = upload.toTransfer();
         TransferState previous = lastState;
         lastState = state;
-        if (transferOptions.getStateChanged() != null) {
-            transferOptions.getStateChanged().onStateChanged(new TransferStateChange(previous, transfer));
+        if (transferOptions.stateChanged() != null) {
+            transferOptions.stateChanged().onStateChanged(new TransferStateChange(previous, transfer));
         }
     }
 
@@ -553,8 +553,8 @@ final class UploadRun {
         long previous = upload.getBytesTransferred();
         upload.updateProgress(bytesUploaded);
         Transfer transfer = upload.toTransfer();
-        if (transferOptions.getProgressUpdated() != null) {
-            transferOptions.getProgressUpdated().onProgressUpdated(new TransferProgressUpdate(previous, transfer));
+        if (transferOptions.progressUpdated() != null) {
+            transferOptions.progressUpdated().onProgressUpdated(new TransferProgressUpdate(previous, transfer));
         }
     }
 
