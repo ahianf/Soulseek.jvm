@@ -6,6 +6,8 @@ package dev.slsk.internal.common;
 
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.concurrent.CancellationSubscription;
+import java.math.BigInteger;
+import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,17 +44,17 @@ public final class TokenBucket implements AutoCloseable {
     private ScheduledFuture<?> wakeup;
 
     private final ArrayDeque<Request> requests = new ArrayDeque<>();
-    private final int intervalMillis;
+    private final long intervalNanos;
     private long capacity;
     private long currentCount;
     private long lastRefillNanos;
 
     /**
-     * Fractional credit carried between ticks, in token-milliseconds.
+     * Fractional credit carried between accruals, in token-nanoseconds.
      *
      * <p>Without it, integer division starves small buckets: a capacity of 1
-     * over a 25 ms interval earns {@code (1 * 10) / 25 == 0} tokens on every
-     * 10 ms tick and never refills at all.
+     * over a 25 ms interval must retain partial credit between accruals or it
+     * can round every small increment down to zero and never refill at all.
      */
     private long refillCredit;
 
@@ -62,9 +64,9 @@ public final class TokenBucket implements AutoCloseable {
      * Creates and starts a token bucket.
      *
      * @param capacity the bucket capacity
-     * @param interval the replenishment interval in milliseconds
+     * @param interval the replenishment interval
      */
-    public TokenBucket(long capacity, int interval) {
+    public TokenBucket(long capacity, Duration interval) {
         this(capacity, interval, null);
     }
 
@@ -72,19 +74,24 @@ public final class TokenBucket implements AutoCloseable {
      * Creates and starts a token bucket.
      *
      * @param capacity the bucket capacity
-     * @param interval the replenishment interval in milliseconds
+     * @param interval the replenishment interval
      * @param scheduler the shared scheduler, or {@code null} to own one
      */
-    public TokenBucket(long capacity, int interval, Scheduler scheduler) {
+    public TokenBucket(long capacity, Duration interval, Scheduler scheduler) {
         if (capacity < 1) {
             throw new IllegalArgumentException("capacity must be greater than or equal to 1");
         }
-        if (interval < 1) {
-            throw new IllegalArgumentException("interval must be greater than or equal to 1");
+        Objects.requireNonNull(interval, "interval");
+        if (!interval.isPositive()) {
+            throw new IllegalArgumentException("interval must be greater than zero");
         }
 
         this.capacity = capacity;
-        this.intervalMillis = interval;
+        try {
+            this.intervalNanos = interval.toNanos();
+        } catch (ArithmeticException tooLarge) {
+            throw new IllegalArgumentException("interval is too large", tooLarge);
+        }
         currentCount = capacity;
         lastRefillNanos = System.nanoTime();
         this.ownsScheduler = scheduler == null;
@@ -311,8 +318,8 @@ public final class TokenBucket implements AutoCloseable {
      */
     private void accrue() {
         long now = System.nanoTime();
-        long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(now - lastRefillNanos);
-        if (elapsedMillis <= 0) {
+        long elapsedNanos = now - lastRefillNanos;
+        if (elapsedNanos <= 0) {
             return;
         }
         lastRefillNanos = now;
@@ -322,16 +329,27 @@ public final class TokenBucket implements AutoCloseable {
         // keeps the multiply below from overflowing: accrual is driven by
         // demand now rather than by a tick, so an idle bucket can go hours
         // between calls and capacity is already scaled by 1024.
-        if (elapsedMillis >= intervalMillis) {
+        if (elapsedNanos >= intervalNanos) {
             currentCount = capacity;
             refillCredit = 0;
             return;
         }
 
-        refillCredit += capacity * elapsedMillis;
-        long earned = refillCredit / intervalMillis;
-        refillCredit -= earned * intervalMillis;
-        currentCount = Math.min(capacity, currentCount + Math.max(0, earned));
+        long earned;
+        try {
+            long credit = Math.addExact(refillCredit, Math.multiplyExact(capacity, elapsedNanos));
+            earned = credit / intervalNanos;
+            refillCredit = credit % intervalNanos;
+        } catch (ArithmeticException overflow) {
+            BigInteger credit = BigInteger.valueOf(capacity)
+                    .multiply(BigInteger.valueOf(elapsedNanos))
+                    .add(BigInteger.valueOf(refillCredit));
+            BigInteger[] divided = credit.divideAndRemainder(BigInteger.valueOf(intervalNanos));
+            earned = divided[0].longValueExact();
+            refillCredit = divided[1].longValueExact();
+        }
+        earned = Math.max(0, earned);
+        currentCount = earned >= capacity - currentCount ? capacity : currentCount + earned;
         if (currentCount == capacity) {
             // Full: stop banking credit that would burst on the next drain.
             refillCredit = 0;
@@ -350,7 +368,7 @@ public final class TokenBucket implements AutoCloseable {
      * capacity only moves under {@link #setCapacity}, so a standing deadline
      * can be early but never late; an early one accrues nothing, grants
      * nothing, and re-arms. That keeps this a no-op on the hot path, where
-     * every granted read re-enters through {@code getAsync}.
+     * every granted read re-enters through {@link #get(int, CancellationSignal)}.
      *
      * <p>Must be called while holding the monitor.
      */
@@ -368,27 +386,24 @@ public final class TokenBucket implements AutoCloseable {
         }
 
         if (wakeup == null) {
-            wakeup = scheduler.schedule(this::refill, millisUntilNextToken(), TimeUnit.MILLISECONDS);
+            wakeup = scheduler.schedule(this::refill, nanosUntilNextToken(), TimeUnit.NANOSECONDS);
         }
     }
 
     /**
      * Returns how long until the bucket earns its next whole token.
      *
-     * <p>Accrual banks {@code capacity} credit per elapsed millisecond and pays
-     * out a token per {@code intervalMillis} of credit, so the wait is the
+     * <p>Accrual banks {@code capacity} credit per elapsed nanosecond and pays
+     * out a token per {@code intervalNanos} of credit, so the wait is the
      * outstanding credit over that rate, rounded up. Never zero: the accrual
-     * clock has millisecond resolution, so a wake-up any sooner would find no
-     * elapsed time and re-arm on the spot.
-     *
      * <p>Must be called while holding the monitor.
      */
-    private long millisUntilNextToken() {
-        long needed = intervalMillis - refillCredit;
+    private long nanosUntilNextToken() {
+        long needed = intervalNanos - refillCredit;
         if (needed <= 0) {
             return 1;
         }
-        return Math.max(1, (needed + capacity - 1) / capacity);
+        return Math.max(1, ((needed - 1) / capacity) + 1);
     }
 
     /**

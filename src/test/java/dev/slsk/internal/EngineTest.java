@@ -488,8 +488,8 @@ class EngineTest {
                     new TokenFactory(),
                     null,
                     null,
-                    new TokenBucket(1, 100),
-                    new TokenBucket(1, 100));
+                    new TokenBucket(1, Duration.ofMillis(100)),
+                    new TokenBucket(1, Duration.ofMillis(100)));
         }
 
         @Override

@@ -3,6 +3,7 @@
 
 package dev.slsk.internal.common;
 
+import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -129,15 +130,22 @@ public final class Settlement<T> {
     /**
      * Waits for the settlement, giving up after a deadline.
      *
-     * @param milliseconds how long to wait
+     * @param timeout how long to wait
      * @return whether it settled within the deadline
      */
-    public boolean await(long milliseconds) {
-        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(Math.max(0, milliseconds));
+    public boolean await(Duration timeout) {
+        Objects.requireNonNull(timeout, "timeout");
+        long timeoutNanos;
+        try {
+            timeoutNanos = timeout.isNegative() ? 0 : timeout.toNanos();
+        } catch (ArithmeticException tooLarge) {
+            timeoutNanos = Long.MAX_VALUE;
+        }
+        long started = System.nanoTime();
         boolean interrupted = false;
         try {
             while (true) {
-                long remaining = deadline - System.nanoTime();
+                long remaining = timeoutNanos - (System.nanoTime() - started);
                 if (remaining <= 0) {
                     return isSettled();
                 }

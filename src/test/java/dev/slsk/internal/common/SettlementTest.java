@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -127,7 +128,7 @@ class SettlementTest {
     void aTimedWaitGivesUp() {
         Settlement<Void> settlement = new Settlement<>();
 
-        assertFalse(settlement.await(1));
+        assertFalse(settlement.await(Duration.ofMillis(1)));
         assertFalse(settlement.isSettled());
     }
 
@@ -137,7 +138,7 @@ class SettlementTest {
         Settlement<Void> settlement = new Settlement<>();
         settlement.succeed();
 
-        assertTrue(settlement.await(60_000));
+        assertTrue(settlement.await(Duration.ofMinutes(1)));
     }
 
     @Test

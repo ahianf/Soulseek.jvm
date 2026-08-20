@@ -44,10 +44,10 @@ import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.LongFunction;
 
@@ -319,7 +319,6 @@ final class UploadRun {
                     connection.disconnect("Transfer complete, maximum linger " + "time exceeded");
                     return;
                 }
-                long remainingMillis = Math.max(1, TimeUnit.NANOSECONDS.toMillis(remainingNanos));
                 // On a thread of its own so the budget can lapse while the read
                 // is still parked: a peer that says nothing is the ordinary case
                 // here, and giving up on it is the point.
@@ -332,7 +331,7 @@ final class UploadRun {
                         read.fail(failure);
                     }
                 });
-                if (!read.await(remainingMillis)) {
+                if (!read.await(Duration.ofNanos(remainingNanos))) {
                     connection.disconnect("Transfer complete, maximum " + "linger time exceeded");
                     return;
                 }

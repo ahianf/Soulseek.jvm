@@ -73,6 +73,7 @@ import java.io.ByteArrayOutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -259,10 +260,10 @@ final class SoulseekEngine implements AutoCloseable {
         this.tokenFactory = tokenFactory == null ? new TokenFactory(this.options.startingToken()) : tokenFactory;
         this.ioAdapter = ioAdapter == null ? new IOAdapter() : ioAdapter;
         this.uploadTokenBucket = uploadTokenBucket == null
-                ? new TokenBucket((this.options.maximumUploadSpeed() * 1024L) / 10, 100, scheduler)
+                ? new TokenBucket((this.options.maximumUploadSpeed() * 1024L) / 10, Duration.ofMillis(100), scheduler)
                 : uploadTokenBucket;
         this.downloadTokenBucket = downloadTokenBucket == null
-                ? new TokenBucket((this.options.maximumDownloadSpeed() * 1024L) / 10, 100, scheduler)
+                ? new TokenBucket((this.options.maximumDownloadSpeed() * 1024L) / 10, Duration.ofMillis(100), scheduler)
                 : downloadTokenBucket;
         // After the buckets and the token factory it takes, and before the peer
         // message handler, which answers a peer through it. The connection

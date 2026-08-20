@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.internal.concurrent.CancellationController;
 import dev.slsk.internal.concurrent.CancellationSignal;
+import java.time.Duration;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -25,21 +26,21 @@ class TokenBucketTest {
     @Test
     @DisplayName("Rejects invalid capacity")
     void rejectsInvalidCapacity() {
-        assertThrows(IllegalArgumentException.class, () -> new TokenBucket(0, 1_000));
-        assertThrows(IllegalArgumentException.class, () -> new TokenBucket(-1, 1_000));
+        assertThrows(IllegalArgumentException.class, () -> new TokenBucket(0, Duration.ofMillis(1_000)));
+        assertThrows(IllegalArgumentException.class, () -> new TokenBucket(-1, Duration.ofMillis(1_000)));
     }
 
     @Test
     @DisplayName("Rejects invalid interval")
     void rejectsInvalidInterval() {
-        assertThrows(IllegalArgumentException.class, () -> new TokenBucket(1_000, 0));
-        assertThrows(IllegalArgumentException.class, () -> new TokenBucket(1_000, -1));
+        assertThrows(IllegalArgumentException.class, () -> new TokenBucket(1_000, Duration.ofMillis(0)));
+        assertThrows(IllegalArgumentException.class, () -> new TokenBucket(1_000, Duration.ofMillis(-1)));
     }
 
     @Test
     @DisplayName("Sets initial properties")
     void setsInitialProperties() {
-        try (TokenBucket bucket = new TokenBucket(10, 10_000)) {
+        try (TokenBucket bucket = new TokenBucket(10, Duration.ofMillis(10_000))) {
             assertEquals(10, bucket.getCapacity());
             assertEquals(10, bucket.getCurrentCount());
         }
@@ -48,7 +49,7 @@ class TokenBucketTest {
     @Test
     @DisplayName("SetCapacity validates, sets, and clamps")
     void setCapacityValidatesSetsAndClamps() {
-        try (TokenBucket bucket = new TokenBucket(10, 10_000)) {
+        try (TokenBucket bucket = new TokenBucket(10, Duration.ofMillis(10_000))) {
             assertEquals(5, bucket.get(5));
 
             bucket.setCapacity(3);
@@ -62,7 +63,7 @@ class TokenBucketTest {
     @Test
     @DisplayName("A grant decrements by the requested count")
     void getDecrementsByRequestedCount() {
-        try (TokenBucket bucket = new TokenBucket(10, 10_000)) {
+        try (TokenBucket bucket = new TokenBucket(10, Duration.ofMillis(10_000))) {
             assertEquals(5, bucket.get(5));
             assertEquals(5, bucket.getCurrentCount());
         }
@@ -71,7 +72,7 @@ class TokenBucketTest {
     @Test
     @DisplayName("A request is limited to capacity")
     void getLimitsRequestToCapacity() {
-        try (TokenBucket bucket = new TokenBucket(10, 10_000)) {
+        try (TokenBucket bucket = new TokenBucket(10, Duration.ofMillis(10_000))) {
             assertEquals(10, bucket.get(11));
         }
     }
@@ -79,7 +80,7 @@ class TokenBucketTest {
     @Test
     @DisplayName("A short balance grants what there is rather than waiting for all of it")
     void getReturnsAvailableTokens() {
-        try (TokenBucket bucket = new TokenBucket(10, 10_000)) {
+        try (TokenBucket bucket = new TokenBucket(10, Duration.ofMillis(10_000))) {
             assertEquals(6, bucket.get(6));
             assertEquals(4, bucket.get(6));
         }
@@ -88,7 +89,7 @@ class TokenBucketTest {
     @Test
     @DisplayName("An empty bucket blocks the caller until it replenishes")
     void getWaitsForReplenishment() throws Exception {
-        try (TokenBucket bucket = new TokenBucket(1, 20)) {
+        try (TokenBucket bucket = new TokenBucket(1, Duration.ofMillis(20))) {
             assertEquals(1, bucket.get(1));
 
             Waiter waiter = Waiter.on(bucket, 1);
@@ -101,7 +102,7 @@ class TokenBucketTest {
     @Test
     @DisplayName("Pending requests are serviced in FIFO order")
     void pendingRequestsAreServicedInFifoOrder() throws Exception {
-        try (TokenBucket bucket = new TokenBucket(1, 25)) {
+        try (TokenBucket bucket = new TokenBucket(1, Duration.ofMillis(25))) {
             bucket.get(1);
 
             // Queued one at a time and confirmed queued before the next starts,
@@ -122,7 +123,7 @@ class TokenBucketTest {
     @Test
     @DisplayName("Return ignores negatives and supports a capacity burst")
     void returnIgnoresNegativesAndSupportsCapacityBurst() {
-        try (TokenBucket bucket = new TokenBucket(10, 10_000)) {
+        try (TokenBucket bucket = new TokenBucket(10, Duration.ofMillis(10_000))) {
             bucket.get(5);
 
             bucket.returnTokens(-5);
@@ -136,7 +137,7 @@ class TokenBucketTest {
     @Test
     @DisplayName("Negative requests preserve source arithmetic")
     void negativeRequestsPreserveSourceArithmetic() {
-        try (TokenBucket bucket = new TokenBucket(10, 10_000)) {
+        try (TokenBucket bucket = new TokenBucket(10, Duration.ofMillis(10_000))) {
             assertEquals(-5, bucket.get(-5));
             assertEquals(15, bucket.getCurrentCount());
         }
@@ -145,7 +146,7 @@ class TokenBucketTest {
     @Test
     @DisplayName("A pre-cancelled request is refused without joining the queue")
     void preCancelledRequestsAreRefused() {
-        try (TokenBucket bucket = new TokenBucket(1, 10_000);
+        try (TokenBucket bucket = new TokenBucket(1, Duration.ofMillis(10_000));
                 CancellationController source = new CancellationController()) {
             source.cancel();
 
@@ -158,7 +159,7 @@ class TokenBucketTest {
     @Test
     @DisplayName("A queued request observes cancellation, and the one ahead of it does not")
     void queuedRequestsObserveCancellation() throws Exception {
-        try (TokenBucket bucket = new TokenBucket(1, 10_000);
+        try (TokenBucket bucket = new TokenBucket(1, Duration.ofMillis(10_000));
                 CancellationController source = new CancellationController()) {
             bucket.get(1);
             Waiter active = Waiter.on(bucket, 1);
@@ -181,7 +182,7 @@ class TokenBucketTest {
         // itself. A blocking caller has only its signal, and this is what that
         // route has to keep doing: take one request out without stranding the
         // request behind it.
-        try (TokenBucket bucket = new TokenBucket(1, 10_000);
+        try (TokenBucket bucket = new TokenBucket(1, Duration.ofMillis(10_000));
                 CancellationController source = new CancellationController()) {
             bucket.get(1);
             Waiter active = Waiter.on(bucket, 1);
@@ -208,7 +209,7 @@ class TokenBucketTest {
     @Test
     @DisplayName("Close is idempotent and releases pending requests")
     void closeIsIdempotentAndReleasesPendingRequests() throws Exception {
-        TokenBucket bucket = new TokenBucket(1, 10_000);
+        TokenBucket bucket = new TokenBucket(1, Duration.ofMillis(10_000));
         bucket.get(1);
         Waiter pending = Waiter.on(bucket, 1);
         pending.awaitQueued(bucket);
@@ -228,7 +229,7 @@ class TokenBucketTest {
         // under the same lock every other caller needs. There are no
         // continuations now, but the rule survives them: the thread that wakes
         // up must not be holding this lock.
-        try (TokenBucket bucket = new TokenBucket(1, 25)) {
+        try (TokenBucket bucket = new TokenBucket(1, Duration.ofMillis(25))) {
             bucket.get(1);
 
             Waiter waiter = Waiter.on(bucket, 1);
@@ -245,7 +246,7 @@ class TokenBucketTest {
         // Nothing replenishes the bucket in the background any more, so a
         // caller returning after a quiet spell has to earn its tokens on the
         // way in. A full interval of elapsed time is worth a whole capacity.
-        try (TokenBucket bucket = new TokenBucket(10, 100)) {
+        try (TokenBucket bucket = new TokenBucket(10, Duration.ofMillis(100))) {
             assertEquals(10, bucket.get(10));
             assertEquals(0, bucket.getCurrentCount());
 
@@ -262,7 +263,7 @@ class TokenBucketTest {
         // With replenishment armed for the accrual deadline instead, returning
         // tokens has to drain the queue itself or this waiter sits for the full
         // ten-second interval behind tokens that are already in the bucket.
-        try (TokenBucket bucket = new TokenBucket(1, 10_000)) {
+        try (TokenBucket bucket = new TokenBucket(1, Duration.ofMillis(10_000))) {
             assertEquals(1, bucket.get(1));
 
             Waiter waiter = Waiter.on(bucket, 1);

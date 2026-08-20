@@ -33,6 +33,7 @@ import dev.slsk.internal.options.SoulseekClientOptionsPatch;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.net.InetAddress;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
@@ -412,8 +413,8 @@ class EngineReconfigureTest {
 
         private Fixture(SoulseekClientOptions clientOptions) {
             options = clientOptions;
-            uploadBucket = new TokenBucket((options.maximumUploadSpeed() * 1024L) / 10, 100);
-            downloadBucket = new TokenBucket((options.maximumDownloadSpeed() * 1024L) / 10, 100);
+            uploadBucket = new TokenBucket((options.maximumUploadSpeed() * 1024L) / 10, Duration.ofMillis(100));
+            downloadBucket = new TokenBucket((options.maximumDownloadSpeed() * 1024L) / 10, Duration.ofMillis(100));
             client = new SoulseekEngine(
                     9999,
                     options,
