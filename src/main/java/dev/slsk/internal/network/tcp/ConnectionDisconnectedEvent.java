@@ -5,8 +5,8 @@
 package dev.slsk.internal.network.tcp;
 
 /** Data describing a TCP disconnection. */
-public record ConnectionDisconnectedEvent(Connection connection, String message, Exception exception)
-        implements ConnectionEvent {
+public record ConnectionDisconnectedEvent(TransportConnection connection, String message, Exception exception)
+        implements TransportEvent {
 
     /** Creates a disconnection without an exception. */
     public ConnectionDisconnectedEvent(String message) {

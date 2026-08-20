@@ -17,11 +17,12 @@ import java.util.function.Consumer;
 
 /** Listens for client connections for TCP network services. */
 public final class SocketListener implements Listener {
-    private final CopyOnWriteArrayList<Consumer<? super Connection>> acceptedListeners = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<Consumer<? super TransportConnection>> acceptedListeners =
+            new CopyOnWriteArrayList<>();
     private final InetAddress ipAddress;
     private final int port;
     private final ConnectionOptions connectionOptions;
-    private final TcpListener tcpListener;
+    private final SocketAcceptor acceptor;
     private final ConnectionMonitor monitor;
     private final ExecutorService executor;
     private volatile boolean listening;
@@ -50,15 +51,15 @@ public final class SocketListener implements Listener {
      * @param connectionOptions the options every accepted connection gets
      * @param monitor the client's monitor, which every accepted connection is
      *     swept by
-     * @param tcpListener a listener adapter to use, or {@code null}
+     * @param acceptor a listener adapter to use, or {@code null}
      */
     public SocketListener(
             InetAddress ipAddress,
             int port,
             ConnectionOptions connectionOptions,
             ConnectionMonitor monitor,
-            TcpListener tcpListener) {
-        this(ipAddress, port, connectionOptions, monitor, tcpListener, null);
+            SocketAcceptor acceptor) {
+        this(ipAddress, port, connectionOptions, monitor, acceptor, null);
     }
 
     /** Creates a listener over an adapter and a caller-owned executor. */
@@ -67,19 +68,18 @@ public final class SocketListener implements Listener {
             int port,
             ConnectionOptions connectionOptions,
             ConnectionMonitor monitor,
-            TcpListener tcpListener,
+            SocketAcceptor acceptor,
             ExecutorService executor) {
         this.monitor = Objects.requireNonNull(monitor, "monitor");
         this.executor = executor;
         this.ipAddress = ipAddress;
         this.port = port;
         this.connectionOptions = connectionOptions == null ? new ConnectionOptions() : connectionOptions;
-        this.tcpListener =
-                tcpListener == null ? new TcpListenerAdapter(new InetSocketAddress(ipAddress, port)) : tcpListener;
+        this.acceptor = acceptor == null ? new JdkSocketAcceptor(new InetSocketAddress(ipAddress, port)) : acceptor;
     }
 
     @Override
-    public Subscription subscribe(Consumer<? super Connection> listener) {
+    public Subscription subscribe(Consumer<? super TransportConnection> listener) {
         return Subscriptions.add(acceptedListeners, listener);
     }
 
@@ -105,7 +105,7 @@ public final class SocketListener implements Listener {
 
     @Override
     public void start() {
-        tcpListener.start();
+        acceptor.start();
         listening = true;
         runInBackground(this::listenContinuously);
     }
@@ -116,14 +116,14 @@ public final class SocketListener implements Listener {
         // accept fail, and the loop reads this flag to tell that failure —
         // which is expected — from one that means the listener is broken.
         listening = false;
-        tcpListener.stop();
+        acceptor.stop();
     }
 
     private void listenContinuously() {
         while (listening) {
             Socket client;
             try {
-                client = tcpListener.acceptTcpClient();
+                client = acceptor.accept();
             } catch (RuntimeException failure) {
                 if (!listening) {
                     // Our own stop() closed the socket out from under the
@@ -162,10 +162,10 @@ public final class SocketListener implements Listener {
 
     private void publishAccepted(Socket client) {
         InetSocketAddress endpoint = (InetSocketAddress) client.getRemoteSocketAddress();
-        Connection connection = executor == null
-                ? new SocketConnection(endpoint, connectionOptions, new TcpClientAdapter(client), monitor)
-                : new SocketConnection(endpoint, connectionOptions, new TcpClientAdapter(client), monitor, executor);
-        for (Consumer<? super Connection> listener : acceptedListeners) {
+        TransportConnection connection = executor == null
+                ? new SocketConnection(endpoint, connectionOptions, new JdkSocketConnector(client), monitor)
+                : new SocketConnection(endpoint, connectionOptions, new JdkSocketConnector(client), monitor, executor);
+        for (Consumer<? super TransportConnection> listener : acceptedListeners) {
             listener.accept(connection);
         }
     }

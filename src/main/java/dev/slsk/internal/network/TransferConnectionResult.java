@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.network;
 
-import dev.slsk.internal.network.tcp.Connection;
+import dev.slsk.internal.network.tcp.TransportConnection;
 
 /**
  * A transfer connection and the peer's transfer token.
@@ -12,4 +12,4 @@ import dev.slsk.internal.network.tcp.Connection;
  * @param connection the transfer connection
  * @param remoteToken the peer token
  */
-public record TransferConnectionResult(Connection connection, int remoteToken) {}
+public record TransferConnectionResult(TransportConnection connection, int remoteToken) {}

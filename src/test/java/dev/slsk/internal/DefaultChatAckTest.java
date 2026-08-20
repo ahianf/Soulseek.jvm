@@ -16,7 +16,7 @@ import dev.slsk.internal.events.PrivateMessageReceivedEvent;
 import dev.slsk.internal.messaging.messages.AcknowledgePrivateMessageCommand;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.network.MessageConnection;
-import dev.slsk.internal.network.tcp.ConnectionState;
+import dev.slsk.internal.network.tcp.TransportState;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.time.Instant;
@@ -227,7 +227,7 @@ class DefaultChatAckTest {
                 return null;
             }
             if (method.getName().equals("getState")) {
-                return ConnectionState.CONNECTED;
+                return TransportState.CONNECTED;
             }
             if (method.getName().equals("getId")) {
                 return UUID.randomUUID();

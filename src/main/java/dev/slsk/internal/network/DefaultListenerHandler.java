@@ -16,8 +16,8 @@ import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.events.Subscriptions;
 import dev.slsk.internal.messaging.messages.PeerInit;
 import dev.slsk.internal.messaging.messages.PierceFirewall;
-import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.Listener;
+import dev.slsk.internal.network.tcp.TransportConnection;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.search.SearchResponder;
 import dev.slsk.internal.search.SearchResponseCacheRecord;
@@ -86,7 +86,7 @@ public final class DefaultListenerHandler implements ListenerHandler {
     }
 
     @Override
-    public void handleConnection(Connection connection) {
+    public void handleConnection(TransportConnection connection) {
         diagnostic.debug("Accepted incoming connection from "
                 + connection.getIpEndpoint().getAddress().getHostAddress()
                 + " on " + listener.get().getIpAddress()
@@ -119,7 +119,7 @@ public final class DefaultListenerHandler implements ListenerHandler {
         return diagnostic;
     }
 
-    private void routeInitialization(Connection connection, byte[] message) {
+    private void routeInitialization(TransportConnection connection, byte[] message) {
         Optional<PeerInit> peerInit = PeerInit.tryFromByteArray(message);
         if (peerInit.isPresent()) {
             handlePeerInit(connection, peerInit.get());
@@ -137,7 +137,7 @@ public final class DefaultListenerHandler implements ListenerHandler {
                 + " bytes, id: " + connection.getId() + ")");
     }
 
-    private void handlePeerInit(Connection connection, PeerInit peerInit) {
+    private void handlePeerInit(TransportConnection connection, PeerInit peerInit) {
         diagnostic.debug("PeerInit for connection type " + peerInit.getConnectionType()
                 + " received from " + peerInit.getUsername() + " ("
                 + connection.getIpEndpoint().getAddress().getHostAddress()
@@ -171,7 +171,7 @@ public final class DefaultListenerHandler implements ListenerHandler {
         }
     }
 
-    private void handlePierceFirewall(Connection connection, PierceFirewall pierce) {
+    private void handlePierceFirewall(TransportConnection connection, PierceFirewall pierce) {
         int token = pierce.getToken();
         String username = peers.get().getPendingSolicitations().get(token);
         if (username != null) {

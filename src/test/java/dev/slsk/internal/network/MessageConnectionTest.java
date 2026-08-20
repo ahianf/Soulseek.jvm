@@ -17,8 +17,8 @@ import dev.slsk.internal.common.Monitors;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.network.tcp.ConnectionKey;
-import dev.slsk.internal.network.tcp.NetworkStream;
-import dev.slsk.internal.network.tcp.TcpClient;
+import dev.slsk.internal.network.tcp.SocketConnector;
+import dev.slsk.internal.network.tcp.SocketTransport;
 import dev.slsk.internal.options.ConnectionOptions;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -87,7 +87,7 @@ class MessageConnectionTest {
     void connectStartsReading() throws Exception {
         FakeStream stream = new FakeStream();
         stream.blockReads = true;
-        FakeTcpClient client = new FakeTcpClient(stream, false);
+        FakeSocketConnector client = new FakeSocketConnector(stream, false);
         client.connectAction = () -> client.connected = true;
         DefaultMessageConnection connection =
                 new DefaultMessageConnection(ENDPOINT, OPTIONS, 4, client, Monitors.shared());
@@ -105,7 +105,7 @@ class MessageConnectionTest {
     void explicitStartReadsAdoptedConnection() throws Exception {
         FakeStream stream = new FakeStream();
         stream.blockReads = true;
-        FakeTcpClient client = new FakeTcpClient(stream, true);
+        FakeSocketConnector client = new FakeSocketConnector(stream, true);
         DefaultMessageConnection connection =
                 new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 4, client, Monitors.shared());
 
@@ -127,7 +127,7 @@ class MessageConnectionTest {
         byte[] frame = frame(code, payload);
         FakeStream stream = new FakeStream(frame);
         stream.maxRead = 1;
-        FakeTcpClient client = new FakeTcpClient(stream, true);
+        FakeSocketConnector client = new FakeSocketConnector(stream, true);
         DefaultMessageConnection connection =
                 new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 4, client, Monitors.shared());
         AtomicReference<MessageReceivedEvent> received = new AtomicReference<>();
@@ -173,7 +173,7 @@ class MessageConnectionTest {
         // looking healthy with a dead read loop.
         byte[] frame = frame(new byte[] {1, 2, 3, 4}, new byte[] {5, 6});
         FakeStream stream = new FakeStream(frame);
-        FakeTcpClient client = new FakeTcpClient(stream, true);
+        FakeSocketConnector client = new FakeSocketConnector(stream, true);
         DefaultMessageConnection connection =
                 new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 4, client, Monitors.shared());
 
@@ -196,7 +196,7 @@ class MessageConnectionTest {
         byte[] frame = frame(new byte[] {(byte) 0x93}, new byte[] {4, 5});
         FakeStream stream = new FakeStream(frame);
         DefaultMessageConnection connection = new DefaultMessageConnection(
-                "alice", ENDPOINT, OPTIONS, 1, new FakeTcpClient(stream, true), Monitors.shared());
+                "alice", ENDPOINT, OPTIONS, 1, new FakeSocketConnector(stream, true), Monitors.shared());
         AtomicReference<byte[]> read = new AtomicReference<>();
         CountDownLatch complete = new CountDownLatch(1);
         connection.<MessageEvent>subscribe(MessageConnection.MessageKind.READ, args -> {
@@ -215,7 +215,7 @@ class MessageConnectionTest {
     @DisplayName("Message write serializes once and raises after completion")
     void writesMessage() throws Exception {
         FakeStream stream = new FakeStream();
-        FakeTcpClient client = new FakeTcpClient(stream, true);
+        FakeSocketConnector client = new FakeSocketConnector(stream, true);
         DefaultMessageConnection connection =
                 new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 4, client, Monitors.shared());
         byte[] bytes = new byte[] {4, 0, 0, 0, 1, 2, 3, 4};
@@ -259,8 +259,8 @@ class MessageConnectionTest {
         FakeStream stream = new FakeStream();
         IOException cause = new IOException("broken");
         stream.writeFailure = cause;
-        DefaultMessageConnection connection =
-                new DefaultMessageConnection(ENDPOINT, OPTIONS, 4, new FakeTcpClient(stream, true), Monitors.shared());
+        DefaultMessageConnection connection = new DefaultMessageConnection(
+                ENDPOINT, OPTIONS, 4, new FakeSocketConnector(stream, true), Monitors.shared());
 
         ConnectionWriteException failure =
                 assertThrows(ConnectionWriteException.class, () -> connection.write(() -> new byte[] {1}));
@@ -308,19 +308,19 @@ class MessageConnectionTest {
         boolean get() throws Exception;
     }
 
-    private static final class FakeTcpClient implements TcpClient {
+    private static final class FakeSocketConnector implements SocketConnector {
         private final Socket socket = new Socket();
         private final FakeStream stream;
         private boolean connected;
         private Runnable connectAction;
 
-        private FakeTcpClient(FakeStream stream, boolean connected) {
+        private FakeSocketConnector(FakeStream stream, boolean connected) {
             this.stream = stream;
             this.connected = connected;
         }
 
         @Override
-        public Socket getClient() {
+        public Socket socket() {
             return socket;
         }
 
@@ -357,7 +357,7 @@ class MessageConnectionTest {
         }
 
         @Override
-        public NetworkStream getStream() {
+        public SocketTransport transport() {
             return stream;
         }
 
@@ -369,7 +369,7 @@ class MessageConnectionTest {
         }
     }
 
-    private static final class FakeStream implements NetworkStream {
+    private static final class FakeStream implements SocketTransport {
         private final List<Byte> written = new ArrayList<>();
         private byte[] input;
         private int position;
@@ -386,22 +386,6 @@ class MessageConnectionTest {
         private FakeStream(byte[] input) {
             this.input = input;
         }
-
-        @Override
-        public int getReadTimeout() {
-            return -1;
-        }
-
-        @Override
-        public void setReadTimeout(int timeout) {}
-
-        @Override
-        public int getWriteTimeout() {
-            return -1;
-        }
-
-        @Override
-        public void setWriteTimeout(int timeout) {}
 
         @Override
         public int read(byte[] buffer, int offset, int size) throws IOException {

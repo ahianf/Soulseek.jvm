@@ -42,12 +42,12 @@ import dev.slsk.internal.messaging.messages.HaveNoParentsCommand;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.messaging.messages.PeerInit;
 import dev.slsk.internal.messaging.messages.PierceFirewall;
-import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.internal.network.tcp.ConnectionKey;
-import dev.slsk.internal.network.tcp.ConnectionState;
 import dev.slsk.internal.network.tcp.ConnectionType;
-import dev.slsk.internal.network.tcp.TcpClient;
+import dev.slsk.internal.network.tcp.SocketConnector;
+import dev.slsk.internal.network.tcp.TransportConnection;
+import dev.slsk.internal.network.tcp.TransportState;
 import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import java.lang.reflect.InvocationHandler;
@@ -298,7 +298,7 @@ class DistributedNetworkTest {
         fixture.manager.addOrUpdateChildConnection(
                 "a", ConnectionProbe.connection(ENDPOINT).connection());
         ConnectionProbe disconnected = ConnectionProbe.message("b", endpoint(42002));
-        disconnected.state = ConnectionState.DISCONNECTED;
+        disconnected.state = TransportState.DISCONNECTED;
         fixture.factory.distributedHandoff = disconnected;
         fixture.manager.addOrUpdateChildConnection(
                 "b", ConnectionProbe.connection(endpoint(42002)).connection());
@@ -638,8 +638,8 @@ class DistributedNetworkTest {
 
         @Override
         public MessageConnection getDistributedConnection(
-                String username, InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient) {
-            if (tcpClient != null) {
+                String username, InetSocketAddress ipEndpoint, ConnectionOptions options, SocketConnector connector) {
+            if (connector != null) {
                 assertNotNull(distributedHandoff);
                 return distributedHandoff.messageConnection();
             }
@@ -650,25 +650,25 @@ class DistributedNetworkTest {
 
         @Override
         public MessageConnection getMessageConnection(
-                String username, InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient) {
+                String username, InetSocketAddress ipEndpoint, ConnectionOptions options, SocketConnector connector) {
             throw new AssertionError("unexpected peer connection");
         }
 
         @Override
         public MessageConnection getServerConnection(
                 InetSocketAddress ipEndpoint,
-                java.util.function.Consumer<Connection> connectedEventHandler,
+                java.util.function.Consumer<TransportConnection> connectedEventHandler,
                 java.util.function.Consumer<ConnectionDisconnectedEvent> disconnectedEventHandler,
                 java.util.function.Consumer<MessageEvent> messageReadEventHandler,
                 java.util.function.Consumer<MessageEvent> messageWrittenEventHandler,
                 ConnectionOptions options,
-                TcpClient tcpClient) {
+                SocketConnector connector) {
             throw new AssertionError("unexpected server connection");
         }
 
         @Override
-        public Connection getTransferConnection(
-                InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient) {
+        public TransportConnection getTransferConnection(
+                InetSocketAddress ipEndpoint, ConnectionOptions options, SocketConnector connector) {
             throw new AssertionError("unexpected transfer connection");
         }
     }
@@ -813,11 +813,11 @@ class DistributedNetworkTest {
         private final String username;
         private final InetSocketAddress endpoint;
         private final UUID id = UUID.randomUUID();
-        private final TcpClient tcpClient = (TcpClient) Proxy.newProxyInstance(
-                TcpClient.class.getClassLoader(),
-                new Class<?>[] {TcpClient.class},
+        private final SocketConnector connector = (SocketConnector) Proxy.newProxyInstance(
+                SocketConnector.class.getClassLoader(),
+                new Class<?>[] {SocketConnector.class},
                 (proxy, method, arguments) -> defaultValue(method.getReturnType()));
-        private final Connection proxy;
+        private final TransportConnection proxy;
         private final List<java.util.function.Consumer<ConnectionDisconnectedEvent>> disconnectedListeners =
                 new CopyOnWriteArrayList<>();
         private final List<java.util.function.Consumer<MessageEvent>> messageReadListeners =
@@ -825,7 +825,7 @@ class DistributedNetworkTest {
         private final List<byte[]> byteWrites = new CopyOnWriteArrayList<>();
         private final List<OutgoingMessage> outgoingWrites = new CopyOnWriteArrayList<>();
         private ConnectionType type = ConnectionType.UNCLASSIFIED;
-        private ConnectionState state = ConnectionState.CONNECTED;
+        private TransportState state = TransportState.CONNECTED;
         private CompletableFuture<Void> connectFuture = CompletableFuture.completedFuture(null);
         private CompletableFuture<Void> writeFuture = CompletableFuture.completedFuture(null);
         private Runnable onByteWrite;
@@ -841,9 +841,9 @@ class DistributedNetworkTest {
             this.message = message;
             this.username = username;
             this.endpoint = endpoint;
-            proxy = (Connection) Proxy.newProxyInstance(
-                    Connection.class.getClassLoader(),
-                    message ? new Class<?>[] {MessageConnection.class} : new Class<?>[] {Connection.class},
+            proxy = (TransportConnection) Proxy.newProxyInstance(
+                    TransportConnection.class.getClassLoader(),
+                    message ? new Class<?>[] {MessageConnection.class} : new Class<?>[] {TransportConnection.class},
                     this);
         }
 
@@ -855,7 +855,7 @@ class DistributedNetworkTest {
             return new ConnectionProbe(true, username, endpoint);
         }
 
-        private Connection connection() {
+        private TransportConnection connection() {
             return proxy;
         }
 
@@ -924,11 +924,11 @@ class DistributedNetworkTest {
                         }
                     }
                     Outcomes.raise(writeFuture);
-                    yield (Connection.PendingWrite) () -> {};
+                    yield (TransportConnection.PendingWrite) () -> {};
                 }
-                case "handoffTcpClient" -> {
+                case "handoffConnector" -> {
                     handoffCount++;
-                    yield tcpClient;
+                    yield connector;
                 }
                 case "startReadingContinuously" -> {
                     startReadingCount++;
@@ -949,7 +949,7 @@ class DistributedNetworkTest {
                 case "subscribe" -> {
                     Object kind = arguments[0];
                     Object listener = arguments[1];
-                    if (kind == Connection.Kind.DISCONNECTED) {
+                    if (kind == TransportConnection.Kind.DISCONNECTED) {
                         java.util.function.Consumer<ConnectionDisconnectedEvent> registered = cast(listener);
                         disconnectedListeners.add(registered);
                         yield (dev.slsk.Subscription) () -> disconnectedListeners.remove(registered);

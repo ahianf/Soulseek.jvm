@@ -5,7 +5,7 @@
 package dev.slsk.internal.network.tcp;
 
 /** TCP connection lifecycle state. */
-public enum ConnectionState {
+public enum TransportState {
     /** Pending initial connection. */
     PENDING,
     /** A connection attempt is in progress. */

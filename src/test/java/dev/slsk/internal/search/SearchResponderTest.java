@@ -26,7 +26,7 @@ import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.PeerConnectionManager;
 import dev.slsk.internal.network.PeerEndpoint;
 import dev.slsk.internal.network.TransferConnectionResult;
-import dev.slsk.internal.network.tcp.Connection;
+import dev.slsk.internal.network.tcp.TransportConnection;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.share.File;
 import dev.slsk.search.SearchFile;
@@ -490,10 +490,10 @@ class SearchResponderTest {
         }
 
         @Override
-        public void addOrUpdateMessageConnection(String username, Connection incomingConnection) {}
+        public void addOrUpdateMessageConnection(String username, TransportConnection incomingConnection) {}
 
         @Override
-        public Connection awaitTransferConnection(
+        public TransportConnection awaitTransferConnection(
                 String username, String filename, int remoteToken, CancellationSignal cancellationSignal) {
             return unsupported();
         }
@@ -533,7 +533,7 @@ class SearchResponderTest {
 
         @Override
         public TransferConnectionResult getTransferConnection(
-                String username, int token, Connection incomingConnection) {
+                String username, int token, TransportConnection incomingConnection) {
             return unsupported();
         }
 
@@ -543,7 +543,7 @@ class SearchResponderTest {
         }
 
         @Override
-        public Connection getTransferConnection(
+        public TransportConnection getTransferConnection(
                 String username, InetSocketAddress ipEndpoint, int token, CancellationSignal cancellationSignal) {
             return unsupported();
         }

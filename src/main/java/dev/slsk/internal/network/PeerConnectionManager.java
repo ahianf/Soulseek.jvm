@@ -7,7 +7,7 @@ package dev.slsk.internal.network;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.diagnostics.DiagnosticSource;
 import dev.slsk.internal.messaging.messages.ConnectToPeerResponse;
-import dev.slsk.internal.network.tcp.Connection;
+import dev.slsk.internal.network.tcp.TransportConnection;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
@@ -29,9 +29,9 @@ public interface PeerConnectionManager extends AutoCloseable, DiagnosticSource {
      * class a future genuinely earns, and D11 replaces it with a connection
      * cell — but it is nobody else's business, so it stops at this boundary.
      */
-    void addOrUpdateMessageConnection(String username, Connection incomingConnection);
+    void addOrUpdateMessageConnection(String username, TransportConnection incomingConnection);
 
-    Connection awaitTransferConnection(
+    TransportConnection awaitTransferConnection(
             String username, String filename, int remoteToken, CancellationSignal cancellationSignal);
 
     MessageConnection getCachedMessageConnection(String username);
@@ -46,11 +46,11 @@ public interface PeerConnectionManager extends AutoCloseable, DiagnosticSource {
             String username, InetSocketAddress ipEndpoint, int solicitationToken, CancellationSignal cancellationSignal)
             throws InterruptedException, TimeoutException;
 
-    TransferConnectionResult getTransferConnection(String username, int token, Connection incomingConnection);
+    TransferConnectionResult getTransferConnection(String username, int token, TransportConnection incomingConnection);
 
     TransferConnectionResult getTransferConnection(ConnectToPeerResponse connectToPeerResponse);
 
-    Connection getTransferConnection(
+    TransportConnection getTransferConnection(
             String username, InetSocketAddress ipEndpoint, int token, CancellationSignal cancellationSignal);
 
     void removeAndCloseAll();

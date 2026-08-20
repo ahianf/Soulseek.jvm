@@ -33,12 +33,12 @@ import dev.slsk.internal.messaging.messages.TransferResponse;
 import dev.slsk.internal.messaging.messages.UserAddressResponse;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.PeerConnectionManager;
-import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDataEvent;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.internal.network.tcp.ConnectionGovernor;
 import dev.slsk.internal.network.tcp.ConnectionReporter;
-import dev.slsk.internal.network.tcp.ConnectionState;
+import dev.slsk.internal.network.tcp.TransportConnection;
+import dev.slsk.internal.network.tcp.TransportState;
 import dev.slsk.internal.options.PositionableOutputStream;
 import dev.slsk.internal.options.TransferOptions;
 import dev.slsk.internal.transfer.DownloadSpecification;
@@ -1103,8 +1103,8 @@ class EngineDownloadTest {
 
     private static final class PeerManagerProbe {
         private final MessageConnection message;
-        private final Connection transfer;
-        private CompletableFuture<Connection> awaitResult;
+        private final TransportConnection transfer;
+        private CompletableFuture<TransportConnection> awaitResult;
         private int awaitCalls;
         private int outgoingTransferCalls;
         private int outgoingToken;
@@ -1113,7 +1113,7 @@ class EngineDownloadTest {
                 new Class<?>[] {PeerConnectionManager.class},
                 this::invoke);
 
-        private PeerManagerProbe(MessageConnection message, Connection transfer) {
+        private PeerManagerProbe(MessageConnection message, TransportConnection transfer) {
             this.message = message;
             this.transfer = transfer;
             awaitResult = CompletableFuture.completedFuture(transfer);
@@ -1158,7 +1158,7 @@ class EngineDownloadTest {
                 return null;
             }
             if (method.getName().equals("getState")) {
-                return ConnectionState.CONNECTED;
+                return TransportState.CONNECTED;
             }
             if (method.getName().equals("getId")) {
                 return UUID.randomUUID();
@@ -1181,8 +1181,8 @@ class EngineDownloadTest {
         private RuntimeException closeFailure;
         private java.util.function.Consumer<ConnectionDataEvent> dataReadListener;
         private java.util.function.Consumer<ConnectionDisconnectedEvent> disconnectedListener;
-        private final Connection proxy = (Connection) Proxy.newProxyInstance(
-                Connection.class.getClassLoader(), new Class<?>[] {Connection.class}, this::invoke);
+        private final TransportConnection proxy = (TransportConnection) Proxy.newProxyInstance(
+                TransportConnection.class.getClassLoader(), new Class<?>[] {TransportConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) throws IOException {
             if (method.getName().equals("write")
@@ -1235,7 +1235,7 @@ class EngineDownloadTest {
                 return null;
             }
             if (method.getName().equals("subscribe")) {
-                if (arguments[0] == Connection.Kind.DATA_READ) {
+                if (arguments[0] == TransportConnection.Kind.DATA_READ) {
                     java.util.function.Consumer<ConnectionDataEvent> registered = cast(arguments[1]);
                     dataReadListener = registered;
                     return (dev.slsk.Subscription) () -> {
@@ -1244,7 +1244,7 @@ class EngineDownloadTest {
                         }
                     };
                 }
-                if (arguments[0] == Connection.Kind.DISCONNECTED) {
+                if (arguments[0] == TransportConnection.Kind.DISCONNECTED) {
                     java.util.function.Consumer<ConnectionDisconnectedEvent> registered = cast(arguments[1]);
                     disconnectedListener = registered;
                     return (dev.slsk.Subscription) () -> {
@@ -1259,7 +1259,7 @@ class EngineDownloadTest {
                 throw closeFailure;
             }
             if (method.getName().equals("getState")) {
-                return ConnectionState.CONNECTED;
+                return TransportState.CONNECTED;
             }
             if (method.getName().equals("getId")) {
                 return UUID.randomUUID();

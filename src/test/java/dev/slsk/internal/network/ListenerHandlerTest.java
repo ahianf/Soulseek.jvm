@@ -23,8 +23,8 @@ import dev.slsk.internal.diagnostics.DiagnosticSeverity;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.messaging.messages.PeerInit;
 import dev.slsk.internal.messaging.messages.PierceFirewall;
-import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.Listener;
+import dev.slsk.internal.network.tcp.TransportConnection;
 import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.search.SearchResponder;
@@ -94,10 +94,10 @@ class ListenerHandlerTest {
     @Test
     void expectedTransferCompletesDirectWait() throws Exception {
         try (Fixture fixture = fixture(null)) {
-            Connection transferConnection = ConnectionProbe.message(new byte[] {1}).proxy;
+            TransportConnection transferConnection = ConnectionProbe.message(new byte[] {1}).proxy;
             fixture.peer.transferResult = new TransferConnectionResult(transferConnection, 24);
             WaitKey key = new WaitKey(Constants.WaitKey.DIRECT_TRANSFER, "alice", 24);
-            Wait<Connection> wait = fixture.waiter.registerIndefinitely(key, Connection.class, null);
+            Wait<TransportConnection> wait = fixture.waiter.registerIndefinitely(key, TransportConnection.class, null);
             ConnectionProbe incoming =
                     ConnectionProbe.message(new PeerInit("alice", Constants.ConnectionType.TRANSFER, 7).toByteArray());
 
@@ -128,7 +128,8 @@ class ListenerHandlerTest {
         try (Fixture fixture = fixture(null)) {
             fixture.peer.pending = Map.of(8, "alice");
             WaitKey peerKey = new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, "alice", 8);
-            Wait<Connection> peerWait = fixture.waiter.registerIndefinitely(peerKey, Connection.class, null);
+            Wait<TransportConnection> peerWait =
+                    fixture.waiter.registerIndefinitely(peerKey, TransportConnection.class, null);
             ConnectionProbe peer = ConnectionProbe.message(new PierceFirewall(8).toByteArray());
             fixture.handler.handleConnection(peer.proxy);
             assertSame(peer.proxy, peerWait.await());
@@ -136,8 +137,8 @@ class ListenerHandlerTest {
             fixture.peer.pending = Map.of();
             fixture.distributed.pending = Map.of(9, "bob");
             WaitKey distributedKey = new WaitKey(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION, "bob", 9);
-            Wait<Connection> distributedWait =
-                    fixture.waiter.registerIndefinitely(distributedKey, Connection.class, null);
+            Wait<TransportConnection> distributedWait =
+                    fixture.waiter.registerIndefinitely(distributedKey, TransportConnection.class, null);
             ConnectionProbe distributed = ConnectionProbe.message(new PierceFirewall(9).toByteArray());
             fixture.handler.handleConnection(distributed.proxy);
             assertSame(distributed.proxy, distributedWait.await());
@@ -273,7 +274,7 @@ class ListenerHandlerTest {
 
     private static final class TestListener implements Listener {
         @Override
-        public Subscription subscribe(Consumer<? super Connection> listener) {
+        public Subscription subscribe(Consumer<? super TransportConnection> listener) {
             return () -> {};
         }
 
@@ -305,7 +306,7 @@ class ListenerHandlerTest {
     }
 
     private static final class ConnectionProbe {
-        private final Connection proxy;
+        private final TransportConnection proxy;
         private final ArrayDeque<CompletableFuture<byte[]>> reads = new ArrayDeque<>();
         private String disconnectMessage;
         private Exception disconnectedException;
@@ -314,8 +315,10 @@ class ListenerHandlerTest {
         private ConnectionProbe() {
             InetSocketAddress endpoint = new InetSocketAddress("127.0.0.1", 1234);
             UUID id = UUID.randomUUID();
-            proxy = (Connection) Proxy.newProxyInstance(
-                    getClass().getClassLoader(), new Class<?>[] {Connection.class}, (ignored, method, arguments) -> {
+            proxy = (TransportConnection) Proxy.newProxyInstance(
+                    getClass().getClassLoader(),
+                    new Class<?>[] {TransportConnection.class},
+                    (ignored, method, arguments) -> {
                         return switch (method.getName()) {
                             case "getIpEndpoint" -> endpoint;
                             case "getId" -> id;
@@ -367,9 +370,9 @@ class ListenerHandlerTest {
     private static final class PeerProbe {
         private Map<Integer, String> pending = Map.of();
         private String addedUsername;
-        private Connection addedConnection;
+        private TransportConnection addedConnection;
         private int transferToken;
-        private Connection transferIncoming;
+        private TransportConnection transferIncoming;
         private TransferConnectionResult transferResult;
         private final PeerConnectionManager proxy = (PeerConnectionManager) Proxy.newProxyInstance(
                 getClass().getClassLoader(),
@@ -379,12 +382,12 @@ class ListenerHandlerTest {
                         case "getPendingSolicitations" -> pending;
                         case "addOrUpdateMessageConnection" -> {
                             addedUsername = (String) arguments[0];
-                            addedConnection = (Connection) arguments[1];
+                            addedConnection = (TransportConnection) arguments[1];
                             yield null;
                         }
                         case "getTransferConnection" -> {
                             transferToken = (Integer) arguments[1];
-                            transferIncoming = (Connection) arguments[2];
+                            transferIncoming = (TransportConnection) arguments[2];
                             yield transferResult;
                         }
                         case "toString" -> "peerManager";
@@ -396,7 +399,7 @@ class ListenerHandlerTest {
     private static final class DistributedProbe {
         private Map<Integer, String> pending = Map.of();
         private String addedUsername;
-        private Connection addedConnection;
+        private TransportConnection addedConnection;
         private final DistributedConnectionManager proxy = (DistributedConnectionManager) Proxy.newProxyInstance(
                 getClass().getClassLoader(),
                 new Class<?>[] {DistributedConnectionManager.class},
@@ -405,7 +408,7 @@ class ListenerHandlerTest {
                         case "getPendingSolicitations" -> pending;
                         case "addOrUpdateChildConnection" -> {
                             addedUsername = (String) arguments[0];
-                            addedConnection = (Connection) arguments[1];
+                            addedConnection = (TransportConnection) arguments[1];
                             yield null;
                         }
                         case "toString" -> "distributedManager";

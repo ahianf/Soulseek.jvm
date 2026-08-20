@@ -5,9 +5,9 @@
 package dev.slsk.internal.network;
 
 import dev.slsk.internal.diagnostics.DiagnosticSource;
-import dev.slsk.internal.network.tcp.Connection;
+import dev.slsk.internal.network.tcp.TransportConnection;
 
 /** Handles connections accepted by the TCP listener. */
 public interface ListenerHandler extends DiagnosticSource {
-    void handleConnection(Connection connection);
+    void handleConnection(TransportConnection connection);
 }

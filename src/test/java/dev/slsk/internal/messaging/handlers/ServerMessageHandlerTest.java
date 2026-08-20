@@ -50,7 +50,7 @@ import dev.slsk.internal.network.MessageEvent;
 import dev.slsk.internal.network.PeerConnectionManager;
 import dev.slsk.internal.network.PeerEndpoint;
 import dev.slsk.internal.network.TransferConnectionResult;
-import dev.slsk.internal.network.tcp.Connection;
+import dev.slsk.internal.network.tcp.TransportConnection;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.options.SoulseekClientOptionsPatch;
 import dev.slsk.internal.room.RoomData;
@@ -1003,8 +1003,8 @@ class ServerMessageHandlerTest {
 
     private static final class ConnectionProbe {
         private String disconnectMessage;
-        private final Connection proxy = (Connection) Proxy.newProxyInstance(
-                Connection.class.getClassLoader(), new Class<?>[] {Connection.class}, this::invoke);
+        private final TransportConnection proxy = (TransportConnection) Proxy.newProxyInstance(
+                TransportConnection.class.getClassLoader(), new Class<?>[] {TransportConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
             return switch (method.getName()) {

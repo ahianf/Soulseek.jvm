@@ -6,20 +6,8 @@ package dev.slsk.internal.network.tcp;
 
 import java.io.IOException;
 
-/** Provides the underlying stream of data for network access. */
-public interface NetworkStream extends AutoCloseable {
-    /** Returns the read timeout in milliseconds. */
-    int getReadTimeout() throws IOException;
-
-    /** Sets the read timeout in milliseconds. */
-    void setReadTimeout(int timeout) throws IOException;
-
-    /** Returns the write timeout in milliseconds. */
-    int getWriteTimeout();
-
-    /** Sets the write timeout in milliseconds. */
-    void setWriteTimeout(int timeout);
-
+/** Exchanges bytes over an established socket. */
+public interface SocketTransport extends AutoCloseable {
     /**
      * Reads up to {@code size} bytes, blocking until some arrive.
      *
@@ -50,7 +38,7 @@ public interface NetworkStream extends AutoCloseable {
      */
     void write(byte[] buffer, int offset, int size) throws IOException;
 
-    /** Closes the stream. */
+    /** Closes the transport. */
     @Override
     void close() throws IOException;
 }

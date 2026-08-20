@@ -36,8 +36,8 @@ import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.MessageEvent;
 import dev.slsk.internal.network.PeerEndpoint;
 import dev.slsk.internal.network.tcp.ConnectionKey;
-import dev.slsk.internal.network.tcp.ConnectionState;
 import dev.slsk.internal.network.tcp.ConnectionType;
+import dev.slsk.internal.network.tcp.TransportState;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.options.SoulseekClientOptionsPatch;
 import dev.slsk.internal.search.SearchResponder;
@@ -442,7 +442,7 @@ class DistributedMessageHandlerTest {
                 case "getId" -> id;
                 case "getKey" -> key;
                 case "getInactiveTime" -> Duration.ZERO;
-                case "getState" -> ConnectionState.CONNECTED;
+                case "getState" -> TransportState.CONNECTED;
                 case "getType" -> ConnectionType.UNCLASSIFIED;
                 case "getWriteQueueDepth" -> 0;
                 case "getCodeLength" -> 1;

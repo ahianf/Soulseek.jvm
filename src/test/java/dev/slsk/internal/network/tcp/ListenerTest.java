@@ -29,8 +29,8 @@ class ListenerTest {
     void constructs() {
         InetAddress address = InetAddress.getLoopbackAddress();
         ConnectionOptions options = new ConnectionOptions();
-        FakeTcpListener tcpListener = new FakeTcpListener();
-        SocketListener listener = new SocketListener(address, 2234, options, Monitors.shared(), tcpListener);
+        FakeSocketAcceptor acceptor = new FakeSocketAcceptor();
+        SocketListener listener = new SocketListener(address, 2234, options, Monitors.shared(), acceptor);
 
         assertSame(address, listener.getIpAddress());
         assertEquals(2234, listener.getPort());
@@ -41,18 +41,18 @@ class ListenerTest {
     @Test
     @DisplayName("SocketListener start and stop delegate and update state")
     void startsAndStops() {
-        FakeTcpListener tcpListener = new FakeTcpListener();
+        FakeSocketAcceptor acceptor = new FakeSocketAcceptor();
         SocketListener listener =
-                new SocketListener(InetAddress.getLoopbackAddress(), 2234, null, Monitors.shared(), tcpListener);
+                new SocketListener(InetAddress.getLoopbackAddress(), 2234, null, Monitors.shared(), acceptor);
 
         listener.start();
         assertTrue(listener.isListening());
-        assertTrue(tcpListener.started);
+        assertTrue(acceptor.started);
 
         listener.stop();
         assertFalse(listener.isListening());
-        assertTrue(tcpListener.stopped);
-        tcpListener.fail(new IllegalStateException("stopped"));
+        assertTrue(acceptor.stopped);
+        acceptor.fail(new IllegalStateException("stopped"));
     }
 
     @Test
@@ -60,7 +60,7 @@ class ListenerTest {
     void acceptsConnection() throws Exception {
         InetAddress address = InetAddress.getLoopbackAddress();
         try (ServerSocket server = new ServerSocket(0, 1, address)) {
-            TcpListenerAdapter adapter = new TcpListenerAdapter(server);
+            JdkSocketAcceptor adapter = new JdkSocketAcceptor(server);
             ConnectionOptions options = ConnectionOptions.builder()
                     .readBufferSize(8)
                     .writeBufferSize(8)
@@ -70,7 +70,7 @@ class ListenerTest {
                     .build();
             SocketListener listener =
                     new SocketListener(address, server.getLocalPort(), options, Monitors.shared(), adapter);
-            AtomicReference<Connection> accepted = new AtomicReference<>();
+            AtomicReference<TransportConnection> accepted = new AtomicReference<>();
             CountDownLatch raised = new CountDownLatch(1);
             listener.subscribe(connection -> {
                 accepted.set(connection);
@@ -80,7 +80,7 @@ class ListenerTest {
             listener.start();
             try (Socket peer = new Socket(address, server.getLocalPort())) {
                 assertTrue(raised.await(2, TimeUnit.SECONDS));
-                assertEquals(ConnectionState.CONNECTED, accepted.get().getState());
+                assertEquals(TransportState.CONNECTED, accepted.get().getState());
                 assertEquals(peer.getLocalPort(), accepted.get().getIpEndpoint().getPort());
             } finally {
                 listener.stop();
@@ -104,7 +104,7 @@ class ListenerTest {
         try (ServerSocket server = new ServerSocket(0, 1, address);
                 UncaughtHandler handler = new UncaughtHandler(uncaught)) {
             SocketListener listener = new SocketListener(
-                    address, server.getLocalPort(), null, Monitors.shared(), new TcpListenerAdapter(server));
+                    address, server.getLocalPort(), null, Monitors.shared(), new JdkSocketAcceptor(server));
             CountDownLatch accepted = new CountDownLatch(1);
             listener.subscribe(connection -> accepted.countDown());
             listener.start();
@@ -129,14 +129,14 @@ class ListenerTest {
         // become silence for a listener that has genuinely died, or the fix
         // would have replaced noise with a client that quietly stops accepting.
         AtomicReference<Throwable> uncaught = new AtomicReference<>();
-        FakeTcpListener tcpListener = new FakeTcpListener();
+        FakeSocketAcceptor acceptor = new FakeSocketAcceptor();
         try (UncaughtHandler handler = new UncaughtHandler(uncaught)) {
             SocketListener listener =
-                    new SocketListener(InetAddress.getLoopbackAddress(), 2234, null, Monitors.shared(), tcpListener);
+                    new SocketListener(InetAddress.getLoopbackAddress(), 2234, null, Monitors.shared(), acceptor);
             listener.start();
             Thread.sleep(50);
 
-            tcpListener.fail(new java.io.UncheckedIOException(new java.net.SocketException("the interface went away")));
+            acceptor.fail(new java.io.UncheckedIOException(new java.net.SocketException("the interface went away")));
 
             long deadline = System.nanoTime() + 2_000_000_000L;
             while (uncaught.get() == null && System.nanoTime() < deadline) {
@@ -161,7 +161,7 @@ class ListenerTest {
         }
     }
 
-    private static final class FakeTcpListener implements TcpListener {
+    private static final class FakeSocketAcceptor implements SocketAcceptor {
         private final CountDownLatch accept = new CountDownLatch(1);
         private volatile RuntimeException failure;
         private boolean started;
@@ -174,7 +174,7 @@ class ListenerTest {
         }
 
         @Override
-        public Socket acceptTcpClient() {
+        public Socket accept() {
             // Parks the accept loop the way a real one parks on a socket, so a
             // test that breaks it out from under sees what production sees.
             try {

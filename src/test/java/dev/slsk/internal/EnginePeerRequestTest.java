@@ -41,8 +41,8 @@ import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.MessageDataEvent;
 import dev.slsk.internal.network.MessageReceivedEvent;
 import dev.slsk.internal.network.PeerConnectionManager;
-import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
+import dev.slsk.internal.network.tcp.TransportConnection;
 import dev.slsk.internal.options.BrowseOptions;
 import dev.slsk.internal.share.BrowseResponseMessage;
 import dev.slsk.internal.share.SharedDirectory;
@@ -658,7 +658,7 @@ class EnginePeerRequestTest {
                 return null;
             }
             if (method.getName().equals("subscribe")) {
-                if (arguments[0] == Connection.Kind.DISCONNECTED) {
+                if (arguments[0] == TransportConnection.Kind.DISCONNECTED) {
                     java.util.function.Consumer<ConnectionDisconnectedEvent> registered = cast(arguments[1]);
                     disconnectedListener = registered;
                     return (dev.slsk.Subscription) () -> {

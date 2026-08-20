@@ -6,8 +6,8 @@ package dev.slsk.internal.network.tcp;
 
 import java.net.Socket;
 
-/** Listens for connections from TCP network clients. */
-public interface TcpListener {
+/** Accepts client sockets from a listening endpoint. */
+public interface SocketAcceptor {
     /**
      * Accepts a pending connection request, blocking until one arrives.
      *
@@ -18,7 +18,7 @@ public interface TcpListener {
      *
      * @return the accepted socket
      */
-    Socket acceptTcpClient();
+    Socket accept();
 
     /** Returns whether a connection request is pending. */
     boolean pending();

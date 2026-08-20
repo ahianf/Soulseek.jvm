@@ -8,7 +8,7 @@ import dev.slsk.Subscription;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.diagnostics.DiagnosticSource;
 import dev.slsk.internal.messaging.messages.ConnectToPeerResponse;
-import dev.slsk.internal.network.tcp.Connection;
+import dev.slsk.internal.network.tcp.TransportConnection;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -56,7 +56,7 @@ public interface DistributedConnectionManager extends AutoCloseable, DiagnosticS
      * @param username the child's username
      * @param incomingConnection the accepted connection to hand off
      */
-    void addOrUpdateChildConnection(String username, Connection incomingConnection);
+    void addOrUpdateChildConnection(String username, TransportConnection incomingConnection);
 
     /**
      * Attempts every candidate at once and adopts the one with the lowest branch

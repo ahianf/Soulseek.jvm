@@ -12,29 +12,27 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.util.Objects;
 
-/**
- * Pass-through implementation of {@link TcpListener} over a server socket.
- */
-final class TcpListenerAdapter implements TcpListener {
+/** JDK-server-socket implementation of {@link SocketAcceptor}. */
+final class JdkSocketAcceptor implements SocketAcceptor {
     private ServerSocket serverSocket;
     private final InetSocketAddress localEndpoint;
     private Socket pendingSocket;
 
-    TcpListenerAdapter() {
+    JdkSocketAcceptor() {
         this(new InetSocketAddress(1));
     }
 
-    TcpListenerAdapter(InetSocketAddress localEndpoint) {
+    JdkSocketAcceptor(InetSocketAddress localEndpoint) {
         this.localEndpoint = Objects.requireNonNull(localEndpoint, "localEndpoint");
     }
 
-    TcpListenerAdapter(ServerSocket serverSocket) {
+    JdkSocketAcceptor(ServerSocket serverSocket) {
         this.serverSocket = Objects.requireNonNull(serverSocket, "serverSocket");
         localEndpoint = (InetSocketAddress) serverSocket.getLocalSocketAddress();
     }
 
     @Override
-    public Socket acceptTcpClient() {
+    public Socket accept() {
         ensureStarted();
         Socket accepted;
         synchronized (this) {

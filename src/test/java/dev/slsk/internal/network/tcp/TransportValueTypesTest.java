@@ -15,7 +15,7 @@ import java.net.InetSocketAddress;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class ConnectionValueTypesTest {
+class TransportValueTypesTest {
     @Test
     @DisplayName("SocketConnection type is one classified category")
     void connectionTypeIsOneCategory() {
@@ -92,12 +92,12 @@ class ConnectionValueTypesTest {
     void stateChangedEventRetainsData() {
         IllegalStateException exception = new IllegalStateException("broken");
         ConnectionStateChangedEvent complete = new ConnectionStateChangedEvent(
-                ConnectionState.CONNECTED, ConnectionState.DISCONNECTED, "closed", exception);
+                TransportState.CONNECTED, TransportState.DISCONNECTED, "closed", exception);
         ConnectionStateChangedEvent minimal =
-                new ConnectionStateChangedEvent(ConnectionState.CONNECTED, ConnectionState.DISCONNECTED);
+                new ConnectionStateChangedEvent(TransportState.CONNECTED, TransportState.DISCONNECTED);
 
-        assertEquals(ConnectionState.CONNECTED, complete.previousState());
-        assertEquals(ConnectionState.DISCONNECTED, complete.currentState());
+        assertEquals(TransportState.CONNECTED, complete.previousState());
+        assertEquals(TransportState.DISCONNECTED, complete.currentState());
         assertEquals("closed", complete.message());
         assertSame(exception, complete.exception());
         assertNull(minimal.message());

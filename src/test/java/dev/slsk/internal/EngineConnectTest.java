@@ -37,8 +37,8 @@ import dev.slsk.internal.network.ConnectionFactory;
 import dev.slsk.internal.network.DistributedConnectionManager;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.MessageEvent;
-import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
+import dev.slsk.internal.network.tcp.TransportConnection;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Method;
@@ -447,7 +447,7 @@ class EngineConnectTest {
         private final MessageConnection connection;
         private InetSocketAddress endpoint;
         private dev.slsk.internal.options.ConnectionOptions options;
-        private java.util.function.Consumer<Connection> connected;
+        private java.util.function.Consumer<TransportConnection> connected;
         private java.util.function.Consumer<ConnectionDisconnectedEvent> disconnected;
         private java.util.function.Consumer<MessageEvent> messageRead;
         private java.util.function.Consumer<MessageEvent> messageWritten;
@@ -463,7 +463,7 @@ class EngineConnectTest {
         private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("getServerConnection")) {
                 endpoint = (InetSocketAddress) arguments[0];
-                connected = (java.util.function.Consumer<Connection>) arguments[1];
+                connected = (java.util.function.Consumer<TransportConnection>) arguments[1];
                 disconnected = (java.util.function.Consumer<ConnectionDisconnectedEvent>) arguments[2];
                 messageRead = (java.util.function.Consumer<MessageEvent>) arguments[3];
                 messageWritten = (java.util.function.Consumer<MessageEvent>) arguments[4];

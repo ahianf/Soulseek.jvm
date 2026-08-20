@@ -16,7 +16,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 /** Provides client connections for TCP network services. */
-public interface Connection extends AutoCloseable {
+public interface TransportConnection extends AutoCloseable {
     enum Kind {
         CONNECTED,
         DATA_READ,
@@ -44,7 +44,7 @@ public interface Connection extends AutoCloseable {
     ConnectionOptions getOptions();
 
     /** Returns the current state. */
-    ConnectionState getState();
+    TransportState getState();
 
     /** Returns the connection traits. */
     ConnectionType getType();
@@ -86,8 +86,8 @@ public interface Connection extends AutoCloseable {
     /** Disconnects with optional details. */
     void disconnect(String message, Exception exception);
 
-    /** Decouples and returns the underlying TCP client. */
-    TcpClient handoffTcpClient();
+    /** Decouples and returns the underlying socket connector. */
+    SocketConnector handoffConnector();
 
     /** Reads an exact byte count into a new array. */
     byte[] read(long length, CancellationSignal cancellationSignal) throws InterruptedException, TimeoutException;

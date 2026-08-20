@@ -6,26 +6,26 @@ package dev.slsk.internal.network.tcp;
 
 /** Data describing a TCP connection state change. */
 public record ConnectionStateChangedEvent(
-        Connection connection,
-        ConnectionState previousState,
-        ConnectionState currentState,
+        TransportConnection connection,
+        TransportState previousState,
+        TransportState currentState,
         String message,
         Exception exception)
-        implements ConnectionEvent {
+        implements TransportEvent {
 
     /** Creates state-change data without optional details. */
-    public ConnectionStateChangedEvent(ConnectionState previousState, ConnectionState currentState) {
+    public ConnectionStateChangedEvent(TransportState previousState, TransportState currentState) {
         this(null, previousState, currentState, null, null);
     }
 
     /** Creates state-change data with a message. */
-    public ConnectionStateChangedEvent(ConnectionState previousState, ConnectionState currentState, String message) {
+    public ConnectionStateChangedEvent(TransportState previousState, TransportState currentState, String message) {
         this(null, previousState, currentState, message, null);
     }
 
     /** Creates state-change data. */
     public ConnectionStateChangedEvent(
-            ConnectionState previousState, ConnectionState currentState, String message, Exception exception) {
+            TransportState previousState, TransportState currentState, String message, Exception exception) {
         this(null, previousState, currentState, message, exception);
     }
 }

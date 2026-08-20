@@ -50,7 +50,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class ConnectionTest {
+class TransportConnectionTest {
     private static final InetSocketAddress ENDPOINT = new InetSocketAddress(InetAddress.getLoopbackAddress(), 2234);
 
     @Test
@@ -59,7 +59,7 @@ class ConnectionTest {
         try (SocketConnection connection = new SocketConnection(ENDPOINT, null, null, Monitors.shared())) {
             assertSame(ENDPOINT, connection.getIpEndpoint());
             assertEquals(new ConnectionKey(ENDPOINT), connection.getKey());
-            assertEquals(ConnectionState.PENDING, connection.getState());
+            assertEquals(TransportState.PENDING, connection.getState());
             assertEquals(ConnectionType.UNCLASSIFIED, connection.getType());
             assertNotNull(connection.getId());
             assertNotEquals(new java.util.UUID(0, 0), connection.getId());
@@ -72,10 +72,10 @@ class ConnectionTest {
     }
 
     @Test
-    @DisplayName("Construction configures socket and adopted stream")
-    void configuresConnectedClient() throws Exception {
+    @DisplayName("Construction configures socket and adopted transport")
+    void configuresConnectedConnector() throws Exception {
         FakeStream stream = new FakeStream();
-        FakeTcpClient client = new FakeTcpClient(stream, true);
+        FakeSocketConnector client = new FakeSocketConnector(stream, true);
         AtomicReference<Socket> configured = new AtomicReference<>();
         ConnectionOptions options = options(8, 9, 3, 100, 1_000, null, configured::set);
 
@@ -86,9 +86,7 @@ class ConnectionTest {
             // monitor owns inactivity, and a bounded SO_TIMEOUT is what lets a
             // read be abandoned without closing the socket. See goal 2.2.
             assertEquals(250, client.socket.getSoTimeout());
-            assertEquals(250, stream.readTimeout);
-            assertEquals(1_000, stream.writeTimeout);
-            assertEquals(ConnectionState.CONNECTED, connection.getState());
+            assertEquals(TransportState.CONNECTED, connection.getState());
             assertSame(options, connection.getOptions());
         }
     }
@@ -96,25 +94,25 @@ class ConnectionTest {
     @Test
     @DisplayName("Disconnect raises both state changes and completion")
     void disconnectRaisesEvents() throws Exception {
-        FakeTcpClient client = new FakeTcpClient(new FakeStream(), true);
+        FakeSocketConnector client = new FakeSocketConnector(new FakeStream(), true);
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), client, Monitors.shared());
         List<ConnectionStateChangedEvent> states = new ArrayList<>();
         List<ConnectionDisconnectedEvent> disconnected = new ArrayList<>();
-        connection.<ConnectionStateChangedEvent>subscribe(Connection.Kind.STATE_CHANGED, args -> {
+        connection.<ConnectionStateChangedEvent>subscribe(TransportConnection.Kind.STATE_CHANGED, args -> {
             assertSame(connection, args.connection());
             states.add(args);
         });
-        connection.<ConnectionDisconnectedEvent>subscribe(Connection.Kind.DISCONNECTED, args -> {
+        connection.<ConnectionDisconnectedEvent>subscribe(TransportConnection.Kind.DISCONNECTED, args -> {
             assertSame(connection, args.connection());
             disconnected.add(args);
         });
 
         connection.disconnect("done");
 
-        assertEquals(ConnectionState.DISCONNECTED, connection.getState());
+        assertEquals(TransportState.DISCONNECTED, connection.getState());
         assertEquals(2, states.size());
-        assertEquals(ConnectionState.DISCONNECTING, states.get(0).currentState());
-        assertEquals(ConnectionState.DISCONNECTED, states.get(1).currentState());
+        assertEquals(TransportState.DISCONNECTING, states.get(0).currentState());
+        assertEquals(TransportState.DISCONNECTED, states.get(1).currentState());
         assertEquals("done", disconnected.get(0).message());
         assertEquals("done", connection.awaitDisconnect(null));
         assertTrue(client.closed);
@@ -124,29 +122,29 @@ class ConnectionTest {
     }
 
     @Test
-    @DisplayName("Direct connect configures stream and raises source events")
+    @DisplayName("Direct connect configures transport and raises source events")
     void connectsDirectly() throws Exception {
         FakeStream stream = new FakeStream();
-        FakeTcpClient client = new FakeTcpClient(stream, false);
+        FakeSocketConnector client = new FakeSocketConnector(stream, false);
         client.connectAction = () -> client.connected = true;
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), client, Monitors.shared());
-        List<ConnectionState> states = new ArrayList<>();
+        List<TransportState> states = new ArrayList<>();
         AtomicInteger connected = new AtomicInteger();
         connection.<ConnectionStateChangedEvent>subscribe(
-                Connection.Kind.STATE_CHANGED, args -> states.add(args.currentState()));
-        connection.<Connection>subscribe(Connection.Kind.CONNECTED, args -> connected.incrementAndGet());
+                TransportConnection.Kind.STATE_CHANGED, args -> states.add(args.currentState()));
+        connection.<TransportConnection>subscribe(
+                TransportConnection.Kind.CONNECTED, args -> connected.incrementAndGet());
 
         connection.connect(null);
 
         assertEquals(1, client.connectCalls);
         assertEquals(0, client.proxyCalls);
-        assertEquals(List.of(ConnectionState.CONNECTING, ConnectionState.CONNECTED), states);
+        assertEquals(List.of(TransportState.CONNECTING, TransportState.CONNECTED), states);
         assertEquals(1, connected.get());
-        assertEquals(ConnectionState.CONNECTED, connection.getState());
-        // Read timeout is the cancellation poll interval regardless of the
-        // connection's inactivity setting (-1, disabled, for this connection).
-        assertEquals(250, stream.readTimeout);
-        assertEquals(-1, stream.writeTimeout);
+        assertEquals(TransportState.CONNECTED, connection.getState());
+        // Read timeout is socket configuration, deliberately independent of
+        // the connection's disabled inactivity setting.
+        assertEquals(250, client.socket.getSoTimeout());
         connection.close();
     }
 
@@ -154,7 +152,7 @@ class ConnectionTest {
     @DisplayName("Proxy connect forwards every configured argument")
     void connectsThroughProxy() throws Exception {
         FakeStream stream = new FakeStream();
-        FakeTcpClient client = new FakeTcpClient(stream, false);
+        FakeSocketConnector client = new FakeSocketConnector(stream, false);
         client.connectAction = () -> client.connected = true;
         ProxyOptions proxy = new ProxyOptions("127.0.0.1", 1080, "alice", "secret");
         ConnectionOptions options = options(8, 8, 3, 100, -1, proxy, null);
@@ -176,7 +174,7 @@ class ConnectionTest {
     @Test
     @DisplayName("Connect timeout disconnects and preserves TimeoutException")
     void connectTimesOut() throws Exception {
-        FakeTcpClient client = new FakeTcpClient(new FakeStream(), false);
+        FakeSocketConnector client = new FakeSocketConnector(new FakeStream(), false);
         client.connectFuture = new CompletableFuture<>();
         SocketConnection connection =
                 new SocketConnection(ENDPOINT, options(8, 8, 3, 10, -1, null, null), client, Monitors.shared());
@@ -184,14 +182,14 @@ class ConnectionTest {
         Throwable failure = failureOf(() -> connection.connect(null));
 
         assertTrue(failure instanceof TimeoutException);
-        assertEquals(ConnectionState.DISCONNECTED, connection.getState());
+        assertEquals(TransportState.DISCONNECTED, connection.getState());
         connection.close();
     }
 
     @Test
     @DisplayName("Connect cancellation disconnects without remapping")
     void connectCancels() throws Exception {
-        FakeTcpClient client = new FakeTcpClient(new FakeStream(), false);
+        FakeSocketConnector client = new FakeSocketConnector(new FakeStream(), false);
         client.connectFuture = new CompletableFuture<>();
         SocketConnection connection =
                 new SocketConnection(ENDPOINT, options(8, 8, 3, 5_000, -1, null, null), client, Monitors.shared());
@@ -200,14 +198,14 @@ class ConnectionTest {
             source.cancel();
             assertThrows(CancellationException.class, () -> connection.connect(source.getSignal()));
         }
-        assertEquals(ConnectionState.DISCONNECTED, connection.getState());
+        assertEquals(TransportState.DISCONNECTED, connection.getState());
         connection.close();
     }
 
     @Test
     @DisplayName("Connect failures are wrapped with the original cause")
     void connectWrapsFailure() throws Exception {
-        FakeTcpClient client = new FakeTcpClient(new FakeStream(), false);
+        FakeSocketConnector client = new FakeSocketConnector(new FakeStream(), false);
         IOException cause = new IOException("broken");
         client.connectFuture = CompletableFuture.failedFuture(cause);
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), client, Monitors.shared());
@@ -216,20 +214,20 @@ class ConnectionTest {
 
         assertTrue(failure instanceof ConnectionException);
         assertSame(cause, failure.getCause());
-        assertEquals(ConnectionState.DISCONNECTED, connection.getState());
+        assertEquals(TransportState.DISCONNECTED, connection.getState());
         connection.close();
     }
 
     @Test
     @DisplayName("Inactivity timer and watchdog disconnect independently")
     void timersDisconnect() throws Exception {
-        FakeTcpClient inactiveClient = new FakeTcpClient(new FakeStream(), true);
+        FakeSocketConnector inactiveClient = new FakeSocketConnector(new FakeStream(), true);
         SocketConnection inactive = new SocketConnection(
                 ENDPOINT, options(8, 8, 3, 100, 20, null, null), inactiveClient, Monitors.shared());
         assertTrue(failureOf(() -> inactive.awaitDisconnect(null)) instanceof TimeoutException);
         inactive.close();
 
-        FakeTcpClient watchedClient = new FakeTcpClient(new FakeStream(), true);
+        FakeSocketConnector watchedClient = new FakeSocketConnector(new FakeStream(), true);
         SocketConnection watched = new SocketConnection(ENDPOINT, noTimers(), watchedClient, Monitors.shared());
         watchedClient.connected = false;
         Throwable watchdogFailure = failureOf(() -> watched.awaitDisconnect(null));
@@ -241,7 +239,7 @@ class ConnectionTest {
     @Test
     @DisplayName("Wait cancellation disconnects the connection")
     void waitCancellationDisconnects() {
-        FakeTcpClient client = new FakeTcpClient(new FakeStream(), true);
+        FakeSocketConnector client = new FakeSocketConnector(new FakeStream(), true);
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), client, Monitors.shared());
         try (CancellationController source = new CancellationController()) {
             // Already cancelled, so registering runs the callback inline: the
@@ -249,7 +247,7 @@ class ConnectionTest {
             source.cancel();
             assertThrows(CancellationException.class, () -> connection.awaitDisconnect(source.getSignal()));
         }
-        assertEquals(ConnectionState.DISCONNECTED, connection.getState());
+        assertEquals(TransportState.DISCONNECTED, connection.getState());
         connection.close();
     }
 
@@ -259,12 +257,12 @@ class ConnectionTest {
         FakeStream stream = new FakeStream();
         stream.readCounts.addAll(List.of(1, 2, 2));
         stream.readBytes = new byte[] {1, 2, 3, 4, 5};
-        FakeTcpClient client = new FakeTcpClient(stream, true);
+        FakeSocketConnector client = new FakeSocketConnector(stream, true);
         SocketConnection connection =
                 new SocketConnection(ENDPOINT, options(2, 2, 3, 100, -1, null, null), client, Monitors.shared());
         List<int[]> reports = new ArrayList<>();
         List<Long> progress = new ArrayList<>();
-        connection.<ConnectionDataEvent>subscribe(Connection.Kind.DATA_READ, args -> {
+        connection.<ConnectionDataEvent>subscribe(TransportConnection.Kind.DATA_READ, args -> {
             assertSame(connection, args.connection());
             progress.add(args.currentLength());
         });
@@ -293,7 +291,10 @@ class ConnectionTest {
         stream.readBytes = new byte[] {9, 8, 7};
         stream.readCounts.addAll(List.of(2, 1));
         SocketConnection connection = new SocketConnection(
-                ENDPOINT, options(2, 2, 3, 100, -1, null, null), new FakeTcpClient(stream, true), Monitors.shared());
+                ENDPOINT,
+                options(2, 2, 3, 100, -1, null, null),
+                new FakeSocketConnector(stream, true),
+                Monitors.shared());
 
         assertArrayEquals(new byte[0], connection.read(0, null));
         assertArrayEquals(new byte[] {9, 8, 7}, connection.read(3L, null));
@@ -319,11 +320,11 @@ class ConnectionTest {
         FakeStream eof = new FakeStream();
         eof.readCounts.add(0);
         SocketConnection connection =
-                new SocketConnection(ENDPOINT, noTimers(), new FakeTcpClient(eof, true), Monitors.shared());
+                new SocketConnection(ENDPOINT, noTimers(), new FakeSocketConnector(eof, true), Monitors.shared());
         Throwable failure = failureOf(() -> connection.read(1, null));
         assertTrue(failure instanceof ConnectionReadException);
         assertTrue(failure.getCause() instanceof ConnectionException);
-        assertEquals(ConnectionState.DISCONNECTED, connection.getState());
+        assertEquals(TransportState.DISCONNECTED, connection.getState());
         connection.close();
     }
 
@@ -332,10 +333,13 @@ class ConnectionTest {
     void writesChunks() throws Exception {
         FakeStream stream = new FakeStream();
         SocketConnection connection = new SocketConnection(
-                ENDPOINT, options(2, 2, 3, 100, -1, null, null), new FakeTcpClient(stream, true), Monitors.shared());
+                ENDPOINT,
+                options(2, 2, 3, 100, -1, null, null),
+                new FakeSocketConnector(stream, true),
+                Monitors.shared());
         List<int[]> reports = new ArrayList<>();
         List<Long> progress = new ArrayList<>();
-        connection.<ConnectionDataEvent>subscribe(Connection.Kind.DATA_WRITTEN, args -> {
+        connection.<ConnectionDataEvent>subscribe(TransportConnection.Kind.DATA_WRITTEN, args -> {
             assertSame(connection, args.connection());
             progress.add(args.currentLength());
         });
@@ -368,7 +372,7 @@ class ConnectionTest {
         SocketConnection connection = new SocketConnection(
                 ENDPOINT,
                 options(8, 8, 2, 100, -1, null, null).withWriteQueueTimeout(Duration.ofMillis(150)),
-                new FakeTcpClient(stream, true),
+                new FakeSocketConnector(stream, true),
                 Monitors.shared());
 
         // A blocking write needs a thread apiece to contend for the queue,
@@ -387,7 +391,7 @@ class ConnectionTest {
         Throwable dropped = failureOf(() -> writeOrWrap(connection, new byte[] {4}, null));
 
         assertTrue(dropped instanceof ConnectionWriteDroppedException);
-        assertEquals(ConnectionState.DISCONNECTED, connection.getState());
+        assertEquals(TransportState.DISCONNECTED, connection.getState());
         assertTrue(futureFailure(first) instanceof ConnectionWriteException);
         assertTrue(futureFailure(second) instanceof ConnectionWriteException);
         assertTrue(futureFailure(third) instanceof ConnectionWriteException);
@@ -399,7 +403,7 @@ class ConnectionTest {
     void framedWritesRunOnOwnedWriter() throws Exception {
         FakeStream stream = new FakeStream();
         SocketConnection connection =
-                new SocketConnection(ENDPOINT, noTimers(), new FakeTcpClient(stream, true), Monitors.shared());
+                new SocketConnection(ENDPOINT, noTimers(), new FakeSocketConnector(stream, true), Monitors.shared());
         Thread caller = Thread.currentThread();
 
         connection.write(new byte[] {1, 2, 3}, null);
@@ -417,7 +421,10 @@ class ConnectionTest {
         CompletableFuture<Void> blocked = new CompletableFuture<>();
         stream.writeFutures.add(blocked);
         SocketConnection connection = new SocketConnection(
-                ENDPOINT, options(8, 8, 3, 100, -1, null, null), new FakeTcpClient(stream, true), Monitors.shared());
+                ENDPOINT,
+                options(8, 8, 3, 100, -1, null, null),
+                new FakeSocketConnector(stream, true),
+                Monitors.shared());
         Executor writers = task -> Thread.ofVirtual().start(task);
         CompletableFuture<Void> first =
                 CompletableFuture.runAsync(() -> writeOrWrap(connection, new byte[] {1}, null), writers);
@@ -430,7 +437,7 @@ class ConnectionTest {
             source.cancel();
 
             assertTrue(futureFailure(cancelled) instanceof CancellationException);
-            assertEquals(ConnectionState.CONNECTED, connection.getState());
+            assertEquals(TransportState.CONNECTED, connection.getState());
             assertEquals(1, connection.getWriteQueueDepth());
         }
 
@@ -438,7 +445,7 @@ class ConnectionTest {
         first.get(1, TimeUnit.SECONDS);
         connection.write(new byte[] {3}, null);
         assertEquals(List.of(List.of((byte) 1), List.of((byte) 3)), stream.writes);
-        assertEquals(ConnectionState.CONNECTED, connection.getState());
+        assertEquals(TransportState.CONNECTED, connection.getState());
         connection.close();
     }
 
@@ -449,7 +456,7 @@ class ConnectionTest {
         CompletableFuture<Void> blocked = new CompletableFuture<>();
         stream.writeFutures.add(blocked);
         SocketConnection connection =
-                new SocketConnection(ENDPOINT, noTimers(), new FakeTcpClient(stream, true), Monitors.shared());
+                new SocketConnection(ENDPOINT, noTimers(), new FakeSocketConnector(stream, true), Monitors.shared());
         Executor writers = task -> Thread.ofVirtual().start(task);
 
         try (CancellationController source = new CancellationController()) {
@@ -459,14 +466,14 @@ class ConnectionTest {
             source.cancel();
 
             assertTrue(futureFailure(cancelled) instanceof CancellationException);
-            assertEquals(ConnectionState.CONNECTED, connection.getState());
+            assertEquals(TransportState.CONNECTED, connection.getState());
         }
 
         blocked.complete(null);
         awaitCondition(() -> connection.getWriteQueueDepth() == 0);
         connection.write(new byte[] {2}, null);
         assertEquals(List.of(List.of((byte) 1), List.of((byte) 2)), stream.writes);
-        assertEquals(ConnectionState.CONNECTED, connection.getState());
+        assertEquals(TransportState.CONNECTED, connection.getState());
         connection.close();
     }
 
@@ -476,7 +483,10 @@ class ConnectionTest {
         FakeStream stream = new FakeStream();
         stream.writeFutures.add(new CompletableFuture<>());
         SocketConnection connection = new SocketConnection(
-                ENDPOINT, options(8, 8, 8, 100, -1, null, null), new FakeTcpClient(stream, true), Monitors.shared());
+                ENDPOINT,
+                options(8, 8, 8, 100, -1, null, null),
+                new FakeSocketConnector(stream, true),
+                Monitors.shared());
         Executor writers = task -> Thread.ofVirtual().start(task);
         List<CompletableFuture<Void>> calls = new ArrayList<>();
         for (int value = 0; value < 6; value++) {
@@ -504,7 +514,7 @@ class ConnectionTest {
     @Test
     @DisplayName("Read and write validate data and connection state")
     void validatesIoArguments() {
-        FakeTcpClient connected = new FakeTcpClient(new FakeStream(), true);
+        FakeSocketConnector connected = new FakeSocketConnector(new FakeStream(), true);
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), connected, Monitors.shared());
         assertThrows(IllegalArgumentException.class, () -> connection.write((byte[]) null, null));
         assertThrows(IllegalArgumentException.class, () -> connection.write(new byte[0], null));
@@ -534,7 +544,7 @@ class ConnectionTest {
     void asyncProgressAndHandoff() throws Exception {
         FakeStream stream = new FakeStream();
         stream.readBytes = new byte[] {1};
-        FakeTcpClient client = new FakeTcpClient(stream, true);
+        FakeSocketConnector client = new FakeSocketConnector(stream, true);
         // A data-read listener runs inline on the reading thread. These
         // listeners are the library's own progress counters; the one place
         // consumer code was reachable from a read loop is behind the event
@@ -543,11 +553,11 @@ class ConnectionTest {
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), client, Monitors.shared());
         CountDownLatch event = new CountDownLatch(1);
         try {
-            connection.<ConnectionDataEvent>subscribe(Connection.Kind.DATA_READ, args -> event.countDown());
+            connection.<ConnectionDataEvent>subscribe(TransportConnection.Kind.DATA_READ, args -> event.countDown());
             connection.read(1, null);
             assertTrue(event.await(1, TimeUnit.SECONDS));
 
-            assertSame(client, connection.handoffTcpClient());
+            assertSame(client, connection.handoffConnector());
             connection.close();
             assertFalse(client.closed);
         } finally {
@@ -559,13 +569,13 @@ class ConnectionTest {
         FakeStream stream = new FakeStream();
         stream.readFailure = cause;
         SocketConnection connection =
-                new SocketConnection(ENDPOINT, noTimers(), new FakeTcpClient(stream, true), Monitors.shared());
+                new SocketConnection(ENDPOINT, noTimers(), new FakeSocketConnector(stream, true), Monitors.shared());
         Throwable failure = failureOf(() -> connection.read(1, null));
         assertTrue(expected.isInstance(failure));
         if (failure instanceof ConnectionReadException) {
             assertSame(cause, failure.getCause());
         }
-        assertEquals(ConnectionState.DISCONNECTED, connection.getState());
+        assertEquals(TransportState.DISCONNECTED, connection.getState());
         connection.close();
     }
 
@@ -574,7 +584,7 @@ class ConnectionTest {
         FakeStream stream = new FakeStream();
         stream.readBytes = new byte[] {1, 2, 3};
         SocketConnection connection =
-                new SocketConnection(ENDPOINT, noTimers(), new FakeTcpClient(stream, true), Monitors.shared());
+                new SocketConnection(ENDPOINT, noTimers(), new FakeSocketConnector(stream, true), Monitors.shared());
 
         Throwable failure = failureOf(() -> connection.read(
                 3,
@@ -586,7 +596,7 @@ class ConnectionTest {
                 null));
 
         assertTrue(expected.isInstance(failure), "expected " + expected + " but got " + failure);
-        assertEquals(ConnectionState.DISCONNECTED, connection.getState());
+        assertEquals(TransportState.DISCONNECTED, connection.getState());
         connection.close();
     }
 
@@ -594,13 +604,13 @@ class ConnectionTest {
         FakeStream stream = new FakeStream();
         stream.writeFailure = cause;
         SocketConnection connection =
-                new SocketConnection(ENDPOINT, noTimers(), new FakeTcpClient(stream, true), Monitors.shared());
+                new SocketConnection(ENDPOINT, noTimers(), new FakeSocketConnector(stream, true), Monitors.shared());
         Throwable failure = failureOf(() -> writeOrWrap(connection, new byte[] {1}, null));
         assertTrue(expected.isInstance(failure));
         if (failure instanceof ConnectionWriteException) {
             assertSame(cause, failure.getCause());
         }
-        assertEquals(ConnectionState.DISCONNECTED, connection.getState());
+        assertEquals(TransportState.DISCONNECTED, connection.getState());
         connection.close();
     }
 
@@ -646,16 +656,16 @@ class ConnectionTest {
         // changeState calls, so every listener ran under the connection's
         // monitor. Asserting holdsLock directly is deterministic, where a
         // deadlock reproduction would be timing-dependent.
-        FakeTcpClient client = new FakeTcpClient(new FakeStream(), true);
+        FakeSocketConnector client = new FakeSocketConnector(new FakeStream(), true);
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), client, Monitors.shared());
         List<String> heldDuring = new ArrayList<>();
 
-        connection.<ConnectionStateChangedEvent>subscribe(Connection.Kind.STATE_CHANGED, args -> {
+        connection.<ConnectionStateChangedEvent>subscribe(TransportConnection.Kind.STATE_CHANGED, args -> {
             if (Thread.holdsLock(args.connection())) {
                 heldDuring.add("stateChanged->" + args.currentState());
             }
         });
-        connection.<ConnectionDisconnectedEvent>subscribe(Connection.Kind.DISCONNECTED, args -> {
+        connection.<ConnectionDisconnectedEvent>subscribe(TransportConnection.Kind.DISCONNECTED, args -> {
             if (Thread.holdsLock(args.connection())) {
                 heldDuring.add("disconnected");
             }
@@ -695,7 +705,7 @@ class ConnectionTest {
         boolean get() throws Exception;
     }
 
-    private static final class FakeTcpClient implements TcpClient {
+    private static final class FakeSocketConnector implements SocketConnector {
         private final Socket socket = new Socket();
         private final FakeStream stream;
         private boolean connected;
@@ -711,13 +721,13 @@ class ConnectionTest {
         private String lastUsername;
         private String lastPassword;
 
-        private FakeTcpClient(FakeStream stream, boolean connected) {
+        private FakeSocketConnector(FakeStream stream, boolean connected) {
             this.stream = stream;
             this.connected = connected;
         }
 
         @Override
-        public Socket getClient() {
+        public Socket socket() {
             return socket;
         }
 
@@ -790,7 +800,7 @@ class ConnectionTest {
         }
 
         @Override
-        public NetworkStream getStream() {
+        public SocketTransport transport() {
             return stream;
         }
 
@@ -802,7 +812,7 @@ class ConnectionTest {
         }
     }
 
-    private static final class FakeStream implements NetworkStream {
+    private static final class FakeStream implements SocketTransport {
         private final Queue<Integer> readCounts = new ArrayDeque<>();
         private final List<Integer> readSizes = new ArrayList<>();
         private final List<List<Byte>> writes = new CopyOnWriteArrayList<>();
@@ -811,30 +821,8 @@ class ConnectionTest {
         private volatile CompletableFuture<Void> activeWriteFuture;
         private byte[] readBytes = new byte[0];
         private int readPosition;
-        private int readTimeout = -1;
-        private int writeTimeout = -1;
         private Exception readFailure;
         private Exception writeFailure;
-
-        @Override
-        public int getReadTimeout() {
-            return readTimeout;
-        }
-
-        @Override
-        public void setReadTimeout(int timeout) {
-            readTimeout = timeout;
-        }
-
-        @Override
-        public int getWriteTimeout() {
-            return writeTimeout;
-        }
-
-        @Override
-        public void setWriteTimeout(int timeout) {
-            writeTimeout = timeout;
-        }
 
         @Override
         public int read(byte[] buffer, int offset, int size) throws IOException {

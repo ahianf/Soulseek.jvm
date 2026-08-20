@@ -5,8 +5,8 @@
 package dev.slsk.internal.network.tcp;
 
 /** Progress data for a TCP read or write operation. */
-public record ConnectionDataEvent(Connection connection, long currentLength, long totalLength)
-        implements ConnectionEvent {
+public record ConnectionDataEvent(TransportConnection connection, long currentLength, long totalLength)
+        implements TransportEvent {
 
     /** Creates connection data progress. */
     public ConnectionDataEvent(long currentLength, long totalLength) {

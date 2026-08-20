@@ -24,17 +24,17 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class TcpAdapterTest {
+class SocketAdaptersTest {
     private static final InetAddress LOOPBACK = InetAddress.getLoopbackAddress();
 
     @Test
     @DisplayName("SOCKS5 anonymous connection preserves the wire exchange")
     void connectsThroughAnonymousProxy() throws Exception {
         try (ServerSocket proxy = loopbackServer();
-                TcpClientAdapter client = new TcpClientAdapter()) {
+                JdkSocketConnector client = new JdkSocketConnector()) {
             CompletableFuture<Void> server = CompletableFuture.runAsync(() -> serveAnonymousProxy(proxy));
 
-            TcpClient.ProxyEndpoint endpoint = client.connectThroughProxy(
+            SocketConnector.ProxyEndpoint endpoint = client.connectThroughProxy(
                     LOOPBACK,
                     proxy.getLocalPort(),
                     InetAddress.getByName("10.20.30.40"),
@@ -53,10 +53,10 @@ class TcpAdapterTest {
     @DisplayName("SOCKS5 username authentication and domain reply round trip")
     void connectsThroughCredentialedProxy() throws Exception {
         try (ServerSocket proxy = loopbackServer();
-                TcpClientAdapter client = new TcpClientAdapter()) {
+                JdkSocketConnector client = new JdkSocketConnector()) {
             CompletableFuture<Void> server = CompletableFuture.runAsync(() -> serveCredentialedProxy(proxy));
 
-            TcpClient.ProxyEndpoint endpoint = client.connectThroughProxy(
+            SocketConnector.ProxyEndpoint endpoint = client.connectThroughProxy(
                     LOOPBACK,
                     proxy.getLocalPort(),
                     InetAddress.getByName("192.0.2.1"),
@@ -75,7 +75,7 @@ class TcpAdapterTest {
     @DisplayName("SOCKS5 preserves source response failures and message quirk")
     void reportsProxyFailure() throws Exception {
         try (ServerSocket proxy = loopbackServer();
-                TcpClientAdapter client = new TcpClientAdapter()) {
+                JdkSocketConnector client = new JdkSocketConnector()) {
             CompletableFuture<Void> server = CompletableFuture.runAsync(() -> serveInvalidConnectVersion(proxy));
 
             ProxyException exception = assertThrows(
@@ -97,7 +97,7 @@ class TcpAdapterTest {
     @Test
     @DisplayName("SOCKS5 validates endpoints and credential pairing")
     void validatesProxyArguments() throws Exception {
-        try (TcpClientAdapter client = new TcpClientAdapter()) {
+        try (JdkSocketConnector client = new JdkSocketConnector()) {
             assertThrows(
                     NullPointerException.class,
                     () -> client.connectThroughProxy(null, 1, LOOPBACK, 1, null, null, null));
@@ -123,10 +123,10 @@ class TcpAdapterTest {
     }
 
     @Test
-    @DisplayName("Network stream adapts timeouts, reads, writes, and cancellation")
-    void networkStreamPassesThroughSocketIo() throws Exception {
+    @DisplayName("Socket transport passes through reads and writes")
+    void transportPassesThroughSocketIo() throws Exception {
         try (ServerSocket server = loopbackServer();
-                TcpClientAdapter client = new TcpClientAdapter()) {
+                JdkSocketConnector client = new JdkSocketConnector()) {
             CompletableFuture<Void> peer = CompletableFuture.runAsync(() -> {
                 try (Socket socket = server.accept()) {
                     OutputStream output = socket.getOutputStream();
@@ -141,25 +141,14 @@ class TcpAdapterTest {
             assertTrue(client.isConnected());
             assertEquals(server.getLocalPort(), client.getRemoteEndpoint().getPort());
 
-            try (NetworkStream stream = client.getStream()) {
-                assertEquals(-1, stream.getReadTimeout());
-                assertEquals(-1, stream.getWriteTimeout());
-                stream.setReadTimeout(1_000);
-                stream.setWriteTimeout(2_000);
-                assertEquals(1_000, stream.getReadTimeout());
-                assertEquals(2_000, stream.getWriteTimeout());
-                assertThrows(IllegalArgumentException.class, () -> stream.setReadTimeout(0));
-                assertThrows(IllegalArgumentException.class, () -> stream.setWriteTimeout(-2));
+            client.socket().setSoTimeout(1_000);
+            assertEquals(1_000, client.socket().getSoTimeout());
 
+            try (SocketTransport transport = client.transport()) {
                 byte[] received = new byte[3];
-                assertEquals(3, stream.read(received, 0, received.length));
+                assertEquals(3, transport.read(received, 0, received.length));
                 assertArrayEquals(new byte[] {1, 2, 3}, received);
-                stream.write(new byte[] {4, 5}, 0, 2);
-
-                // The stream no longer observes cancellation itself: it blocks,
-                // and SocketConnection.readTo owns the cancellation loop
-                // using the read timeout as its check point.
-                stream.setReadTimeout(50);
+                transport.write(new byte[] {4, 5}, 0, 2);
             }
             peer.get(3, TimeUnit.SECONDS);
         }
@@ -168,7 +157,7 @@ class TcpAdapterTest {
     @Test
     @DisplayName("TCP listener starts, probes, accepts, and stops")
     void listenerPassesThroughServerSocketBehavior() throws Exception {
-        TcpListenerAdapter listener = new TcpListenerAdapter(new InetSocketAddress(LOOPBACK, 0));
+        JdkSocketAcceptor listener = new JdkSocketAcceptor(new InetSocketAddress(LOOPBACK, 0));
         listener.start();
         try {
             assertFalse(listener.pending());
@@ -180,16 +169,16 @@ class TcpAdapterTest {
             listener.stop();
         }
         assertThrows(IllegalStateException.class, listener::pending);
-        assertThrows(IllegalStateException.class, listener::acceptTcpClient);
+        assertThrows(IllegalStateException.class, listener::accept);
     }
 
-    private static Socket acceptPending(TcpListenerAdapter listener) throws Exception {
+    private static Socket acceptPending(JdkSocketAcceptor listener) throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
         while (!listener.pending() && System.nanoTime() < deadline) {
             Thread.onSpinWait();
         }
         assertTrue(listener.pending());
-        return listener.acceptTcpClient();
+        return listener.accept();
     }
 
     private static ServerSocket loopbackServer() throws Exception {

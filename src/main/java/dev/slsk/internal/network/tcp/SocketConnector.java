@@ -10,13 +10,13 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 
-/** Provides client connections for TCP network services. */
-public interface TcpClient extends AutoCloseable {
+/** Opens and exposes a client socket connection. */
+public interface SocketConnector extends AutoCloseable {
     /** Address and port reported by a SOCKS proxy after connection. */
     record ProxyEndpoint(String proxyAddress, int proxyPort) {}
 
     /** Returns the underlying socket. */
-    Socket getClient();
+    Socket socket();
 
     /** Returns whether the socket has connected and remains open locally. */
     boolean isConnected();
@@ -37,8 +37,8 @@ public interface TcpClient extends AutoCloseable {
             String password,
             CancellationSignal cancellationSignal);
 
-    /** Returns the network stream used to exchange data. */
-    NetworkStream getStream() throws IOException;
+    /** Returns the byte transport over the connected socket. */
+    SocketTransport transport() throws IOException;
 
     /** Closes the socket. */
     @Override

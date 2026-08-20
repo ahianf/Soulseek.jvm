@@ -12,7 +12,7 @@ import java.util.function.Consumer;
 /** Listens for client connections for TCP network services. */
 public interface Listener {
     /** Subscribes to accepted connections. */
-    Subscription subscribe(Consumer<? super Connection> listener);
+    Subscription subscribe(Consumer<? super TransportConnection> listener);
 
     /** Returns options used for accepted connections. */
     ConnectionOptions getConnectionOptions();

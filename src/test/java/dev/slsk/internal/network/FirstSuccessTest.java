@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.internal.network.tcp.Connection;
+import dev.slsk.internal.network.tcp.TransportConnection;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -37,12 +37,13 @@ class FirstSuccessTest {
     @DisplayName("the first arm to succeed wins, and says which arm it was")
     void theFirstArmToSucceedWins() throws Exception {
         ConnectionProbe direct = new ConnectionProbe();
-        FirstSuccess.Winner<Connection> directWinner = FirstSuccess.race(direct::connection, () -> refuse("indirect"));
+        FirstSuccess.Winner<TransportConnection> directWinner =
+                FirstSuccess.race(direct::connection, () -> refuse("indirect"));
         assertSame(direct.connection(), directWinner.value());
         assertTrue(directWinner.first());
 
         ConnectionProbe indirect = new ConnectionProbe();
-        FirstSuccess.Winner<Connection> indirectWinner =
+        FirstSuccess.Winner<TransportConnection> indirectWinner =
                 FirstSuccess.race(() -> refuse("direct"), indirect::connection);
         assertSame(indirect.connection(), indirectWinner.value());
         assertFalse(indirectWinner.first());
@@ -60,7 +61,7 @@ class FirstSuccessTest {
         ConnectionProbe slow = new ConnectionProbe();
         CountDownLatch directFailed = new CountDownLatch(1);
 
-        FirstSuccess.Winner<Connection> winner = FirstSuccess.race(
+        FirstSuccess.Winner<TransportConnection> winner = FirstSuccess.race(
                 () -> {
                     directFailed.countDown();
                     return refuse("direct");
@@ -124,7 +125,7 @@ class FirstSuccessTest {
         ConnectionProbe loser = new ConnectionProbe();
         CountDownLatch raceDecided = new CountDownLatch(1);
 
-        FirstSuccess.Winner<Connection> outcome = FirstSuccess.race(winner::connection, () -> {
+        FirstSuccess.Winner<TransportConnection> outcome = FirstSuccess.race(winner::connection, () -> {
             await(raceDecided);
             return loser.connection();
         });
@@ -158,7 +159,7 @@ class FirstSuccessTest {
     }
 
     /** What an arm does when it cannot reach the peer, wrappers and all. */
-    private static Connection refuse(String arm) {
+    private static TransportConnection refuse(String arm) {
         throw new CompletionException(new IllegalStateException(arm));
     }
 
@@ -174,10 +175,10 @@ class FirstSuccessTest {
     private static final class ConnectionProbe implements InvocationHandler {
         private final AtomicInteger closeCount = new AtomicInteger();
         private final CountDownLatch closed = new CountDownLatch(1);
-        private final Connection proxy = (Connection)
-                Proxy.newProxyInstance(Connection.class.getClassLoader(), new Class<?>[] {Connection.class}, this);
+        private final TransportConnection proxy = (TransportConnection) Proxy.newProxyInstance(
+                TransportConnection.class.getClassLoader(), new Class<?>[] {TransportConnection.class}, this);
 
-        private Connection connection() {
+        private TransportConnection connection() {
             return proxy;
         }
 

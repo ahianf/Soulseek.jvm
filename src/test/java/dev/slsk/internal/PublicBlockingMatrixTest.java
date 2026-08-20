@@ -24,10 +24,10 @@ import dev.slsk.internal.network.ConnectionFactory;
 import dev.slsk.internal.network.DefaultMessageConnection;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.MessageEvent;
-import dev.slsk.internal.network.tcp.Connection;
-import dev.slsk.internal.network.tcp.ConnectionState;
-import dev.slsk.internal.network.tcp.NetworkStream;
-import dev.slsk.internal.network.tcp.TcpClient;
+import dev.slsk.internal.network.tcp.SocketConnector;
+import dev.slsk.internal.network.tcp.SocketTransport;
+import dev.slsk.internal.network.tcp.TransportConnection;
+import dev.slsk.internal.network.tcp.TransportState;
 import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.search.SearchId;
@@ -431,7 +431,7 @@ class PublicBlockingMatrixTest {
     /** A logged-in public client over an actual connection writer and waiter. */
     private static final class FacetFixture implements AutoCloseable {
         private final ControlledStream stream = new ControlledStream();
-        private final ControlledTcpClient tcp = new ControlledTcpClient(stream, false);
+        private final ControlledSocketConnector tcp = new ControlledSocketConnector(stream, false);
         private final DefaultMessageConnection server = new DefaultMessageConnection(
                 new InetSocketAddress("127.0.0.1", 1), new ConnectionOptions(), Integer.BYTES, tcp, Monitors.shared());
         private final SoulseekEngine engine;
@@ -596,11 +596,11 @@ class PublicBlockingMatrixTest {
         }
 
         private void assertServerUsable() throws Exception {
-            assertEquals(ConnectionState.CONNECTED, server.getState(), "the shared server connection was lost");
+            assertEquals(TransportState.CONNECTED, server.getState(), "the shared server connection was lost");
             int before = stream.writeCount();
             slsk.chat().send(BOB, "probe");
             stream.awaitWriteCount(before + 1);
-            assertEquals(ConnectionState.CONNECTED, server.getState(), "the shared server connection was not reusable");
+            assertEquals(TransportState.CONNECTED, server.getState(), "the shared server connection was not reusable");
         }
 
         @Override
@@ -616,7 +616,7 @@ class PublicBlockingMatrixTest {
     /** One public connect attempt whose transport cannot finish until closed. */
     private static final class ConnectFixture implements AutoCloseable {
         private final ControlledStream stream = new ControlledStream();
-        private final ControlledTcpClient tcp = new ControlledTcpClient(stream, true);
+        private final ControlledSocketConnector tcp = new ControlledSocketConnector(stream, true);
         private final DefaultMessageConnection server = new DefaultMessageConnection(
                 new InetSocketAddress("127.0.0.1", 1), new ConnectionOptions(), Integer.BYTES, tcp, Monitors.shared());
         private final SoulseekEngine engine;
@@ -668,7 +668,7 @@ class PublicBlockingMatrixTest {
         private void assertAbandoned() throws Exception {
             assertTrue(tcp.closed.get(), "the abandoned connect socket stayed open");
             assertTrue(tcp.connectExited.await(5, TimeUnit.SECONDS), "the transport connect worker was orphaned");
-            assertEquals(ConnectionState.DISCONNECTED, server.getState());
+            assertEquals(TransportState.DISCONNECTED, server.getState());
             assertFalse(engine.getState() == SoulseekClientState.CONNECTING);
         }
 
@@ -689,37 +689,37 @@ class PublicBlockingMatrixTest {
 
         @Override
         public MessageConnection getDistributedConnection(
-                String username, InetSocketAddress endpoint, ConnectionOptions options, TcpClient client) {
+                String username, InetSocketAddress endpoint, ConnectionOptions options, SocketConnector client) {
             return connection;
         }
 
         @Override
         public MessageConnection getMessageConnection(
-                String username, InetSocketAddress endpoint, ConnectionOptions options, TcpClient client) {
+                String username, InetSocketAddress endpoint, ConnectionOptions options, SocketConnector client) {
             return connection;
         }
 
         @Override
         public MessageConnection getServerConnection(
                 InetSocketAddress endpoint,
-                java.util.function.Consumer<Connection> connected,
+                java.util.function.Consumer<TransportConnection> connected,
                 java.util.function.Consumer<dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent> disconnected,
                 java.util.function.Consumer<MessageEvent> read,
                 java.util.function.Consumer<MessageEvent> written,
                 ConnectionOptions options,
-                TcpClient client) {
+                SocketConnector client) {
             return connection;
         }
 
         @Override
-        public dev.slsk.internal.network.tcp.Connection getTransferConnection(
-                InetSocketAddress endpoint, ConnectionOptions options, TcpClient client) {
+        public dev.slsk.internal.network.tcp.TransportConnection getTransferConnection(
+                InetSocketAddress endpoint, ConnectionOptions options, SocketConnector client) {
             return connection;
         }
     }
 
     /** A transport with deterministic connect and frame-write gates. */
-    private static final class ControlledTcpClient implements TcpClient {
+    private static final class ControlledSocketConnector implements SocketConnector {
         private final ControlledStream stream;
         private final boolean blockConnect;
         private final Socket socket = new Socket();
@@ -729,13 +729,13 @@ class PublicBlockingMatrixTest {
         private final AtomicBoolean closed = new AtomicBoolean();
         private volatile boolean connected;
 
-        private ControlledTcpClient(ControlledStream stream, boolean blockConnect) {
+        private ControlledSocketConnector(ControlledStream stream, boolean blockConnect) {
             this.stream = stream;
             this.blockConnect = blockConnect;
         }
 
         @Override
-        public Socket getClient() {
+        public Socket socket() {
             return socket;
         }
 
@@ -782,7 +782,7 @@ class PublicBlockingMatrixTest {
         }
 
         @Override
-        public NetworkStream getStream() {
+        public SocketTransport transport() {
             return stream;
         }
 
@@ -797,33 +797,11 @@ class PublicBlockingMatrixTest {
         }
     }
 
-    private static final class ControlledStream implements NetworkStream {
+    private static final class ControlledStream implements SocketTransport {
         private final AtomicInteger writes = new AtomicInteger();
         private final AtomicReference<WriteGate> nextGate = new AtomicReference<>();
         private final List<WriteGate> gates = new ArrayList<>();
         private final CountDownLatch closed = new CountDownLatch(1);
-        private volatile int readTimeout = -1;
-        private volatile int writeTimeout = -1;
-
-        @Override
-        public int getReadTimeout() {
-            return readTimeout;
-        }
-
-        @Override
-        public void setReadTimeout(int timeout) {
-            readTimeout = timeout;
-        }
-
-        @Override
-        public int getWriteTimeout() {
-            return writeTimeout;
-        }
-
-        @Override
-        public void setWriteTimeout(int timeout) {
-            writeTimeout = timeout;
-        }
 
         @Override
         public int read(byte[] buffer, int offset, int size) {

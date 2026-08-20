@@ -33,8 +33,8 @@ import dev.slsk.internal.messaging.messages.UserStatusRequest;
 import dev.slsk.internal.messaging.messages.WatchUserRequest;
 import dev.slsk.internal.messaging.messages.WatchUserResponse;
 import dev.slsk.internal.network.MessageConnection;
-import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
+import dev.slsk.internal.network.tcp.TransportConnection;
 import dev.slsk.internal.options.BrowseOptions;
 import dev.slsk.internal.share.BrowseResponseMessage;
 import dev.slsk.internal.share.SharedDirectory;
@@ -277,7 +277,7 @@ final class UserDirectory {
                             completionEventFired);
             BrowseResponseMessage response;
             try (Subscription disconnectedSubscription = connection.subscribe(
-                            Connection.Kind.DISCONNECTED,
+                            TransportConnection.Kind.DISCONNECTED,
                             (ConnectionDisconnectedEvent eventData) -> context.getWaiter()
                                     .fail(
                                             browseWaitKey,

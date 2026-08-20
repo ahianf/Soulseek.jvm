@@ -7,11 +7,11 @@ package dev.slsk.internal.network;
 import dev.slsk.Subscription;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
-import dev.slsk.internal.network.tcp.Connection;
+import dev.slsk.internal.network.tcp.TransportConnection;
 import java.util.function.Consumer;
 
 /** Provides framed client connections to the Soulseek network. */
-public interface MessageConnection extends Connection {
+public interface MessageConnection extends TransportConnection {
     enum MessageKind {
         DATA_READ,
         READ,

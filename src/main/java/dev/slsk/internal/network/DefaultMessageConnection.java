@@ -14,7 +14,7 @@ import dev.slsk.internal.network.tcp.ConnectionDataEvent;
 import dev.slsk.internal.network.tcp.ConnectionKey;
 import dev.slsk.internal.network.tcp.ConnectionMonitor;
 import dev.slsk.internal.network.tcp.SocketConnection;
-import dev.slsk.internal.network.tcp.TcpClient;
+import dev.slsk.internal.network.tcp.SocketConnector;
 import dev.slsk.internal.options.ConnectionOptions;
 import java.io.ByteArrayOutputStream;
 import java.net.InetSocketAddress;
@@ -46,9 +46,9 @@ public final class DefaultMessageConnection extends SocketConnection implements 
             InetSocketAddress ipEndpoint,
             ConnectionOptions options,
             int codeLength,
-            TcpClient tcpClient,
+            SocketConnector connector,
             ConnectionMonitor monitor) {
-        super(ipEndpoint, options, tcpClient, monitor);
+        super(ipEndpoint, options, connector, monitor);
         this.codeLength = codeLength;
         username = "";
         bindConnectedReadLoop();
@@ -59,10 +59,10 @@ public final class DefaultMessageConnection extends SocketConnection implements 
             InetSocketAddress ipEndpoint,
             ConnectionOptions options,
             int codeLength,
-            TcpClient tcpClient,
+            SocketConnector connector,
             ConnectionMonitor monitor,
             ExecutorService ioExecutor) {
-        super(ipEndpoint, options, tcpClient, monitor, ioExecutor);
+        super(ipEndpoint, options, connector, monitor, ioExecutor);
         this.codeLength = codeLength;
         username = "";
         bindConnectedReadLoop();
@@ -74,9 +74,9 @@ public final class DefaultMessageConnection extends SocketConnection implements 
             InetSocketAddress ipEndpoint,
             ConnectionOptions options,
             int codeLength,
-            TcpClient tcpClient,
+            SocketConnector connector,
             ConnectionMonitor monitor) {
-        super(ipEndpoint, options, tcpClient, monitor);
+        super(ipEndpoint, options, connector, monitor);
         this.codeLength = codeLength;
         CommonUtils.requireText(username, "username");
         this.username = username;
@@ -89,10 +89,10 @@ public final class DefaultMessageConnection extends SocketConnection implements 
             InetSocketAddress ipEndpoint,
             ConnectionOptions options,
             int codeLength,
-            TcpClient tcpClient,
+            SocketConnector connector,
             ConnectionMonitor monitor,
             ExecutorService ioExecutor) {
-        super(ipEndpoint, options, tcpClient, monitor, ioExecutor);
+        super(ipEndpoint, options, connector, monitor, ioExecutor);
         this.codeLength = codeLength;
         CommonUtils.requireText(username, "username");
         this.username = username;

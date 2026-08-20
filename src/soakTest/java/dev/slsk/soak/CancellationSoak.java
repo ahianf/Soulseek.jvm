@@ -9,8 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.internal.common.Monitors;
 import dev.slsk.internal.concurrent.CancellationController;
-import dev.slsk.internal.network.tcp.ConnectionState;
 import dev.slsk.internal.network.tcp.SocketConnection;
+import dev.slsk.internal.network.tcp.TransportState;
 import dev.slsk.internal.options.ConnectionOptions;
 import java.io.OutputStream;
 import java.util.concurrent.CompletableFuture;
@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
  * Scenario: cancel a transfer while it is running.
  *
  * <p>The 0.11.0 baseline aborted promptly only because
- * {@code NetworkStreamAdapter.observeCancellation} closed the socket from the
+ * the old transport cancellation bridge closed the socket from the
  * cancelling thread, underneath a reader blocked mid-call. With a silent peer
  * that was the <em>only</em> way the read could ever wake, since the socket
  * timeout was the 15-second inactivity budget.
@@ -180,14 +180,12 @@ class CancellationSoak {
                 assertThrows(RuntimeException.class, doomed::join);
 
                 assertEquals(
-                        ConnectionState.DISCONNECTED,
+                        TransportState.DISCONNECTED,
                         cancelled.getState(),
                         "The cancelled connection's stream position is indeterminate; it must disconnect.");
                 assertEquals(64, survivor.join().length, "The bystander's read did not complete.");
                 assertEquals(
-                        ConnectionState.CONNECTED,
-                        bystander.getState(),
-                        "Cancelling one connection disturbed another.");
+                        TransportState.CONNECTED, bystander.getState(), "Cancelling one connection disturbed another.");
             } finally {
                 cancelled.close();
                 bystander.close();

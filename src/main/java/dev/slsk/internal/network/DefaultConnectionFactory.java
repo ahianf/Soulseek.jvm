@@ -4,11 +4,11 @@
 
 package dev.slsk.internal.network;
 
-import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.internal.network.tcp.ConnectionMonitor;
 import dev.slsk.internal.network.tcp.SocketConnection;
-import dev.slsk.internal.network.tcp.TcpClient;
+import dev.slsk.internal.network.tcp.SocketConnector;
+import dev.slsk.internal.network.tcp.TransportConnection;
 import dev.slsk.internal.options.ConnectionOptions;
 import java.net.InetSocketAddress;
 import java.util.Objects;
@@ -44,40 +44,40 @@ public final class DefaultConnectionFactory implements ConnectionFactory {
 
     @Override
     public MessageConnection getDistributedConnection(
-            String username, InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient) {
-        return messageConnection(username, ipEndpoint, defaultOptions(options), 1, tcpClient);
+            String username, InetSocketAddress ipEndpoint, ConnectionOptions options, SocketConnector connector) {
+        return messageConnection(username, ipEndpoint, defaultOptions(options), 1, connector);
     }
 
     @Override
     public MessageConnection getMessageConnection(
-            String username, InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient) {
-        return messageConnection(username, ipEndpoint, defaultOptions(options), 4, tcpClient);
+            String username, InetSocketAddress ipEndpoint, ConnectionOptions options, SocketConnector connector) {
+        return messageConnection(username, ipEndpoint, defaultOptions(options), 4, connector);
     }
 
     @Override
     public MessageConnection getServerConnection(
             InetSocketAddress ipEndpoint,
-            Consumer<Connection> connectedEventHandler,
+            Consumer<TransportConnection> connectedEventHandler,
             Consumer<ConnectionDisconnectedEvent> disconnectedEventHandler,
             Consumer<MessageEvent> messageReadEventHandler,
             Consumer<MessageEvent> messageWrittenEventHandler,
             ConnectionOptions options,
-            TcpClient tcpClient) {
+            SocketConnector connector) {
         DefaultMessageConnection connection = executor == null
                 ? new DefaultMessageConnection(
-                        ipEndpoint, defaultOptions(options).withoutInactivityTimeout(), 4, tcpClient, monitor)
+                        ipEndpoint, defaultOptions(options).withoutInactivityTimeout(), 4, connector, monitor)
                 : new DefaultMessageConnection(
                         ipEndpoint,
                         defaultOptions(options).withoutInactivityTimeout(),
                         4,
-                        tcpClient,
+                        connector,
                         monitor,
                         executor);
         if (connectedEventHandler != null) {
-            connection.subscribe(Connection.Kind.CONNECTED, connectedEventHandler);
+            connection.subscribe(TransportConnection.Kind.CONNECTED, connectedEventHandler);
         }
         if (disconnectedEventHandler != null) {
-            connection.subscribe(Connection.Kind.DISCONNECTED, disconnectedEventHandler);
+            connection.subscribe(TransportConnection.Kind.DISCONNECTED, disconnectedEventHandler);
         }
         if (messageReadEventHandler != null) {
             connection.subscribe(MessageConnection.MessageKind.READ, messageReadEventHandler);
@@ -89,15 +89,19 @@ public final class DefaultConnectionFactory implements ConnectionFactory {
     }
 
     @Override
-    public Connection getTransferConnection(
-            InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient) {
+    public TransportConnection getTransferConnection(
+            InetSocketAddress ipEndpoint, ConnectionOptions options, SocketConnector connector) {
         return executor == null
-                ? new SocketConnection(ipEndpoint, defaultOptions(options), tcpClient, monitor)
-                : new SocketConnection(ipEndpoint, defaultOptions(options), tcpClient, monitor, executor);
+                ? new SocketConnection(ipEndpoint, defaultOptions(options), connector, monitor)
+                : new SocketConnection(ipEndpoint, defaultOptions(options), connector, monitor, executor);
     }
 
     private DefaultMessageConnection messageConnection(
-            String username, InetSocketAddress endpoint, ConnectionOptions options, int codeLength, TcpClient client) {
+            String username,
+            InetSocketAddress endpoint,
+            ConnectionOptions options,
+            int codeLength,
+            SocketConnector client) {
         return executor == null
                 ? new DefaultMessageConnection(username, endpoint, options, codeLength, client, monitor)
                 : new DefaultMessageConnection(username, endpoint, options, codeLength, client, monitor, executor);

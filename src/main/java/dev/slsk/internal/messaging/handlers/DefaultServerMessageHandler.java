@@ -74,7 +74,7 @@ import dev.slsk.internal.network.MessageEvent;
 import dev.slsk.internal.network.PeerConnectionManager;
 import dev.slsk.internal.network.PeerEndpoint;
 import dev.slsk.internal.network.TransferConnectionResult;
-import dev.slsk.internal.network.tcp.Connection;
+import dev.slsk.internal.network.tcp.TransportConnection;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.room.RoomData;
 import dev.slsk.internal.room.RoomInfoMessage;
@@ -558,7 +558,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
             return;
         }
         TransferInternal download = matchingDownload.get();
-        Connection connection = result.connection();
+        TransportConnection connection = result.connection();
         diagnostic.debug("Solicited inbound transfer connection to "
                 + download.getUsername() + " ("
                 + connection.getIpEndpoint() + ") for token "

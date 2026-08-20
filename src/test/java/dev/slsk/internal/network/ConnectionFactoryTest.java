@@ -12,10 +12,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.internal.common.Monitors;
 import dev.slsk.internal.concurrent.CancellationSignal;
-import dev.slsk.internal.network.tcp.Connection;
-import dev.slsk.internal.network.tcp.NetworkStream;
 import dev.slsk.internal.network.tcp.SocketConnection;
-import dev.slsk.internal.network.tcp.TcpClient;
+import dev.slsk.internal.network.tcp.SocketConnector;
+import dev.slsk.internal.network.tcp.SocketTransport;
+import dev.slsk.internal.network.tcp.TransportConnection;
 import dev.slsk.internal.options.ConnectionOptions;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -41,14 +41,15 @@ class ConnectionFactoryTest {
     @DisplayName("Factory creates transfer connection with supplied options")
     void createsTransferConnection() {
         ConnectionOptions options = options(1, 2, 3, 4, null);
-        try (Connection connection =
+        try (TransportConnection connection =
                 new DefaultConnectionFactory(Monitors.shared()).getTransferConnection(ENDPOINT, options, null)) {
             assertTrue(connection instanceof SocketConnection);
             assertSame(ENDPOINT, connection.getIpEndpoint());
             assertSame(options, connection.getOptions());
         }
 
-        try (Connection defaults = new DefaultConnectionFactory(Monitors.shared()).getTransferConnection(ENDPOINT)) {
+        try (TransportConnection defaults =
+                new DefaultConnectionFactory(Monitors.shared()).getTransferConnection(ENDPOINT)) {
             assertNotNull(defaults.getOptions());
         }
     }
@@ -81,7 +82,7 @@ class ConnectionFactoryTest {
                 .putInt(42)
                 .array();
         FakeStream stream = new FakeStream(frame);
-        FakeTcpClient client = new FakeTcpClient(stream);
+        FakeSocketConnector client = new FakeSocketConnector(stream);
         AtomicInteger connected = new AtomicInteger();
         AtomicInteger disconnected = new AtomicInteger();
         AtomicInteger read = new AtomicInteger();
@@ -143,18 +144,18 @@ class ConnectionFactoryTest {
                 .build();
     }
 
-    private static final class FakeTcpClient implements TcpClient {
+    private static final class FakeSocketConnector implements SocketConnector {
         private final Socket socket = new Socket();
         private final FakeStream stream;
         private boolean connected;
         private Runnable connectAction;
 
-        private FakeTcpClient(FakeStream stream) {
+        private FakeSocketConnector(FakeStream stream) {
             this.stream = stream;
         }
 
         @Override
-        public Socket getClient() {
+        public Socket socket() {
             return socket;
         }
 
@@ -188,7 +189,7 @@ class ConnectionFactoryTest {
         }
 
         @Override
-        public NetworkStream getStream() {
+        public SocketTransport transport() {
             return stream;
         }
 
@@ -200,7 +201,7 @@ class ConnectionFactoryTest {
         }
     }
 
-    private static final class FakeStream implements NetworkStream {
+    private static final class FakeStream implements SocketTransport {
         private final byte[] input;
         private final List<Byte> written = new ArrayList<>();
         private int position;
@@ -209,22 +210,6 @@ class ConnectionFactoryTest {
         private FakeStream(byte[] input) {
             this.input = input;
         }
-
-        @Override
-        public int getReadTimeout() {
-            return -1;
-        }
-
-        @Override
-        public void setReadTimeout(int timeout) {}
-
-        @Override
-        public int getWriteTimeout() {
-            return -1;
-        }
-
-        @Override
-        public void setWriteTimeout(int timeout) {}
 
         @Override
         public int read(byte[] buffer, int offset, int size) throws java.io.IOException {

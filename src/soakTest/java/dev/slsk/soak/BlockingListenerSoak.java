@@ -7,10 +7,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.internal.common.Monitors;
 import dev.slsk.internal.concurrent.CancellationSignal;
-import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.internal.network.tcp.ConnectionStateChangedEvent;
 import dev.slsk.internal.network.tcp.SocketConnection;
+import dev.slsk.internal.network.tcp.TransportConnection;
 import dev.slsk.internal.options.ConnectionOptions;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -46,12 +46,12 @@ class BlockingListenerSoak {
             for (int index = 0; index < CONNECTIONS; index++) {
                 SocketConnection connection =
                         new SocketConnection(peer.endpoint(), new ConnectionOptions(), null, Monitors.shared());
-                connection.<ConnectionStateChangedEvent>subscribe(Connection.Kind.STATE_CHANGED, event -> {
+                connection.<ConnectionStateChangedEvent>subscribe(TransportConnection.Kind.STATE_CHANGED, event -> {
                     stateEvents.incrementAndGet();
                     sleepQuietly(LISTENER_BLOCK_MILLIS);
                 });
                 connection.<ConnectionDisconnectedEvent>subscribe(
-                        Connection.Kind.DISCONNECTED, event -> allDisconnected.countDown());
+                        TransportConnection.Kind.DISCONNECTED, event -> allDisconnected.countDown());
                 connection.connect(CancellationSignal.none());
                 connections[index] = connection;
             }

@@ -7,7 +7,7 @@ package dev.slsk.internal.transfer;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Settlement;
 import dev.slsk.internal.common.WaitKey;
-import dev.slsk.internal.network.tcp.Connection;
+import dev.slsk.internal.network.tcp.TransportConnection;
 import dev.slsk.internal.options.TransferOptions;
 import java.net.InetSocketAddress;
 import java.time.Clock;
@@ -22,7 +22,7 @@ public final class TransferInternal {
     private double averageSpeed;
     private long bytesTransferred;
     private final Clock clock;
-    private Connection connection;
+    private TransportConnection connection;
     private final TransferDirection direction;
     private Instant endTime;
     private Throwable exception;
@@ -89,12 +89,12 @@ public final class TransferInternal {
     }
 
     /** Returns the transfer connection, or {@code null}. */
-    public synchronized Connection getConnection() {
+    public synchronized TransportConnection getConnection() {
         return connection;
     }
 
     /** Sets the transfer connection. */
-    public synchronized void setConnection(Connection value) {
+    public synchronized void setConnection(TransportConnection value) {
         connection = value;
     }
 

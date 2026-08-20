@@ -4,9 +4,9 @@
 
 package dev.slsk.internal.network;
 
-import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
-import dev.slsk.internal.network.tcp.TcpClient;
+import dev.slsk.internal.network.tcp.SocketConnector;
+import dev.slsk.internal.network.tcp.TransportConnection;
 import dev.slsk.internal.options.ConnectionOptions;
 import java.net.InetSocketAddress;
 import java.util.function.Consumer;
@@ -14,7 +14,7 @@ import java.util.function.Consumer;
 /** Creates protocol and transfer connections. */
 public interface ConnectionFactory {
     MessageConnection getDistributedConnection(
-            String username, InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient);
+            String username, InetSocketAddress ipEndpoint, ConnectionOptions options, SocketConnector connector);
 
     default MessageConnection getDistributedConnection(String username, InetSocketAddress ipEndpoint) {
         return getDistributedConnection(username, ipEndpoint, null, null);
@@ -26,7 +26,7 @@ public interface ConnectionFactory {
     }
 
     MessageConnection getMessageConnection(
-            String username, InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient);
+            String username, InetSocketAddress ipEndpoint, ConnectionOptions options, SocketConnector connector);
 
     default MessageConnection getMessageConnection(String username, InetSocketAddress ipEndpoint) {
         return getMessageConnection(username, ipEndpoint, null, null);
@@ -39,16 +39,16 @@ public interface ConnectionFactory {
 
     MessageConnection getServerConnection(
             InetSocketAddress ipEndpoint,
-            Consumer<Connection> connectedEventHandler,
+            Consumer<TransportConnection> connectedEventHandler,
             Consumer<ConnectionDisconnectedEvent> disconnectedEventHandler,
             Consumer<MessageEvent> messageReadEventHandler,
             Consumer<MessageEvent> messageWrittenEventHandler,
             ConnectionOptions options,
-            TcpClient tcpClient);
+            SocketConnector connector);
 
     default MessageConnection getServerConnection(
             InetSocketAddress ipEndpoint,
-            Consumer<Connection> connectedEventHandler,
+            Consumer<TransportConnection> connectedEventHandler,
             Consumer<ConnectionDisconnectedEvent> disconnectedEventHandler,
             Consumer<MessageEvent> messageReadEventHandler,
             Consumer<MessageEvent> messageWrittenEventHandler) {
@@ -64,7 +64,7 @@ public interface ConnectionFactory {
 
     default MessageConnection getServerConnection(
             InetSocketAddress ipEndpoint,
-            Consumer<Connection> connectedEventHandler,
+            Consumer<TransportConnection> connectedEventHandler,
             Consumer<ConnectionDisconnectedEvent> disconnectedEventHandler,
             Consumer<MessageEvent> messageReadEventHandler,
             Consumer<MessageEvent> messageWrittenEventHandler,
@@ -79,13 +79,14 @@ public interface ConnectionFactory {
                 null);
     }
 
-    Connection getTransferConnection(InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient);
+    TransportConnection getTransferConnection(
+            InetSocketAddress ipEndpoint, ConnectionOptions options, SocketConnector connector);
 
-    default Connection getTransferConnection(InetSocketAddress ipEndpoint) {
+    default TransportConnection getTransferConnection(InetSocketAddress ipEndpoint) {
         return getTransferConnection(ipEndpoint, null, null);
     }
 
-    default Connection getTransferConnection(InetSocketAddress ipEndpoint, ConnectionOptions options) {
+    default TransportConnection getTransferConnection(InetSocketAddress ipEndpoint, ConnectionOptions options) {
         return getTransferConnection(ipEndpoint, options, null);
     }
 }

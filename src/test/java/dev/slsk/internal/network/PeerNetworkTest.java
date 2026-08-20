@@ -32,12 +32,12 @@ import dev.slsk.internal.messaging.messages.ConnectToPeerResponse;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.messaging.messages.PeerInit;
 import dev.slsk.internal.messaging.messages.PierceFirewall;
-import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.internal.network.tcp.ConnectionKey;
-import dev.slsk.internal.network.tcp.ConnectionState;
 import dev.slsk.internal.network.tcp.ConnectionType;
-import dev.slsk.internal.network.tcp.TcpClient;
+import dev.slsk.internal.network.tcp.SocketConnector;
+import dev.slsk.internal.network.tcp.TransportConnection;
+import dev.slsk.internal.network.tcp.TransportState;
 import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import java.lang.reflect.InvocationHandler;
@@ -241,7 +241,7 @@ class PeerNetworkTest {
         fixture.factory.transferDirect = direct;
         fixture.waiter.defaultFuture = CompletableFuture.failedFuture(new RuntimeException("indirect"));
 
-        Connection result =
+        TransportConnection result =
                 fixture.manager().getTransferConnection(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none());
 
         assertSame(direct.connection(), result);
@@ -265,7 +265,7 @@ class PeerNetworkTest {
         fixture.factory.transferHandoff = indirect;
         fixture.waiter.defaultFuture = CompletableFuture.completedFuture(accepted.connection());
 
-        Connection result =
+        TransportConnection result =
                 fixture.manager().getTransferConnection(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none());
 
         assertSame(indirect.connection(), result);
@@ -679,14 +679,14 @@ class PeerNetworkTest {
 
         @Override
         public MessageConnection getDistributedConnection(
-                String username, InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient) {
+                String username, InetSocketAddress ipEndpoint, ConnectionOptions options, SocketConnector connector) {
             throw new AssertionError("unexpected distributed connection");
         }
 
         @Override
         public MessageConnection getMessageConnection(
-                String username, InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient) {
-            if (tcpClient != null) {
+                String username, InetSocketAddress ipEndpoint, ConnectionOptions options, SocketConnector connector) {
+            if (connector != null) {
                 assertNotNull(messageHandoff);
                 return messageHandoff.messageConnection();
             }
@@ -698,19 +698,19 @@ class PeerNetworkTest {
         @Override
         public MessageConnection getServerConnection(
                 InetSocketAddress ipEndpoint,
-                java.util.function.Consumer<Connection> connectedEventHandler,
+                java.util.function.Consumer<TransportConnection> connectedEventHandler,
                 java.util.function.Consumer<ConnectionDisconnectedEvent> disconnectedEventHandler,
                 java.util.function.Consumer<MessageEvent> messageReadEventHandler,
                 java.util.function.Consumer<MessageEvent> messageWrittenEventHandler,
                 ConnectionOptions options,
-                TcpClient tcpClient) {
+                SocketConnector connector) {
             throw new AssertionError("unexpected server connection");
         }
 
         @Override
-        public Connection getTransferConnection(
-                InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient) {
-            if (tcpClient != null) {
+        public TransportConnection getTransferConnection(
+                InetSocketAddress ipEndpoint, ConnectionOptions options, SocketConnector connector) {
+            if (connector != null) {
                 assertNotNull(transferHandoff);
                 return transferHandoff.connection();
             }
@@ -842,11 +842,11 @@ class PeerNetworkTest {
         private final String username;
         private final InetSocketAddress endpoint;
         private final UUID id = UUID.randomUUID();
-        private final TcpClient tcpClient = (TcpClient) Proxy.newProxyInstance(
-                TcpClient.class.getClassLoader(),
-                new Class<?>[] {TcpClient.class},
+        private final SocketConnector connector = (SocketConnector) Proxy.newProxyInstance(
+                SocketConnector.class.getClassLoader(),
+                new Class<?>[] {SocketConnector.class},
                 (proxy, method, arguments) -> defaultValue(method.getReturnType()));
-        private final Connection proxy;
+        private final TransportConnection proxy;
         private final List<java.util.function.Consumer<ConnectionDisconnectedEvent>> disconnectedListeners =
                 new ArrayList<>();
         private final List<java.util.function.Consumer<MessageEvent>> messageReadListeners = new ArrayList<>();
@@ -870,8 +870,9 @@ class PeerNetworkTest {
             this.username = username;
             this.endpoint = endpoint;
             Class<?>[] interfaces =
-                    message ? new Class<?>[] {MessageConnection.class} : new Class<?>[] {Connection.class};
-            proxy = (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(), interfaces, this);
+                    message ? new Class<?>[] {MessageConnection.class} : new Class<?>[] {TransportConnection.class};
+            proxy = (TransportConnection)
+                    Proxy.newProxyInstance(TransportConnection.class.getClassLoader(), interfaces, this);
         }
 
         private static ConnectionProbe connection(InetSocketAddress endpoint) {
@@ -882,7 +883,7 @@ class PeerNetworkTest {
             return new ConnectionProbe(true, username, endpoint);
         }
 
-        private Connection connection() {
+        private TransportConnection connection() {
             return proxy;
         }
 
@@ -907,7 +908,7 @@ class PeerNetworkTest {
                 case "getIpEndpoint" -> endpoint;
                 case "getKey" -> new ConnectionKey(username, endpoint);
                 case "getOptions" -> new ConnectionOptions();
-                case "getState" -> ConnectionState.CONNECTED;
+                case "getState" -> TransportState.CONNECTED;
                 case "getType" -> type;
                 case "setType" -> {
                     type = (ConnectionType) arguments[0];
@@ -937,9 +938,9 @@ class PeerNetworkTest {
                     Outcomes.raise(writeFuture);
                     yield null;
                 }
-                case "handoffTcpClient" -> {
+                case "handoffConnector" -> {
                     handoffCount++;
-                    yield tcpClient;
+                    yield connector;
                 }
                 case "startReadingContinuously" -> {
                     startReadingCount++;
@@ -956,7 +957,7 @@ class PeerNetworkTest {
                 case "subscribe" -> {
                     Object kind = arguments[0];
                     Object listener = arguments[1];
-                    if (kind == Connection.Kind.DISCONNECTED) {
+                    if (kind == TransportConnection.Kind.DISCONNECTED) {
                         java.util.function.Consumer<ConnectionDisconnectedEvent> registered = cast(listener);
                         disconnectedListeners.add(registered);
                         yield (dev.slsk.Subscription) () -> disconnectedListeners.remove(registered);

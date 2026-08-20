@@ -15,10 +15,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-/**
- * Pass-through implementation of {@link TcpClient} over a socket.
- */
-final class TcpClientAdapter implements TcpClient {
+/** JDK-socket implementation of {@link SocketConnector}. */
+final class JdkSocketConnector implements SocketConnector {
     private static final byte SOCKS_5 = 0x05;
 
     /**
@@ -40,16 +38,16 @@ final class TcpClientAdapter implements TcpClient {
     private final Socket socket;
     private boolean closed;
 
-    TcpClientAdapter() {
+    JdkSocketConnector() {
         this(new Socket());
     }
 
-    TcpClientAdapter(Socket socket) {
+    JdkSocketConnector(Socket socket) {
         this.socket = Objects.requireNonNull(socket, "socket");
     }
 
     @Override
-    public Socket getClient() {
+    public Socket socket() {
         return socket;
     }
 
@@ -98,11 +96,11 @@ final class TcpClientAdapter implements TcpClient {
     }
 
     @Override
-    public NetworkStream getStream() throws IOException {
+    public SocketTransport transport() throws IOException {
         if (!isConnected()) {
             throw new IllegalStateException("The operation is not allowed on non-connected sockets");
         }
-        return new NetworkStreamAdapter(socket);
+        return new JdkSocketTransport(socket);
     }
 
     @Override
@@ -139,13 +137,13 @@ final class TcpClientAdapter implements TcpClient {
             // and the connect deadline still bounds the caller's wait.
             int pollTimeout = socket.getSoTimeout();
             socket.setSoTimeout(PROXY_HANDSHAKE_TIMEOUT_MILLIS);
-            NetworkStream stream = getStream();
+            SocketTransport transport = transport();
 
             byte[] auth = usingCredentials
                     ? new byte[] {SOCKS_5, 0x02, AUTH_ANONYMOUS, AUTH_USERNAME}
                     : new byte[] {SOCKS_5, 0x01, AUTH_ANONYMOUS};
-            write(stream, auth, cancellationSignal);
-            byte[] authResponse = read(stream, buffer, 2, cancellationSignal);
+            write(transport, auth, cancellationSignal);
+            byte[] authResponse = read(transport, buffer, 2, cancellationSignal);
 
             if (authResponse[0] != SOCKS_5) {
                 throw new ProxyException("Invalid SOCKS version (expected: "
@@ -167,9 +165,9 @@ final class TcpClientAdapter implements TcpClient {
                     addAll(credentials, username.getBytes(StandardCharsets.US_ASCII));
                     credentials.add((byte) password.length());
                     addAll(credentials, password.getBytes(StandardCharsets.US_ASCII));
-                    write(stream, toByteArray(credentials), cancellationSignal);
+                    write(transport, toByteArray(credentials), cancellationSignal);
 
-                    byte[] response = read(stream, buffer, 2, cancellationSignal);
+                    byte[] response = read(transport, buffer, 2, cancellationSignal);
                     if (response.length != 2) {
                         throw new ProxyException("Abnormal authentication response from server");
                     }
@@ -199,9 +197,9 @@ final class TcpClientAdapter implements TcpClient {
             addAll(connection, destinationAddress.getAddress());
             connection.add((byte) (destinationPort >>> 8));
             connection.add((byte) destinationPort);
-            write(stream, toByteArray(connection), cancellationSignal);
+            write(transport, toByteArray(connection), cancellationSignal);
 
-            byte[] connectionResponse = read(stream, buffer, 4, CancellationSignal.none());
+            byte[] connectionResponse = read(transport, buffer, 4, CancellationSignal.none());
             if (connectionResponse[0] != SOCKS_5) {
                 throw new ProxyException("Invalid SOCKS version (expected: "
                         + unsigned(SOCKS_5)
@@ -217,19 +215,19 @@ final class TcpClientAdapter implements TcpClient {
             try {
                 boundAddress = switch (connectionResponse[3]) {
                     case IPV4 ->
-                        InetAddress.getByAddress(read(stream, buffer, 4, CancellationSignal.none()))
+                        InetAddress.getByAddress(read(transport, buffer, 4, CancellationSignal.none()))
                                 .getHostAddress();
                     case DOMAIN -> {
-                        byte[] length = read(stream, buffer, 1, CancellationSignal.none());
+                        byte[] length = read(transport, buffer, 1, CancellationSignal.none());
                         if (length[0] == ERROR) {
                             throw new ProxyException("Invalid domain name");
                         }
                         yield new String(
-                                read(stream, buffer, unsigned(length[0]), CancellationSignal.none()),
+                                read(transport, buffer, unsigned(length[0]), CancellationSignal.none()),
                                 StandardCharsets.US_ASCII);
                     }
                     case IPV6 ->
-                        InetAddress.getByAddress(read(stream, buffer, 16, CancellationSignal.none()))
+                        InetAddress.getByAddress(read(transport, buffer, 16, CancellationSignal.none()))
                                 .getHostAddress();
                     default ->
                         throw new ProxyException("Unknown SOCKS Address type (expected: one of "
@@ -246,7 +244,7 @@ final class TcpClientAdapter implements TcpClient {
                 throw new ProxyException("Invalid address response from server: " + exception.getMessage());
             }
 
-            byte[] port = read(stream, buffer, 2, CancellationSignal.none());
+            byte[] port = read(transport, buffer, 2, CancellationSignal.none());
             int boundPort = (unsigned(port[0]) << 8) | unsigned(port[1]);
             socket.setSoTimeout(pollTimeout);
             return new ProxyEndpoint(boundAddress, boundPort);
@@ -257,19 +255,20 @@ final class TcpClientAdapter implements TcpClient {
         }
     }
 
-    private static byte[] read(NetworkStream stream, byte[] buffer, int length, CancellationSignal cancellationSignal)
+    private static byte[] read(
+            SocketTransport transport, byte[] buffer, int length, CancellationSignal cancellationSignal)
             throws IOException {
         cancellationSignal.throwIfCancellationRequested();
-        int bytesRead = stream.read(buffer, 0, length);
+        int bytesRead = transport.read(buffer, 0, length);
         byte[] result = new byte[bytesRead];
         System.arraycopy(buffer, 0, result, 0, bytesRead);
         return result;
     }
 
-    private static void write(NetworkStream stream, byte[] data, CancellationSignal cancellationSignal)
+    private static void write(SocketTransport transport, byte[] data, CancellationSignal cancellationSignal)
             throws IOException {
         cancellationSignal.throwIfCancellationRequested();
-        stream.write(data, 0, data.length);
+        transport.write(data, 0, data.length);
     }
 
     private static void addAll(List<Byte> list, byte[] bytes) {

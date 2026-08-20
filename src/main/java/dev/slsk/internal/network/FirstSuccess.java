@@ -4,7 +4,7 @@
 package dev.slsk.internal.network;
 
 import dev.slsk.internal.common.Failures;
-import dev.slsk.internal.network.tcp.Connection;
+import dev.slsk.internal.network.tcp.TransportConnection;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executor;
@@ -53,14 +53,14 @@ final class FirstSuccess {
      * @throws InterruptedException if the caller abandons the race
      * @throws TimeoutException if the arm that lost the race timed out
      */
-    static <T extends Connection> Winner<T> race(Attempt<T> first, Attempt<T> second)
+    static <T extends TransportConnection> Winner<T> race(Attempt<T> first, Attempt<T> second)
             throws InterruptedException, TimeoutException {
         return race(
                 command -> Thread.ofVirtual().name("soulseek-standalone-race").start(command), first, second);
     }
 
     /** Runs both attempts on the supplied client executor. */
-    static <T extends Connection> Winner<T> race(Executor executor, Attempt<T> first, Attempt<T> second)
+    static <T extends TransportConnection> Winner<T> race(Executor executor, Attempt<T> first, Attempt<T> second)
             throws InterruptedException, TimeoutException {
         // One slot, because exactly one outcome is ever offered: the first arm
         // to succeed, or the second arm to fail.
@@ -78,7 +78,7 @@ final class FirstSuccess {
         return outcome.winner();
     }
 
-    private static <T extends Connection> void attempt(
+    private static <T extends TransportConnection> void attempt(
             Attempt<T> arm,
             boolean first,
             BlockingQueue<Outcome<T>> handoff,
@@ -109,7 +109,7 @@ final class FirstSuccess {
     }
 
     @FunctionalInterface
-    interface Attempt<T extends Connection> {
+    interface Attempt<T extends TransportConnection> {
         T get() throws Exception;
     }
 
@@ -121,7 +121,7 @@ final class FirstSuccess {
      *     {@link #race}, which is the direct one at every call site
      * @param <T> the connection type
      */
-    record Winner<T extends Connection>(T value, boolean first) {}
+    record Winner<T extends TransportConnection>(T value, boolean first) {}
 
-    private record Outcome<T extends Connection>(Winner<T> winner, Throwable failure) {}
+    private record Outcome<T extends TransportConnection>(Winner<T> winner, Throwable failure) {}
 }

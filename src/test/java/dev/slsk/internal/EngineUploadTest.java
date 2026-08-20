@@ -35,12 +35,12 @@ import dev.slsk.internal.messaging.messages.UploadFailed;
 import dev.slsk.internal.messaging.messages.UserAddressResponse;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.PeerConnectionManager;
-import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDataEvent;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.internal.network.tcp.ConnectionGovernor;
 import dev.slsk.internal.network.tcp.ConnectionReporter;
-import dev.slsk.internal.network.tcp.ConnectionState;
+import dev.slsk.internal.network.tcp.TransportConnection;
+import dev.slsk.internal.network.tcp.TransportState;
 import dev.slsk.internal.options.TransferOptions;
 import dev.slsk.internal.options.TransferStateChange;
 import dev.slsk.internal.transfer.Transfer;
@@ -1037,7 +1037,7 @@ class EngineUploadTest {
 
     private static final class PeerManagerProbe {
         private final MessageConnection messageConnection;
-        private final Connection transferConnection;
+        private final TransportConnection transferConnection;
         private CancellationSignal transferToken;
         /**
          * Whether this peer already has a message connection in the cache.
@@ -1056,7 +1056,7 @@ class EngineUploadTest {
                 new Class<?>[] {PeerConnectionManager.class},
                 this::invoke);
 
-        private PeerManagerProbe(MessageConnection messageConnection, Connection transferConnection) {
+        private PeerManagerProbe(MessageConnection messageConnection, TransportConnection transferConnection) {
             this.messageConnection = messageConnection;
             this.transferConnection = transferConnection;
         }
@@ -1099,7 +1099,7 @@ class EngineUploadTest {
                 return null;
             }
             if (method.getName().equals("getState")) {
-                return ConnectionState.CONNECTED;
+                return TransportState.CONNECTED;
             }
             if (method.getName().equals("getId")) {
                 return UUID.randomUUID();
@@ -1123,8 +1123,8 @@ class EngineUploadTest {
         private final ByteArrayOutputStream written = new ByteArrayOutputStream();
         private java.util.function.Consumer<ConnectionDataEvent> dataWrittenListener;
         private java.util.function.Consumer<ConnectionDisconnectedEvent> disconnectedListener;
-        private final Connection proxy = (Connection) Proxy.newProxyInstance(
-                Connection.class.getClassLoader(), new Class<?>[] {Connection.class}, this::invoke);
+        private final TransportConnection proxy = (TransportConnection) Proxy.newProxyInstance(
+                TransportConnection.class.getClassLoader(), new Class<?>[] {TransportConnection.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("read")
@@ -1182,7 +1182,7 @@ class EngineUploadTest {
                 return CompletableFuture.completedFuture(null);
             }
             if (method.getName().equals("subscribe")) {
-                if (arguments[0] == Connection.Kind.DATA_WRITTEN) {
+                if (arguments[0] == TransportConnection.Kind.DATA_WRITTEN) {
                     java.util.function.Consumer<ConnectionDataEvent> registered = cast(arguments[1]);
                     dataWrittenListener = registered;
                     return (dev.slsk.Subscription) () -> {
@@ -1191,7 +1191,7 @@ class EngineUploadTest {
                         }
                     };
                 }
-                if (arguments[0] == Connection.Kind.DISCONNECTED) {
+                if (arguments[0] == TransportConnection.Kind.DISCONNECTED) {
                     java.util.function.Consumer<ConnectionDisconnectedEvent> registered = cast(arguments[1]);
                     disconnectedListener = registered;
                     return (dev.slsk.Subscription) () -> {
@@ -1203,7 +1203,7 @@ class EngineUploadTest {
                 return (dev.slsk.Subscription) () -> {};
             }
             if (method.getName().equals("getState")) {
-                return ConnectionState.CONNECTED;
+                return TransportState.CONNECTED;
             }
             if (method.getName().equals("getId")) {
                 return UUID.randomUUID();

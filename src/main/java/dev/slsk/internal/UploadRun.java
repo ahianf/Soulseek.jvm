@@ -28,9 +28,9 @@ import dev.slsk.internal.messaging.messages.TransferResponse;
 import dev.slsk.internal.messaging.messages.UploadDenied;
 import dev.slsk.internal.messaging.messages.UploadFailed;
 import dev.slsk.internal.network.MessageConnection;
-import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDataEvent;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
+import dev.slsk.internal.network.tcp.TransportConnection;
 import dev.slsk.internal.options.TransferOptions;
 import dev.slsk.internal.options.TransferProgressUpdate;
 import dev.slsk.internal.options.TransferStateChange;
@@ -75,7 +75,7 @@ final class UploadRun {
     private TransferPhase lastPhase = TransferPhase.NONE;
     private Semaphore perUserSemaphore;
     private InetSocketAddress endpoint;
-    private Connection connection;
+    private TransportConnection connection;
     private InputStream inputStream;
     private TransferStreams.PositionTrackingInputStream trackingStream;
     private Consumer<ConnectionDataEvent> dataWrittenListener;
@@ -221,8 +221,8 @@ final class UploadRun {
                 upload.settlement().fail(new ConnectionException("Transfer failed: " + eventData.message(), failure));
             }
         };
-        dataWrittenSubscription = connection.subscribe(Connection.Kind.DATA_WRITTEN, dataWrittenListener);
-        disconnectedSubscription = connection.subscribe(Connection.Kind.DISCONNECTED, disconnectedListener);
+        dataWrittenSubscription = connection.subscribe(TransportConnection.Kind.DATA_WRITTEN, dataWrittenListener);
+        disconnectedSubscription = connection.subscribe(TransportConnection.Kind.DISCONNECTED, disconnectedListener);
     }
 
     private void readStartOffset() throws InterruptedException, TimeoutException {

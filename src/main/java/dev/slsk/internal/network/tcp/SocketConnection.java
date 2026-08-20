@@ -41,7 +41,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /** Provides client connections for TCP network services. */
-public class SocketConnection implements Connection {
+public class SocketConnection implements TransportConnection {
 
     /** Fastest monitor tick, so a very short inactivity timeout stays precise. */
     private static final int MIN_MONITOR_INTERVAL_MILLIS = 10;
@@ -64,11 +64,12 @@ public class SocketConnection implements Connection {
      */
     private static final int CANCELLATION_POLL_MILLIS = 250;
 
-    /** {@link NetworkStream}'s sentinel for "block until data arrives". */
-    private static final int NO_READ_TIMEOUT = -1;
+    /** JDK {@code SO_TIMEOUT}'s value for "block until data arrives". */
+    private static final int NO_READ_TIMEOUT = 0;
 
     private final UUID id = UUID.randomUUID();
-    private final CopyOnWriteArrayList<Consumer<? super Connection>> connectedListeners = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<Consumer<? super TransportConnection>> connectedListeners =
+            new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<Consumer<? super ConnectionDataEvent>> dataReadListeners =
             new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<Consumer<? super ConnectionDataEvent>> dataWrittenListeners =
@@ -101,12 +102,11 @@ public class SocketConnection implements Connection {
 
     /**
      * The {@code SO_TIMEOUT} currently applied, so a read that does not need to
-     * change it makes no syscall. Tracks what the constructor and
-     * {@link #setStreamTimeouts()} install.
+     * change it makes no syscall. The constructor installs the initial value.
      */
     private int appliedReadTimeoutMillis = CANCELLATION_POLL_MILLIS;
 
-    private volatile ConnectionState state = ConnectionState.PENDING;
+    private volatile TransportState state = TransportState.PENDING;
     private volatile ConnectionType type = ConnectionType.UNCLASSIFIED;
     private volatile boolean writeQueueFull;
 
@@ -125,8 +125,8 @@ public class SocketConnection implements Connection {
 
     protected InetSocketAddress ipEndpoint;
     protected final ConnectionOptions options;
-    protected volatile NetworkStream stream;
-    protected volatile TcpClient tcpClient;
+    protected volatile SocketTransport transport;
+    protected volatile SocketConnector connector;
 
     /** Executor shared by this connection's read and write loops. */
     protected final ExecutorService ioExecutor() {
@@ -134,21 +134,24 @@ public class SocketConnection implements Connection {
     }
 
     /**
-     * Creates a connection over an optional existing TCP client.
+     * Creates a connection over an optional existing socket connector.
      *
      * @param ipEndpoint where the peer is
      * @param options the connection options, or {@code null} for the defaults
-     * @param tcpClient an established client to adopt, or {@code null}
+     * @param connector an established connector to adopt, or {@code null}
      * @param monitor the client's connection monitor; required, because a
      *     connection nobody sweeps never notices that it has gone idle or that
      *     its transport has gone away
      */
     public SocketConnection(
-            InetSocketAddress ipEndpoint, ConnectionOptions options, TcpClient tcpClient, ConnectionMonitor monitor) {
+            InetSocketAddress ipEndpoint,
+            ConnectionOptions options,
+            SocketConnector connector,
+            ConnectionMonitor monitor) {
         this(
                 ipEndpoint,
                 options,
-                tcpClient,
+                connector,
                 monitor,
                 Executors.newThreadPerTaskExecutor(Thread.ofVirtual()
                         .name("soulseek-standalone-connection-", 0)
@@ -160,16 +163,16 @@ public class SocketConnection implements Connection {
     public SocketConnection(
             InetSocketAddress ipEndpoint,
             ConnectionOptions options,
-            TcpClient tcpClient,
+            SocketConnector connector,
             ConnectionMonitor monitor,
             ExecutorService ioExecutor) {
-        this(ipEndpoint, options, tcpClient, monitor, ioExecutor, false);
+        this(ipEndpoint, options, connector, monitor, ioExecutor, false);
     }
 
     private SocketConnection(
             InetSocketAddress ipEndpoint,
             ConnectionOptions options,
-            TcpClient tcpClient,
+            SocketConnector connector,
             ConnectionMonitor monitor,
             ExecutorService ioExecutor,
             boolean ownsExecutor) {
@@ -178,7 +181,7 @@ public class SocketConnection implements Connection {
         this.ownsExecutor = ownsExecutor;
         this.ipEndpoint = ipEndpoint;
         this.options = options == null ? new ConnectionOptions() : options;
-        this.tcpClient = tcpClient == null ? new TcpClientAdapter() : tcpClient;
+        this.connector = connector == null ? new JdkSocketConnector() : connector;
         // ArrayBlockingQueue requires a positive physical capacity. A
         // non-positive configured capacity retains the old observable
         // behaviour (every framed write times out/drops) through the explicit
@@ -186,14 +189,13 @@ public class SocketConnection implements Connection {
         frameWrites = new ArrayBlockingQueue<>(Math.max(1, this.options.writeQueueSize()));
 
         try {
-            this.options.configureSocket().configure(this.tcpClient.getClient());
+            this.options.configureSocket().configure(this.connector.socket());
             setSocketTimeout(CANCELLATION_POLL_MILLIS);
 
-            if (this.tcpClient.isConnected()) {
-                state = ConnectionState.CONNECTED;
+            if (this.connector.isConnected()) {
+                state = TransportState.CONNECTED;
                 startTimers();
-                stream = this.tcpClient.getStream();
-                setStreamTimeouts();
+                transport = this.connector.transport();
                 startFrameWriter();
             }
         } catch (IOException exception) {
@@ -207,7 +209,7 @@ public class SocketConnection implements Connection {
         Objects.requireNonNull(kind, "kind");
         Objects.requireNonNull(listener, "listener");
         return switch (kind) {
-            case CONNECTED -> Subscriptions.add(connectedListeners, (Consumer<? super Connection>) listener);
+            case CONNECTED -> Subscriptions.add(connectedListeners, (Consumer<? super TransportConnection>) listener);
             case DATA_READ -> Subscriptions.add(dataReadListeners, (Consumer<? super ConnectionDataEvent>) listener);
             case DATA_WRITTEN ->
                 Subscriptions.add(dataWrittenListeners, (Consumer<? super ConnectionDataEvent>) listener);
@@ -244,7 +246,7 @@ public class SocketConnection implements Connection {
     }
 
     @Override
-    public ConnectionState getState() {
+    public TransportState getState() {
         return state;
     }
 
@@ -284,14 +286,14 @@ public class SocketConnection implements Connection {
      */
     @Override
     public void connect(CancellationSignal cancellationSignal) throws InterruptedException, TimeoutException {
-        if (state != ConnectionState.PENDING && state != ConnectionState.DISCONNECTED) {
+        if (state != TransportState.PENDING && state != TransportState.DISCONNECTED) {
             throw new IllegalStateException("Invalid attempt to connect a connected or "
                     + "transitioning connection (current state: "
                     + state + ")");
         }
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
 
-        changeState(ConnectionState.CONNECTING, "Connecting to " + formatEndpoint(ipEndpoint), null);
+        changeState(TransportState.CONNECTING, "Connecting to " + formatEndpoint(ipEndpoint), null);
 
         try {
             Duration timeout = options.connectTimeout();
@@ -300,10 +302,9 @@ public class SocketConnection implements Connection {
             }
             awaitTransportConnect(token, timeout);
             startTimers();
-            stream = tcpClient.getStream();
-            setStreamTimeouts();
+            transport = connector.transport();
             startFrameWriter();
-            changeState(ConnectionState.CONNECTED, "Connected to " + formatEndpoint(ipEndpoint), null);
+            changeState(TransportState.CONNECTED, "Connected to " + formatEndpoint(ipEndpoint), null);
         } catch (Exception exception) {
             throw Failures.rethrow(handleConnectFailure(exception));
         }
@@ -324,7 +325,7 @@ public class SocketConnection implements Connection {
             try {
                 ProxyOptions proxy = options.proxyOptions();
                 if (proxy != null) {
-                    tcpClient.connectThroughProxy(
+                    connector.connectThroughProxy(
                             proxy.ipEndpoint().getAddress(),
                             proxy.ipEndpoint().getPort(),
                             ipEndpoint.getAddress(),
@@ -333,7 +334,7 @@ public class SocketConnection implements Connection {
                             proxy.password(),
                             token);
                 } else {
-                    tcpClient.connect(ipEndpoint.getAddress(), ipEndpoint.getPort());
+                    connector.connect(ipEndpoint.getAddress(), ipEndpoint.getPort());
                 }
                 gate.offer(connected);
             } catch (Throwable failure) {
@@ -377,37 +378,37 @@ public class SocketConnection implements Connection {
      */
     @Override
     public void disconnect(String message, Exception exception) {
-        ConnectionState previousState;
+        TransportState previousState;
         String reason;
 
         synchronized (this) {
-            if (state == ConnectionState.DISCONNECTED || state == ConnectionState.DISCONNECTING) {
+            if (state == TransportState.DISCONNECTED || state == TransportState.DISCONNECTING) {
                 return;
             }
             reason = message != null ? message : exception == null ? null : exception.getMessage();
             previousState = state;
-            state = ConnectionState.DISCONNECTING;
+            state = TransportState.DISCONNECTING;
         }
 
-        publishStateChanged(previousState, ConnectionState.DISCONNECTING, reason, null);
+        publishStateChanged(previousState, TransportState.DISCONNECTING, reason, null);
         stopTimers();
         // Make the terminal state visible before releasing parked writers. The
         // disconnected event still follows transport teardown below, but an
         // exceptional send never returns while the state says transitioning.
-        state = ConnectionState.DISCONNECTED;
+        state = TransportState.DISCONNECTED;
         stopFrameWriter(() -> frameWriteTeardownFailure(reason, exception));
         closeTransport();
 
-        publishStateChanged(ConnectionState.DISCONNECTING, ConnectionState.DISCONNECTED, reason, exception);
+        publishStateChanged(TransportState.DISCONNECTING, TransportState.DISCONNECTED, reason, exception);
         publishDisconnected(reason, exception);
     }
 
     @Override
-    public TcpClient handoffTcpClient() {
+    public SocketConnector handoffConnector() {
         stopFrameWriter(() -> new ConnectionWriteException("Write aborted because the transport was handed off"));
-        TcpClient result = tcpClient;
-        tcpClient = null;
-        stream = null;
+        SocketConnector result = connector;
+        connector = null;
+        transport = null;
         return result;
     }
 
@@ -545,23 +546,23 @@ public class SocketConnection implements Connection {
      *
      * <p>Callers must not hold a library lock: this invokes user listeners.
      */
-    protected void changeState(ConnectionState newState, String message, Exception exception) {
-        ConnectionState previousState = state;
+    protected void changeState(TransportState newState, String message, Exception exception) {
+        TransportState previousState = state;
         state = newState;
 
         publishStateChanged(previousState, newState, message, exception);
-        if (newState == ConnectionState.CONNECTED) {
-            for (Consumer<? super Connection> listener : connectedListeners) {
+        if (newState == TransportState.CONNECTED) {
+            for (Consumer<? super TransportConnection> listener : connectedListeners) {
                 listener.accept(this);
             }
-        } else if (newState == ConnectionState.DISCONNECTED) {
+        } else if (newState == TransportState.DISCONNECTED) {
             publishDisconnected(message, exception);
         }
     }
 
     /** Publishes the state-changed event. Must be called with no lock held. */
     private void publishStateChanged(
-            ConnectionState previousState, ConnectionState newState, String message, Exception exception) {
+            TransportState previousState, TransportState newState, String message, Exception exception) {
         ConnectionStateChangedEvent eventData =
                 new ConnectionStateChangedEvent(this, previousState, newState, message, exception);
         for (Consumer<? super ConnectionStateChangedEvent> listener : stateChangedListeners) {
@@ -607,23 +608,13 @@ public class SocketConnection implements Connection {
         lastActivityNanos = System.nanoTime();
     }
 
-    /** Returns the currently associated network stream. */
-    protected final NetworkStream getStream() {
-        return stream;
-    }
-
-    /** Returns the currently associated TCP client. */
-    protected final TcpClient getTcpClient() {
-        return tcpClient;
-    }
-
     /** Returns whether this connection has been closed. */
     protected final boolean isClosed() {
         return closeStarted.get();
     }
 
     /** Sets state for derived source ports that adopt a connection. */
-    protected final void setState(ConnectionState value) {
+    protected final void setState(TransportState value) {
         state = value;
     }
 
@@ -657,7 +648,7 @@ public class SocketConnection implements Connection {
                     // onto a second virtual thread that this one then blocked
                     // on, which bought nothing: both threads were doing the
                     // same read.
-                    bytesRead = stream.read(buffer, 0, bytesGranted);
+                    bytesRead = transport.read(buffer, 0, bytesGranted);
                 } catch (SocketTimeoutException timeout) {
                     // No data inside the poll window. This is the cancellation
                     // check point: the socket is untouched and no bytes were
@@ -724,7 +715,7 @@ public class SocketConnection implements Connection {
             while (totalBytesWritten < length) {
                 cancellationSignal.throwIfCancellationRequested();
                 boolean closing = closeStarted.get();
-                if (closing || state == ConnectionState.DISCONNECTING || state == ConnectionState.DISCONNECTED) {
+                if (closing || state == TransportState.DISCONNECTING || state == TransportState.DISCONNECTED) {
                     throw new ConnectionWriteException("Write aborted after " + totalBytesWritten
                             + " bytes written; the connection has "
                             + "been or is being "
@@ -737,7 +728,7 @@ public class SocketConnection implements Connection {
                 if (bytesRead < 0) {
                     bytesRead = 0;
                 }
-                stream.write(buffer, 0, bytesRead);
+                transport.write(buffer, 0, bytesRead);
                 totalBytesWritten += bytesRead;
                 if (reporter != null) {
                     reporter.report(bytesToRead, bytesGranted, bytesRead);
@@ -815,11 +806,11 @@ public class SocketConnection implements Connection {
     private void writeFrame(byte[] bytes) throws Exception {
         resetInactivityTime();
         boolean closing = closeStarted.get();
-        if (closing || state == ConnectionState.DISCONNECTING || state == ConnectionState.DISCONNECTED) {
+        if (closing || state == TransportState.DISCONNECTING || state == TransportState.DISCONNECTED) {
             throw new ConnectionWriteException("Write aborted before the frame reached the socket; the connection "
                     + "has been or is being " + (closing ? "closed" : "disconnected"));
         }
-        stream.write(bytes, 0, bytes.length);
+        transport.write(bytes, 0, bytes.length);
         emitProgress(dataWrittenListeners, null, bytes.length, bytes.length, CancellationSignal.none());
         resetInactivityTime();
     }
@@ -975,11 +966,11 @@ public class SocketConnection implements Connection {
     }
 
     private void validateConnected() {
-        TcpClient client = tcpClient;
-        if (client == null || !client.isConnected()) {
-            throw new IllegalStateException("The underlying Tcp connection is closed");
+        SocketConnector currentConnector = connector;
+        if (currentConnector == null || !currentConnector.isConnected()) {
+            throw new IllegalStateException("The underlying socket connection is closed");
         }
-        if (state != ConnectionState.CONNECTED) {
+        if (state != TransportState.CONNECTED) {
             throw new IllegalStateException("Invalid attempt to send to a disconnected or "
                     + "transitioning connection (current state: "
                     + state + ")");
@@ -987,7 +978,7 @@ public class SocketConnection implements Connection {
     }
 
     private void setSocketTimeout(int timeout) throws IOException {
-        tcpClient.getClient().setSoTimeout(timeout);
+        connector.socket().setSoTimeout(timeout);
     }
 
     /**
@@ -1011,24 +1002,12 @@ public class SocketConnection implements Connection {
      * tearing down the connection carrying it.
      */
     private void applyReadTimeout(CancellationSignal cancellationSignal) throws IOException {
-        // -1, not 0: NetworkStream spells "no timeout" as -1 and rejects 0.
         int desired = cancellationSignal == CancellationSignal.none() ? NO_READ_TIMEOUT : CANCELLATION_POLL_MILLIS;
-        if (desired == appliedReadTimeoutMillis || stream == null) {
+        if (desired == appliedReadTimeoutMillis || transport == null) {
             return;
         }
-        stream.setReadTimeout(desired);
+        setSocketTimeout(desired);
         appliedReadTimeoutMillis = desired;
-    }
-
-    private void setStreamTimeouts() throws IOException {
-        // The read timeout is the cancellation poll interval, not the
-        // inactivity budget; the periodic monitor owns inactivity now.
-        // applyReadTimeout narrows it per read.
-        stream.setReadTimeout(CANCELLATION_POLL_MILLIS);
-        appliedReadTimeoutMillis = CANCELLATION_POLL_MILLIS;
-        // SO_TIMEOUT does not apply to writes in Java, so this stays
-        // informational; write cancellation is checked between chunks.
-        stream.setWriteTimeout(durationMillisOrInfinite(options.inactivityTimeout()));
     }
 
     private void startTimers() {
@@ -1063,8 +1042,8 @@ public class SocketConnection implements Connection {
      * this connection's own.
      */
     void monitorTick() {
-        TcpClient client = tcpClient;
-        if (client == null || !client.isConnected()) {
+        SocketConnector currentConnector = connector;
+        if (currentConnector == null || !currentConnector.isConnected()) {
             String message = "The connection was closed unexpectedly";
             disconnect(message, new ConnectionException(message));
             return;
@@ -1080,23 +1059,19 @@ public class SocketConnection implements Connection {
         }
     }
 
-    private static int durationMillisOrInfinite(Duration duration) {
-        return duration == null ? -1 : Math.toIntExact(duration.toMillis());
-    }
-
     private void closeTransport() {
-        NetworkStream currentStream = stream;
-        TcpClient currentClient = tcpClient;
+        SocketTransport currentTransport = transport;
+        SocketConnector currentConnector = connector;
         try {
-            if (currentStream != null) {
-                currentStream.close();
+            if (currentTransport != null) {
+                currentTransport.close();
             }
         } catch (IOException ignored) {
             // Source close is best-effort during disconnection.
         }
         try {
-            if (currentClient != null) {
-                currentClient.close();
+            if (currentConnector != null) {
+                currentConnector.close();
             }
         } catch (IOException ignored) {
             // Source close is best-effort during disconnection.

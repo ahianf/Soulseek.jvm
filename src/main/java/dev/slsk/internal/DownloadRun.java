@@ -26,9 +26,9 @@ import dev.slsk.internal.messaging.messages.QueueDownloadRequest;
 import dev.slsk.internal.messaging.messages.TransferRequest;
 import dev.slsk.internal.messaging.messages.TransferResponse;
 import dev.slsk.internal.network.MessageConnection;
-import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDataEvent;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
+import dev.slsk.internal.network.tcp.TransportConnection;
 import dev.slsk.internal.options.TransferOptions;
 import dev.slsk.internal.options.TransferProgressUpdate;
 import dev.slsk.internal.options.TransferStateChange;
@@ -99,7 +99,7 @@ final class DownloadRun {
     private final WaitKey transferStartRequestedWaitKey;
     private TransferPhase lastPhase = TransferPhase.NONE;
     private InetSocketAddress endpoint;
-    private Connection connection;
+    private TransportConnection connection;
     private OutputStream outputStream;
     private TransferStreams.PositionTrackingOutputStream trackingStream;
     private Consumer<ConnectionDataEvent> dataReadListener;
@@ -259,7 +259,7 @@ final class DownloadRun {
         // transfer connection the moment it reads it. A thread of its own is
         // what "before" means here: the wait has to be in place while the write
         // happens, and neither can wait for the other.
-        Settlement<Connection> established = new Settlement<>();
+        Settlement<TransportConnection> established = new Settlement<>();
         domain.networkExecutor().executor().execute(() -> {
             try {
                 established.succeed(domain.peers()
@@ -276,7 +276,7 @@ final class DownloadRun {
                 new TransferResponse(download.getRemoteToken(), download.getSize() == null ? 0 : download.getSize()),
                 CommonUtils.token(cancellationSignal));
 
-        Settlement.Outcome<Connection> establishment = established.await();
+        Settlement.Outcome<TransportConnection> establishment = established.await();
         Throwable failure = establishment.failure();
         if (failure == null) {
             connection = establishment.value();
@@ -323,8 +323,8 @@ final class DownloadRun {
                 download.settlement().fail(new ConnectionException("Transfer failed: " + eventData.message(), failure));
             }
         };
-        dataReadSubscription = connection.subscribe(Connection.Kind.DATA_READ, dataReadListener);
-        disconnectedSubscription = connection.subscribe(Connection.Kind.DISCONNECTED, disconnectedListener);
+        dataReadSubscription = connection.subscribe(TransportConnection.Kind.DATA_READ, dataReadListener);
+        disconnectedSubscription = connection.subscribe(TransportConnection.Kind.DISCONNECTED, disconnectedListener);
     }
 
     private void positionOutputStream() {
