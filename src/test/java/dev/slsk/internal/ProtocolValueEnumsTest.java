@@ -6,7 +6,6 @@ package dev.slsk.internal;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import dev.slsk.internal.diagnostics.DiagnosticLevel;
 import dev.slsk.internal.search.SearchScopeType;
 import dev.slsk.internal.share.FileAttributeType;
 import dev.slsk.internal.transfer.TransferDirection;
@@ -47,13 +46,6 @@ class ProtocolValueEnumsTest {
         assertEquals(value, UserPresence.fromValue(expected));
     }
 
-    @ParameterizedTest(name = "{0} uses value {1}")
-    @MethodSource("diagnosticLevels")
-    void preservesDiagnosticLevelValues(DiagnosticLevel value, int expected) {
-        assertEquals(expected, value.getValue());
-        assertEquals(value, DiagnosticLevel.fromValue(expected));
-    }
-
     @Test
     @DisplayName("Rejects unknown protocol enum values")
     void rejectsUnknownValues() {
@@ -61,7 +53,6 @@ class ProtocolValueEnumsTest {
         assertThrows(IllegalArgumentException.class, () -> FileAttributeType.fromValue(3));
         assertThrows(IllegalArgumentException.class, () -> SearchScopeType.fromValue(4));
         assertThrows(IllegalArgumentException.class, () -> UserPresence.fromValue(3));
-        assertThrows(IllegalArgumentException.class, () -> DiagnosticLevel.fromValue(5));
     }
 
     private static Stream<Arguments> transferDirections() {
@@ -90,14 +81,5 @@ class ProtocolValueEnumsTest {
                 Arguments.of(UserPresence.OFFLINE, 0),
                 Arguments.of(UserPresence.AWAY, 1),
                 Arguments.of(UserPresence.ONLINE, 2));
-    }
-
-    private static Stream<Arguments> diagnosticLevels() {
-        return Stream.of(
-                Arguments.of(DiagnosticLevel.NONE, 0),
-                Arguments.of(DiagnosticLevel.WARNING, 1),
-                Arguments.of(DiagnosticLevel.INFO, 2),
-                Arguments.of(DiagnosticLevel.DEBUG, 3),
-                Arguments.of(DiagnosticLevel.TRACE, 4));
     }
 }

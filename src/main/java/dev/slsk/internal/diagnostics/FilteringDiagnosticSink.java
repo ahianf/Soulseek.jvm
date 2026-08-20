@@ -103,7 +103,7 @@ public final class FilteringDiagnosticSink implements DiagnosticSink {
     }
 
     private boolean enabled(DiagnosticLevel level) {
-        return level.getValue() <= minimumLevel.getValue();
+        return level.ordinal() <= minimumLevel.ordinal();
     }
 
     private void publishEvent(DiagnosticLevel level, String message, Throwable exception, String source) {

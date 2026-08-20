@@ -69,7 +69,7 @@ class FilteringDiagnosticSinkTest {
         factory.warning("message");
 
         assertEquals(count, events.size());
-        assertTrue(events.stream().allMatch(event -> event.level().getValue() <= minimum.getValue()));
+        assertTrue(events.stream().allMatch(event -> event.level().ordinal() <= minimum.ordinal()));
     }
 
     static Stream<Arguments> filterCases() {

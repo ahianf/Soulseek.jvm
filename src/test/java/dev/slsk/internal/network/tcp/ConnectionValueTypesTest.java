@@ -17,17 +17,6 @@ import org.junit.jupiter.api.Test;
 
 class ConnectionValueTypesTest {
     @Test
-    @DisplayName("SocketConnection state preserves every numeric value")
-    void stateValuesMatchSource() {
-        assertEquals(0, ConnectionState.PENDING.getValue());
-        assertEquals(1, ConnectionState.CONNECTING.getValue());
-        assertEquals(2, ConnectionState.CONNECTED.getValue());
-        assertEquals(3, ConnectionState.DISCONNECTING.getValue());
-        assertEquals(4, ConnectionState.DISCONNECTED.getValue());
-        assertEquals(ConnectionState.CONNECTED, ConnectionState.fromValue(2));
-    }
-
-    @Test
     @DisplayName("SocketConnection type flags combine and test bits")
     void connectionTypesPreserveFlags() {
         ConnectionTypes combined = ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT);

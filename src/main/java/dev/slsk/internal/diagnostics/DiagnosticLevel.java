@@ -9,48 +9,17 @@ package dev.slsk.internal.diagnostics;
  */
 public enum DiagnosticLevel {
     /** No diagnostic messages. */
-    NONE(0),
+    NONE,
 
     /** Warning messages. */
-    WARNING(1),
+    WARNING,
 
     /** Informational messages. */
-    INFO(2),
+    INFO,
 
     /** Debug messages. */
-    DEBUG(3),
+    DEBUG,
 
     /** Trace messages. */
-    TRACE(4);
-
-    private final int value;
-
-    DiagnosticLevel(int value) {
-        this.value = value;
-    }
-
-    /**
-     * Returns the level value.
-     *
-     * @return the level value
-     */
-    public int getValue() {
-        return value;
-    }
-
-    /**
-     * Returns the level represented by a value.
-     *
-     * @param value the level value
-     * @return the matching level
-     * @throws IllegalArgumentException when the value is unknown
-     */
-    public static DiagnosticLevel fromValue(int value) {
-        for (DiagnosticLevel level : values()) {
-            if (level.value == value) {
-                return level;
-            }
-        }
-        throw new IllegalArgumentException("Unknown diagnostic level: " + value);
-    }
+    TRACE
 }
