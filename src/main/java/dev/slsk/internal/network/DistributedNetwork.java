@@ -101,7 +101,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     /** Set when a state change arrived while an update was in flight; see updateStatus. */
     private final AtomicBoolean statusDirty = new AtomicBoolean();
 
-    private final AtomicBoolean disposed = new AtomicBoolean();
+    private final AtomicBoolean closed = new AtomicBoolean();
     private final ConcurrentHashMap<String, ConnectionCell> childConnections = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, InetSocketAddress> children = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, CancellationController> pendingInboundIndirectConnections =
@@ -414,7 +414,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         return successful;
     }
 
-    /** Adopts the lowest-branch-level candidate and disposes of the rest. */
+    /** Adopts the lowest-branch-level candidate and closes of the rest. */
     private void adoptBestCandidate(List<ParentCandidate> successful) {
         if (successful.isEmpty()) {
             diagnostic.warning("Failed to connect to any of the available parent " + "candidates");
@@ -639,7 +639,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     }
 
     @Override
-    public void removeAndDisposeAll() {
+    public void removeAndCloseAll() {
         pendingSolicitations.clear();
         pendingInboundIndirectConnections.clear();
         MessageConnection parent = parentConnection;
@@ -748,7 +748,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
 
     @Override
     public void close() {
-        if (disposed.compareAndSet(false, true)) {
+        if (closed.compareAndSet(false, true)) {
             watchdog.cancel(false);
             ScheduledFuture<?> debounce = statusDebounce.getAndSet(null);
             if (debounce != null) {
@@ -757,7 +757,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             if (ownsScheduler) {
                 scheduler.close();
             }
-            removeAndDisposeAll();
+            removeAndCloseAll();
         }
     }
 

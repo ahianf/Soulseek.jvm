@@ -186,7 +186,7 @@ class ListenerHandlerTest {
     }
 
     @Test
-    void unknownPierceFirewallDisconnectsAndDisposes() throws Exception {
+    void unknownPierceFirewallDisconnectsAndCloses() throws Exception {
         try (Fixture fixture = fixture(null)) {
             ConnectionProbe connection = ConnectionProbe.message(new PierceFirewall(12).toByteArray());
 

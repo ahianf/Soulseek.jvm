@@ -511,7 +511,7 @@ final class TransferDomain implements PeerServices {
      * {@code EnqueueDownloadCallback} and left the application to call
      * {@code upload(...)} itself, which is why "uploads are requested by peers
      * and admitted by the upload policy" has to mean the library serves them —
-     * otherwise the capability is disposed of and nothing takes it over.
+     * otherwise the capability is closed and nothing takes it over.
      *
      * <p>The bytes come from {@link ShareCatalog#resolve}, so a peer can only
      * ever receive what the catalog agrees it may have, checked against the
@@ -854,7 +854,7 @@ final class TransferDomain implements PeerServices {
         // A stream this opened is a stream this closes, whatever the request
         // said about a stream it did not open.
         TransferOptions options =
-                (request.options() == null ? new TransferOptions() : request.options()).withDisposalOptions(null, true);
+                (request.options() == null ? new TransferOptions() : request.options()).withCloseOptions(null, true);
         return runDownload(
                 requestedUsername,
                 remoteFilename,
@@ -936,7 +936,7 @@ final class TransferDomain implements PeerServices {
         int transferToken = request.token() == null ? tokens.nextToken() : request.token();
         validateUploadUniqueness(requestedUsername, remoteFilename, transferToken);
         TransferOptions fileOptions =
-                (request.options() == null ? new TransferOptions() : request.options()).withDisposalOptions(true, null);
+                (request.options() == null ? new TransferOptions() : request.options()).withCloseOptions(true, null);
         long size;
         try {
             size = io.getFileInfo(localFilename).size();

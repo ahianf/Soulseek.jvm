@@ -686,7 +686,7 @@ final class SoulseekEngine implements AutoCloseable {
         if (connection != null) {
             connection.disconnect(reason, exception);
         }
-        distributedConnectionManager.removeAndDisposeAll();
+        distributedConnectionManager.removeAndCloseAll();
         distributedConnectionManager.resetStatus();
         searchDomain.cancelAll();
         server.username(null);
@@ -698,7 +698,7 @@ final class SoulseekEngine implements AutoCloseable {
         if (!closed.compareAndSet(false, true)) {
             return;
         }
-        disconnect("Client is being disposed", new IllegalStateException("The client is closed"));
+        disconnect("Client is being closed", new IllegalStateException("The client is closed"));
         if (listener != null) {
             listener.stop();
         }

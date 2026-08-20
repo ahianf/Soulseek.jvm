@@ -147,7 +147,7 @@ public final class Failures {
      * An {@link IllegalStateException} that skips its stack-trace capture.
      *
      * <p>For a routine outcome that is reported as an exception because that is
-     * the shape of the field carrying it — a connection disposed on purpose, a
+     * the shape of the field carrying it — a connection closed on purpose, a
      * delivery that failed because a peer went away. Such an exception is
      * constructed on the reporting path, so the trace it would capture points
      * at the reporter, not at anything that went wrong; filling it in is pure

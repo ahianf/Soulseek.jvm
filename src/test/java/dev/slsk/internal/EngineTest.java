@@ -618,7 +618,7 @@ class EngineTest {
                 case "hasParent" -> parent != null && parent.ipEndpoint() != null;
                 case "getChildren" -> children;
                 case "getAverageBroadcastLatency" -> averageLatency;
-                case "removeAndDisposeAll" -> {
+                case "removeAndCloseAll" -> {
                     removed++;
                     yield null;
                 }

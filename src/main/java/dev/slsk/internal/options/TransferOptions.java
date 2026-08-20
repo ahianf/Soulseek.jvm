@@ -17,8 +17,8 @@ public record TransferOptions(
         Duration maximumLingerTime,
         boolean seekInputStreamAutomatically,
         boolean seekOutputStreamAutomatically,
-        boolean disposeInputStreamOnCompletion,
-        boolean disposeOutputStreamOnCompletion) {
+        boolean closeInputStreamOnCompletion,
+        boolean closeOutputStreamOnCompletion) {
     /** Default maximum connection linger time. */
     public static final Duration DEFAULT_MAXIMUM_LINGER_TIME = Duration.ofSeconds(3);
 
@@ -51,35 +51,35 @@ public record TransferOptions(
                 .build();
     }
 
-    /** Returns a copy retaining both stream-disposal options. */
-    public TransferOptions withDisposalOptions() {
+    /** Returns this instance, retaining both stream-close options. */
+    public TransferOptions withCloseOptions() {
         return this;
     }
 
-    /** Returns a copy overriding input-stream disposal when non-null. */
-    public TransferOptions withDisposalOptions(Boolean disposeInputStreamOnCompletion) {
-        return withDisposalOptions(disposeInputStreamOnCompletion, null);
+    /** Returns a copy overriding input-stream closing when non-null. */
+    public TransferOptions withCloseOptions(Boolean closeInputStreamOnCompletion) {
+        return withCloseOptions(closeInputStreamOnCompletion, null);
     }
 
-    /** Returns a copy overriding the specified stream-disposal options. */
-    public TransferOptions withDisposalOptions(
-            Boolean disposeInputStreamOnCompletion, Boolean disposeOutputStreamOnCompletion) {
+    /** Returns a copy overriding the specified stream-close options. */
+    public TransferOptions withCloseOptions(
+            Boolean closeInputStreamOnCompletion, Boolean closeOutputStreamOnCompletion) {
         return builder(this)
-                .disposeInputStreamOnCompletion(
-                        disposeInputStreamOnCompletion == null
-                                ? this.disposeInputStreamOnCompletion
-                                : disposeInputStreamOnCompletion)
-                .disposeOutputStreamOnCompletion(
-                        disposeOutputStreamOnCompletion == null
-                                ? this.disposeOutputStreamOnCompletion
-                                : disposeOutputStreamOnCompletion)
+                .closeInputStreamOnCompletion(
+                        closeInputStreamOnCompletion == null
+                                ? this.closeInputStreamOnCompletion
+                                : closeInputStreamOnCompletion)
+                .closeOutputStreamOnCompletion(
+                        closeOutputStreamOnCompletion == null
+                                ? this.closeOutputStreamOnCompletion
+                                : closeOutputStreamOnCompletion)
                 .build();
     }
 
     /** Builder for transfer options. */
     public static final class Builder {
-        private boolean disposeInputStreamOnCompletion = true;
-        private boolean disposeOutputStreamOnCompletion = true;
+        private boolean closeInputStreamOnCompletion = true;
+        private boolean closeOutputStreamOnCompletion = true;
         private Duration maximumLingerTime = DEFAULT_MAXIMUM_LINGER_TIME;
         private Consumer<TransferProgressUpdate> progressUpdated;
         private TransferReporter reporter;
@@ -98,8 +98,8 @@ public record TransferOptions(
             maximumLingerTime = source.maximumLingerTime;
             seekInputStreamAutomatically = source.seekInputStreamAutomatically;
             seekOutputStreamAutomatically = source.seekOutputStreamAutomatically;
-            disposeInputStreamOnCompletion = source.disposeInputStreamOnCompletion;
-            disposeOutputStreamOnCompletion = source.disposeOutputStreamOnCompletion;
+            closeInputStreamOnCompletion = source.closeInputStreamOnCompletion;
+            closeOutputStreamOnCompletion = source.closeOutputStreamOnCompletion;
         }
 
         public Builder stateChanged(Consumer<TransferStateChange> value) {
@@ -137,13 +137,13 @@ public record TransferOptions(
             return this;
         }
 
-        public Builder disposeInputStreamOnCompletion(boolean value) {
-            disposeInputStreamOnCompletion = value;
+        public Builder closeInputStreamOnCompletion(boolean value) {
+            closeInputStreamOnCompletion = value;
             return this;
         }
 
-        public Builder disposeOutputStreamOnCompletion(boolean value) {
-            disposeOutputStreamOnCompletion = value;
+        public Builder closeOutputStreamOnCompletion(boolean value) {
+            closeOutputStreamOnCompletion = value;
             return this;
         }
 
@@ -156,8 +156,8 @@ public record TransferOptions(
                     maximumLingerTime,
                     seekInputStreamAutomatically,
                     seekOutputStreamAutomatically,
-                    disposeInputStreamOnCompletion,
-                    disposeOutputStreamOnCompletion);
+                    closeInputStreamOnCompletion,
+                    closeOutputStreamOnCompletion);
         }
     }
 }

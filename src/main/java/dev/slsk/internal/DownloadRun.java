@@ -501,7 +501,7 @@ final class DownloadRun {
                     connection.close();
                 } catch (Throwable failure) {
                     domain.diagnostic.warning(
-                            "Failed to dispose transfer connection "
+                            "Failed to close transfer connection "
                                     + "for file "
                                     + download.getFilename()
                                     + " from user "
@@ -511,7 +511,7 @@ final class DownloadRun {
                 }
             }
             determineFinalOutputPosition();
-            if (transferOptions.disposeOutputStreamOnCompletion() && outputStream != null) {
+            if (transferOptions.closeOutputStreamOnCompletion() && outputStream != null) {
                 try {
                     try {
                         outputStream.flush();

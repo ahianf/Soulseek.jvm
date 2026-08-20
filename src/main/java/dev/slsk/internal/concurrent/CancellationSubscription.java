@@ -4,7 +4,7 @@
 package dev.slsk.internal.concurrent;
 
 /**
- * A disposable subscription to cancellation.
+ * A closeTracking subscription to cancellation.
  */
 @FunctionalInterface
 public interface CancellationSubscription extends AutoCloseable {

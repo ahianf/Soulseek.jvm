@@ -95,7 +95,7 @@ public interface DistributedConnectionManager extends AutoCloseable, DiagnosticS
 
     void promoteToBranchRoot();
 
-    void removeAndDisposeAll();
+    void removeAndCloseAll();
 
     void resetStatus();
 

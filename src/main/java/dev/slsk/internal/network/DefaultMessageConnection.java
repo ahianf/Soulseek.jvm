@@ -171,7 +171,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
             try {
                 readContinuously();
             } catch (Throwable failure) {
-                if (isDisposed()) {
+                if (isClosed()) {
                     return;
                 }
                 Exception reported = failure instanceof Exception exception
@@ -211,7 +211,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
         Consumer<ConnectionDataEvent> payloadProgress =
                 event -> publishMessageDataRead(codeHolder[0], event.currentLength(), event.totalLength());
         try {
-            while (!isDisposed()) {
+            while (!isClosed()) {
                 ByteArrayOutputStream message = new ByteArrayOutputStream();
                 // Read on this thread. Each of these used to dispatch onto
                 // a fresh virtual thread and block on the future, three

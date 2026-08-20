@@ -38,7 +38,7 @@ final class TcpClientAdapter implements TcpClient {
     private static final byte ERROR = (byte) 0xff;
 
     private final Socket socket;
-    private boolean disposed;
+    private boolean closed;
 
     TcpClientAdapter() {
         this(new Socket());
@@ -108,11 +108,11 @@ final class TcpClientAdapter implements TcpClient {
     @Override
     public void close() throws IOException {
         socket.close();
-        disposed = true;
+        closed = true;
     }
 
-    boolean isDisposed() {
-        return disposed;
+    boolean isClosed() {
+        return closed;
     }
 
     private ProxyEndpoint connectThroughProxyInternal(

@@ -740,23 +740,23 @@ class EngineUploadTest {
     }
 
     @Test
-    void streamDisposalOptionIsHonored() {
+    void streamCloseOptionIsHonored() {
         try (Fixture fixture = new Fixture()) {
-            CloseTrackingInputStream disposable = new CloseTrackingInputStream(new byte[] {1});
+            CloseTrackingInputStream closeTracking = new CloseTrackingInputStream(new byte[] {1});
             fixture.client
                     .transfers()
-                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> disposable)
+                    .upload(UploadRequest.fromStream("alice", "file", 1, offset -> closeTracking)
                             .token(45)
-                            .options(options(20).withDisposalOptions(true))
+                            .options(options(20).withCloseOptions(true))
                             .build());
-            assertTrue(disposable.closed.get());
+            assertTrue(closeTracking.closed.get());
 
             CloseTrackingInputStream retained = new CloseTrackingInputStream(new byte[] {2});
             fixture.client
                     .transfers()
                     .upload(UploadRequest.fromStream("alice", "other", 1, offset -> retained)
                             .token(46)
-                            .options(options(20).withDisposalOptions(false))
+                            .options(options(20).withCloseOptions(false))
                             .build());
             assertFalse(retained.closed.get());
         }

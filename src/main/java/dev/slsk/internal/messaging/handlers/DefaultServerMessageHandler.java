@@ -317,7 +317,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 case DISTRIBUTED_RESET -> {
                     diagnostic.info("Distributed network reset received from the server");
                     publish(ServerMessageEvent.DISTRIBUTED_NETWORK_RESET, null);
-                    distributed.get().removeAndDisposeAll();
+                    distributed.get().removeAndCloseAll();
                     distributed.get().resetStatus();
                 }
                 case CANNOT_CONNECT -> {

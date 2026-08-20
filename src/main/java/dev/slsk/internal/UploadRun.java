@@ -443,7 +443,7 @@ final class UploadRun {
                 }
             }
             currentStreamPosition();
-            if (transferOptions.disposeInputStreamOnCompletion() && inputStream != null) {
+            if (transferOptions.closeInputStreamOnCompletion() && inputStream != null) {
                 try {
                     inputStream.close();
                 } catch (Throwable ignored) {

@@ -40,7 +40,7 @@ public final class SearchInternal implements AutoCloseable {
     private final Set<Settlement<Void>> waiters = new HashSet<>();
 
     private Boolean terminal;
-    private final AtomicBoolean disposed = new AtomicBoolean();
+    private final AtomicBoolean closed = new AtomicBoolean();
     private int fileCount;
     private int lockedFileCount;
     private final SearchOptions options;
@@ -226,13 +226,13 @@ public final class SearchInternal implements AutoCloseable {
                     + " received response with search token "
                     + initialResponse.token());
         }
-        if (disposed.get()) {
+        if (closed.get()) {
             return;
         }
 
         SearchResponse response = initialResponse;
         synchronized (stateLock) {
-            if (disposed.get() || state != SearchPhase.IN_PROGRESS || !responseMeetsOptionCriteria(response)) {
+            if (closed.get() || state != SearchPhase.IN_PROGRESS || !responseMeetsOptionCriteria(response)) {
                 return;
             }
 
@@ -271,7 +271,7 @@ public final class SearchInternal implements AutoCloseable {
             for (Consumer<SearchResponse> callback : List.copyOf(responseCallbacks)) {
                 callback.accept(response);
             }
-            if (disposed.get()) {
+            if (closed.get()) {
                 return;
             }
             resetTimeout();
@@ -339,7 +339,7 @@ public final class SearchInternal implements AutoCloseable {
     /** Releases the timeout task and executor. */
     @Override
     public void close() {
-        if (disposed.compareAndSet(false, true)) {
+        if (closed.compareAndSet(false, true)) {
             stopTimeout();
             if (ownsScheduler) {
                 timerExecutor.close();

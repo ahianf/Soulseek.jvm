@@ -31,7 +31,7 @@ import java.util.concurrent.TimeoutException;
  */
 final class ConnectionCell {
     private final Settlement<MessageConnection> settlement = new Settlement<>();
-    private boolean disposed;
+    private boolean closed;
 
     /**
      * Waits for this cell to settle and returns its connection.
@@ -84,7 +84,7 @@ final class ConnectionCell {
             if (!settlement.succeed(value)) {
                 return;
             }
-            close = disposed;
+            close = closed;
         }
 
         // Claimed while it was still being established. The caller that
@@ -111,7 +111,7 @@ final class ConnectionCell {
     /**
      * Closes this cell's connection, whenever it arrives.
      *
-     * <p>What disposing of a cache does about the attempts still in it. An
+     * <p>What closing a cache does about the attempts still in it. An
      * establishment in flight owns a socket that nobody asked for any more, and
      * it cannot be closed until it exists.
      */
@@ -119,7 +119,7 @@ final class ConnectionCell {
         MessageConnection close;
 
         synchronized (this) {
-            disposed = true;
+            closed = true;
             Settlement.Outcome<MessageConnection> outcome = settlement.outcome();
             close = outcome != null && outcome.failure() == null ? outcome.value() : null;
         }

@@ -95,7 +95,7 @@ class CapabilityExhaustivenessTest {
         Set<String> baseline = baselineMembers();
         Map<String, String> dispositions = dispositions();
 
-        List<String> undisposed = new ArrayList<>();
+        List<String> unclosed = new ArrayList<>();
         for (String member : baseline) {
             // The remove half of a listener pair shares its add's row: the
             // stream replaces registration and Subscription.close replaces
@@ -104,15 +104,15 @@ class CapabilityExhaustivenessTest {
                     ? "add" + member.substring("remove".length())
                     : member;
             if (!dispositions.containsKey(key)) {
-                undisposed.add(member);
+                unclosed.add(member);
             }
         }
 
         assertTrue(
-                undisposed.isEmpty(),
+                unclosed.isEmpty(),
                 "these capabilities have no disposition, so deleting the old client would lose them:"
                         + System.lineSeparator()
-                        + String.join(System.lineSeparator(), undisposed));
+                        + String.join(System.lineSeparator(), unclosed));
     }
 
     @Test

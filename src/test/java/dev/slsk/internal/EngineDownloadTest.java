@@ -764,21 +764,21 @@ class EngineDownloadTest {
     }
 
     @Test
-    void outputDisposalOptionIsHonored() {
+    void outputCloseOptionIsHonored() {
         try (Fixture fixture = new Fixture()) {
             fixture.transfer.data = new byte[] {1};
             fixture.waiter.startRequest =
                     CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 28, "file", 1));
-            CloseTrackingOutputStream disposable = new CloseTrackingOutputStream();
+            CloseTrackingOutputStream closeTracking = new CloseTrackingOutputStream();
             fixture.client
                     .transfers()
-                    .download(DownloadRequest.toStream("alice", "file", () -> disposable)
+                    .download(DownloadRequest.toStream("alice", "file", () -> closeTracking)
                             .size(1L)
                             .token(28)
-                            .options(options().withDisposalOptions(null, true))
+                            .options(options().withCloseOptions(null, true))
                             .build());
-            assertTrue(disposable.flushed.get());
-            assertTrue(disposable.closed.get());
+            assertTrue(closeTracking.flushed.get());
+            assertTrue(closeTracking.closed.get());
 
             fixture.transfer.data = new byte[] {2};
             CloseTrackingOutputStream retained = new CloseTrackingOutputStream();
@@ -787,7 +787,7 @@ class EngineDownloadTest {
                     .download(DownloadRequest.toStream("alice", "other", () -> retained)
                             .size(1L)
                             .token(29)
-                            .options(options().withDisposalOptions(null, false))
+                            .options(options().withCloseOptions(null, false))
                             .build());
             assertFalse(retained.closed.get());
         }
@@ -809,13 +809,13 @@ class EngineDownloadTest {
                     .download(DownloadRequest.toStream("alice", "folder/file", () -> output)
                             .size(1L)
                             .token(32)
-                            .options(options().withDisposalOptions(null, true))
+                            .options(options().withCloseOptions(null, true))
                             .build());
 
             assertInstanceOf(TransferOutcome.Succeeded.class, outcome);
             assertTrue(diagnostic.warnings.stream().anyMatch(warning -> warning.contains("Failed to cancel wait")));
             assertTrue(diagnostic.warnings.stream()
-                    .anyMatch(warning -> warning.contains("Failed to dispose transfer connection")));
+                    .anyMatch(warning -> warning.contains("Failed to close transfer connection")));
             assertTrue(diagnostic.warnings.stream()
                     .anyMatch(warning -> warning.contains("Failed to determine final position")));
             assertTrue(diagnostic.warnings.stream()
@@ -880,7 +880,7 @@ class EngineDownloadTest {
     }
 
     private static TransferOptions options() {
-        return new TransferOptions().withDisposalOptions(null, false);
+        return new TransferOptions().withCloseOptions(null, false);
     }
 
     private static TransferInternal transfer(TransferDirection direction, String username, String filename, int token) {

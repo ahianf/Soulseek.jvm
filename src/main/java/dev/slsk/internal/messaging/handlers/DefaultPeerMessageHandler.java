@@ -579,7 +579,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         try {
             stream.close();
         } catch (IOException ignored) {
-            // Source ignores stream disposal failures.
+            // Source ignores stream close failures.
         }
     }
 

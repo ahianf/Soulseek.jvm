@@ -53,7 +53,7 @@ public interface PeerConnectionManager extends AutoCloseable, DiagnosticSource {
     Connection getTransferConnection(
             String username, InetSocketAddress ipEndpoint, int token, CancellationSignal cancellationSignal);
 
-    void removeAndDisposeAll();
+    void removeAndCloseAll();
 
     boolean tryInvalidateMessageConnectionCache(String username);
 

@@ -97,7 +97,6 @@ public class SocketConnection implements Connection {
     private volatile FrameWrite activeFrameWrite;
 
     private final AtomicBoolean closeStarted = new AtomicBoolean();
-    private volatile boolean disposed;
     private volatile long lastActivityNanos = System.nanoTime();
 
     /**
@@ -529,14 +528,13 @@ public class SocketConnection implements Connection {
         if (!closeStarted.compareAndSet(false, true)) {
             return;
         }
-        // Stackless: disposal is a decision, not a fault, and this runs once
+        // Stackless: closing is a decision, not a fault, and this runs once
         // per connection at the churn rate of the whole peer mesh.
         disconnect(
-                "SocketConnection is being disposed",
-                Failures.stacklessIllegalState(getClass().getSimpleName() + " has been disposed"));
+                "SocketConnection is being closed",
+                Failures.stacklessIllegalState(getClass().getSimpleName() + " has been closed"));
         stopTimers();
         closeTransport();
-        disposed = true;
         if (ownsExecutor) {
             ioExecutor.shutdown();
         }
@@ -619,9 +617,9 @@ public class SocketConnection implements Connection {
         return tcpClient;
     }
 
-    /** Returns whether this connection has been disposed. */
-    protected final boolean isDisposed() {
-        return disposed;
+    /** Returns whether this connection has been closed. */
+    protected final boolean isClosed() {
+        return closeStarted.get();
     }
 
     /** Sets state for derived source ports that adopt a connection. */
@@ -647,7 +645,7 @@ public class SocketConnection implements Connection {
 
         try {
             applyReadTimeout(cancellationSignal);
-            while (!disposed && totalBytesRead < length) {
+            while (!closeStarted.get() && totalBytesRead < length) {
                 cancellationSignal.throwIfCancellationRequested();
                 long bytesRemaining = length - totalBytesRead;
                 int bytesToRead = bytesRemaining >= buffer.length ? buffer.length : (int) bytesRemaining;
@@ -725,11 +723,12 @@ public class SocketConnection implements Connection {
 
             while (totalBytesWritten < length) {
                 cancellationSignal.throwIfCancellationRequested();
-                if (disposed || state == ConnectionState.DISCONNECTING || state == ConnectionState.DISCONNECTED) {
+                boolean closing = closeStarted.get();
+                if (closing || state == ConnectionState.DISCONNECTING || state == ConnectionState.DISCONNECTED) {
                     throw new ConnectionWriteException("Write aborted after " + totalBytesWritten
                             + " bytes written; the connection has "
                             + "been or is being "
-                            + (disposed ? "disposed" : "disconnected"));
+                            + (closing ? "closed" : "disconnected"));
                 }
                 long bytesRemaining = length - totalBytesWritten;
                 int bytesToRead = bytesRemaining >= buffer.length ? buffer.length : (int) bytesRemaining;
@@ -815,9 +814,10 @@ public class SocketConnection implements Connection {
     /** Writes one complete frame without consulting its caller's cancellation. */
     private void writeFrame(byte[] bytes) throws Exception {
         resetInactivityTime();
-        if (disposed || state == ConnectionState.DISCONNECTING || state == ConnectionState.DISCONNECTED) {
+        boolean closing = closeStarted.get();
+        if (closing || state == ConnectionState.DISCONNECTING || state == ConnectionState.DISCONNECTED) {
             throw new ConnectionWriteException("Write aborted before the frame reached the socket; the connection "
-                    + "has been or is being " + (disposed ? "disposed" : "disconnected"));
+                    + "has been or is being " + (closing ? "closed" : "disconnected"));
         }
         stream.write(bytes, 0, bytes.length);
         emitProgress(dataWrittenListeners, null, bytes.length, bytes.length, CancellationSignal.none());

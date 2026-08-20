@@ -283,8 +283,8 @@ class DistributedNetworkTest {
 
         assertTrue(fixture.manager.getChildren().isEmpty());
         assertEquals(1, disconnected.get());
-        // The source retains its provisional disposal callback, so an
-        // established child's disconnect invokes both disposal handlers.
+        // The source retains its provisional close callback, so an
+        // established child's disconnect invokes both close handlers.
         assertEquals(2, child.closeCount);
         assertTrue(fixture.diagnostic.contains("disconnected."));
     }
@@ -458,7 +458,7 @@ class DistributedNetworkTest {
     }
 
     @Test
-    void parentSelectionPrefersLowestBranchAndDisposesOthers() {
+    void parentSelectionPrefersLowestBranchAndClosesOthers() {
         Fixture fixture = fixture();
         InetSocketAddress firstEndpoint = endpoint(42011);
         InetSocketAddress secondEndpoint = endpoint(42012);
@@ -569,7 +569,7 @@ class DistributedNetworkTest {
         fixture.manager.addOrUpdateChildConnection(
                 USERNAME, ConnectionProbe.connection(ENDPOINT).connection());
 
-        fixture.manager.removeAndDisposeAll();
+        fixture.manager.removeAndCloseAll();
 
         assertTrue(fixture.manager.getChildren().isEmpty());
         assertTrue(fixture.manager.getPendingSolicitations().isEmpty());
@@ -679,7 +679,7 @@ class DistributedNetworkTest {
      * <p>Concurrent, and it has to be: the parent fan-out attempts every
      * candidate at once, and each of them registers three waits and completes
      * them from its own thread. A {@code HashMap} here is what made
-     * {@code parentSelectionPrefersLowestBranchAndDisposesOthers} flaky — a
+     * {@code parentSelectionPrefersLowestBranchAndClosesOthers} flaky — a
      * concurrent resize lost a branch-level wait, the candidate that owned it
      * never finished initializing, and the mesh adopted whoever was left.
      */

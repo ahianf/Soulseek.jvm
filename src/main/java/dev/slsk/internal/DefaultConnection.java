@@ -400,7 +400,7 @@ final class DefaultConnection implements Connection {
      *
      * <p>Must run before the engine is closed. Closing the engine disconnects,
      * and a supervisor still listening would read that as a drop and start
-     * retrying against a client that is being disposed.
+     * retrying against a client that is being closed.
      */
     void close() {
         disconnected.set(true);

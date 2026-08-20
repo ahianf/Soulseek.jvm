@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * replaces simply dropped it: whenever both arms succeeded, the loser's
  * connection leaked. Callers still cancel the losing arm once they know who
  * won; that stops an attempt still in flight, which is a different job from
- * disposing of one that finished.
+ * closing one that finished.
  */
 final class FirstSuccess {
 

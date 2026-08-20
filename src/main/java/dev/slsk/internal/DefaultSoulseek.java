@@ -185,7 +185,7 @@ public final class DefaultSoulseek implements Soulseek {
         if (closed.compareAndSet(false, true)) {
             // Reconnects first of all: closing the engine disconnects, and a
             // supervisor still listening would read that as a drop and start
-            // retrying a client that is being disposed.
+            // retrying a client that is being closed.
             connection.close();
             // The queue next: a transfer cancelled by a closing socket looks
             // like a peer failure and would be retried on the way down.

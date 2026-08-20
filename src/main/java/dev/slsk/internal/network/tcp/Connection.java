@@ -201,7 +201,7 @@ public interface Connection extends AutoCloseable {
         write(length, inputStream, governor, null, CancellationSignal.none());
     }
 
-    /** Disposes the connection. */
+    /** Closes the connection. */
     @Override
     void close();
 }

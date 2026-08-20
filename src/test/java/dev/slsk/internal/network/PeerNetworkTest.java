@@ -122,7 +122,7 @@ class PeerNetworkTest {
     }
 
     @Test
-    void incomingMessageSupersedesWithoutDisposingOldConnection() {
+    void incomingMessageSupersedesWithoutClosingOldConnection() {
         Fixture fixture = new Fixture();
         ConnectionProbe first = ConnectionProbe.message(USERNAME, DIRECT_ENDPOINT);
         ConnectionProbe second = ConnectionProbe.message(USERNAME, INDIRECT_ENDPOINT);
@@ -556,15 +556,15 @@ class PeerNetworkTest {
         fixture.manager()
                 .addOrUpdateMessageConnection(
                         USERNAME, ConnectionProbe.connection(DIRECT_ENDPOINT).connection());
-        fixture.manager().removeAndDisposeAll();
+        fixture.manager().removeAndCloseAll();
         assertTrue(fixture.manager().getMessageConnections().isEmpty());
         assertEquals(1, third.closeCount);
     }
 
     /**
-     * removeAndDisposeAll iterates the map weakly, so an insertion racing the
+     * removeAndCloseAll iterates the map weakly, so an insertion racing the
      * sweep — or arriving after close() — used to create a cell nothing would
-     * ever dispose. A shutdown-time place-in-queue poll or upload-failure
+     * ever close. A shutdown-time place-in-queue poll or upload-failure
      * notification could repopulate the cache of a closed network, which is
      * how a live run's last cache census read 1 rather than 0.
      */

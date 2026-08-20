@@ -956,7 +956,7 @@ class ServerMessageHandlerTest {
                     }
                     yield null;
                 }
-                case "removeAndDisposeAll" -> {
+                case "removeAndCloseAll" -> {
                     removed++;
                     yield null;
                 }

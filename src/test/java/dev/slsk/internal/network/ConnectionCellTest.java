@@ -110,13 +110,13 @@ class ConnectionCellTest {
     }
 
     /**
-     * Disposing of the cache has to reach the attempts still in it: an
+     * Closing the cache has to reach the attempts still in it: an
      * establishment in flight owns a socket nobody wants any more, and it
      * cannot be closed until it exists.
      */
     @Test
-    @DisplayName("a disposed cell closes its connection whenever it arrives")
-    void aDisposedCellClosesWhateverSettles() {
+    @DisplayName("a closed cell closes its connection whenever it arrives")
+    void aClosedCellClosesWhateverSettles() {
         ConnectionCell inFlight = new ConnectionCell();
         ConnectionProbe pending = new ConnectionProbe();
         inFlight.closeWhenSettled();
@@ -131,7 +131,7 @@ class ConnectionCellTest {
         established.closeWhenSettled();
         assertEquals(1, connected.closeCount.get());
 
-        // A failed attempt disposed of its own connection on the way out, so
+        // A failed attempt closed its own connection on the way out, so
         // there is nothing left here for the cache to close.
         ConnectionCell failed = new ConnectionCell();
         failed.fail(new ConnectionException("refused"));

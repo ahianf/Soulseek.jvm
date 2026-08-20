@@ -549,7 +549,7 @@ class SearchResponderTest {
         }
 
         @Override
-        public void removeAndDisposeAll() {}
+        public void removeAndCloseAll() {}
 
         @Override
         public boolean tryInvalidateMessageConnectionCache(String username) {

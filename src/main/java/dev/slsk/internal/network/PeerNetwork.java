@@ -101,7 +101,7 @@ public final class PeerNetwork implements PeerConnectionManager {
     private final Consumer<ConnectionDisconnectedEvent> disconnectedListener = this::messageConnectionDisconnected;
     private final Consumer<ConnectionDisconnectedEvent> provisionalDisconnectedListener =
             this::messageConnectionProvisionalDisconnected;
-    private final AtomicBoolean disposed = new AtomicBoolean();
+    private final AtomicBoolean closed = new AtomicBoolean();
 
     /** Creates a peer network with default collaborators. */
     public PeerNetwork(
@@ -546,7 +546,7 @@ public final class PeerNetwork implements PeerConnectionManager {
     }
 
     @Override
-    public void removeAndDisposeAll() {
+    public void removeAndCloseAll() {
         pendingSolicitations.clear();
         pendingInboundIndirectConnections.clear();
         messageConnections.forEach((username, cell) -> {
@@ -563,8 +563,8 @@ public final class PeerNetwork implements PeerConnectionManager {
 
     @Override
     public void close() {
-        if (disposed.compareAndSet(false, true)) {
-            removeAndDisposeAll();
+        if (closed.compareAndSet(false, true)) {
+            removeAndCloseAll();
             if (ownsScheduler) {
                 scheduler.close();
             }
@@ -933,14 +933,14 @@ public final class PeerNetwork implements PeerConnectionManager {
      * Refuses a cache insertion once the network is closed, undoing the claim
      * it made.
      *
-     * <p>{@code removeAndDisposeAll} iterates the map weakly, so a cell put in
-     * racing the sweep — or after it — was never disposed and never removed: a
+     * <p>{@code removeAndCloseAll} iterates the map weakly, so a cell put in
+     * racing the sweep — or after it — was never closed and never removed: a
      * shutdown-time place-in-queue poll or upload-failure notification could
      * repopulate the cache of a closed network, which is how a live run's last
      * cache census read 1 rather than 0.
      */
     private void guardOpen(String username, ConnectionCell entry) {
-        if (disposed.get()) {
+        if (closed.get()) {
             messageConnections.remove(username, entry);
             entry.closeWhenSettled();
             throw new ConnectionException("The peer network is closed");

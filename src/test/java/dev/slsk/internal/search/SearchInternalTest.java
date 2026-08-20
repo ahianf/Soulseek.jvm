@@ -93,7 +93,7 @@ class SearchInternalTest {
     }
 
     @Test
-    void rejectsMismatchedTokenBeforeDisposedCheck() {
+    void rejectsMismatchedTokenBeforeClosedCheck() {
         SearchInternal search = search(42, new SearchOptions());
         search.close();
 

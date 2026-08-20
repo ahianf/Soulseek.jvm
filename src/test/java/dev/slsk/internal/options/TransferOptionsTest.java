@@ -38,8 +38,8 @@ class TransferOptionsTest {
                 .maximumLingerTime(Duration.ofMillis(42))
                 .seekInputStreamAutomatically(false)
                 .seekOutputStreamAutomatically(false)
-                .disposeInputStreamOnCompletion(false)
-                .disposeOutputStreamOnCompletion(false)
+                .closeInputStreamOnCompletion(false)
+                .closeOutputStreamOnCompletion(false)
                 .build();
 
         assertSame(stateChanged, options.stateChanged());
@@ -49,8 +49,8 @@ class TransferOptionsTest {
         assertEquals(Duration.ofMillis(42), options.maximumLingerTime());
         assertFalse(options.seekInputStreamAutomatically());
         assertFalse(options.seekOutputStreamAutomatically());
-        assertFalse(options.disposeInputStreamOnCompletion());
-        assertFalse(options.disposeOutputStreamOnCompletion());
+        assertFalse(options.closeInputStreamOnCompletion());
+        assertFalse(options.closeOutputStreamOnCompletion());
     }
 
     @Test
@@ -60,8 +60,8 @@ class TransferOptionsTest {
 
         assertTrue(options.seekInputStreamAutomatically());
         assertTrue(options.seekOutputStreamAutomatically());
-        assertTrue(options.disposeInputStreamOnCompletion());
-        assertTrue(options.disposeOutputStreamOnCompletion());
+        assertTrue(options.closeInputStreamOnCompletion());
+        assertTrue(options.closeOutputStreamOnCompletion());
         assertEquals(TransferOptions.DEFAULT_MAXIMUM_LINGER_TIME, options.maximumLingerTime());
         assertNull(options.stateChanged());
         assertNull(options.progressUpdated());
@@ -81,7 +81,7 @@ class TransferOptionsTest {
                 .reporter(reporter)
                 .maximumLingerTime(Duration.ofMillis(42))
                 .seekInputStreamAutomatically(false)
-                .disposeInputStreamOnCompletion(false)
+                .closeInputStreamOnCompletion(false)
                 .build();
 
         TransferOptions copy = original.withAdditionalStateChanged(null);
@@ -92,8 +92,8 @@ class TransferOptionsTest {
         assertEquals(Duration.ofMillis(42), copy.maximumLingerTime());
         assertFalse(copy.seekInputStreamAutomatically());
         assertTrue(copy.seekOutputStreamAutomatically());
-        assertFalse(copy.disposeInputStreamOnCompletion());
-        assertTrue(copy.disposeOutputStreamOnCompletion());
+        assertFalse(copy.closeInputStreamOnCompletion());
+        assertTrue(copy.closeOutputStreamOnCompletion());
         assertNotSame(original.stateChanged(), copy.stateChanged());
         copy.stateChanged().accept(new TransferStateChange(TransferPhase.NONE, null));
     }
@@ -133,34 +133,34 @@ class TransferOptionsTest {
     }
 
     @Test
-    @DisplayName("WithDisposalOptions retains null overrides")
-    void withDisposalOptionsRetainsNullOverrides() {
+    @DisplayName("WithCloseOptions retains null overrides")
+    void withCloseOptionsRetainsNullOverrides() {
         TransferOptions original = TransferOptions.builder()
                 .maximumLingerTime(Duration.ofMillis(42))
                 .seekInputStreamAutomatically(false)
                 .seekOutputStreamAutomatically(false)
-                .disposeInputStreamOnCompletion(false)
+                .closeInputStreamOnCompletion(false)
                 .build();
 
-        TransferOptions copy = original.withDisposalOptions();
+        TransferOptions copy = original.withCloseOptions();
 
-        assertFalse(copy.disposeInputStreamOnCompletion());
-        assertTrue(copy.disposeOutputStreamOnCompletion());
+        assertFalse(copy.closeInputStreamOnCompletion());
+        assertTrue(copy.closeOutputStreamOnCompletion());
         assertEquals(Duration.ofMillis(42), copy.maximumLingerTime());
     }
 
     @Test
-    @DisplayName("WithDisposalOptions applies specified overrides")
-    void withDisposalOptionsAppliesSpecifiedOverrides() {
+    @DisplayName("WithCloseOptions applies specified overrides")
+    void withCloseOptionsAppliesSpecifiedOverrides() {
         TransferOptions original = new TransferOptions();
 
-        TransferOptions copy = original.withDisposalOptions(false, false);
-        TransferOptions outputOnly = original.withDisposalOptions(null, false);
+        TransferOptions copy = original.withCloseOptions(false, false);
+        TransferOptions outputOnly = original.withCloseOptions(null, false);
 
-        assertFalse(copy.disposeInputStreamOnCompletion());
-        assertFalse(copy.disposeOutputStreamOnCompletion());
-        assertTrue(outputOnly.disposeInputStreamOnCompletion());
-        assertFalse(outputOnly.disposeOutputStreamOnCompletion());
+        assertFalse(copy.closeInputStreamOnCompletion());
+        assertFalse(copy.closeOutputStreamOnCompletion());
+        assertTrue(outputOnly.closeInputStreamOnCompletion());
+        assertFalse(outputOnly.closeOutputStreamOnCompletion());
     }
 
     @Test
