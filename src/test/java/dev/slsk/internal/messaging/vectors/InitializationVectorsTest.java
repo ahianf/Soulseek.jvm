@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>3 vectors: 2 byte-exact (Tier A, encode) and
  * 1 framing-only (Tier C, decode). Tier assignment and the reason for
- * every demotion are recorded in tools/wire-vectors/bindings.json.</p>
+ * every demotion are recorded in tools/wire-vectors/bindings.json.
  */
 class InitializationVectorsTest {
     private static byte[] hex(String value) {

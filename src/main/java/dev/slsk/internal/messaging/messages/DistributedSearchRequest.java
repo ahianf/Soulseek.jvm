@@ -18,7 +18,7 @@ public final class DistributedSearchRequest implements IncomingMessage, Outgoing
      * code point of ASCII character 1 (49)" and that peers "reject messages
      * that use any other value" — Nicotine+ drops them in
      * {@code slskproto.py}. The C# source wrote a zero here under the comment
-     * "nobody knows what this is", which predates that documentation.</p>
+     * "nobody knows what this is", which predates that documentation.
      */
     private static final int IDENTIFIER = 49;
 

@@ -27,7 +27,7 @@ import dev.slsk.internal.messaging.messages.*;
  *
  * <p>27 vectors: 10 byte-exact (Tier A, encode) and
  * 17 framing-only (Tier C, decode). Tier assignment and the reason for
- * every demotion are recorded in tools/wire-vectors/bindings.json.</p>
+ * every demotion are recorded in tools/wire-vectors/bindings.json.
  */
 class PeerVectorsTest {
     private static byte[] hex(String value) {
