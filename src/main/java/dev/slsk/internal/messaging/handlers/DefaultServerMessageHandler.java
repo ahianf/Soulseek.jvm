@@ -91,6 +91,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -527,9 +528,8 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 + response.getUsername() + " ("
                 + response.getIpEndpoint() + ") for remote token "
                 + response.getToken());
-        boolean expected = !downloads.get().isEmpty()
-                && downloads.get().values().stream()
-                        .anyMatch(transfer -> Objects.equals(transfer.getUsername(), response.getUsername()));
+        boolean expected = downloads.get().values().stream()
+                .anyMatch(transfer -> Objects.equals(transfer.getUsername(), response.getUsername()));
         if (!expected) {
             throw new SoulseekClientException("Unexpected transfer request from "
                     + response.getUsername() + " ("
@@ -542,12 +542,11 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     }
 
     private void correlateTransferConnection(ConnectToPeerResponse response, TransferConnectionResult result) {
-        TransferInternal download = downloads.get().values().stream()
+        Optional<TransferInternal> matchingDownload = downloads.get().values().stream()
                 .filter(transfer -> Objects.equals(transfer.getRemoteToken(), result.remoteToken())
                         && Objects.equals(transfer.getUsername(), response.getUsername()))
-                .findFirst()
-                .orElse(null);
-        if (download == null) {
+                .findFirst();
+        if (matchingDownload.isEmpty()) {
             diagnostic.debug("Transfer ConnectToPeer request from "
                     + response.getUsername() + " ("
                     + response.getIpEndpoint() + ") for remote token "
@@ -556,6 +555,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
             result.connection().disconnect("Unknown transfer");
             return;
         }
+        TransferInternal download = matchingDownload.get();
         Connection connection = result.connection();
         diagnostic.debug("Solicited inbound transfer connection to "
                 + download.getUsername() + " ("
