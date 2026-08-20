@@ -44,7 +44,7 @@ final class LiveIntegrationSettings {
      * @return the options
      */
     static SoulseekClientOptions options() {
-        return new SoulseekClientOptions(true, null, listenPort());
+        return SoulseekClientOptions.builder().listenPort(listenPort()).build();
     }
 
     private static int listenPort() {

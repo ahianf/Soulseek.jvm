@@ -28,7 +28,7 @@ class EngineLiveIT {
         try (SoulseekEngine client =
                 new SoulseekEngine(credentials.minorVersion(), LiveIntegrationSettings.options())) {
             assertDoesNotThrow(() -> client.connect(credentials.username(), credentials.password()));
-            assertEquals(SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN), client.getState());
+            assertEquals(SoulseekClientState.LOGGED_IN, client.getState());
         }
     }
 
@@ -47,14 +47,10 @@ class EngineLiveIT {
             assertDoesNotThrow(() -> client.connect(credentials.username(), credentials.password()));
 
             assertEquals(4, events.size());
-            assertEquals(SoulseekClientState.CONNECTING, events.get(0).getState());
-            assertEquals(SoulseekClientState.CONNECTED, events.get(1).getState());
-            assertEquals(
-                    SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGING_IN),
-                    events.get(2).getState());
-            assertEquals(
-                    SoulseekClientState.CONNECTED.or(SoulseekClientState.LOGGED_IN),
-                    events.get(3).getState());
+            assertEquals(SoulseekClientState.CONNECTING, events.get(0).state());
+            assertEquals(SoulseekClientState.CONNECTED, events.get(1).state());
+            assertEquals(SoulseekClientState.LOGGING_IN, events.get(2).state());
+            assertEquals(SoulseekClientState.LOGGED_IN, events.get(3).state());
         }
     }
 
@@ -88,7 +84,7 @@ class EngineLiveIT {
             assertDoesNotThrow(() -> client.disconnect());
 
             assertEquals(SoulseekClientState.DISCONNECTED, client.getState());
-            assertEquals(SoulseekClientState.DISCONNECTED, event.get().getState());
+            assertEquals(SoulseekClientState.DISCONNECTED, event.get().state());
         }
     }
 
@@ -117,31 +113,9 @@ class EngineLiveIT {
     }
 
     private static SoulseekClientOptions optionsStartingAtMaximumToken() {
-        return new SoulseekClientOptions(
-                true,
-                null,
-                SoulseekClientOptions.DEFAULT_LISTEN_PORT,
-                true,
-                true,
-                SoulseekClientOptions.DEFAULT_DISTRIBUTED_CHILD_LIMIT,
-                SoulseekClientOptions.DEFAULT_MAXIMUM_CONCURRENT_SEARCHES,
-                SoulseekClientOptions.DEFAULT_MAXIMUM_CONCURRENT_UPLOADS,
-                Integer.MAX_VALUE,
-                Integer.MAX_VALUE,
-                Integer.MAX_VALUE,
-                true,
-                SoulseekClientOptions.DEFAULT_MESSAGE_TIMEOUT,
-                true,
-                true,
-                false,
-                DiagnosticSeverity.INFO,
-                Integer.MAX_VALUE,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
+        return SoulseekClientOptions.builder()
+                .minimumDiagnosticLevel(DiagnosticSeverity.INFO)
+                .startingToken(Integer.MAX_VALUE)
+                .build();
     }
 }
