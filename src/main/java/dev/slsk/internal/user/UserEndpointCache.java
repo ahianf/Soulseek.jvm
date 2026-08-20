@@ -4,8 +4,8 @@
 
 package dev.slsk.internal.user;
 
-import dev.slsk.internal.common.CacheLookupResult;
 import java.net.InetSocketAddress;
+import java.util.Optional;
 
 /** A cache for user endpoints. */
 public interface UserEndpointCache {
@@ -15,7 +15,7 @@ public interface UserEndpointCache {
      * @param username the username
      * @return a result containing the cached endpoint when present
      */
-    CacheLookupResult<InetSocketAddress> lookup(String username);
+    Optional<InetSocketAddress> lookup(String username);
 
     /**
      * Adds or updates the endpoint cached for a username.

@@ -9,7 +9,6 @@ import dev.slsk.exceptions.UserEndpointCacheException;
 import dev.slsk.exceptions.UserEndpointException;
 import dev.slsk.exceptions.UserNotFoundException;
 import dev.slsk.exceptions.UserOfflineException;
-import dev.slsk.internal.common.CacheLookupResult;
 import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Failures;
@@ -50,6 +49,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
@@ -342,10 +342,10 @@ final class UserDirectory {
             return retrieveUserEndpoint(requestedUsername, token, null);
         }
 
-        CacheLookupResult<InetSocketAddress> cached = tryCacheGet(cache, requestedUsername);
-        if (cached.found()) {
-            context.getDiagnostic().debug("Endpoint cache HIT for " + requestedUsername + ": " + cached.value());
-            return cached.value();
+        Optional<InetSocketAddress> cached = tryCacheGet(cache, requestedUsername);
+        if (cached.isPresent()) {
+            context.getDiagnostic().debug("Endpoint cache HIT for " + requestedUsername + ": " + cached.get());
+            return cached.get();
         }
 
         // The source serializes same-user lookups only when a cache is configured, so the first
@@ -372,10 +372,10 @@ final class UserDirectory {
         }
 
         try {
-            CacheLookupResult<InetSocketAddress> second = tryCacheGet(cache, requestedUsername);
-            if (second.found()) {
-                context.getDiagnostic().debug("Endpoint cache HIT for " + requestedUsername + ": " + second.value());
-                return second.value();
+            Optional<InetSocketAddress> second = tryCacheGet(cache, requestedUsername);
+            if (second.isPresent()) {
+                context.getDiagnostic().debug("Endpoint cache HIT for " + requestedUsername + ": " + second.get());
+                return second.get();
             }
             return retrieveUserEndpoint(requestedUsername, token, cache);
         } finally {
@@ -478,7 +478,7 @@ final class UserDirectory {
                 "Failed to retrieve endpoint for user " + requestedUsername + ": " + Failures.message(cause), cause);
     }
 
-    static CacheLookupResult<InetSocketAddress> tryCacheGet(UserEndpointCache cache, String requestedUsername) {
+    static Optional<InetSocketAddress> tryCacheGet(UserEndpointCache cache, String requestedUsername) {
         try {
             return cache.lookup(requestedUsername);
         } catch (Throwable failure) {

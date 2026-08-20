@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.search;
 
-import dev.slsk.internal.common.CacheLookupResult;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 /** A cache for undelivered search responses. */
@@ -38,7 +38,7 @@ public interface SearchResponseCache {
      * @param responseToken the delivery-response token
      * @return the lookup result
      */
-    CacheLookupResult<SearchResponseCacheRecord> lookup(int responseToken);
+    Optional<SearchResponseCacheRecord> lookup(int responseToken);
 
     /**
      * Attempts to remove a cached response.
@@ -46,5 +46,5 @@ public interface SearchResponseCache {
      * @param responseToken the delivery-response token
      * @return the removal result
      */
-    CacheLookupResult<SearchResponseCacheRecord> remove(int responseToken);
+    Optional<SearchResponseCacheRecord> remove(int responseToken);
 }

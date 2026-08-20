@@ -3,11 +3,11 @@
 
 package dev.slsk.internal.user;
 
-import dev.slsk.internal.common.CacheLookupResult;
 import java.net.InetSocketAddress;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -81,15 +81,15 @@ public final class BoundedUserEndpointCache implements UserEndpointCache {
     }
 
     @Override
-    public CacheLookupResult<InetSocketAddress> lookup(String username) {
+    public Optional<InetSocketAddress> lookup(String username) {
         Entry entry = entries.get(username);
         if (entry == null) {
-            return CacheLookupResult.notFound();
+            return Optional.empty();
         }
         if (entry.expiresAtMillis() <= System.currentTimeMillis()) {
             entries.remove(username, entry);
-            return CacheLookupResult.notFound();
+            return Optional.empty();
         }
-        return CacheLookupResult.found(entry.endpoint());
+        return Optional.of(entry.endpoint());
     }
 }

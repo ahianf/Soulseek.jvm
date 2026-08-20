@@ -12,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.internal.common.CacheLookupResult;
 import dev.slsk.internal.diagnostics.DiagnosticLevel;
 import dev.slsk.internal.search.SearchResponseCache;
 import dev.slsk.internal.search.SearchResponseCacheRecord;
@@ -263,8 +262,8 @@ class SoulseekClientOptionsTest {
 
     private static final class TestUserCache implements UserEndpointCache {
         @Override
-        public CacheLookupResult<java.net.InetSocketAddress> lookup(String username) {
-            return CacheLookupResult.notFound();
+        public java.util.Optional<java.net.InetSocketAddress> lookup(String username) {
+            return java.util.Optional.empty();
         }
 
         @Override
@@ -276,13 +275,13 @@ class SoulseekClientOptionsTest {
         public void put(int responseToken, SearchResponseCacheRecord response) {}
 
         @Override
-        public CacheLookupResult<SearchResponseCacheRecord> lookup(int responseToken) {
-            return CacheLookupResult.notFound();
+        public java.util.Optional<SearchResponseCacheRecord> lookup(int responseToken) {
+            return java.util.Optional.empty();
         }
 
         @Override
-        public CacheLookupResult<SearchResponseCacheRecord> remove(int responseToken) {
-            return CacheLookupResult.notFound();
+        public java.util.Optional<SearchResponseCacheRecord> remove(int responseToken) {
+            return java.util.Optional.empty();
         }
     }
 }

@@ -13,7 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.Subscription;
-import dev.slsk.internal.common.CacheLookupResult;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.DefaultWaiter;
 import dev.slsk.internal.common.Outcomes;
@@ -173,7 +172,7 @@ class ListenerHandlerTest {
     @Test
     void cachedSearchPierceAddsConnectionThenResponds() throws Exception {
         TestCache cache = new TestCache();
-        cache.lookup = CacheLookupResult.found(new SearchResponseCacheRecord("alice", 1, "query", null));
+        cache.lookup = java.util.Optional.of(new SearchResponseCacheRecord("alice", 1, "query", null));
         try (Fixture fixture = fixture(cache)) {
             ConnectionProbe connection = ConnectionProbe.message(new PierceFirewall(11).toByteArray());
 
@@ -428,21 +427,21 @@ class ListenerHandlerTest {
     }
 
     private static final class TestCache implements SearchResponseCache {
-        private CacheLookupResult<SearchResponseCacheRecord> lookup = CacheLookupResult.notFound();
+        private java.util.Optional<SearchResponseCacheRecord> lookup = java.util.Optional.empty();
         private int lastLookupToken;
 
         @Override
         public void put(int responseToken, SearchResponseCacheRecord response) {}
 
         @Override
-        public CacheLookupResult<SearchResponseCacheRecord> lookup(int responseToken) {
+        public java.util.Optional<SearchResponseCacheRecord> lookup(int responseToken) {
             lastLookupToken = responseToken;
             return lookup;
         }
 
         @Override
-        public CacheLookupResult<SearchResponseCacheRecord> remove(int responseToken) {
-            return CacheLookupResult.notFound();
+        public java.util.Optional<SearchResponseCacheRecord> remove(int responseToken) {
+            return java.util.Optional.empty();
         }
     }
 

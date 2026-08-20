@@ -13,7 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.Subscription;
-import dev.slsk.internal.common.CacheLookupResult;
 import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.concurrent.CancellationSignal;
@@ -96,7 +95,7 @@ class SearchResponderTest {
 
         TestCache cache = new TestCache();
         SearchResponseCacheRecord record = new SearchResponseCacheRecord("alice", 2, "q", RESPONSE);
-        cache.removed = CacheLookupResult.found(record);
+        cache.removed = java.util.Optional.of(record);
         Fixture fixture = fixture(cache);
         AtomicReference<SearchRequestResponseEvent> failed = new AtomicReference<>();
         fixture.responder.<SearchRequestResponseEvent>subscribe(
@@ -229,7 +228,7 @@ class SearchResponderTest {
     @Test
     void cachedResponseWritesAndRaisesDelivered() {
         TestCache cache = new TestCache();
-        cache.removed = CacheLookupResult.found(new SearchResponseCacheRecord("alice", 3, "query", RESPONSE));
+        cache.removed = java.util.Optional.of(new SearchResponseCacheRecord("alice", 3, "query", RESPONSE));
         Fixture fixture = fixture(cache);
         AtomicReference<byte[]> written = new AtomicReference<>();
         fixture.manager.connection = messageConnection(written, CompletableFuture.completedFuture(null));
@@ -246,7 +245,7 @@ class SearchResponderTest {
     @Test
     void cachedDeliveryFailureRaisesFailureEvent() {
         TestCache cache = new TestCache();
-        cache.removed = CacheLookupResult.found(new SearchResponseCacheRecord("alice", 3, "query", RESPONSE));
+        cache.removed = java.util.Optional.of(new SearchResponseCacheRecord("alice", 3, "query", RESPONSE));
         Fixture fixture = fixture(cache);
         RuntimeException failure = new RuntimeException("write");
         fixture.manager.connection =
@@ -400,7 +399,7 @@ class SearchResponderTest {
     }
 
     private static final class TestCache implements SearchResponseCache {
-        private CacheLookupResult<SearchResponseCacheRecord> removed = CacheLookupResult.notFound();
+        private java.util.Optional<SearchResponseCacheRecord> removed = java.util.Optional.empty();
         private RuntimeException throwOnRemove;
         private RuntimeException throwOnAdd;
         private int lastRemovedToken;
@@ -425,12 +424,12 @@ class SearchResponderTest {
         }
 
         @Override
-        public CacheLookupResult<SearchResponseCacheRecord> lookup(int responseToken) {
-            return CacheLookupResult.notFound();
+        public java.util.Optional<SearchResponseCacheRecord> lookup(int responseToken) {
+            return java.util.Optional.empty();
         }
 
         @Override
-        public CacheLookupResult<SearchResponseCacheRecord> remove(int responseToken) {
+        public java.util.Optional<SearchResponseCacheRecord> remove(int responseToken) {
             if (throwOnRemove != null) {
                 throw throwOnRemove;
             }

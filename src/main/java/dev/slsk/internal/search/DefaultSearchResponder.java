@@ -5,7 +5,6 @@
 package dev.slsk.internal.search;
 
 import dev.slsk.Subscription;
-import dev.slsk.internal.common.CacheLookupResult;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.concurrent.CancellationSignal;
@@ -21,6 +20,7 @@ import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.share.Catalogs;
 import java.net.InetSocketAddress;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -132,9 +132,9 @@ public final class DefaultSearchResponder implements SearchResponder {
             return false;
         }
         try {
-            CacheLookupResult<SearchResponseCacheRecord> result = cache.remove(responseToken);
-            if (result.found()) {
-                SearchResponseCacheRecord record = result.value();
+            Optional<SearchResponseCacheRecord> result = cache.remove(responseToken);
+            if (result.isPresent()) {
+                SearchResponseCacheRecord record = result.get();
                 diagnostic.debug("Discarded cached search response " + responseToken
                         + " to " + record.username() + " for query '"
                         + record.query() + "' with token " + record.token());
@@ -183,7 +183,7 @@ public final class DefaultSearchResponder implements SearchResponder {
             return false;
         }
 
-        CacheLookupResult<SearchResponseCacheRecord> lookup;
+        Optional<SearchResponseCacheRecord> lookup;
         try {
             lookup = cache.remove(responseToken);
         } catch (Throwable failure) {
@@ -192,11 +192,11 @@ public final class DefaultSearchResponder implements SearchResponder {
                     failure);
             return false;
         }
-        if (!lookup.found()) {
+        if (lookup.isEmpty()) {
             return false;
         }
 
-        SearchResponseCacheRecord record = lookup.value();
+        SearchResponseCacheRecord record = lookup.get();
         try {
             MessageConnection connection = peers.get().getCachedMessageConnection(record.username());
             connection.write(record.searchResponse().toByteArray());

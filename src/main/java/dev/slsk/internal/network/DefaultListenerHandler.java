@@ -6,7 +6,6 @@ package dev.slsk.internal.network;
 
 import dev.slsk.Subscription;
 import dev.slsk.exceptions.ConnectionException;
-import dev.slsk.internal.common.CacheLookupResult;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.WaitKey;
@@ -213,10 +212,10 @@ public final class DefaultListenerHandler implements ListenerHandler {
         }
 
         if (options.get().searchResponseCache() != null) {
-            CacheLookupResult<SearchResponseCacheRecord> lookup =
+            Optional<SearchResponseCacheRecord> lookup =
                     options.get().searchResponseCache().lookup(token);
-            if (lookup.found()) {
-                SearchResponseCacheRecord record = lookup.value();
+            if (lookup.isPresent()) {
+                SearchResponseCacheRecord record = lookup.get();
                 diagnostic.debug("PierceFirewall matching pending search response "
                         + "received from " + record.username() + " ("
                         + connection.getIpEndpoint().getAddress().getHostAddress()

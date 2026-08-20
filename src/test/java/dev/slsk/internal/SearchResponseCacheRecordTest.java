@@ -4,26 +4,12 @@
 
 package dev.slsk.internal;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.internal.common.CacheLookupResult;
 import dev.slsk.internal.search.SearchResponseCacheRecord;
 import org.junit.jupiter.api.Test;
 
-class CacheContractTest {
-    @Test
-    void lookupResultDistinguishesAbsentFromPresentNull() {
-        CacheLookupResult<String> absent = CacheLookupResult.notFound();
-        CacheLookupResult<String> presentNull = CacheLookupResult.found(null);
-
-        assertFalse(absent.found());
-        assertNull(absent.value());
-        assertTrue(presentNull.found());
-        assertNull(presentNull.value());
-    }
-
+class SearchResponseCacheRecordTest {
     @Test
     void responseCacheRecordPreservesNullableReferences() {
         SearchResponseCacheRecord record = new SearchResponseCacheRecord(null, -1, null, null);

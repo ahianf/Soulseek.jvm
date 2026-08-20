@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.internal.common.CacheLookupResult;
 import java.net.InetSocketAddress;
 import org.junit.jupiter.api.Test;
 
@@ -23,14 +22,14 @@ class BoundedUserEndpointCacheTest {
 
         cache.put("alice", endpoint(2234));
 
-        CacheLookupResult<InetSocketAddress> result = cache.lookup("alice");
-        assertTrue(result.found());
-        assertEquals(endpoint(2234), result.value());
+        java.util.Optional<InetSocketAddress> result = cache.lookup("alice");
+        assertTrue(result.isPresent());
+        assertEquals(endpoint(2234), result.get());
     }
 
     @Test
     void missesOnAUsernameItNeverSaw() {
-        assertFalse(new BoundedUserEndpointCache().lookup("nobody").found());
+        assertFalse(new BoundedUserEndpointCache().lookup("nobody").isPresent());
     }
 
     @Test
@@ -40,7 +39,7 @@ class BoundedUserEndpointCacheTest {
         cache.put("alice", endpoint(2234));
         cache.put("alice", endpoint(50300));
 
-        assertEquals(endpoint(50300), cache.lookup("alice").value());
+        assertEquals(endpoint(50300), cache.lookup("alice").get());
     }
 
     @Test
@@ -49,7 +48,7 @@ class BoundedUserEndpointCacheTest {
 
         cache.put("alice", endpoint(2234));
 
-        assertFalse(cache.lookup("alice").found());
+        assertFalse(cache.lookup("alice").isPresent());
     }
 
     @Test
@@ -61,7 +60,7 @@ class BoundedUserEndpointCacheTest {
 
         // A second lookup can only miss for the same reason if the first left
         // the entry behind; this pins the removal, not just the miss.
-        assertFalse(cache.lookup("alice").found());
+        assertFalse(cache.lookup("alice").isPresent());
     }
 
     @Test
@@ -74,7 +73,7 @@ class BoundedUserEndpointCacheTest {
 
         int live = 0;
         for (int index = 0; index < 25; index++) {
-            if (cache.lookup("peer" + index).found()) {
+            if (cache.lookup("peer" + index).isPresent()) {
                 live++;
             }
         }
@@ -89,6 +88,6 @@ class BoundedUserEndpointCacheTest {
         cache.put("second", endpoint(2));
         cache.put("third", endpoint(3));
 
-        assertTrue(cache.lookup("third").found(), "the entry just written was evicted");
+        assertTrue(cache.lookup("third").isPresent(), "the entry just written was evicted");
     }
 }

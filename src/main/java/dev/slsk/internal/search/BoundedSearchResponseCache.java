@@ -3,11 +3,11 @@
 
 package dev.slsk.internal.search;
 
-import dev.slsk.internal.common.CacheLookupResult;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
@@ -104,24 +104,24 @@ public final class BoundedSearchResponseCache implements SearchResponseCache {
     }
 
     @Override
-    public CacheLookupResult<SearchResponseCacheRecord> lookup(int responseToken) {
+    public Optional<SearchResponseCacheRecord> lookup(int responseToken) {
         Entry entry = entries.get(responseToken);
         if (entry == null) {
-            return CacheLookupResult.notFound();
+            return Optional.empty();
         }
         if (entry.expiresAtMillis() <= System.currentTimeMillis()) {
             if (entries.remove(responseToken, entry)) {
                 notifyEvicted(entry.record());
             }
-            return CacheLookupResult.notFound();
+            return Optional.empty();
         }
-        return CacheLookupResult.found(entry.record());
+        return Optional.of(entry.record());
     }
 
     @Override
-    public CacheLookupResult<SearchResponseCacheRecord> remove(int responseToken) {
+    public Optional<SearchResponseCacheRecord> remove(int responseToken) {
         Entry entry = entries.remove(responseToken);
-        return entry == null ? CacheLookupResult.notFound() : CacheLookupResult.found(entry.record());
+        return entry == null ? Optional.empty() : Optional.of(entry.record());
     }
 
     private void notifyEvicted(SearchResponseCacheRecord record) {

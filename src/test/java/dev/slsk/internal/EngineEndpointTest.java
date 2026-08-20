@@ -13,7 +13,6 @@ import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.UserEndpointCacheException;
 import dev.slsk.exceptions.UserEndpointException;
 import dev.slsk.exceptions.UserOfflineException;
-import dev.slsk.internal.common.CacheLookupResult;
 import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
@@ -113,14 +112,14 @@ class EngineEndpointTest {
     @Test
     void cacheHitReturnsWithoutNetworkAndMissUpdatesCache() throws Exception {
         CacheProbe cache = new CacheProbe();
-        cache.value = CacheLookupResult.found(ENDPOINT);
+        cache.value = java.util.Optional.of(ENDPOINT);
         Fixture fixture = new Fixture(cache);
 
         assertEquals(ENDPOINT, fixture.client.users().getUserEndpoint("alice"));
         assertEquals(0, fixture.connection.writes.get());
         assertEquals(0, fixture.waiter.registrations.get());
 
-        cache.value = CacheLookupResult.notFound();
+        cache.value = java.util.Optional.empty();
         InetSocketAddress second = new InetSocketAddress(InetAddress.getLoopbackAddress(), 46002);
         fixture.waiter.result = CompletableFuture.completedFuture(new UserAddressResponse("bob", second));
         assertEquals(second, fixture.client.users().getUserEndpoint("bob"));
@@ -142,7 +141,7 @@ class EngineEndpointTest {
         readFixture.close();
 
         CacheProbe updateCache = new CacheProbe();
-        updateCache.value = CacheLookupResult.notFound();
+        updateCache.value = java.util.Optional.empty();
         RuntimeException updateFailure = new RuntimeException("update failed");
         updateCache.updateFailure = updateFailure;
         Fixture updateFixture = new Fixture(updateCache);
@@ -187,7 +186,7 @@ class EngineEndpointTest {
     @Test
     void serializesSameUserLookupsBehindTheCacheAndSweepsIdleSemaphores() throws Exception {
         CacheProbe cache = new CacheProbe();
-        cache.value = CacheLookupResult.notFound();
+        cache.value = java.util.Optional.empty();
         Fixture fixture = new Fixture(cache);
         fixture.waiter.result = CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT));
 
@@ -195,7 +194,7 @@ class EngineEndpointTest {
         assertEquals(1, fixture.connection.writes.get());
 
         // The second caller reads the value the first stored rather than repeating the request.
-        cache.value = CacheLookupResult.found(ENDPOINT);
+        cache.value = java.util.Optional.of(ENDPOINT);
         assertEquals(ENDPOINT, fixture.client.users().getUserEndpoint("alice"));
         assertEquals(1, fixture.connection.writes.get());
 
@@ -400,14 +399,14 @@ class EngineEndpointTest {
     }
 
     private static final class CacheProbe implements UserEndpointCache {
-        private CacheLookupResult<InetSocketAddress> value = CacheLookupResult.notFound();
+        private java.util.Optional<InetSocketAddress> value = java.util.Optional.empty();
         private RuntimeException readFailure;
         private RuntimeException updateFailure;
         private String updatedUsername;
         private InetSocketAddress updatedEndpoint;
 
         @Override
-        public CacheLookupResult<InetSocketAddress> lookup(String username) {
+        public java.util.Optional<InetSocketAddress> lookup(String username) {
             if (readFailure != null) {
                 throw readFailure;
             }
@@ -421,7 +420,7 @@ class EngineEndpointTest {
             }
             updatedUsername = username;
             updatedEndpoint = endpoint;
-            value = CacheLookupResult.found(endpoint);
+            value = java.util.Optional.of(endpoint);
         }
     }
     /** Resolves on a spawned thread; an interrupt here is a test failure. */

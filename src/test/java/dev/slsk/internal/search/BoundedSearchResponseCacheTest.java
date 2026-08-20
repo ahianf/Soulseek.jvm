@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.internal.common.CacheLookupResult;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -30,9 +29,9 @@ class BoundedSearchResponseCacheTest {
 
         cache.put(1, record("alice"));
 
-        CacheLookupResult<SearchResponseCacheRecord> result = cache.lookup(1);
-        assertTrue(result.found());
-        assertEquals("alice", result.value().username());
+        java.util.Optional<SearchResponseCacheRecord> result = cache.lookup(1);
+        assertTrue(result.isPresent());
+        assertEquals("alice", result.get().username());
     }
 
     @Test
@@ -40,8 +39,8 @@ class BoundedSearchResponseCacheTest {
         BoundedSearchResponseCache cache = new BoundedSearchResponseCache();
         cache.put(1, record("alice"));
 
-        assertEquals("alice", cache.remove(1).value().username());
-        assertFalse(cache.lookup(1).found());
+        assertEquals("alice", cache.remove(1).get().username());
+        assertFalse(cache.lookup(1).isPresent());
     }
 
     @Test
@@ -50,7 +49,7 @@ class BoundedSearchResponseCacheTest {
         List<String> evicted = evictionsOf(cache);
 
         cache.put(1, record("alice"));
-        assertFalse(cache.lookup(1).found());
+        assertFalse(cache.lookup(1).isPresent());
 
         assertEquals(List.of("alice"), evicted);
     }
@@ -76,7 +75,7 @@ class BoundedSearchResponseCacheTest {
         cache.put(3, record("carol"));
 
         assertEquals(1, evicted.size(), "expected exactly one eviction, got " + evicted);
-        assertTrue(cache.lookup(3).found(), "the record just written was evicted");
+        assertTrue(cache.lookup(3).isPresent(), "the record just written was evicted");
     }
 
     @Test
@@ -102,6 +101,6 @@ class BoundedSearchResponseCacheTest {
         cache.put(1, record("alice"));
         cache.put(2, record("bob"));
 
-        assertFalse(cache.lookup(1).found());
+        assertFalse(cache.lookup(1).isPresent());
     }
 }
