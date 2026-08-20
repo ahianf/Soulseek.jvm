@@ -10,7 +10,7 @@ import java.util.OptionalInt;
 /**
  * Where a transfer is right now.
  *
- * <p>This replaces a bit-flag set transliterated from a C# {@code [Flags]} enum,
+ * <p>This replaces the former internal bit-flag set,
  * in which a state was a combination like {@code COMPLETED | REJECTED} and a
  * consumer had to mask to find out what was true. Two problems came with that.
  * Illegal combinations were representable — nothing stopped {@code QUEUED |

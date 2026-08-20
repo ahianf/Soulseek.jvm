@@ -379,8 +379,8 @@ class PeerMessageHandlerTest {
 
     /**
      * The admission guards a throwing policy itself; this is the upload
-     * failing to start after the policy said yes. The C# source answers any
-     * enqueue failure with a generic denial — generic because the real message
+     * failing to start after the policy said yes. It answers any enqueue
+     * failure with a generic denial — generic because the real message
      * can carry filesystem details a stranger should not see — where silence
      * would leave the peer hanging until its own timeout.
      */

@@ -41,7 +41,7 @@ class UserModelsTest {
     }
 
     @Test
-    @DisplayName("UserData rejects null status because the C# enum is non-nullable")
+    @DisplayName("UserData rejects a null status")
     void userDataRejectsNullStatus() {
         assertThrows(NullPointerException.class, () -> new UserData("alice", null, 1, 2, 3, 4, "CL"));
     }
@@ -115,7 +115,7 @@ class UserModelsTest {
     }
 
     @Test
-    @DisplayName("UserStatusSnapshot rejects null presence because the C# enum is non-nullable")
+    @DisplayName("UserStatusSnapshot rejects a null presence")
     void userStatusRejectsNullPresence() {
         assertThrows(NullPointerException.class, () -> new UserStatusSnapshot("alice", null, false));
     }

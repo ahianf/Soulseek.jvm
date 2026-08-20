@@ -18,7 +18,7 @@ public final class TransferRequest implements IncomingMessage, OutgoingMessage {
     private final long fileSize;
     private final int token;
 
-    /** Creates a transfer request with the source default file size. */
+    /** Creates a transfer request with an unspecified file size. */
     public TransferRequest(TransferDirection direction, int token, String filename) {
         this(direction, token, filename, 0);
     }

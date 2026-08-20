@@ -10,9 +10,8 @@ import java.util.Objects;
 /**
  * The completed search context and collected responses.
  *
- * <p>This record is the named Java equivalent of the C# method's
- * {@code (SearchStateSnapshot SearchStateSnapshot, IReadOnlyCollection<SearchResponseMessage> Responses)}
- * tuple.</p>
+ * <p>The named result keeps the completed snapshot and the responses accepted
+ * for it together without exposing mutable collection state.
  *
  * @param search the completed search snapshot
  * @param responses the accepted search responses

@@ -7,7 +7,7 @@ package dev.slsk.internal.network;
 import java.net.InetSocketAddress;
 
 /**
- * The named Java representation of the C# distributed-peer tuple.
+ * A distributed peer and the endpoint through which it is reachable.
  *
  * @param username the peer username
  * @param ipEndpoint the peer endpoint

@@ -863,8 +863,7 @@ final class TransferDomain implements PeerServices {
                             // write at end-of-file whatever a seek said. If
                             // the local file is not exactly startOffset bytes,
                             // the resumed bytes would land at the wrong place
-                            // with no error. The C# source fails loudly on the
-                            // same mismatch; so does this.
+                            // with no error, so a mismatch must fail loudly.
                             long existing = localFileSize(localFilename);
                             if (existing != startOffset) {
                                 throw new IOException("Cannot resume " + localFilename

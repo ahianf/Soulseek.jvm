@@ -149,8 +149,8 @@ public final class MessageBuilder {
     /**
      * Writes a length-prefixed string.
      *
-     * <p>The requested encoding is strict. Encoding failure falls up to
-     * replacement-tolerant UTF-8, matching the source.
+     * <p>The requested encoding is strict. Encoding failure falls back to
+     * replacement-tolerant UTF-8 so one malformed value does not abort a frame.
      */
     public MessageBuilder writeString(String value, CharacterEncoding encoding) {
         CharacterEncoding requested = encoding == null ? CharacterEncoding.getUtf8() : encoding;

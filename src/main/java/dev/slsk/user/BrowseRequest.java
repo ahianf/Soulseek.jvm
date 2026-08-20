@@ -15,8 +15,8 @@ import java.util.function.Consumer;
  * worth saying about it and only the first is required. The old surface
  * expressed the same options as {@code browse(user)}, {@code browse(user,
  * options)}, {@code browse(user, signal)} and {@code browse(user, options,
- * signal)} — the progressive-overload shape a C# optional parameter turns into,
- * which stops scaling at the fifth thing worth configuring.
+ * signal)}. The request value keeps that configuration composable as more
+ * browse behavior is added.
  *
  * @param user whose share to read
  * @param timeout how long to wait for the peer to start responding

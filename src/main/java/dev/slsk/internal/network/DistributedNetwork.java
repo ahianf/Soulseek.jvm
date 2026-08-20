@@ -567,7 +567,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         try {
             // Written on this thread rather than dispatched and joined. This
             // method already runs on a virtual thread of its own, one per
-            // child, so going through writeAsync bought a second thread per
+            // child, so dispatching the write bought a second thread per
             // child per message whose only purpose was to be waited on.
             connection.write(bytes, cancellationSignal);
         } catch (Exception failure) {

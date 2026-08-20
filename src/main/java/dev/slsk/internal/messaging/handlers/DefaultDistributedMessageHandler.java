@@ -115,7 +115,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
         try {
             code = new MessageReader<>(message, MessageCode.Distributed.class).readCode();
         } catch (IllegalArgumentException unknown) {
-            // A newer client's message, not a broken connection; C# ignores it.
+            // A newer client's message, not a broken connection.
             diagnostic.debug(() -> "Ignored an unknown distributed child message from " + connection.getUsername()
                     + ": " + unknown.getMessage());
             return;
@@ -174,9 +174,8 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
         try {
             code = new MessageReader<>(message, MessageCode.Distributed.class).readCode();
         } catch (IllegalArgumentException unknown) {
-            // A newer client's message, not a broken connection; C# ignores
-            // it, and this is the parent's read loop — every inbound search
-            // travels on it.
+            // A newer client's message, not a broken connection. This is the
+            // parent's read loop — every inbound search travels on it.
             diagnostic.debug(() -> "Ignored an unknown distributed message from " + connection.getUsername() + ": "
                     + unknown.getMessage());
             return;

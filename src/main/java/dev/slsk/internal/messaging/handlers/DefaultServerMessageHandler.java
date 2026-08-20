@@ -219,10 +219,8 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
             code = new MessageReader<>(message, MessageCode.Server.class).readCode();
         } catch (IllegalArgumentException unknown) {
             // A code outside the table is a protocol addition or a newer
-            // server, not a broken connection. The C# source parses it
-            // tolerantly and lands in the switch's default; throwing here
-            // instead killed the read loop — for this connection, the whole
-            // client.
+            // server, not a broken connection. Throwing here would kill the
+            // read loop — for this connection, the whole client.
             diagnostic.debug(() -> "Ignored an unknown server message: " + unknown.getMessage());
             return;
         }

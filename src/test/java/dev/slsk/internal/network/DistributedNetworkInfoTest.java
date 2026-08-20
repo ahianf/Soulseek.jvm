@@ -70,7 +70,7 @@ class DistributedNetworkInfoTest {
     }
 
     @Test
-    @DisplayName("Rejects null tuple values that C# value tuples cannot represent")
+    @DisplayName("Rejects null distributed peers")
     void rejectsNullTupleValues() {
         assertThrows(
                 NullPointerException.class,

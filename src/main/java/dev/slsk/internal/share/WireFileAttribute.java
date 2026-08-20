@@ -56,8 +56,8 @@ public enum WireFileAttribute {
      * Returns the type represented by a protocol value, if this client knows
      * it.
      *
-     * <p>Peers run clients newer than this one, and the C# source reads their
-     * attribute types tolerantly. Throwing instead meant one nonstandard
+     * <p>Peers run clients newer than this one. Throwing on an unknown type
+     * meant one nonstandard
      * attribute discarded the entire search or browse response it arrived in.
      *
      * @param value the protocol value

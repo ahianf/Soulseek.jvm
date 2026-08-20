@@ -39,7 +39,7 @@ class DistributedEventTest {
     }
 
     @Test
-    @DisplayName("DistributedParentEvent preserves C# null equality")
+    @DisplayName("DistributedParentEvent compares absent parents safely")
     void parentPreservesNullEquality() {
         DistributedParentEvent root = new DistributedParentEvent(null, null, 0, null);
         DistributedParentEvent child = new DistributedParentEvent(null, null, 1, null);

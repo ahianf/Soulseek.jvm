@@ -47,7 +47,7 @@ class DiagnosticMessageTest {
     }
 
     @Test
-    @DisplayName("Rejects null level because the C# enum is non-nullable")
+    @DisplayName("Rejects a null diagnostic level")
     void rejectsNullLevel() {
         assertThrows(
                 NullPointerException.class,

@@ -7,8 +7,8 @@ package dev.slsk.internal.common;
 /**
  * Assembly-internal application constants.
  *
- * <p>This class is public only so Java implementation subpackages can share
- * the C# assembly-internal values. Its package is not exported by the module.
+ * <p>This class is public only so implementation subpackages can share these
+ * values. Its package is not exported by the module.
  */
 public final class Constants {
     /** Soulseek network major version. */

@@ -7,8 +7,9 @@ package dev.slsk.exceptions;
 /**
  * Represents errors that occur during Soulseek client operations.
  *
- * <p>This is unchecked because C# exceptions do not participate in method
- * signatures and a checked base type would change every Java call site.</p>
+ * <p>This is unchecked because it is the common base for both programming
+ * errors and operational failures; forcing every subtype into every method
+ * signature would obscure the recoverable exceptions those methods declare.
  */
 public class SoulseekClientException extends RuntimeException {
     private static final long serialVersionUID = 1L;

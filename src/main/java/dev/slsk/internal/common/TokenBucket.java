@@ -307,7 +307,7 @@ public final class TokenBucket implements AutoCloseable {
     /**
      * Adds the tokens that elapsed time has earned since the last accrual.
      *
-     * <p>The source refilled to full capacity once per interval, which makes
+     * <p>Refilling to full capacity once per interval makes
      * the transmit rate bursty: a whole interval's allowance becomes available
      * at one instant and is consumed as fast as the socket will take it. Tokens
      * are added in proportion to elapsed time instead, so a peer sees a steady

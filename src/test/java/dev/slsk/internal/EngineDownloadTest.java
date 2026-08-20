@@ -737,8 +737,8 @@ class EngineDownloadTest {
     /**
      * Appending ignores position — O_APPEND puts every write at end-of-file —
      * so resuming a file whose length is not the requested offset would land
-     * the bytes at the wrong place with no error. The C# source fails loudly
-     * on the same mismatch.
+     * the bytes at the wrong place with no error, so a mismatch must fail
+     * loudly.
      */
     @Test
     @DisplayName("a resume whose offset does not match the local file fails loudly, not silently")

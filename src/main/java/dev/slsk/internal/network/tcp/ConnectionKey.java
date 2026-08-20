@@ -30,17 +30,13 @@ public final class ConnectionKey {
         return username;
     }
 
-    /**
-     * Compares keys by hash, preserving the source implementation.
-     */
+    /** Compares keys by their normalized legacy hash. */
     @Override
     public boolean equals(Object other) {
         return other instanceof ConnectionKey key && hashCode() == key.hashCode();
     }
 
-    /**
-     * Hashes the source's colon-joined nullable fields.
-     */
+    /** Hashes the colon-joined nullable identity fields. */
     @Override
     public int hashCode() {
         return sourceString().hashCode();

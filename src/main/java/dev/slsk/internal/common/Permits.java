@@ -12,8 +12,7 @@ import java.util.concurrent.Semaphore;
  * Acquiring a semaphore permit without burning a core waiting for it.
  *
  * <p>This used to spin {@code tryAcquire(50, MILLISECONDS)} on a virtual thread
- * so that it could notice cancellation between attempts, emulating C#'s
- * natively cancellable {@code SemaphoreSlim.WaitAsync(token)}. A hundred queued
+ * so that it could notice cancellation between attempts. A hundred queued
  * transfers meant two thousand pointless wakeups a second.
  *
  * <p>It then blocked on a virtual thread of its own and completed a future the

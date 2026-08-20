@@ -279,8 +279,8 @@ class MessagePrimitivesTest {
     }
 
     /**
-     * Peers run clients newer than this one, and the C# source reads their
-     * attribute types tolerantly. Throwing instead meant one nonstandard
+     * Peers run clients newer than this one. Throwing on an unknown attribute
+     * type meant one nonstandard
      * attribute discarded the whole search or browse response it arrived in.
      */
     @Test

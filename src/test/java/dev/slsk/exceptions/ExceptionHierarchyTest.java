@@ -42,7 +42,7 @@ class ExceptionHierarchyTest {
 
     @ParameterizedTest(name = "{0} extends {1}")
     @MethodSource("inheritanceRelationships")
-    @DisplayName("Exceptions preserve the C# inheritance tree")
+    @DisplayName("Exceptions preserve the shipped inheritance tree")
     void exceptionsPreserveInheritance(
             Class<? extends SoulseekClientException> child, Class<? extends SoulseekClientException> parent) {
         assertTrue(parent.isAssignableFrom(child));

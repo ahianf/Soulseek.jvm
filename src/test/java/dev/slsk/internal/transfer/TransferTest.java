@@ -17,8 +17,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * One constructor now. The seven shorter ones were C# default-parameter
- * expansion with no production caller — this test class was their only user —
+ * One constructor now. The seven shorter ones were default-parameter expansion
+ * with no production caller — this test class was their only user —
  * and they went the way of the transfer overloads before them.
  */
 class TransferTest {

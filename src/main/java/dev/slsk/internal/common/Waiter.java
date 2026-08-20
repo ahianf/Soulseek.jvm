@@ -12,8 +12,8 @@ import java.time.Duration;
  *
  * <p>Registration is separate from waiting, and the ten {@code waitAsync}
  * overloads that used to be here are three: a wait is a key, an expected type,
- * a deadline and a cancellation signal, and the rest were C# default parameters
- * kept as Java source.
+ * a deadline and a cancellation signal. Defaults are expressed by the two
+ * delegating methods rather than a combinatorial overload set.
  */
 public interface Waiter extends AutoCloseable {
     Duration getDefaultTimeout();

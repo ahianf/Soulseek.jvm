@@ -179,9 +179,8 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         try {
             code = new MessageReader<>(message, MessageCode.Peer.class).readCode();
         } catch (IllegalArgumentException unknown) {
-            // A newer peer client's message, not a broken connection. C#
-            // parses tolerantly and ignores it in the switch default; throwing
-            // here killed this peer's read loop.
+            // A newer peer client's message, not a broken connection. Throwing
+            // here would kill this peer's read loop.
             diagnostic.debug(() ->
                     "Ignored an unknown peer message from " + connection.getUsername() + ": " + unknown.getMessage());
             return;
@@ -545,8 +544,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
             } catch (RuntimeException failure) {
                 // The admission catches a throwing policy itself; this is the
                 // upload failing to start after the policy said yes. The peer
-                // still deserves an answer, and — as the C# source does for
-                // any enqueue failure — a generic one: the real message can
+                // still deserves an answer, and a generic one: the real message can
                 // carry filesystem details a stranger should not see. Silence
                 // would leave the peer hanging until its own timeout.
                 diagnostic.warning(

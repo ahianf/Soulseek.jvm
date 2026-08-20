@@ -32,9 +32,7 @@ public final class DefaultWaiter implements Waiter {
     private final Map<WaitKey, ArrayDeque<PendingWait<?>>> waits = new HashMap<>();
     private boolean closed;
 
-    /**
-     * Creates a waiter with the source default timeout.
-     */
+    /** Creates a waiter with the default five-second timeout. */
     public DefaultWaiter() {
         this(DEFAULT_TIMEOUT);
     }
@@ -91,8 +89,8 @@ public final class DefaultWaiter implements Waiter {
      * {@code PLACE_IN_QUEUE_RESPONSE(user, file)} can hold two callers' waits
      * at once, and dequeuing the head handed caller B's cancellation to caller
      * A: A got a spurious {@code CancellationException} and B stayed waiting,
-     * to later be settled with A's response. The C# waiter completes the
-     * specific wait; so does this.
+     * to later be settled with A's response. Cancellation therefore targets
+     * the registered wait rather than its queue head.
      */
     private void cancel(WaitKey key, PendingWait<?> wait) {
         if (wait.trySettle(null, new CancellationException("The wait was cancelled"))) {

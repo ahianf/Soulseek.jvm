@@ -21,8 +21,7 @@ class TransfersOutcomeTest {
     /**
      * A size mismatch is ABORTED, and the peer's advertised size cannot
      * change between attempts — so retrying re-requests the same file to fail
-     * the same way, peer-visibly, up to the attempt cap. The C# source
-     * classifies the mismatch as terminal; the mapping used to fall through
+     * the same way, peer-visibly, up to the attempt cap. The mapping used to fall through
      * to the generic retryable failure.
      */
     @Test

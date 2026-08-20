@@ -740,8 +740,7 @@ class ServerMessageHandlerTest {
 
     /**
      * A frame whose code is outside the table is a protocol addition or a
-     * newer client, and the C# source ignores it in the switch default. It
-     * used to throw out of the prologue, before the try — and for the server
+     * newer client. It used to throw out of the prologue, before the try — and for the server
      * connection, killing the read loop kills the whole client.
      */
     @Test

@@ -34,8 +34,8 @@ public final class EmbeddedMessage implements IncomingMessage {
     /**
      * Returns the original embedded framed-message array.
      *
-     * <p>The source exposes its original mutable array, so this port does
-     * likewise.</p>
+     * <p>The array is not copied; callers receive the framed payload owned by
+     * this message.
      */
     public byte[] getDistributedMessage() {
         return distributedMessage;

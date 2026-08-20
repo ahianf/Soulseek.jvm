@@ -21,7 +21,7 @@ class WireFileAttributeTest {
     }
 
     @Test
-    @DisplayName("Rejects null because the C# enum value is non-nullable")
+    @DisplayName("Rejects a null wire attribute type")
     void rejectsNullType() {
         assertThrows(NullPointerException.class, () -> new FileAttribute(null, 1));
     }

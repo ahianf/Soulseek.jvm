@@ -160,7 +160,7 @@ class SearchTargetTest {
     }
 
     @Test
-    @DisplayName("Rejects null type because the C# enum is non-nullable")
+    @DisplayName("Rejects a null search target type")
     void rejectsNullType() {
         assertThrows(NullPointerException.class, () -> new SearchTarget(null));
     }
