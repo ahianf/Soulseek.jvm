@@ -93,7 +93,7 @@ final class TcpClientAdapter implements TcpClient {
             throw new IllegalArgumentException("password length must not exceed 255: " + password.length());
         }
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
-        return connectThroughProxyInternal(
+        return performProxyHandshake(
                 proxyAddress, proxyPort, destinationAddress, destinationPort, token, username, password);
     }
 
@@ -115,7 +115,7 @@ final class TcpClientAdapter implements TcpClient {
         return closed;
     }
 
-    private ProxyEndpoint connectThroughProxyInternal(
+    private ProxyEndpoint performProxyHandshake(
             InetAddress proxyAddress,
             int proxyPort,
             InetAddress destinationAddress,

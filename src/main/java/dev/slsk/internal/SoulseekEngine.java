@@ -605,7 +605,7 @@ final class SoulseekEngine implements AutoCloseable {
             }
         }
 
-        connectInternal(
+        connectOperation(
                 requestedAddress,
                 new InetSocketAddress(serverAddress, requestedPort),
                 requestedUsername,
@@ -657,7 +657,22 @@ final class SoulseekEngine implements AutoCloseable {
                 }
             }
         }
-        return reconfigureOptionsInternal(patch, CommonUtils.token(cancellationSignal));
+        CancellationSignal token = CommonUtils.token(cancellationSignal);
+        try {
+            // Never held on the failing path, so nothing to unlock.
+            Locks.acquire(stateLock, token);
+        } catch (InterruptedException interrupted) {
+            throw new InterruptedOperationException("The reconfiguration invocation was interrupted", interrupted);
+        } catch (RuntimeException failure) {
+            throw reportReconfigureFailure(failure);
+        }
+        try {
+            return performReconfigureOptions(patch, token);
+        } catch (Throwable failure) {
+            throw reportReconfigureFailure(failure);
+        } finally {
+            stateLock.unlock();
+        }
     }
 
     /** Disconnects with the default reason. */
@@ -934,7 +949,7 @@ final class SoulseekEngine implements AutoCloseable {
         }
     }
 
-    private void connectInternal(
+    private void connectOperation(
             String requestedAddress,
             InetSocketAddress requestedEndpoint,
             String requestedUsername,
@@ -1140,25 +1155,6 @@ final class SoulseekEngine implements AutoCloseable {
             diagnostic.warning("Server reconnect required for options " + "to fully take effect");
         }
         return reconnectRequired;
-    }
-
-    private boolean reconfigureOptionsInternal(
-            SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
-        try {
-            // Never held on the failing path, so nothing to unlock.
-            Locks.acquire(stateLock, cancellationSignal);
-        } catch (InterruptedException interrupted) {
-            throw new InterruptedOperationException("The reconfiguration invocation was interrupted", interrupted);
-        } catch (RuntimeException failure) {
-            throw reportReconfigureFailure(failure);
-        }
-        try {
-            return performReconfigureOptions(patch, cancellationSignal);
-        } catch (Throwable failure) {
-            throw reportReconfigureFailure(failure);
-        } finally {
-            stateLock.unlock();
-        }
     }
 
     /** Classifies a reconfiguration failure, which is never rolled back. */

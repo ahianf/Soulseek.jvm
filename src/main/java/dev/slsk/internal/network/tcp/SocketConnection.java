@@ -438,7 +438,7 @@ public class SocketConnection implements Connection {
         validateRead(length);
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        readInternal(length, output, SocketConnection::grantAll, null, scopedProgress, token);
+        readTo(length, output, SocketConnection::grantAll, null, scopedProgress, token);
         return output.toByteArray();
     }
 
@@ -457,7 +457,7 @@ public class SocketConnection implements Connection {
         validateConnected();
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         ConnectionGovernor effectiveGovernor = governor == null ? SocketConnection::grantAll : governor;
-        readInternal(length, outputStream, effectiveGovernor, reporter, null, token);
+        readTo(length, outputStream, effectiveGovernor, reporter, null, token);
     }
 
     @Override
@@ -518,7 +518,7 @@ public class SocketConnection implements Connection {
         validateConnected();
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         ConnectionGovernor effectiveGovernor = governor == null ? SocketConnection::grantAll : governor;
-        writeStreamingInternal(length, inputStream, effectiveGovernor, reporter, token);
+        writeStreaming(length, inputStream, effectiveGovernor, reporter, token);
     }
 
     @Override
@@ -627,7 +627,7 @@ public class SocketConnection implements Connection {
         state = value;
     }
 
-    private void readInternal(
+    private void readTo(
             long length,
             OutputStream outputStream,
             ConnectionGovernor governor,
@@ -709,7 +709,7 @@ public class SocketConnection implements Connection {
      * connection traffic must use {@link #enqueueFrameWrite(FrameWrite,
      * CancellationSignal)} instead.
      */
-    private void writeStreamingInternal(
+    private void writeStreaming(
             long length,
             InputStream inputStream,
             ConnectionGovernor governor,

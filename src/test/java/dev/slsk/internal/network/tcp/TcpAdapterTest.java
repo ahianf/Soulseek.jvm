@@ -157,7 +157,7 @@ class TcpAdapterTest {
                 stream.write(new byte[] {4, 5}, 0, 2);
 
                 // The stream no longer observes cancellation itself: it blocks,
-                // and SocketConnection.readInternal owns the cancellation loop
+                // and SocketConnection.readTo owns the cancellation loop
                 // using the read timeout as its check point.
                 stream.setReadTimeout(50);
             }

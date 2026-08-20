@@ -153,7 +153,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
      * <p>This loop used to be started with a helper that attached
      * {@code exceptionally(e -> null)} and dropped the throwable on the floor —
      * on the single most important loop in the library. Most failures already
-     * disconnect on the way out of {@code readInternal}, but anything else, a
+     * disconnect on the way out of {@code readTo}, but anything else, a
      * throwing listener included, vanished without trace.
      *
      * <p>Disconnecting is the right channel rather than a log line: it is what

@@ -310,7 +310,7 @@ class ConnectionTest {
         // in the stream any more: a blocking read reports a lapsed deadline as
         // SocketTimeoutException, which the read loop treats as its cancellation
         // check point rather than a failure. The governor is the remaining
-        // source, and readInternal must still pass its failure through
+        // source, and readTo must still pass its failure through
         // untranslated rather than wrapping it as a read error — the rate
         // limiter throwing is not the socket failing.
         assertGovernorFailurePassesThrough(
