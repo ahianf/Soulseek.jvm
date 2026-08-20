@@ -17,14 +17,15 @@ class SearchTest {
     void instantiatesWithExpectedData() {
         SearchQuery query = new SearchQuery("foo bar");
         SearchScope scope = SearchScope.getNetwork();
-        SearchState state = SearchState.COMPLETED.or(SearchState.TIMED_OUT);
+        SearchPhase state = SearchPhase.COMPLETED;
 
-        Search search = new Search(query, scope, 42, state, 3, 4, 5);
+        Search search = new Search(query, scope, 42, state, SearchTermination.TIMED_OUT, 3, 4, 5);
 
         assertEquals("foo bar", search.query().searchText());
         assertEquals(SearchScopeType.NETWORK, search.scope().type());
         assertEquals(42, search.token());
         assertEquals(state, search.state());
+        assertEquals(SearchTermination.TIMED_OUT, search.termination());
         assertEquals(3, search.responseCount());
         assertEquals(4, search.fileCount());
         assertEquals(5, search.lockedFileCount());
@@ -33,15 +34,20 @@ class SearchTest {
     @Test
     @DisplayName("Preserves nullable query and scope references")
     void preservesNullableQueryAndScopeReferences() {
-        Search search = new Search(null, null, 0, SearchState.NONE, 0, 0, 0);
+        Search search = new Search(null, null, 0, SearchPhase.NONE, null, 0, 0, 0);
 
         assertNull(search.query());
         assertNull(search.scope());
     }
 
     @Test
-    @DisplayName("Rejects null state because the C# flag enum is non-nullable")
+    @DisplayName("Rejects null state and inconsistent termination data")
     void rejectsNullState() {
-        assertThrows(NullPointerException.class, () -> new Search(null, null, 0, null, 0, 0, 0));
+        assertThrows(NullPointerException.class, () -> new Search(null, null, 0, null, null, 0, 0, 0));
+        assertThrows(
+                IllegalArgumentException.class, () -> new Search(null, null, 0, SearchPhase.COMPLETED, null, 0, 0, 0));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new Search(null, null, 0, SearchPhase.IN_PROGRESS, SearchTermination.TIMED_OUT, 0, 0, 0));
     }
 }

@@ -20,11 +20,12 @@ import dev.slsk.internal.options.SearchResponseReceived;
 import dev.slsk.internal.options.SearchStateChange;
 import dev.slsk.internal.search.Search;
 import dev.slsk.internal.search.SearchInternal;
+import dev.slsk.internal.search.SearchPhase;
 import dev.slsk.internal.search.SearchQuery;
 import dev.slsk.internal.search.SearchResponse;
 import dev.slsk.internal.search.SearchResult;
 import dev.slsk.internal.search.SearchScope;
-import dev.slsk.internal.search.SearchState;
+import dev.slsk.internal.search.SearchTermination;
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -221,8 +222,8 @@ final class SearchDomain {
                 invocation.token(),
                 invocation.options(),
                 context.getScheduler());
-        SearchState[] previousState = {SearchState.NONE};
-        Consumer<SearchState> updateState = newState -> {
+        SearchPhase[] previousState = {SearchPhase.NONE};
+        Consumer<SearchPhase> updateState = newState -> {
             search.setState(newState);
             Search snapshot = search.toSearch();
             SearchStateChangedEvent eventData = new SearchStateChangedEvent(previousState[0], snapshot);
@@ -243,13 +244,13 @@ final class SearchDomain {
                 throw new DuplicateTokenException(
                         "An active search with token " + search.getToken() + " is already in progress");
             }
-            updateState.accept(SearchState.REQUESTED);
+            updateState.accept(SearchPhase.REQUESTED);
             context.getDiagnostic()
                     .debug("Attempting to acquire search semaphore for search '"
                             + invocation.query().searchText() + "' ("
                             + searchSemaphore.availablePermits()
                             + " available)");
-            updateState.accept(SearchState.QUEUED);
+            updateState.accept(SearchPhase.QUEUED);
             acquireSearchPermit(cancellationSignal);
             context.getDiagnostic()
                     .debug("Acquired search semaphore for search '"
@@ -269,9 +270,9 @@ final class SearchDomain {
                     context.publishEvent(Kind.SEARCH_RESPONSE_RECEIVED, eventData);
                 });
                 server.writeBytes(message, cancellationSignal);
-                updateState.accept(SearchState.IN_PROGRESS);
+                updateState.accept(SearchPhase.IN_PROGRESS);
                 search.waitForCompletion(cancellationSignal);
-                updateState.accept(SearchState.COMPLETED.or(search.getState()));
+                updateState.accept(search.getState());
                 context.getDiagnostic()
                         .debug("Search for '" + invocation.query().searchText() + "' completed: " + search.getState());
                 return search.toSearch();
@@ -286,12 +287,12 @@ final class SearchDomain {
             }
         } catch (Throwable cause) {
             if (cause instanceof CancellationException) {
-                search.complete(SearchState.CANCELLED);
-                updateState.accept(SearchState.COMPLETED.or(SearchState.CANCELLED));
+                search.complete(SearchTermination.CANCELLED);
+                updateState.accept(SearchPhase.COMPLETED);
                 throw Failures.surface(cause);
             }
-            search.complete(SearchState.ERRORED);
-            updateState.accept(SearchState.COMPLETED.or(SearchState.ERRORED));
+            search.complete(SearchTermination.ERRORED);
+            updateState.accept(SearchPhase.COMPLETED);
             if (cause instanceof TimeoutException || cause instanceof DuplicateTokenException) {
                 throw Failures.surface(cause);
             }

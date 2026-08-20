@@ -5,12 +5,10 @@ package dev.slsk.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.internal.connection.SoulseekClientState;
-import dev.slsk.internal.search.SearchState;
 import dev.slsk.internal.transfer.TransferState;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,19 +24,6 @@ class FlagStatesTest {
         assertTrue(SoulseekClientState.CONNECTED.isConnected());
         assertFalse(SoulseekClientState.CONNECTED.isLoggedIn());
         assertFalse(SoulseekClientState.CONNECTING.isConnected());
-    }
-
-    @Test
-    @DisplayName("Combines and tests search state flags")
-    void combinesAndTestsSearchStateFlags() {
-        SearchState state = SearchState.COMPLETED.or(SearchState.TIMED_OUT);
-
-        assertEquals(20, state.getValue());
-        assertTrue(state.contains(SearchState.COMPLETED));
-        assertTrue(state.contains(SearchState.TIMED_OUT));
-        assertFalse(state.contains(SearchState.CANCELLED));
-        assertEquals(state, SearchState.fromValue(20));
-        assertEquals("COMPLETED | TIMED_OUT", state.toString());
     }
 
     @Test
@@ -76,25 +61,12 @@ class FlagStatesTest {
     @Test
     @DisplayName("Returns canonical instances for declared single states")
     void returnsCanonicalInstancesForDeclaredStates() {
-        assertSame(SearchState.QUEUED, SearchState.fromValue(256));
         assertSame(TransferState.REJECTED, TransferState.fromValue(512));
-    }
-
-    @Test
-    @DisplayName("Uses value equality for combined states")
-    void usesValueEqualityForCombinedStates() {
-        SearchState first = SearchState.COMPLETED.or(SearchState.ERRORED);
-        SearchState second = SearchState.fromValue(132);
-
-        assertEquals(first, second);
-        assertEquals(first.hashCode(), second.hashCode());
-        assertNotEquals(first, SearchState.COMPLETED);
     }
 
     @Test
     @DisplayName("None is present in every flags value like Enum.HasFlag")
     void noneIsPresentInEveryFlagsValue() {
-        assertTrue(SearchState.COMPLETED.contains(SearchState.NONE));
         assertTrue(TransferState.IN_PROGRESS.contains(TransferState.NONE));
     }
 }

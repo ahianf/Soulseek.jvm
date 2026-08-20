@@ -55,7 +55,8 @@ public final class SearchInternal implements AutoCloseable {
 
     private volatile ScheduledFuture<?> timeoutTask;
     private volatile long timeoutDeadlineNanos;
-    private volatile SearchState state = SearchState.NONE;
+    private volatile SearchPhase state = SearchPhase.NONE;
+    private volatile SearchTermination termination;
 
     /** Serializes timeout replacement with scheduler callbacks. */
     private final Object timeoutLock = new Object();
@@ -129,9 +130,16 @@ public final class SearchInternal implements AutoCloseable {
     }
 
     /** Returns the current state. */
-    public SearchState getState() {
+    public SearchPhase getState() {
         synchronized (stateLock) {
             return state;
+        }
+    }
+
+    /** Returns why the search ended, or {@code null} while it is active. */
+    public SearchTermination getTermination() {
+        synchronized (stateLock) {
+            return termination;
         }
     }
 
@@ -171,28 +179,36 @@ public final class SearchInternal implements AutoCloseable {
     public void cancel() {
         synchronized (stateLock) {
             stopTimeout();
-            state = SearchState.COMPLETED.or(SearchState.CANCELLED);
+            state = SearchPhase.COMPLETED;
+            termination = SearchTermination.CANCELLED;
             settleWaiters(false);
         }
     }
 
-    /** Completes the search with a terminal detail state. */
-    public void complete(SearchState terminalState) {
-        Objects.requireNonNull(terminalState, "terminalState");
+    /** Completes the search with its terminal reason. */
+    public void complete(SearchTermination reason) {
+        Objects.requireNonNull(reason, "reason");
         synchronized (stateLock) {
             stopTimeout();
-            state = SearchState.COMPLETED.or(terminalState);
+            state = SearchPhase.COMPLETED;
+            termination = reason;
             settleWaiters(true);
         }
     }
 
     /** Sets the current search state. */
-    public void setState(SearchState newState) {
+    public void setState(SearchPhase newState) {
         Objects.requireNonNull(newState, "newState");
         synchronized (stateLock) {
-            SearchState previousState = state;
+            if (newState == SearchPhase.COMPLETED && termination == null) {
+                throw new IllegalStateException("a completed search requires a termination reason");
+            }
+            SearchPhase previousState = state;
             state = newState;
-            if (!previousState.equals(SearchState.IN_PROGRESS) && newState.equals(SearchState.IN_PROGRESS)) {
+            if (newState != SearchPhase.COMPLETED) {
+                termination = null;
+            }
+            if (previousState != SearchPhase.IN_PROGRESS && newState == SearchPhase.IN_PROGRESS) {
                 resetTimeout();
             }
         }
@@ -217,7 +233,7 @@ public final class SearchInternal implements AutoCloseable {
         SearchResponse response = initialResponse;
         try {
             synchronized (stateLock) {
-                if (!state.contains(SearchState.IN_PROGRESS) || !responseMeetsOptionCriteria(response)) {
+                if (state != SearchPhase.IN_PROGRESS || !responseMeetsOptionCriteria(response)) {
                     return;
                 }
 
@@ -258,9 +274,9 @@ public final class SearchInternal implements AutoCloseable {
                 }
                 resetTimeout();
                 if (responseCount >= options.responseLimit()) {
-                    complete(SearchState.RESPONSE_LIMIT_REACHED);
+                    complete(SearchTermination.RESPONSE_LIMIT_REACHED);
                 } else if (fileCount >= options.fileLimit()) {
-                    complete(SearchState.FILE_LIMIT_REACHED);
+                    complete(SearchTermination.FILE_LIMIT_REACHED);
                 }
             }
         } catch (IllegalStateException ignored) {
@@ -317,7 +333,7 @@ public final class SearchInternal implements AutoCloseable {
     /** Creates the public immutable snapshot of this search. */
     public Search toSearch() {
         synchronized (stateLock) {
-            return new Search(query, scope, token, state, responseCount, fileCount, lockedFileCount);
+            return new Search(query, scope, token, state, termination, responseCount, fileCount, lockedFileCount);
         }
     }
 
@@ -377,7 +393,7 @@ public final class SearchInternal implements AutoCloseable {
     private void checkTimeout() {
         long deadline = timeoutDeadlineNanos;
         if (deadline != 0 && System.nanoTime() - deadline >= 0) {
-            complete(SearchState.TIMED_OUT);
+            complete(SearchTermination.TIMED_OUT);
         }
     }
 

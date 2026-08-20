@@ -40,10 +40,10 @@ import dev.slsk.internal.network.MessageEvent;
 import dev.slsk.internal.network.MessageReceivedEvent;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.search.SearchInternal;
+import dev.slsk.internal.search.SearchPhase;
 import dev.slsk.internal.search.SearchQuery;
 import dev.slsk.internal.search.SearchResponse;
 import dev.slsk.internal.search.SearchScope;
-import dev.slsk.internal.search.SearchState;
 import dev.slsk.internal.share.BrowseResponse;
 import dev.slsk.internal.share.Catalogs;
 import dev.slsk.internal.share.Directory;
@@ -152,7 +152,7 @@ class PeerMessageHandlerTest {
     void activeSearchReceivesResponseAndInactiveSearchIsIgnored() {
         Fixture fixture = new Fixture(new SoulseekClientOptions());
         SearchInternal search = new SearchInternal(SearchQuery.fromText("query"), SearchScope.getNetwork(), TOKEN);
-        search.setState(SearchState.IN_PROGRESS);
+        search.setState(SearchPhase.IN_PROGRESS);
         fixture.client.searches.put(TOKEN, search);
         SearchResponse response =
                 new SearchResponse(USERNAME, TOKEN, true, 100, 0, List.of(new File(1, FILENAME, 123L, "mp3")));

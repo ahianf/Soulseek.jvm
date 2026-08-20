@@ -10,10 +10,11 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.slsk.internal.search.Search;
+import dev.slsk.internal.search.SearchPhase;
 import dev.slsk.internal.search.SearchQuery;
 import dev.slsk.internal.search.SearchResponse;
 import dev.slsk.internal.search.SearchScope;
-import dev.slsk.internal.search.SearchState;
+import dev.slsk.internal.search.SearchTermination;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -21,13 +22,20 @@ class SearchEventTest {
     @Test
     @DisplayName("SearchStateChangedEvent instantiates with valid Search")
     void stateChangedInstantiatesWithValidSearch() {
-        Search search =
-                new Search(new SearchQuery("foo"), SearchScope.getNetwork(), 42, SearchState.COMPLETED, 0, 0, 0);
-        SearchStateChangedEvent args = new SearchStateChangedEvent(SearchState.NONE, search);
+        Search search = new Search(
+                new SearchQuery("foo"),
+                SearchScope.getNetwork(),
+                42,
+                SearchPhase.COMPLETED,
+                SearchTermination.TIMED_OUT,
+                0,
+                0,
+                0);
+        SearchStateChangedEvent args = new SearchStateChangedEvent(SearchPhase.NONE, search);
 
         assertSame(search, args.search());
-        assertEquals(SearchState.NONE, args.previousState());
-        assertEquals(SearchState.COMPLETED, args.search().state());
+        assertEquals(SearchPhase.NONE, args.previousState());
+        assertEquals(SearchPhase.COMPLETED, args.search().state());
     }
 
     @Test
@@ -52,7 +60,7 @@ class SearchEventTest {
     @Test
     @DisplayName("Search event base preserves a null search")
     void searchEventBasePreservesNullSearch() {
-        SearchStateChangedEvent args = new SearchStateChangedEvent(SearchState.NONE, null);
+        SearchStateChangedEvent args = new SearchStateChangedEvent(SearchPhase.NONE, null);
 
         assertNull(args.search());
     }
@@ -65,7 +73,7 @@ class SearchEventTest {
 
     @Test
     void responseReceivedInstantiatesWithSearchAndResponse() {
-        Search search = new Search(null, null, 42, SearchState.IN_PROGRESS, 1, 2, 3);
+        Search search = new Search(null, null, 42, SearchPhase.IN_PROGRESS, null, 1, 2, 3);
         SearchResponse response = new SearchResponse("alice", 42, true, 1, 2, null);
 
         SearchResponseReceivedEvent args = new SearchResponseReceivedEvent(response, search);

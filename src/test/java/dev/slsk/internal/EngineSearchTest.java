@@ -28,12 +28,13 @@ import dev.slsk.internal.options.SearchResponseReceived;
 import dev.slsk.internal.options.SearchStateChange;
 import dev.slsk.internal.search.Search;
 import dev.slsk.internal.search.SearchInternal;
+import dev.slsk.internal.search.SearchPhase;
 import dev.slsk.internal.search.SearchQuery;
 import dev.slsk.internal.search.SearchRequest;
 import dev.slsk.internal.search.SearchResponse;
 import dev.slsk.internal.search.SearchResult;
 import dev.slsk.internal.search.SearchScope;
-import dev.slsk.internal.search.SearchState;
+import dev.slsk.internal.search.SearchTermination;
 import dev.slsk.internal.share.File;
 import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Method;
@@ -147,14 +148,15 @@ class EngineSearchTest {
         assertArrayEquals(
                 new dev.slsk.internal.messaging.messages.SearchRequest("a", 10).toByteArray(),
                 fixture.server.messages.get(0));
-        assertTrue(result.search().state().contains(SearchState.TIMED_OUT));
+        assertEquals(SearchPhase.COMPLETED, result.search().state());
+        assertEquals(SearchTermination.TIMED_OUT, result.search().termination());
         fixture.close();
     }
 
     @Test
     void sendsFilteredNetworkSearchAndReturnsTimedOutSearch() {
         Fixture fixture = new Fixture();
-        List<SearchState> states = new ArrayList<>();
+        List<SearchPhase> states = new ArrayList<>();
         SearchOptions options =
                 options(40, 250, true, change -> states.add(change.search().state()), null);
 
@@ -169,11 +171,7 @@ class EngineSearchTest {
                 new dev.slsk.internal.messaging.messages.SearchRequest("foo -bar", 11).toByteArray(),
                 fixture.server.messages.get(0));
         assertEquals(
-                List.of(
-                        SearchState.REQUESTED,
-                        SearchState.QUEUED,
-                        SearchState.IN_PROGRESS,
-                        SearchState.COMPLETED.or(SearchState.TIMED_OUT)),
+                List.of(SearchPhase.REQUESTED, SearchPhase.QUEUED, SearchPhase.IN_PROGRESS, SearchPhase.COMPLETED),
                 states);
         assertEquals("foo -bar", result.search().query().searchText());
         assertEquals(11, result.search().token());
@@ -220,7 +218,7 @@ class EngineSearchTest {
                         .build()));
         waitUntil(() -> {
             SearchInternal active = fixture.client.getSearches().get(30);
-            return active != null && active.getState().equals(SearchState.IN_PROGRESS);
+            return active != null && active.getState().equals(SearchPhase.IN_PROGRESS);
         });
         SearchResponse response =
                 new SearchResponse("alice", 30, true, 100, 0, List.of(new File(2, "file.mp3", 3, "mp3")));
@@ -232,9 +230,8 @@ class EngineSearchTest {
         assertEquals(response.token(), result.responses().getFirst().token());
         assertEquals(1, result.search().responseCount());
         assertEquals(1, result.search().fileCount());
-        assertEquals(
-                SearchState.COMPLETED.or(SearchState.RESPONSE_LIMIT_REACHED),
-                result.search().state());
+        assertEquals(SearchPhase.COMPLETED, result.search().state());
+        assertEquals(SearchTermination.RESPONSE_LIMIT_REACHED, result.search().termination());
         assertEquals(1, optionResponses.get());
         assertEquals(1, clientResponses.get());
         assertEquals(4, clientStates.get());
@@ -259,7 +256,7 @@ class EngineSearchTest {
                                 .build(),
                         responses::add));
         waitUntil(() -> fixture.client.getSearches().containsKey(31)
-                && fixture.client.getSearches().get(31).getState().equals(SearchState.IN_PROGRESS));
+                && fixture.client.getSearches().get(31).getState().equals(SearchPhase.IN_PROGRESS));
         SearchResponse response = new SearchResponse("bob", 31, true, 1, 0, List.of(new File(2, "file", 3, "ext")));
         fixture.client.getSearches().get(31).tryAddResponse(response);
 
@@ -373,8 +370,8 @@ class EngineSearchTest {
         // caller is on its own thread, so wait for the state rather than for
         // the entry to appear.
         waitUntil(() -> fixture.client.getSearches().get(53) != null
-                && fixture.client.getSearches().get(53).getState() == SearchState.QUEUED);
-        assertEquals(SearchState.QUEUED, fixture.client.getSearches().get(53).getState());
+                && fixture.client.getSearches().get(53).getState() == SearchPhase.QUEUED);
+        assertEquals(SearchPhase.QUEUED, fixture.client.getSearches().get(53).getState());
         firstSource.cancel();
         assertInstanceOf(CancellationException.class, completionCause(() -> first.join()));
         waitUntil(() -> fixture.server.messages.size() == 3);
@@ -398,7 +395,8 @@ class EngineSearchTest {
                         .options(options(30, 250, true))
                         .build());
         assertArrayEquals(expected, fixture.server.messages.get(0));
-        assertTrue(result.search().state().contains(SearchState.TIMED_OUT));
+        assertEquals(SearchPhase.COMPLETED, result.search().state());
+        assertEquals(SearchTermination.TIMED_OUT, result.search().termination());
         fixture.close();
     }
 

@@ -11,12 +11,16 @@ public record Search(
         SearchQuery query,
         SearchScope scope,
         int token,
-        SearchState state,
+        SearchPhase state,
+        SearchTermination termination,
         int responseCount,
         int fileCount,
         int lockedFileCount) {
 
     public Search {
         state = Objects.requireNonNull(state, "state");
+        if ((state == SearchPhase.COMPLETED) != (termination != null)) {
+            throw new IllegalArgumentException("only completed searches have a termination reason");
+        }
     }
 }

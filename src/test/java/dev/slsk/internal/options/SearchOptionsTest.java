@@ -11,8 +11,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.internal.search.Search;
+import dev.slsk.internal.search.SearchPhase;
 import dev.slsk.internal.search.SearchResponse;
-import dev.slsk.internal.search.SearchState;
+import dev.slsk.internal.search.SearchTermination;
 import dev.slsk.internal.share.File;
 import java.time.Duration;
 import java.util.List;
@@ -105,16 +106,16 @@ class SearchOptionsTest {
                 .stateChanged(state::set)
                 .responseReceived(received::set)
                 .build();
-        Search search = new Search(null, null, 9, SearchState.COMPLETED, 0, 0, 0);
+        Search search = new Search(null, null, 9, SearchPhase.COMPLETED, SearchTermination.TIMED_OUT, 0, 0, 0);
         SearchResponse response = new SearchResponse("u", 8, true, 1, 7, List.of());
         File file = new File(1, "x", 2, "ext");
 
-        options.stateChanged().accept(new SearchStateChange(SearchState.IN_PROGRESS, search));
+        options.stateChanged().accept(new SearchStateChange(SearchPhase.IN_PROGRESS, search));
         options.responseReceived().accept(new SearchResponseReceived(search, response));
 
         assertTrue(options.responseFilter().test(response));
         assertTrue(options.fileFilter().test(file));
-        assertEquals(new SearchStateChange(SearchState.IN_PROGRESS, search), state.get());
+        assertEquals(new SearchStateChange(SearchPhase.IN_PROGRESS, search), state.get());
         assertEquals(new SearchResponseReceived(search, response), received.get());
     }
 }
