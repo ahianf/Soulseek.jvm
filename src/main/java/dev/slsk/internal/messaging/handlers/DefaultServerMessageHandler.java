@@ -187,7 +187,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         this.searchResponses = Objects.requireNonNull(searchResponses, "searchResponses");
         this.networkExecutor = Objects.requireNonNull(networkExecutor, "networkExecutor");
         diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
                 : diagnosticFactory;
         for (ServerMessageEvent event : ServerMessageEvent.values()) {
             listeners.put(event, new CopyOnWriteArrayList<>());
@@ -232,32 +232,32 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         try {
             switch (code) {
                 case PARENT_MIN_SPEED -> {
-                    raise(ServerMessageEvent.SERVER_INFO_RECEIVED, new ServerInfo(integer(message)));
+                    publish(ServerMessageEvent.SERVER_INFO_RECEIVED, new ServerInfo(integer(message)));
                 }
                 case PARENT_SPEED_RATIO -> {
-                    raise(ServerMessageEvent.SERVER_INFO_RECEIVED, new ServerInfo(null, integer(message)));
+                    publish(ServerMessageEvent.SERVER_INFO_RECEIVED, new ServerInfo(null, integer(message)));
                 }
                 case WISHLIST_INTERVAL -> {
-                    raise(ServerMessageEvent.SERVER_INFO_RECEIVED, new ServerInfo(null, null, integer(message)));
+                    publish(ServerMessageEvent.SERVER_INFO_RECEIVED, new ServerInfo(null, null, integer(message)));
                 }
                 case CHECK_PRIVILEGES -> {
                     waiter.complete(new WaitKey(code), integer(message));
                 }
                 case PRIVATE_ROOM_ADDED -> {
-                    raise(ServerMessageEvent.PRIVATE_ROOM_MEMBERSHIP_ADDED, string(message));
+                    publish(ServerMessageEvent.PRIVATE_ROOM_MEMBERSHIP_ADDED, string(message));
                 }
                 case PRIVATE_ROOM_REMOVED -> {
                     String room = string(message);
                     waiter.complete(new WaitKey(code, room));
-                    raise(ServerMessageEvent.PRIVATE_ROOM_MEMBERSHIP_REMOVED, room);
+                    publish(ServerMessageEvent.PRIVATE_ROOM_MEMBERSHIP_REMOVED, room);
                 }
                 case PRIVATE_ROOM_OPERATOR_ADDED -> {
-                    raise(ServerMessageEvent.PRIVATE_ROOM_MODERATION_ADDED, string(message));
+                    publish(ServerMessageEvent.PRIVATE_ROOM_MODERATION_ADDED, string(message));
                 }
                 case PRIVATE_ROOM_OPERATOR_REMOVED -> {
                     String room = string(message);
                     waiter.complete(new WaitKey(code, room));
-                    raise(ServerMessageEvent.PRIVATE_ROOM_MODERATION_REMOVED, room);
+                    publish(ServerMessageEvent.PRIVATE_ROOM_MODERATION_REMOVED, room);
                 }
                 case NEW_PASSWORD -> {
                     waiter.complete(
@@ -270,12 +270,14 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                             PrivateRoomToggle.fromByteArray(message).isAcceptInvitations());
                 }
                 case EXCLUDED_SEARCH_PHRASES -> {
-                    raise(
+                    publish(
                             ServerMessageEvent.EXCLUDED_SEARCH_PHRASES_RECEIVED,
                             ExcludedSearchPhrasesNotification.fromByteArray(message));
                 }
                 case GLOBAL_ADMIN_MESSAGE -> {
-                    raise(ServerMessageEvent.GLOBAL_MESSAGE_RECEIVED, GlobalMessageNotification.fromByteArray(message));
+                    publish(
+                            ServerMessageEvent.GLOBAL_MESSAGE_RECEIVED,
+                            GlobalMessageNotification.fromByteArray(message));
                 }
                 case PING -> {
                     waiter.complete(new WaitKey(code));
@@ -286,23 +288,23 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 case ROOM_LIST -> {
                     RoomList rooms = RoomListResponseFactory.fromByteArray(message);
                     waiter.complete(new WaitKey(code), rooms);
-                    raise(ServerMessageEvent.ROOM_LIST_RECEIVED, rooms);
+                    publish(ServerMessageEvent.ROOM_LIST_RECEIVED, rooms);
                 }
                 case PRIVATE_ROOM_OWNED -> {
                     RoomInfo room = PrivateRoomOwnedListNotification.fromByteArray(message);
-                    raise(ServerMessageEvent.PRIVATE_ROOM_MODERATED_USER_LIST_RECEIVED, room);
+                    publish(ServerMessageEvent.PRIVATE_ROOM_MODERATED_USER_LIST_RECEIVED, room);
                 }
                 case PRIVATE_ROOM_USERS -> {
                     RoomInfo room = PrivateRoomUserListNotification.fromByteArray(message);
-                    raise(ServerMessageEvent.PRIVATE_ROOM_USER_LIST_RECEIVED, room);
+                    publish(ServerMessageEvent.PRIVATE_ROOM_USER_LIST_RECEIVED, room);
                 }
                 case PRIVILEGED_USERS -> {
-                    raise(
+                    publish(
                             ServerMessageEvent.PRIVILEGED_USER_LIST_RECEIVED,
                             PrivilegedUserListNotification.fromByteArray(message));
                 }
                 case ADD_PRIVILEGED_USER -> {
-                    raise(
+                    publish(
                             ServerMessageEvent.PRIVILEGE_NOTIFICATION_RECEIVED,
                             new PrivilegeNotificationReceivedEvent(PrivilegedUserNotification.fromByteArray(message)));
                 }
@@ -314,7 +316,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 case NET_INFO -> handleNetInfo(message);
                 case DISTRIBUTED_RESET -> {
                     diagnostic.info("Distributed network reset received from the server");
-                    raise(ServerMessageEvent.DISTRIBUTED_NETWORK_RESET, null);
+                    publish(ServerMessageEvent.DISTRIBUTED_NETWORK_RESET, null);
                     distributed.get().removeAndDisposeAll();
                     distributed.get().resetStatus();
                 }
@@ -336,12 +338,12 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 case GET_STATUS -> {
                     UserStatus status = UserStatusResponseFactory.fromByteArray(message);
                     waiter.complete(new WaitKey(code, status.username()), status);
-                    raise(ServerMessageEvent.USER_STATUS_CHANGED, status);
+                    publish(ServerMessageEvent.USER_STATUS_CHANGED, status);
                 }
                 case GET_USER_STATS -> {
                     UserStatistics statistics = UserStatisticsResponseFactory.fromByteArray(message);
                     waiter.complete(new WaitKey(code, statistics.username()), statistics);
-                    raise(ServerMessageEvent.USER_STATISTICS_CHANGED, statistics);
+                    publish(ServerMessageEvent.USER_STATISTICS_CHANGED, statistics);
                 }
                 case PRIVATE_MESSAGE -> handlePrivateMessage(message);
                 case GET_PEER_ADDRESS -> {
@@ -355,42 +357,42 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 case LEAVE_ROOM -> {
                     LeaveRoomResponse response = LeaveRoomResponse.fromByteArray(message);
                     waiter.complete(new WaitKey(code, response.getRoomName()));
-                    raise(ServerMessageEvent.ROOM_LEFT, new RoomLeftEvent(response.getRoomName(), server.username()));
+                    publish(ServerMessageEvent.ROOM_LEFT, new RoomLeftEvent(response.getRoomName(), server.username()));
                 }
                 case SAY_IN_CHAT_ROOM -> {
-                    raise(
+                    publish(
                             ServerMessageEvent.ROOM_MESSAGE_RECEIVED,
                             new RoomMessageReceivedEvent(RoomMessageNotification.fromByteArray(message)));
                 }
                 case PUBLIC_CHAT -> {
-                    raise(
+                    publish(
                             ServerMessageEvent.PUBLIC_CHAT_MESSAGE_RECEIVED,
                             new PublicChatMessageReceivedEvent(PublicChatMessageNotification.fromByteArray(message)));
                 }
                 case USER_JOINED_ROOM -> {
-                    raise(
+                    publish(
                             ServerMessageEvent.ROOM_JOINED,
                             new RoomJoinedEvent(UserJoinedRoomNotification.fromByteArray(message)));
                 }
                 case USER_LEFT_ROOM -> {
-                    raise(
+                    publish(
                             ServerMessageEvent.ROOM_LEFT,
                             new RoomLeftEvent(UserLeftRoomNotification.fromByteArray(message)));
                 }
                 case ROOM_TICKERS -> {
-                    raise(
+                    publish(
                             ServerMessageEvent.ROOM_TICKER_LIST_RECEIVED,
                             new RoomTickerListReceivedEvent(RoomTickerListNotification.fromByteArray(message)));
                 }
                 case ROOM_TICKER_ADD -> {
                     RoomTickerAddedNotification added = RoomTickerAddedNotification.fromByteArray(message);
-                    raise(
+                    publish(
                             ServerMessageEvent.ROOM_TICKER_ADDED,
                             new RoomTickerAddedEvent(added.getRoomName(), added.getTicker()));
                 }
                 case ROOM_TICKER_REMOVE -> {
                     RoomTickerRemovedNotification removed = RoomTickerRemovedNotification.fromByteArray(message);
-                    raise(
+                    publish(
                             ServerMessageEvent.ROOM_TICKER_REMOVED,
                             new RoomTickerRemovedEvent(removed.getRoomName(), removed.getUsername()));
                 }
@@ -411,7 +413,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                     waiter.complete(new WaitKey(code, response.getRoomName(), response.getUsername()));
                 }
                 case KICKED_FROM_SERVER -> {
-                    raise(ServerMessageEvent.KICKED_FROM_SERVER, null);
+                    publish(ServerMessageEvent.KICKED_FROM_SERVER, null);
                 }
                 case FILE_SEARCH -> handleSearchRequest(message);
                 case EMBEDDED_MESSAGE -> {
@@ -436,7 +438,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
 
     private void handlePrivilegeNotification(byte[] message) {
         PrivilegeNotification notification = PrivilegeNotification.fromByteArray(message);
-        raise(
+        publish(
                 ServerMessageEvent.PRIVILEGE_NOTIFICATION_RECEIVED,
                 new PrivilegeNotificationReceivedEvent(notification.getUsername(), notification.getId()));
         if (!options.get().autoAcknowledgePrivilegeNotifications()) {
@@ -450,7 +452,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
 
     private void handlePrivateMessage(byte[] message) {
         PrivateMessageNotification notification = PrivateMessageNotification.fromByteArray(message);
-        raise(ServerMessageEvent.PRIVATE_MESSAGE_RECEIVED, new PrivateMessageReceivedEvent(notification));
+        publish(ServerMessageEvent.PRIVATE_MESSAGE_RECEIVED, new PrivateMessageReceivedEvent(notification));
         if (!options.get().autoAcknowledgePrivateMessages()) {
             return;
         }
@@ -483,7 +485,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                         : " from user " + cannotConnect.getUsername()));
         searchResponses.get().tryDiscard(cannotConnect.getToken());
         if (cannotConnect.getUsername() != null && !cannotConnect.getUsername().isEmpty()) {
-            raise(ServerMessageEvent.USER_CANNOT_CONNECT, new UserCannotConnectEvent(cannotConnect));
+            publish(ServerMessageEvent.USER_CANNOT_CONNECT, new UserCannotConnectEvent(cannotConnect));
         }
     }
 
@@ -599,14 +601,14 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     }
 
     @SuppressWarnings("unchecked")
-    private <T> void raise(ServerMessageEvent event, T eventData) {
+    private <T> void publish(ServerMessageEvent event, T eventData) {
         List<Consumer<?>> snapshot = new ArrayList<>(listeners.get(event));
         for (Consumer<?> listener : snapshot) {
             ((Consumer<T>) listener).accept(eventData);
         }
     }
 
-    private void raiseDiagnostic(DiagnosticEvent eventData) {
+    private void publishDiagnostic(DiagnosticEvent eventData) {
         diagnosticListeners.forEach(listener -> listener.accept(eventData));
     }
 

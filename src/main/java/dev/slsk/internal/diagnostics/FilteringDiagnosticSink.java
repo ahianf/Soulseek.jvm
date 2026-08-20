@@ -23,7 +23,7 @@ public final class FilteringDiagnosticSink implements DiagnosticSink {
     @Override
     public void trace(String message) {
         if (enabled(DiagnosticLevel.TRACE)) {
-            raiseEvent(
+            publishEvent(
                     DiagnosticLevel.TRACE,
                     message,
                     null,
@@ -34,7 +34,7 @@ public final class FilteringDiagnosticSink implements DiagnosticSink {
     @Override
     public void trace(String message, Throwable exception) {
         if (enabled(DiagnosticLevel.TRACE)) {
-            raiseEvent(
+            publishEvent(
                     DiagnosticLevel.TRACE,
                     message,
                     exception,
@@ -45,7 +45,7 @@ public final class FilteringDiagnosticSink implements DiagnosticSink {
     @Override
     public void debug(String message) {
         if (enabled(DiagnosticLevel.DEBUG)) {
-            raiseEvent(
+            publishEvent(
                     DiagnosticLevel.DEBUG,
                     message,
                     null,
@@ -56,7 +56,7 @@ public final class FilteringDiagnosticSink implements DiagnosticSink {
     @Override
     public void debug(String message, Throwable exception) {
         if (enabled(DiagnosticLevel.DEBUG)) {
-            raiseEvent(
+            publishEvent(
                     DiagnosticLevel.DEBUG,
                     message,
                     exception,
@@ -67,7 +67,7 @@ public final class FilteringDiagnosticSink implements DiagnosticSink {
     @Override
     public void info(String message) {
         if (enabled(DiagnosticLevel.INFO)) {
-            raiseEvent(
+            publishEvent(
                     DiagnosticLevel.INFO, message, null, CALLER.getCallerClass().getName());
         }
     }
@@ -75,7 +75,7 @@ public final class FilteringDiagnosticSink implements DiagnosticSink {
     @Override
     public void warning(String message) {
         if (enabled(DiagnosticLevel.WARNING)) {
-            raiseEvent(
+            publishEvent(
                     DiagnosticLevel.WARNING,
                     message,
                     null,
@@ -86,7 +86,7 @@ public final class FilteringDiagnosticSink implements DiagnosticSink {
     @Override
     public void warning(String message, Throwable exception) {
         if (enabled(DiagnosticLevel.WARNING)) {
-            raiseEvent(
+            publishEvent(
                     DiagnosticLevel.WARNING,
                     message,
                     exception,
@@ -106,7 +106,7 @@ public final class FilteringDiagnosticSink implements DiagnosticSink {
         return level.getValue() <= minimumLevel.getValue();
     }
 
-    private void raiseEvent(DiagnosticLevel level, String message, Throwable exception, String source) {
+    private void publishEvent(DiagnosticLevel level, String message, Throwable exception, String source) {
         eventHandler.accept(new DiagnosticEvent(level, source, message, exception));
     }
 }

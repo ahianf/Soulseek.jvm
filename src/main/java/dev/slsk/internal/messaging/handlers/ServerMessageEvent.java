@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.messaging.handlers;
 
-/** Events raised while handling server messages. */
+/** Events published while handling server messages. */
 public enum ServerMessageEvent {
     DISTRIBUTED_NETWORK_RESET,
     EXCLUDED_SEARCH_PHRASES_RECEIVED,

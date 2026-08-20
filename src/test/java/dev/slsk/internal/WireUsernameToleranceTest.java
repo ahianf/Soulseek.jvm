@@ -50,7 +50,7 @@ class WireUsernameToleranceTest {
                 received.countDown();
             });
 
-            fixture.client.raiseEvent(EngineEvents.Kind.PRIVILEGED_USER_LIST_RECEIVED, List.of("alice", "", "bob"));
+            fixture.client.publishEvent(EngineEvents.Kind.PRIVILEGED_USER_LIST_RECEIVED, List.of("alice", "", "bob"));
 
             assertTrue(received.await(5, TimeUnit.SECONDS), "the list event never arrived");
             assertEquals(
@@ -67,14 +67,14 @@ class WireUsernameToleranceTest {
             List<ChatEvent> chat = new CopyOnWriteArrayList<>();
             fixture.chat.events().subscribe(chat::add);
 
-            fixture.client.raiseEvent(
+            fixture.client.publishEvent(
                     EngineEvents.Kind.PRIVATE_MESSAGE_RECEIVED,
                     new PrivateMessageReceivedEvent(7, Instant.now(), " ", "hello", false));
             // A representable message right behind it still arrives, which is
             // what proves the listener did not die on the first one.
             CountDownLatch received = new CountDownLatch(1);
             fixture.chat.events().subscribe(ChatEvent.MessageReceived.class, event -> received.countDown());
-            fixture.client.raiseEvent(
+            fixture.client.publishEvent(
                     EngineEvents.Kind.PRIVATE_MESSAGE_RECEIVED,
                     new PrivateMessageReceivedEvent(8, Instant.now(), "bob", "still here", false));
 

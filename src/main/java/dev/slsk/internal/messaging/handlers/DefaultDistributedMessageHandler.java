@@ -96,7 +96,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
         this.searchResponses = Objects.requireNonNull(searchResponses, "searchResponses");
         this.networkExecutor = Objects.requireNonNull(networkExecutor, "networkExecutor");
         diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
                 : diagnosticFactory;
     }
 
@@ -328,7 +328,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                 mesh.get().getParent());
     }
 
-    private void raiseDiagnostic(DiagnosticEvent eventData) {
+    private void publishDiagnostic(DiagnosticEvent eventData) {
         diagnosticListeners.forEach(listener -> listener.accept(eventData));
     }
 }

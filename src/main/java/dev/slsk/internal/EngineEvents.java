@@ -23,7 +23,7 @@ import java.util.function.Consumer;
  *
  * <p>Two behaviours are not just plumbing:
  *
- * <p><strong>Dispatch is contained.</strong> These events are raised from
+ * <p><strong>Dispatch is contained.</strong> These events are published from
  * message handlers running on read loops. A listener that throws used to
  * propagate straight back into the loop it came from and take the connection
  * with it. Now the fault is handed to the engine's diagnostic sink and the
@@ -37,7 +37,7 @@ import java.util.function.Consumer;
  */
 final class EngineEvents {
 
-    /** Everything the engine raises. */
+    /** Everything the engine publishes. */
     enum Kind {
         BROWSE_PROGRESS_UPDATED,
         CONNECTED,
@@ -90,7 +90,7 @@ final class EngineEvents {
 
     /**
      * Where a contained fault goes. Supplied rather than read from a field
-     * because the engine's diagnostic sink raises {@link
+     * because the engine's diagnostic sink publishes {@link
      * Kind#DIAGNOSTIC_GENERATED} through this object, so it cannot exist before
      * it.
      */
@@ -129,7 +129,7 @@ final class EngineEvents {
     }
 
     /**
-     * Raises an event, containing any listener fault.
+     * Publishes an event, containing any listener fault.
      *
      * @param kind which event
      * @param payload the payload, which is {@code null} for the kinds that
@@ -137,7 +137,7 @@ final class EngineEvents {
      * @param <T> the payload type
      */
     @SuppressWarnings("unchecked")
-    <T> void raise(Kind kind, T payload) {
+    <T> void publish(Kind kind, T payload) {
         for (Consumer<?> listener : listeners.get(kind)) {
             try {
                 ((Consumer<T>) listener).accept(payload);

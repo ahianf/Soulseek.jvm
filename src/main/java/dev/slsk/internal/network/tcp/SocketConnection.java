@@ -362,7 +362,7 @@ public class SocketConnection implements Connection {
     }
 
     /**
-     * Disconnects, raising the state and disconnected events.
+     * Disconnects, publishing the state and disconnected events.
      *
      * <p>The monitor is used only to claim the transition, so exactly one
      * caller proceeds. Everything after that — transport teardown and every
@@ -543,7 +543,7 @@ public class SocketConnection implements Connection {
     }
 
     /**
-     * Changes state and raises the matching source events.
+     * Changes state and publishes the matching source events.
      *
      * <p>Callers must not hold a library lock: this invokes user listeners.
      */
@@ -561,7 +561,7 @@ public class SocketConnection implements Connection {
         }
     }
 
-    /** Raises the state-changed event. Must be called with no lock held. */
+    /** Publishes the state-changed event. Must be called with no lock held. */
     private void publishStateChanged(
             ConnectionState previousState, ConnectionState newState, String message, Exception exception) {
         ConnectionStateChangedEvent eventData =
@@ -572,7 +572,7 @@ public class SocketConnection implements Connection {
     }
 
     /**
-     * Raises the disconnected event and releases the disconnect latch. Must be
+     * Publishes the disconnected event and releases the disconnect latch. Must be
      * called with no lock held.
      */
     private void publishDisconnected(String message, Exception exception) {
@@ -1117,7 +1117,7 @@ public class SocketConnection implements Connection {
     }
 
     /**
-     * Raises a progress event to the registered listeners and, optionally, to
+     * Publishes a progress event to the registered listeners and, optionally, to
      * one caller-supplied listener scoped to a single read.
      *
      * <p>The scoped listener exists so that a caller wanting progress for one

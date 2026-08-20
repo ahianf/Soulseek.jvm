@@ -266,12 +266,12 @@ class EngineTest {
 
         DiagnosticEvent expected = new DiagnosticEvent(
                 dev.slsk.internal.diagnostics.DiagnosticLevel.INFO, EngineTest.class.getName(), "message");
-        fixture.search.raiseDiagnostic(expected);
+        fixture.search.publishDiagnostic(expected);
         assertSame(expected, diagnostic.get());
 
         subscription.close();
         diagnostic.set(null);
-        fixture.search.raiseDiagnostic(new DiagnosticEvent(
+        fixture.search.publishDiagnostic(new DiagnosticEvent(
                 dev.slsk.internal.diagnostics.DiagnosticLevel.INFO, EngineTest.class.getName(), "after"));
         assertNull(diagnostic.get(), "a closed subscription receives nothing");
 
@@ -583,7 +583,7 @@ class EngineTest {
             return defaultValue(method.getReturnType());
         }
 
-        private void raiseDiagnostic(DiagnosticEvent eventData) {
+        private void publishDiagnostic(DiagnosticEvent eventData) {
             diagnostic.accept(eventData);
         }
     }

@@ -193,7 +193,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         this.distributedMessages = Objects.requireNonNull(distributedMessages, "distributedMessages");
         this.connectionFactory = Objects.requireNonNull(connectionFactory, "connectionFactory");
         diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
                 : diagnosticFactory;
         this.ownsScheduler = scheduler == null;
         this.scheduler = scheduler == null ? new Scheduler("soulseek-distributed-status") : scheduler;
@@ -451,7 +451,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         DistributedParentEvent eventData = new DistributedParentEvent(
                 parentConnection.getUsername(), parentConnection.getIpEndpoint(), parentBranchLevel, parentBranchRoot);
         parentAdoptedListeners.forEach(listener -> listener.accept(eventData));
-        raiseStateChanged();
+        publishStateChanged();
 
         parentCandidates = rejected.stream()
                 .map(candidate -> new PeerEndpoint(
@@ -581,7 +581,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             branchRootNode = false;
             diagnostic.info("Demoted from distributed branch root.");
             demotedListeners.forEach(listener -> listener.accept(null));
-            raiseStateChanged();
+            publishStateChanged();
         }
     }
 
@@ -634,7 +634,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             branchRootNode = true;
             diagnostic.info("Promoted to distributed branch root.");
             promotedListeners.forEach(listener -> listener.accept(null));
-            raiseStateChanged();
+            publishStateChanged();
         }
     }
 
@@ -729,7 +729,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 new HaveNoParentsCommand(haveNoParents).toByteArray());
         try {
             server.writeBytes(payload, token(cancellationSignal));
-            raiseStateChanged();
+            publishStateChanged();
             diagnostic.info("Updated distributed status; " + status);
             lastStatus = status;
             lastStatusTimestamp = Instant.now();
@@ -881,8 +881,8 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 + connection.getUsername() + " ("
                 + connection.getIpEndpoint() + ")");
         if (!superseded) {
-            raiseChildAdded(connection);
-            raiseStateChanged();
+            publishChildAdded(connection);
+            publishStateChanged();
         }
         updateStatusEventually();
         return connection;
@@ -922,8 +922,8 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 + ", id: " + connection.getId() + ")");
         diagnostic.info(
                 "Added child connection to " + connection.getUsername() + " (" + connection.getIpEndpoint() + ")");
-        raiseChildAdded(connection);
-        raiseStateChanged();
+        publishChildAdded(connection);
+        publishStateChanged();
         updateStatusEventually();
         return connection;
     }
@@ -1146,7 +1146,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         DistributedChildEvent childEvent =
                 new DistributedChildEvent(connection.getUsername(), connection.getIpEndpoint());
         childDisconnectedListeners.forEach(listener -> listener.accept(childEvent));
-        raiseStateChanged();
+        publishStateChanged();
         connection.close();
         updateStatusEventually();
     }
@@ -1186,7 +1186,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         parentConnection = null;
         parentBranchLevel = 0;
         parentBranchRoot = "";
-        raiseStateChanged();
+        publishStateChanged();
         connection.close();
         // On a thread of its own: this runs from the dying connection's own
         // disconnect handler, and re-parenting negotiates with every remaining
@@ -1238,17 +1238,17 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 + "; children: " + children.size() + "/" + getChildLimit();
     }
 
-    private void raiseChildAdded(MessageConnection connection) {
+    private void publishChildAdded(MessageConnection connection) {
         DistributedChildEvent eventData =
                 new DistributedChildEvent(connection.getUsername(), connection.getIpEndpoint());
         childAddedListeners.forEach(listener -> listener.accept(eventData));
     }
 
-    private void raiseStateChanged() {
+    private void publishStateChanged() {
         // Snapshotting the network builds two lists and walks every child, and
         // this runs from the message path — branch level, branch root and
         // parent changes all land here. With nobody listening it was pure
-        // garbage; the sibling raise* methods already forEach over an empty
+        // garbage; the sibling publish* methods already forEach over an empty
         // list for free, but only because they have a payload to hand.
         if (stateChangedListeners.isEmpty()) {
             return;
@@ -1269,7 +1269,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         stateChangedListeners.forEach(listener -> listener.accept(info));
     }
 
-    private void raiseDiagnostic(DiagnosticEvent eventData) {
+    private void publishDiagnostic(DiagnosticEvent eventData) {
         diagnosticListeners.forEach(listener -> listener.accept(eventData));
     }
 

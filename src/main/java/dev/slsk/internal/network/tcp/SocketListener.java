@@ -137,7 +137,7 @@ public final class SocketListener implements Listener {
                 listening = false;
                 throw failure;
             }
-            runInBackground(() -> raiseAccepted(client));
+            runInBackground(() -> publishAccepted(client));
         }
     }
 
@@ -160,7 +160,7 @@ public final class SocketListener implements Listener {
         }
     }
 
-    private void raiseAccepted(Socket client) {
+    private void publishAccepted(Socket client) {
         InetSocketAddress endpoint = (InetSocketAddress) client.getRemoteSocketAddress();
         Connection connection = executor == null
                 ? new SocketConnection(endpoint, connectionOptions, new TcpClientAdapter(client), monitor)

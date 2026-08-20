@@ -202,7 +202,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
         }
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         super.write(bytes, token);
-        raiseMessageWritten(bytes);
+        publishMessageWritten(bytes);
     }
 
     void readContinuously() throws InterruptedException, java.util.concurrent.TimeoutException {
@@ -217,7 +217,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
         // single thread.
         byte[][] codeHolder = new byte[1][];
         Consumer<ConnectionDataEvent> payloadProgress =
-                event -> raiseMessageDataRead(codeHolder[0], event.currentLength(), event.totalLength());
+                event -> publishMessageDataRead(codeHolder[0], event.currentLength(), event.totalLength());
         try {
             while (!isDisposed()) {
                 ByteArrayOutputStream message = new ByteArrayOutputStream();
@@ -235,15 +235,15 @@ public final class DefaultMessageConnection extends SocketConnection implements 
                 codeHolder[0] = codeBytes;
                 message.writeBytes(codeBytes);
 
-                raiseMessageDataRead(codeBytes, 0, length - codeLength);
-                raiseMessageReceived(length, codeBytes);
+                publishMessageDataRead(codeBytes, 0, length - codeLength);
+                publishMessageReceived(length, codeBytes);
 
                 // Passed to the read rather than added to the shared
                 // listener list and removed afterwards, which cost two
                 // CopyOnWriteArrayList copies per message.
                 byte[] payload = read(length - codeLength, payloadProgress, CancellationSignal.none());
                 message.writeBytes(payload);
-                raiseMessageRead(message.toByteArray());
+                publishMessageRead(message.toByteArray());
             }
         } finally {
             readingContinuously = false;
@@ -254,7 +254,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
         subscribe(Kind.CONNECTED, connection -> startReadLoop());
     }
 
-    private void raiseMessageDataRead(byte[] code, long currentLength, long totalLength) {
+    private void publishMessageDataRead(byte[] code, long currentLength, long totalLength) {
         MessageDataEvent eventData = new MessageDataEvent(this, code, currentLength, totalLength);
         dispatch(() -> {
             for (Consumer<? super MessageDataEvent> listener : messageDataReadListeners) {
@@ -263,14 +263,14 @@ public final class DefaultMessageConnection extends SocketConnection implements 
         });
     }
 
-    private void raiseMessageReceived(long length, byte[] code) {
+    private void publishMessageReceived(long length, byte[] code) {
         MessageReceivedEvent eventData = new MessageReceivedEvent(this, length, code);
         for (Consumer<? super MessageReceivedEvent> listener : messageReceivedListeners) {
             listener.accept(eventData);
         }
     }
 
-    private void raiseMessageRead(byte[] message) {
+    private void publishMessageRead(byte[] message) {
         MessageEvent eventData = new MessageEvent(this, message);
         dispatch(() -> {
             for (Consumer<? super MessageEvent> listener : messageReadListeners) {
@@ -279,7 +279,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
         });
     }
 
-    private void raiseMessageWritten(byte[] message) {
+    private void publishMessageWritten(byte[] message) {
         MessageEvent eventData = new MessageEvent(this, message);
         dispatch(() -> {
             for (Consumer<? super MessageEvent> listener : messageWrittenListeners) {

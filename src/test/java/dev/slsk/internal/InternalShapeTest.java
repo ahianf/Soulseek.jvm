@@ -16,6 +16,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,6 +44,10 @@ import org.junit.jupiter.api.Test;
 class InternalShapeTest {
 
     private static final Path MAIN_SOURCES = Path.of("src", "main", "java");
+    private static final Path MESSAGING_SOURCES = MAIN_SOURCES.resolve(Path.of("dev", "slsk", "internal", "messaging"));
+    private static final Path NETWORK_SOURCES = MAIN_SOURCES.resolve(Path.of("dev", "slsk", "internal", "network"));
+    private static final Pattern ADD_REMOVE_LISTENER = Pattern.compile("\\b(?:add|remove)[A-Z]\\w*Listener\\s*\\(");
+    private static final Pattern SENDER_CALLBACK = Pattern.compile("\\bhandle\\s*\\(\\s*Object\\s+sender\\b");
 
     /**
      * How many overloads of one name a type may declare.
@@ -130,6 +136,38 @@ class InternalShapeTest {
             fail("A method with more than " + OVERLOAD_LIMIT + " overloads is a tower of defaults; "
                     + "give it one shape and let the callers say what they mean.\n  "
                     + String.join("\n  ", violations));
+        }
+    }
+
+    @Test
+    @DisplayName("internal network callbacks carry identity in their payload")
+    void callbacksDoNotTakeDotNetSenderArguments() {
+        assertNoInternalCallbackShape(
+                SENDER_CALLBACK,
+                "A callback payload carries its source identity; do not restore handle(Object sender, ...).\n  ");
+    }
+
+    @Test
+    @DisplayName("internal network listeners are scoped subscriptions")
+    void listenerRegistrationDoesNotReturnToAddRemovePairs() {
+        assertNoInternalCallbackShape(
+                ADD_REMOVE_LISTENER,
+                "Listener lifetimes are represented by Subscription; do not restore paired add/remove methods.\n  ");
+    }
+
+    private static void assertNoInternalCallbackShape(Pattern forbidden, String message) {
+        List<String> violations = new ArrayList<>();
+        for (Path file : mainSources()) {
+            if (!file.startsWith(NETWORK_SOURCES) && !file.startsWith(MESSAGING_SOURCES)) {
+                continue;
+            }
+            Matcher matcher = forbidden.matcher(stripCommentsAndLiterals(readString(file)));
+            while (matcher.find()) {
+                violations.add(file + ": forbidden callback shape at offset " + matcher.start());
+            }
+        }
+        if (!violations.isEmpty()) {
+            fail(message + String.join("\n  ", violations));
         }
     }
 

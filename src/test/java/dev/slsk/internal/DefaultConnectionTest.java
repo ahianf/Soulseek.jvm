@@ -164,7 +164,7 @@ class DefaultConnectionTest {
             // branch under test is the one that reads it.
             engineOf(slsk)
                     .events()
-                    .raise(
+                    .publish(
                             EngineEvents.Kind.DISCONNECTED,
                             new SoulseekClientDisconnectedEvent(
                                     "Read error: Connection timed out",
@@ -180,7 +180,7 @@ class DefaultConnectionTest {
         try (Soulseek slsk = client()) {
             engineOf(slsk)
                     .events()
-                    .raise(
+                    .publish(
                             EngineEvents.Kind.DISCONNECTED,
                             new SoulseekClientDisconnectedEvent(
                                     "The server rejected the login", new LoginRejectedException("INVALIDPASS")));

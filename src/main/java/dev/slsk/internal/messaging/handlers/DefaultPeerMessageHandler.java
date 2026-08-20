@@ -134,7 +134,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         this.services = Objects.requireNonNull(services, "services");
         this.responses = Objects.requireNonNull(responses, "responses");
         diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
                 : diagnosticFactory;
     }
 
@@ -571,7 +571,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         }
     }
 
-    private void raiseDiagnostic(DiagnosticEvent eventData) {
+    private void publishDiagnostic(DiagnosticEvent eventData) {
         diagnosticListeners.forEach(listener -> listener.accept(eventData));
     }
 

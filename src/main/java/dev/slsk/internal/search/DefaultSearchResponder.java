@@ -101,7 +101,7 @@ public final class DefaultSearchResponder implements SearchResponder {
         this.loggedInUsername = Objects.requireNonNull(loggedInUsername, "loggedInUsername");
         this.advertisedUploadSpeed = Objects.requireNonNull(advertisedUploadSpeed, "advertisedUploadSpeed");
         diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
                 : diagnosticFactory;
     }
 
@@ -138,7 +138,7 @@ public final class DefaultSearchResponder implements SearchResponder {
                 diagnostic.debug("Discarded cached search response " + responseToken
                         + " to " + record.username() + " for query '"
                         + record.query() + "' with token " + record.token());
-                raiseResponseFailed(record);
+                publishResponseFailed(record);
                 return true;
             }
         } catch (Throwable failure) {
@@ -151,7 +151,7 @@ public final class DefaultSearchResponder implements SearchResponder {
 
     @Override
     public boolean tryRespond(String username, int token, String query) {
-        raiseRequestReceived(new SearchRequestEvent(username, token, query));
+        publishRequestReceived(new SearchRequestEvent(username, token, query));
 
         SearchResponse response;
         try {
@@ -206,7 +206,7 @@ public final class DefaultSearchResponder implements SearchResponder {
                     + " files to " + record.username()
                     + " for query '" + record.query()
                     + "' with token " + record.token());
-            raiseResponseDelivered(record);
+            publishResponseDelivered(record);
             return true;
         } catch (Throwable failure) {
             Throwable cause = failure;
@@ -216,7 +216,7 @@ public final class DefaultSearchResponder implements SearchResponder {
                             + record.query() + "' with token " + record.token()
                             + ": " + Failures.message(cause),
                     cause);
-            raiseResponseFailed(record);
+            publishResponseFailed(record);
             return false;
         }
     }
@@ -247,7 +247,7 @@ public final class DefaultSearchResponder implements SearchResponder {
             diagnostic.debug("Sent response containing " + totalFiles(response)
                     + " files to " + username + " for query '" + query
                     + "' with token " + token);
-            raiseResponseDelivered(new SearchResponseCacheRecord(username, token, query, response));
+            publishResponseDelivered(new SearchResponseCacheRecord(username, token, query, response));
             return true;
         } catch (Throwable failure) {
             Throwable cause = failure;
@@ -296,7 +296,7 @@ public final class DefaultSearchResponder implements SearchResponder {
     private void onEvicted(SearchResponseCacheRecord record) {
         diagnostic.debug("Expired undelivered search response to " + record.username() + " for query '" + record.query()
                 + "' with token " + record.token());
-        raiseResponseFailed(record);
+        publishResponseFailed(record);
     }
 
     private void cacheUndelivered(
@@ -331,22 +331,22 @@ public final class DefaultSearchResponder implements SearchResponder {
                 failure);
     }
 
-    private void raiseDiagnostic(DiagnosticEvent args) {
-        diagnosticListeners.forEach(listener -> listener.accept(args));
+    private void publishDiagnostic(DiagnosticEvent eventData) {
+        diagnosticListeners.forEach(listener -> listener.accept(eventData));
     }
 
-    private void raiseRequestReceived(SearchRequestEvent args) {
-        requestListeners.forEach(listener -> listener.accept(args));
+    private void publishRequestReceived(SearchRequestEvent eventData) {
+        requestListeners.forEach(listener -> listener.accept(eventData));
     }
 
-    private void raiseResponseDelivered(SearchResponseCacheRecord record) {
-        SearchRequestResponseEvent args = toEvent(record);
-        responseDeliveredListeners.forEach(listener -> listener.accept(args));
+    private void publishResponseDelivered(SearchResponseCacheRecord record) {
+        SearchRequestResponseEvent eventData = toEvent(record);
+        responseDeliveredListeners.forEach(listener -> listener.accept(eventData));
     }
 
-    private void raiseResponseFailed(SearchResponseCacheRecord record) {
-        SearchRequestResponseEvent args = toEvent(record);
-        responseFailedListeners.forEach(listener -> listener.accept(args));
+    private void publishResponseFailed(SearchResponseCacheRecord record) {
+        SearchRequestResponseEvent eventData = toEvent(record);
+        responseFailedListeners.forEach(listener -> listener.accept(eventData));
     }
 
     private static SearchRequestResponseEvent toEvent(SearchResponseCacheRecord record) {

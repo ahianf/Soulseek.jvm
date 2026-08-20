@@ -94,9 +94,9 @@ class DefaultChatAckTest {
      * The Definition of Done's assertion, made directly: a listener that blocks
      * for a second does not delay the next protocol message.
      *
-     * <p>Both events are raised from one thread, standing in for the server
+     * <p>Both events are published from one thread, standing in for the server
      * connection's read loop. If delivery were still on that thread, the second
-     * raise could not return until the first listener had finished.
+     * publication could not return until the first listener had finished.
      */
     @Test
     @DisplayName("a listener that blocks for a second does not delay the next message")
@@ -192,9 +192,9 @@ class DefaultChatAckTest {
             chat = new DefaultChat(client, events, diagnostic.proxy);
         }
 
-        /** Raises an inbound private message the way the server read loop does. */
+        /** Publishes an inbound private message the way the server read loop does. */
         private void receive(int id, String from, String message) {
-            client.raiseEvent(
+            client.publishEvent(
                     EngineEvents.Kind.PRIVATE_MESSAGE_RECEIVED,
                     new PrivateMessageReceivedEvent(id, Instant.now(), from, message, false));
         }

@@ -145,7 +145,7 @@ public final class PeerNetwork implements PeerConnectionManager {
         ownsScheduler = scheduler == null;
         this.scheduler = scheduler == null ? new Scheduler("soulseek-peer-network") : scheduler;
         diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
                 : diagnosticFactory;
     }
 
@@ -1000,7 +1000,7 @@ public final class PeerNetwork implements PeerConnectionManager {
         connection.close();
     }
 
-    private void raiseDiagnostic(DiagnosticEvent eventData) {
+    private void publishDiagnostic(DiagnosticEvent eventData) {
         diagnosticListeners.forEach(listener -> listener.accept(eventData));
     }
 

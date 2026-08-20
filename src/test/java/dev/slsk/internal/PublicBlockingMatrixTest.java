@@ -591,7 +591,7 @@ class PublicBlockingMatrixTest {
         }
 
         private void joinRoomLocally() {
-            engine.events().raise(Kind.ROOM_JOINED, new RoomJoinedEvent("matrix", "alice", null));
+            engine.events().publish(Kind.ROOM_JOINED, new RoomJoinedEvent("matrix", "alice", null));
             assertEquals("matrix", slsk.rooms().get("matrix").name());
         }
 

@@ -77,7 +77,7 @@ public final class DefaultListenerHandler implements ListenerHandler {
         this.waiter = Objects.requireNonNull(waiter, "waiter");
         this.searchResponses = Objects.requireNonNull(searchResponses, "searchResponses");
         diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
                 : diagnosticFactory;
     }
 
@@ -235,8 +235,8 @@ public final class DefaultListenerHandler implements ListenerHandler {
                 + " (id: " + connection.getId() + ")");
     }
 
-    private void raiseDiagnostic(DiagnosticEvent args) {
-        diagnosticListeners.forEach(listener -> listener.accept(args));
+    private void publishDiagnostic(DiagnosticEvent eventData) {
+        diagnosticListeners.forEach(listener -> listener.accept(eventData));
     }
 
     private static String toHex(byte[] bytes) {

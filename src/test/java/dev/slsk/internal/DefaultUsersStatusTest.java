@@ -52,7 +52,7 @@ class DefaultUsersStatusTest {
                 received.countDown();
             });
 
-            fixture.client.raiseEvent(
+            fixture.client.publishEvent(
                     EngineEvents.Kind.USER_STATUS_CHANGED,
                     new dev.slsk.internal.user.UserStatus("bob", dev.slsk.internal.user.UserPresence.ONLINE, true));
 
@@ -75,7 +75,7 @@ class DefaultUsersStatusTest {
                 received.countDown();
             });
 
-            fixture.client.raiseEvent(
+            fixture.client.publishEvent(
                     EngineEvents.Kind.USER_CANNOT_CONNECT,
                     new dev.slsk.internal.events.UserCannotConnectEvent(42, "bob"));
 
