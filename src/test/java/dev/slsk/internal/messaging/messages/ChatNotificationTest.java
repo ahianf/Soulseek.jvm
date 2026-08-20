@@ -16,7 +16,7 @@ import dev.slsk.internal.events.RoomMessageReceivedEvent;
 import dev.slsk.internal.events.RoomTickerListReceivedEvent;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
-import dev.slsk.internal.room.RoomTicker;
+import dev.slsk.internal.room.RoomTickerMessage;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -110,8 +110,8 @@ class ChatNotificationTest {
     @Test
     @DisplayName("Ticker list preserves explicit count and snapshots values")
     void tickerListRetainsAndParses() {
-        List<RoomTicker> source = new ArrayList<>();
-        RoomTicker ticker = new RoomTicker("alice", "hello");
+        List<RoomTickerMessage> source = new ArrayList<>();
+        RoomTickerMessage ticker = new RoomTickerMessage("alice", "hello");
         source.add(ticker);
         RoomTickerListNotification direct = new RoomTickerListNotification("room", 7, source);
         source.clear();
@@ -168,7 +168,7 @@ class ChatNotificationTest {
         assertChat(publicArgs.roomName(), publicArgs.username(), publicArgs.message());
 
         RoomTickerListNotification list =
-                new RoomTickerListNotification("room", 99, List.of(new RoomTicker("alice", "hello")));
+                new RoomTickerListNotification("room", 99, List.of(new RoomTickerMessage("alice", "hello")));
         RoomTickerListReceivedEvent tickerArgs = new RoomTickerListReceivedEvent(list);
         assertEquals("room", tickerArgs.roomName());
         assertEquals(1, tickerArgs.tickerCount());

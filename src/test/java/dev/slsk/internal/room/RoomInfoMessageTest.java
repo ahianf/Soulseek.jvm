@@ -14,12 +14,12 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class RoomInfoTest {
+class RoomInfoMessageTest {
     @Test
-    @DisplayName("RoomInfo instantiates properly")
+    @DisplayName("RoomInfoMessage instantiates properly")
     void instantiatesProperly() {
         List<String> users = List.of("alice", "bob");
-        RoomInfo info = new RoomInfo("room", users);
+        RoomInfoMessage info = new RoomInfoMessage("room", users);
 
         assertEquals("room", info.name());
         assertEquals(users.size(), info.userCount());
@@ -27,9 +27,9 @@ class RoomInfoTest {
     }
 
     @Test
-    @DisplayName("RoomInfo instantiates properly with count only")
+    @DisplayName("RoomInfoMessage instantiates properly with count only")
     void instantiatesProperlyWithCountOnly() {
-        RoomInfo info = new RoomInfo("room", -3);
+        RoomInfoMessage info = new RoomInfoMessage("room", -3);
 
         assertEquals("room", info.name());
         assertEquals(-3, info.userCount());
@@ -37,19 +37,19 @@ class RoomInfoTest {
     }
 
     @Test
-    @DisplayName("RoomInfo instantiates with empty user list if none is given")
+    @DisplayName("RoomInfoMessage instantiates with empty user list if none is given")
     void instantiatesWithEmptyUserListIfNotGiven() {
-        RoomInfo info = new RoomInfo("room", (List<String>) null);
+        RoomInfoMessage info = new RoomInfoMessage("room", (List<String>) null);
 
         assertEquals(0, info.userCount());
         assertTrue(info.users().isEmpty());
     }
 
     @Test
-    @DisplayName("RoomInfo copies and protects the user list")
+    @DisplayName("RoomInfoMessage copies and protects the user list")
     void copiesAndProtectsUserList() {
         List<String> source = new ArrayList<>(List.of("alice"));
-        RoomInfo info = new RoomInfo(null, source);
+        RoomInfoMessage info = new RoomInfoMessage(null, source);
 
         source.clear();
 

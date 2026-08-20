@@ -5,4 +5,4 @@
 package dev.slsk.internal.room;
 
 /** A chat-room ticker. */
-public record RoomTicker(String username, String message) {}
+public record RoomTickerMessage(String username, String message) {}

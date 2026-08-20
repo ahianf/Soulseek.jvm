@@ -6,16 +6,16 @@ package dev.slsk.internal.messaging.messages;
 
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
-import dev.slsk.internal.room.RoomTicker;
+import dev.slsk.internal.room.RoomTickerMessage;
 
 /** Notification that a ticker was added to a chat room. */
 public final class RoomTickerAddedNotification implements IncomingMessage {
 
     private final String roomName;
-    private final RoomTicker ticker;
+    private final RoomTickerMessage ticker;
 
     /** Creates a ticker-added notification. */
-    public RoomTickerAddedNotification(String roomName, RoomTicker ticker) {
+    public RoomTickerAddedNotification(String roomName, RoomTickerMessage ticker) {
         this.roomName = roomName;
         this.ticker = ticker;
     }
@@ -24,7 +24,7 @@ public final class RoomTickerAddedNotification implements IncomingMessage {
         return roomName;
     }
 
-    public RoomTicker getTicker() {
+    public RoomTickerMessage getTicker() {
         return ticker;
     }
 
@@ -33,6 +33,7 @@ public final class RoomTickerAddedNotification implements IncomingMessage {
         MessageReader<MessageCode.Server> reader = ServerMessageParser.reader(
                 bytes, MessageCode.Server.ROOM_TICKER_ADD, "RoomTickerAddedNotification", false);
         String roomName = reader.readString();
-        return new RoomTickerAddedNotification(roomName, new RoomTicker(reader.readString(), reader.readString()));
+        return new RoomTickerAddedNotification(
+                roomName, new RoomTickerMessage(reader.readString(), reader.readString()));
     }
 }

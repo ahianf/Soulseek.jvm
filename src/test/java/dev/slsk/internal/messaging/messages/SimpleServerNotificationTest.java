@@ -11,7 +11,7 @@ import dev.slsk.exceptions.MessageException;
 import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
-import dev.slsk.internal.room.RoomInfo;
+import dev.slsk.internal.room.RoomInfoMessage;
 import java.util.List;
 import java.util.function.Function;
 import org.junit.jupiter.api.DisplayName;
@@ -83,7 +83,7 @@ class SimpleServerNotificationTest {
     @Test
     @DisplayName("Private owned-room list parses room and users")
     void parsesOwnedRoom() {
-        RoomInfo room = PrivateRoomOwnedListNotification.fromByteArray(
+        RoomInfoMessage room = PrivateRoomOwnedListNotification.fromByteArray(
                 roomList(MessageCode.Server.PRIVATE_ROOM_OWNED, "secret", "alice", "bob"));
 
         assertEquals("secret", room.name());
@@ -94,7 +94,7 @@ class SimpleServerNotificationTest {
     @Test
     @DisplayName("Private user list parses room and users")
     void parsesPrivateRoomUsers() {
-        RoomInfo room = PrivateRoomUserListNotification.fromByteArray(
+        RoomInfoMessage room = PrivateRoomUserListNotification.fromByteArray(
                 roomList(MessageCode.Server.PRIVATE_ROOM_USERS, "secret", "alice", "bob"));
 
         assertEquals("secret", room.name());

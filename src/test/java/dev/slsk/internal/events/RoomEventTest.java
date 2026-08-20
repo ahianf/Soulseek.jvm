@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import dev.slsk.internal.room.RoomTicker;
+import dev.slsk.internal.room.RoomTickerMessage;
 import dev.slsk.internal.user.UserData;
 import dev.slsk.internal.user.WireUserPresence;
 import java.util.ArrayList;
@@ -63,7 +63,7 @@ class RoomEventTest {
     @Test
     @DisplayName("RoomTickerAddedEvent instantiates with expected values")
     void tickerAddedInstantiatesWithExpectedValues() {
-        RoomTicker ticker = new RoomTicker("alice", "hello");
+        RoomTickerMessage ticker = new RoomTickerMessage("alice", "hello");
         RoomTickerAddedEvent args = new RoomTickerAddedEvent("lobby", ticker);
 
         assertEquals("lobby", args.roomName());
@@ -82,9 +82,9 @@ class RoomEventTest {
     @Test
     @DisplayName("RoomTickerListReceivedEvent instantiates with expected values")
     void tickerListInstantiatesWithExpectedValues() {
-        RoomTicker first = new RoomTicker("alice", "one");
-        RoomTicker second = new RoomTicker("bob", "two");
-        List<RoomTicker> tickers = new ArrayList<>(List.of(first, second));
+        RoomTickerMessage first = new RoomTickerMessage("alice", "one");
+        RoomTickerMessage second = new RoomTickerMessage("bob", "two");
+        List<RoomTickerMessage> tickers = new ArrayList<>(List.of(first, second));
         RoomTickerListReceivedEvent args = new RoomTickerListReceivedEvent("lobby", tickers);
 
         tickers.clear();
@@ -92,7 +92,8 @@ class RoomEventTest {
         assertEquals("lobby", args.roomName());
         assertEquals(2, args.tickerCount());
         assertEquals(List.of(first, second), args.tickers());
-        assertThrows(UnsupportedOperationException.class, () -> args.tickers().add(new RoomTicker("carol", "three")));
+        assertThrows(
+                UnsupportedOperationException.class, () -> args.tickers().add(new RoomTickerMessage("carol", "three")));
     }
 
     @Test

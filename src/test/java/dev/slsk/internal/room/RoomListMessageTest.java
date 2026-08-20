@@ -13,16 +13,16 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class RoomListTest {
+class RoomListMessageTest {
     @Test
-    @DisplayName("RoomList instantiates properly")
+    @DisplayName("RoomListMessage instantiates properly")
     void instantiatesProperly() {
-        List<RoomInfo> publicRooms = List.of(new RoomInfo("public", 1));
-        List<RoomInfo> privateRooms = List.of(new RoomInfo("private", 2));
-        List<RoomInfo> ownedRooms = List.of(new RoomInfo("owned", 3));
+        List<RoomInfoMessage> publicRooms = List.of(new RoomInfoMessage("public", 1));
+        List<RoomInfoMessage> privateRooms = List.of(new RoomInfoMessage("private", 2));
+        List<RoomInfoMessage> ownedRooms = List.of(new RoomInfoMessage("owned", 3));
         List<String> moderated = List.of("moderated");
 
-        RoomList list = new RoomList(publicRooms, privateRooms, ownedRooms, moderated);
+        RoomListMessage list = new RoomListMessage(publicRooms, privateRooms, ownedRooms, moderated);
 
         assertEquals(publicRooms, list.publicRooms());
         assertEquals(1, list.publicCount());
@@ -35,9 +35,9 @@ class RoomListTest {
     }
 
     @Test
-    @DisplayName("RoomList instantiates with empty lists if not given")
+    @DisplayName("RoomListMessage instantiates with empty lists if not given")
     void instantiatesWithEmptyListsIfNotGiven() {
-        RoomList list = new RoomList(null, null, null, null);
+        RoomListMessage list = new RoomListMessage(null, null, null, null);
 
         assertTrue(list.publicRooms().isEmpty());
         assertEquals(0, list.publicCount());
@@ -50,12 +50,12 @@ class RoomListTest {
     }
 
     @Test
-    @DisplayName("RoomList copies and protects every list")
+    @DisplayName("RoomListMessage copies and protects every list")
     void copiesAndProtectsEveryList() {
-        RoomInfo room = new RoomInfo("room", 1);
-        List<RoomInfo> rooms = new ArrayList<>(List.of(room));
+        RoomInfoMessage room = new RoomInfoMessage("room", 1);
+        List<RoomInfoMessage> rooms = new ArrayList<>(List.of(room));
         List<String> names = new ArrayList<>(List.of("room"));
-        RoomList list = new RoomList(rooms, rooms, rooms, names);
+        RoomListMessage list = new RoomListMessage(rooms, rooms, rooms, names);
 
         rooms.clear();
         names.clear();

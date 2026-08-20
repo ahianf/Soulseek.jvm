@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.events;
 
-import dev.slsk.internal.room.RoomTicker;
+import dev.slsk.internal.room.RoomTickerMessage;
 
 /** Event payload emitted when a ticker is added to a chat room. */
-public record RoomTickerAddedEvent(String roomName, RoomTicker ticker) implements SoulseekClientEvent {}
+public record RoomTickerAddedEvent(String roomName, RoomTickerMessage ticker) implements SoulseekClientEvent {}

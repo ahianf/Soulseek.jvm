@@ -77,8 +77,8 @@ import dev.slsk.internal.network.TransferConnectionResult;
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.room.RoomData;
-import dev.slsk.internal.room.RoomInfo;
-import dev.slsk.internal.room.RoomList;
+import dev.slsk.internal.room.RoomInfoMessage;
+import dev.slsk.internal.room.RoomListMessage;
 import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.search.SearchResponder;
 import dev.slsk.internal.search.SearchScopeType;
@@ -287,16 +287,16 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                     waiter.complete(new WaitKey(code), LoginResponse.fromByteArray(message));
                 }
                 case ROOM_LIST -> {
-                    RoomList rooms = RoomListResponseFactory.fromByteArray(message);
+                    RoomListMessage rooms = RoomListResponseFactory.fromByteArray(message);
                     waiter.complete(new WaitKey(code), rooms);
                     publish(ServerMessageEvent.ROOM_LIST_RECEIVED, rooms);
                 }
                 case PRIVATE_ROOM_OWNED -> {
-                    RoomInfo room = PrivateRoomOwnedListNotification.fromByteArray(message);
+                    RoomInfoMessage room = PrivateRoomOwnedListNotification.fromByteArray(message);
                     publish(ServerMessageEvent.PRIVATE_ROOM_MODERATED_USER_LIST_RECEIVED, room);
                 }
                 case PRIVATE_ROOM_USERS -> {
-                    RoomInfo room = PrivateRoomUserListNotification.fromByteArray(message);
+                    RoomInfoMessage room = PrivateRoomUserListNotification.fromByteArray(message);
                     publish(ServerMessageEvent.PRIVATE_ROOM_USER_LIST_RECEIVED, room);
                 }
                 case PRIVILEGED_USERS -> {

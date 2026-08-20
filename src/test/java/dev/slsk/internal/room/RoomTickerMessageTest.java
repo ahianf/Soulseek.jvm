@@ -10,11 +10,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class RoomTickerTest {
+class RoomTickerMessageTest {
     @Test
     @DisplayName("Instantiates with the given data")
     void instantiatesWithTheGivenData() {
-        RoomTicker ticker = new RoomTicker("alice", "hello");
+        RoomTickerMessage ticker = new RoomTickerMessage("alice", "hello");
 
         assertEquals("alice", ticker.username());
         assertEquals("hello", ticker.message());
@@ -23,7 +23,7 @@ class RoomTickerTest {
     @Test
     @DisplayName("Preserves null data")
     void preservesNullData() {
-        RoomTicker ticker = new RoomTicker(null, null);
+        RoomTickerMessage ticker = new RoomTickerMessage(null, null);
 
         assertNull(ticker.username());
         assertNull(ticker.message());

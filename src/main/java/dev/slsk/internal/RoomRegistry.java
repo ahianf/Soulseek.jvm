@@ -24,7 +24,7 @@ import dev.slsk.internal.messaging.messages.RoomListRequest;
 import dev.slsk.internal.messaging.messages.RoomMessageCommand;
 import dev.slsk.internal.messaging.messages.SetRoomTickerCommand;
 import dev.slsk.internal.room.RoomData;
-import dev.slsk.internal.room.RoomList;
+import dev.slsk.internal.room.RoomListMessage;
 import java.util.Objects;
 import java.util.concurrent.TimeoutException;
 
@@ -92,16 +92,16 @@ final class RoomRegistry {
         }
     }
 
-    RoomList getRoomList() throws InterruptedException {
+    RoomListMessage getRoomList() throws InterruptedException {
         return getRoomList(CancellationSignal.none());
     }
 
-    RoomList getRoomList(CancellationSignal cancellationSignal) throws InterruptedException {
+    RoomListMessage getRoomList(CancellationSignal cancellationSignal) throws InterruptedException {
         server.requireLoggedIn("fetch the list of chat rooms");
         return server.request(
                 new RoomListRequest(),
                 new WaitKey(MessageCode.Server.ROOM_LIST),
-                RoomList.class,
+                RoomListMessage.class,
                 cancellationSignal,
                 "Failed to fetch the list of chat rooms from the server: ");
     }

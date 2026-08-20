@@ -5,11 +5,12 @@
 package dev.slsk.internal.events;
 
 import dev.slsk.internal.messaging.messages.RoomTickerListNotification;
-import dev.slsk.internal.room.RoomTicker;
+import dev.slsk.internal.room.RoomTickerMessage;
 import java.util.List;
 
 /** Event payload emitted when a chat-room ticker list is received. */
-public record RoomTickerListReceivedEvent(String roomName, List<RoomTicker> tickers) implements SoulseekClientEvent {
+public record RoomTickerListReceivedEvent(String roomName, List<RoomTickerMessage> tickers)
+        implements SoulseekClientEvent {
 
     /**
      * Creates ticker-list event payload.

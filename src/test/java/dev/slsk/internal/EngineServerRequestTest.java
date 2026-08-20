@@ -38,7 +38,7 @@ import dev.slsk.internal.messaging.messages.WatchUserRequest;
 import dev.slsk.internal.messaging.messages.WatchUserResponse;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.room.RoomData;
-import dev.slsk.internal.room.RoomList;
+import dev.slsk.internal.room.RoomListMessage;
 import dev.slsk.internal.user.UserData;
 import dev.slsk.internal.user.UserStatisticsSnapshot;
 import dev.slsk.internal.user.UserStatusSnapshot;
@@ -229,11 +229,11 @@ class EngineServerRequestTest {
             CancellationController source = new CancellationController();
             CancellationSignal token = source.getSignal();
 
-            RoomList roomList = new RoomList(List.of(), List.of(), List.of(), List.of());
+            RoomListMessage roomList = new RoomListMessage(List.of(), List.of(), List.of(), List.of());
             waiter.result = CompletableFuture.completedFuture(roomList);
             assertSame(roomList, client.rooms().getRoomList(token));
             assertEquals(new WaitKey(MessageCode.Server.ROOM_LIST), waiter.key);
-            assertSame(RoomList.class, waiter.resultType);
+            assertSame(RoomListMessage.class, waiter.resultType);
             assertInstanceOf(RoomListRequest.class, connection.message);
 
             RoomData roomData = new RoomData("room", List.of(), true);

@@ -7,13 +7,13 @@ package dev.slsk.internal.room;
 import java.util.List;
 
 /** The server's public and private chat-room lists. */
-public record RoomList(
-        List<RoomInfo> publicRooms,
-        List<RoomInfo> privateRooms,
-        List<RoomInfo> ownedRooms,
+public record RoomListMessage(
+        List<RoomInfoMessage> publicRooms,
+        List<RoomInfoMessage> privateRooms,
+        List<RoomInfoMessage> ownedRooms,
         List<String> moderatedRoomNames) {
 
-    public RoomList {
+    public RoomListMessage {
         publicRooms = publicRooms == null ? List.of() : List.copyOf(publicRooms);
         privateRooms = privateRooms == null ? List.of() : List.copyOf(privateRooms);
         ownedRooms = ownedRooms == null ? List.of() : List.copyOf(ownedRooms);

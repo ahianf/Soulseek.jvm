@@ -54,8 +54,8 @@ import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.options.SoulseekClientOptionsPatch;
 import dev.slsk.internal.room.RoomData;
-import dev.slsk.internal.room.RoomInfo;
-import dev.slsk.internal.room.RoomList;
+import dev.slsk.internal.room.RoomInfoMessage;
+import dev.slsk.internal.room.RoomListMessage;
 import dev.slsk.internal.search.ParsedSearchQuery;
 import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.search.SearchResponder;
@@ -260,8 +260,8 @@ class ServerMessageHandlerTest {
     @Test
     void roomListCompletesWaitAndRaisesSameSnapshot() {
         Fixture fixture = new Fixture(options(false, false));
-        AtomicReference<RoomList> event = new AtomicReference<>();
-        fixture.handler.<RoomList>subscribe(ServerMessageEvent.ROOM_LIST_RECEIVED, value -> event.set(value));
+        AtomicReference<RoomListMessage> event = new AtomicReference<>();
+        fixture.handler.<RoomListMessage>subscribe(ServerMessageEvent.ROOM_LIST_RECEIVED, value -> event.set(value));
 
         fixture.handle(roomList());
 
@@ -405,8 +405,8 @@ class ServerMessageHandlerTest {
         AtomicReference<String> membershipRemoved = listen(fixture, ServerMessageEvent.PRIVATE_ROOM_MEMBERSHIP_REMOVED);
         AtomicReference<String> moderationAdded = listen(fixture, ServerMessageEvent.PRIVATE_ROOM_MODERATION_ADDED);
         AtomicReference<String> moderationRemoved = listen(fixture, ServerMessageEvent.PRIVATE_ROOM_MODERATION_REMOVED);
-        AtomicReference<RoomInfo> users = listen(fixture, ServerMessageEvent.PRIVATE_ROOM_USER_LIST_RECEIVED);
-        AtomicReference<RoomInfo> moderated =
+        AtomicReference<RoomInfoMessage> users = listen(fixture, ServerMessageEvent.PRIVATE_ROOM_USER_LIST_RECEIVED);
+        AtomicReference<RoomInfoMessage> moderated =
                 listen(fixture, ServerMessageEvent.PRIVATE_ROOM_MODERATED_USER_LIST_RECEIVED);
 
         fixture.handle(string(MessageCode.Server.PRIVATE_ROOM_ADDED, ROOM));

@@ -7,17 +7,17 @@ package dev.slsk.internal.room;
 import java.util.List;
 
 /** Information about a chat room. */
-public record RoomInfo(String name, int userCount, List<String> users) {
+public record RoomInfoMessage(String name, int userCount, List<String> users) {
 
-    public RoomInfo {
+    public RoomInfoMessage {
         users = users == null ? List.of() : List.copyOf(users);
     }
 
-    public RoomInfo(String name, int userCount) {
+    public RoomInfoMessage(String name, int userCount) {
         this(name, userCount, List.of());
     }
 
-    public RoomInfo(String name, List<String> users) {
+    public RoomInfoMessage(String name, List<String> users) {
         this(name, users == null ? 0 : users.size(), users);
     }
 }

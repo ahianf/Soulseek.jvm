@@ -6,12 +6,12 @@ package dev.slsk.internal.messaging.messages;
 
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
-import dev.slsk.internal.room.RoomTicker;
+import dev.slsk.internal.room.RoomTickerMessage;
 import java.util.ArrayList;
 import java.util.List;
 
 /** An incoming list of tickers for a chat room. */
-public record RoomTickerListNotification(String roomName, int tickerCount, List<RoomTicker> tickers)
+public record RoomTickerListNotification(String roomName, int tickerCount, List<RoomTickerMessage> tickers)
         implements IncomingMessage {
 
     public RoomTickerListNotification {
@@ -23,9 +23,9 @@ public record RoomTickerListNotification(String roomName, int tickerCount, List<
                 ServerMessageParser.reader(bytes, MessageCode.Server.ROOM_TICKERS, "RoomTickerListNotification", false);
         String roomName = reader.readString();
         int tickerCount = reader.readInteger();
-        List<RoomTicker> tickers = new ArrayList<>();
+        List<RoomTickerMessage> tickers = new ArrayList<>();
         for (int index = 0; index < tickerCount; index++) {
-            tickers.add(new RoomTicker(reader.readString(), reader.readString()));
+            tickers.add(new RoomTickerMessage(reader.readString(), reader.readString()));
         }
         return new RoomTickerListNotification(roomName, tickerCount, tickers);
     }

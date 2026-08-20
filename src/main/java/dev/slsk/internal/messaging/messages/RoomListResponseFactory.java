@@ -6,8 +6,8 @@ package dev.slsk.internal.messaging.messages;
 
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
-import dev.slsk.internal.room.RoomInfo;
-import dev.slsk.internal.room.RoomList;
+import dev.slsk.internal.room.RoomInfoMessage;
+import dev.slsk.internal.room.RoomListMessage;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,22 +16,22 @@ public final class RoomListResponseFactory implements IncomingMessage {
     private RoomListResponseFactory() {}
 
     /** Parses a room list. */
-    public static RoomList fromByteArray(byte[] bytes) {
+    public static RoomListMessage fromByteArray(byte[] bytes) {
         MessageReader<MessageCode.Server> reader =
                 ServerMessageParser.reader(bytes, MessageCode.Server.ROOM_LIST, "RoomListResponseFactory", false);
-        List<RoomInfo> publicRooms = readRoomInfoList(reader);
-        List<RoomInfo> ownedRooms = readRoomInfoList(reader);
-        List<RoomInfo> privateRooms = readRoomInfoList(reader);
+        List<RoomInfoMessage> publicRooms = readRoomInfoList(reader);
+        List<RoomInfoMessage> ownedRooms = readRoomInfoList(reader);
+        List<RoomInfoMessage> privateRooms = readRoomInfoList(reader);
         List<String> moderatedRooms = readRoomNameList(reader);
-        return new RoomList(publicRooms, privateRooms, ownedRooms, moderatedRooms);
+        return new RoomListMessage(publicRooms, privateRooms, ownedRooms, moderatedRooms);
     }
 
-    private static List<RoomInfo> readRoomInfoList(MessageReader<MessageCode.Server> reader) {
+    private static List<RoomInfoMessage> readRoomInfoList(MessageReader<MessageCode.Server> reader) {
         List<String> names = readRoomNameList(reader);
         int userCountCount = reader.readInteger();
-        List<RoomInfo> rooms = new ArrayList<>();
+        List<RoomInfoMessage> rooms = new ArrayList<>();
         for (int index = 0; index < userCountCount; index++) {
-            rooms.add(new RoomInfo(names.get(index), reader.readInteger()));
+            rooms.add(new RoomInfoMessage(names.get(index), reader.readInteger()));
         }
         return rooms;
     }
