@@ -10,6 +10,7 @@ import dev.slsk.internal.common.Settlement;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.concurrent.CancellationSubscription;
 import dev.slsk.internal.options.SearchOptions;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -44,6 +45,7 @@ public final class SearchInternal implements AutoCloseable {
     private int lockedFileCount;
     private final SearchOptions options;
     private final SearchQuery query;
+    private final List<Consumer<SearchResponse>> responseCallbacks = new ArrayList<>();
     private int responseCount;
     private final Object stateLock = new Object();
     private final SearchScope scope;
@@ -51,7 +53,6 @@ public final class SearchInternal implements AutoCloseable {
     private final boolean ownsScheduler;
     private final int token;
 
-    private volatile Consumer<SearchResponse> responseReceived;
     private volatile ScheduledFuture<?> timeoutTask;
     private volatile long timeoutDeadlineNanos;
     private volatile SearchState state = SearchState.NONE;
@@ -151,14 +152,19 @@ public final class SearchInternal implements AutoCloseable {
 
     /** Replaces the response callback. */
     public void setResponseReceived(Consumer<SearchResponse> callback) {
-        responseReceived = callback;
+        synchronized (stateLock) {
+            responseCallbacks.clear();
+            if (callback != null) {
+                responseCallbacks.add(callback);
+            }
+        }
     }
 
-    /** Adds a response callback using C# delegate-composition order. */
-    public synchronized void addResponseReceived(Consumer<SearchResponse> callback) {
-        Objects.requireNonNull(callback, "callback");
-        Consumer<SearchResponse> existing = responseReceived;
-        responseReceived = existing == null ? callback : existing.andThen(callback);
+    /** Adds a response callback after callbacks already registered. */
+    public void addResponseReceived(Consumer<SearchResponse> callback) {
+        synchronized (stateLock) {
+            responseCallbacks.add(Objects.requireNonNull(callback, "callback"));
+        }
     }
 
     /** Cancels the search. */
@@ -247,8 +253,7 @@ public final class SearchInternal implements AutoCloseable {
                 fileCount += response.fileCount();
                 lockedFileCount += response.lockedFileCount();
 
-                Consumer<SearchResponse> callback = responseReceived;
-                if (callback != null) {
+                for (Consumer<SearchResponse> callback : List.copyOf(responseCallbacks)) {
                     callback.accept(response);
                 }
                 resetTimeout();

@@ -130,7 +130,7 @@ class SearchInternalTest {
     }
 
     @Test
-    void invokesComposedCallbacksInOrderAndResetsTimeout() {
+    void invokesRegisteredCallbacksInOrderAndResetsTimeout() {
         StringBuilder order = new StringBuilder();
         try (SearchInternal search = search(42, options(1000).build())) {
             search.setState(SearchState.IN_PROGRESS);
