@@ -250,21 +250,17 @@ final class DefaultRooms implements Rooms {
         }
         return new RoomUser(
                 name,
-                data.getStatus() == null
+                data.status() == null
                         ? UserPresence.ONLINE
-                        : switch (data.getStatus()) {
+                        : switch (data.status()) {
                             case OFFLINE -> UserPresence.OFFLINE;
                             case AWAY -> UserPresence.AWAY;
                             case ONLINE -> UserPresence.ONLINE;
                         },
                 new UserStatistics(
-                        name,
-                        data.getAverageSpeed(),
-                        data.getUploadCount(),
-                        data.getFileCount(),
-                        data.getDirectoryCount()),
-                data.getSlotsFree() == null ? OptionalInt.empty() : OptionalInt.of(data.getSlotsFree()),
-                Optional.ofNullable(data.getCountryCode()));
+                        name, data.averageSpeed(), data.uploadCount(), data.fileCount(), data.directoryCount()),
+                data.slotsFree() == null ? OptionalInt.empty() : OptionalInt.of(data.slotsFree()),
+                Optional.ofNullable(data.countryCode()));
     }
 
     private static Room room(dev.slsk.internal.room.RoomData data) {
@@ -274,8 +270,8 @@ final class DefaultRooms implements Rooms {
         List<RoomUser> users = data.getUsers() == null
                 ? List.of()
                 : data.getUsers().stream()
-                        .filter(entry -> entry != null && Usernames.fromWire(entry.getUsername()) != null)
-                        .map(entry -> user(Username.of(entry.getUsername()), entry))
+                        .filter(entry -> entry != null && Usernames.fromWire(entry.username()) != null)
+                        .map(entry -> user(Username.of(entry.username()), entry))
                         .toList();
         Set<Username> operators = data.getOperators() == null
                 ? Set.of()

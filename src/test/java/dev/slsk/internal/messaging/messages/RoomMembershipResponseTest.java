@@ -65,15 +65,15 @@ class RoomMembershipResponseTest {
         assertEquals("room", room.getName());
         assertEquals(2, room.getUserCount());
         UserData alice = room.getUsers().get(0);
-        assertEquals("alice", alice.getUsername());
-        assertEquals(UserPresence.ONLINE, alice.getStatus());
-        assertEquals(10, alice.getAverageSpeed());
-        assertEquals(11L, alice.getUploadCount());
-        assertEquals(12, alice.getFileCount());
-        assertEquals(13, alice.getDirectoryCount());
-        assertEquals(14, alice.getSlotsFree());
-        assertEquals("CL", alice.getCountryCode());
-        assertEquals(UserPresence.AWAY, room.getUsers().get(1).getStatus());
+        assertEquals("alice", alice.username());
+        assertEquals(UserPresence.ONLINE, alice.status());
+        assertEquals(10, alice.averageSpeed());
+        assertEquals(11L, alice.uploadCount());
+        assertEquals(12, alice.fileCount());
+        assertEquals(13, alice.directoryCount());
+        assertEquals(14, alice.slotsFree());
+        assertEquals("CL", alice.countryCode());
+        assertEquals(UserPresence.AWAY, room.getUsers().get(1).status());
     }
 
     @Test
@@ -105,14 +105,14 @@ class RoomMembershipResponseTest {
         UserData data = notification.getUserData();
         assertEquals("room", notification.getRoomName());
         assertEquals("alice", notification.getUsername());
-        assertEquals("alice", data.getUsername());
-        assertEquals(UserPresence.ONLINE, data.getStatus());
-        assertEquals(10, data.getAverageSpeed());
-        assertEquals(11L, data.getUploadCount());
-        assertEquals(12, data.getFileCount());
-        assertEquals(13, data.getDirectoryCount());
-        assertEquals(14, data.getSlotsFree());
-        assertEquals("", data.getCountryCode());
+        assertEquals("alice", data.username());
+        assertEquals(UserPresence.ONLINE, data.status());
+        assertEquals(10, data.averageSpeed());
+        assertEquals(11L, data.uploadCount());
+        assertEquals(12, data.fileCount());
+        assertEquals(13, data.directoryCount());
+        assertEquals(14, data.slotsFree());
+        assertEquals("", data.countryCode());
 
         RoomJoinedEvent eventData = new RoomJoinedEvent(notification);
         assertEquals("room", eventData.getRoomName());

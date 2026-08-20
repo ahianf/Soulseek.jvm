@@ -99,8 +99,8 @@ class SearchOptionsTest {
                 .maximumPeerQueueLength(4)
                 .minimumPeerUploadSpeed(5)
                 .fileLimit(6)
-                .responseFilter(response -> response.getQueueLength() == 7)
-                .fileFilter(file -> "x".equals(file.getFilename()))
+                .responseFilter(response -> response.queueLength() == 7)
+                .fileFilter(file -> "x".equals(file.filename()))
                 .stateChanged(state::set)
                 .responseReceived(received::set)
                 .build();

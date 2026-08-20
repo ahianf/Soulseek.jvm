@@ -340,12 +340,12 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 }
                 case GET_STATUS -> {
                     UserStatus status = UserStatusResponseFactory.fromByteArray(message);
-                    waiter.complete(new WaitKey(code, status.getUsername()), status);
+                    waiter.complete(new WaitKey(code, status.username()), status);
                     raise(ServerMessageEvent.USER_STATUS_CHANGED, status);
                 }
                 case GET_USER_STATS -> {
                     UserStatistics statistics = UserStatisticsResponseFactory.fromByteArray(message);
-                    waiter.complete(new WaitKey(code, statistics.getUsername()), statistics);
+                    waiter.complete(new WaitKey(code, statistics.username()), statistics);
                     raise(ServerMessageEvent.USER_STATISTICS_CHANGED, statistics);
                 }
                 case PRIVATE_MESSAGE -> handlePrivateMessage(message);

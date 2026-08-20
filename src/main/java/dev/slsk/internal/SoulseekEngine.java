@@ -861,8 +861,8 @@ final class SoulseekEngine implements AutoCloseable {
                     // average the server computed from our reports, which is
                     // what search responses advertise; the transfer domain
                     // adopts it before the event goes out.
-                    if (statistics != null && statistics.getUsername().equals(server.username())) {
-                        transfers.advertisedUploadSpeed(statistics.getAverageSpeed());
+                    if (statistics != null && statistics.username().equals(server.username())) {
+                        transfers.advertisedUploadSpeed(statistics.averageSpeed());
                     }
                     events.raise(Kind.USER_STATISTICS_CHANGED, statistics);
                 });

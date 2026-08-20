@@ -27,20 +27,19 @@ class SearchResponseTest {
         files.clear();
         locked.clear();
 
-        assertEquals("alice", response.getUsername());
-        assertEquals(17, response.getToken());
+        assertEquals("alice", response.username());
+        assertEquals(17, response.token());
         assertEquals(true, response.hasFreeUploadSlot());
-        assertEquals(99, response.getUploadSpeed());
-        assertEquals(3, response.getQueueLength());
-        assertEquals(1, response.getFileCount());
-        assertSame(file, response.getFiles().getFirst());
-        assertEquals(2, response.getLockedFileCount());
-        assertSame(file, response.getLockedFiles().getFirst());
-        assertThrows(
-                UnsupportedOperationException.class, () -> response.getFiles().clear());
+        assertEquals(99, response.uploadSpeed());
+        assertEquals(3, response.queueLength());
+        assertEquals(1, response.fileCount());
+        assertSame(file, response.files().getFirst());
+        assertEquals(2, response.lockedFileCount());
+        assertSame(file, response.lockedFiles().getFirst());
+        assertThrows(UnsupportedOperationException.class, () -> response.files().clear());
         assertThrows(
                 UnsupportedOperationException.class,
-                () -> response.getLockedFiles().clear());
+                () -> response.lockedFiles().clear());
     }
 
     @Test
@@ -48,23 +47,22 @@ class SearchResponseTest {
     void defaultsNullListsToEmpty() {
         SearchResponse response = new SearchResponse(null, 0, false, 0, 0, null, null);
 
-        assertSame(null, response.getUsername());
-        assertEquals(0, response.getFileCount());
-        assertEquals(List.of(), response.getFiles());
-        assertEquals(0, response.getLockedFileCount());
-        assertEquals(List.of(), response.getLockedFiles());
+        assertSame(null, response.username());
+        assertEquals(0, response.fileCount());
+        assertEquals(List.of(), response.files());
+        assertEquals(0, response.lockedFileCount());
+        assertEquals(List.of(), response.lockedFiles());
     }
 
     @Test
-    @DisplayName("SearchResponse retains null list elements")
-    void retainsNullListElements() {
-        SearchResponse response = new SearchResponse(
-                "u", 1, false, 2, 3, java.util.Arrays.asList((File) null), java.util.Arrays.asList((File) null));
-
-        assertEquals(1, response.getFileCount());
-        assertSame(null, response.getFiles().getFirst());
-        assertEquals(1, response.getLockedFileCount());
-        assertSame(null, response.getLockedFiles().getFirst());
+    @DisplayName("SearchResponse rejects null list elements")
+    void rejectsNullListElements() {
+        assertThrows(
+                NullPointerException.class,
+                () -> new SearchResponse("u", 1, false, 2, 3, java.util.Arrays.asList((File) null), List.of()));
+        assertThrows(
+                NullPointerException.class,
+                () -> new SearchResponse("u", 1, false, 2, 3, List.of(), java.util.Arrays.asList((File) null)));
     }
 
     @Test
@@ -74,28 +72,24 @@ class SearchResponseTest {
         File replacement = new File(1, "f", 2, "e");
         SearchResponse copy = new SearchResponse(original, List.of(replacement), null);
 
-        assertEquals("alice", copy.getUsername());
-        assertEquals(17, copy.getToken());
+        assertEquals("alice", copy.username());
+        assertEquals(17, copy.token());
         assertEquals(true, copy.hasFreeUploadSlot());
-        assertEquals(99, copy.getUploadSpeed());
-        assertEquals(3, copy.getQueueLength());
-        assertEquals(1, copy.getFileCount());
-        assertSame(replacement, copy.getFiles().getFirst());
-        assertEquals(0, copy.getLockedFileCount());
+        assertEquals(99, copy.uploadSpeed());
+        assertEquals(3, copy.queueLength());
+        assertEquals(1, copy.fileCount());
+        assertSame(replacement, copy.files().getFirst());
+        assertEquals(0, copy.lockedFileCount());
     }
 
     @Test
-    @DisplayName("RawSearchResponse preserves stream and base defaults")
+    @DisplayName("RawSearchResponse preserves stream and length")
     void rawResponsePreservesData() {
         ByteArrayInputStream stream = new ByteArrayInputStream(new byte[] {1, 2});
         RawSearchResponse response = new RawSearchResponse(2, stream);
 
-        assertEquals(2, response.getLength());
-        assertSame(stream, response.getStream());
-        assertEquals("", response.getUsername());
-        assertEquals(0, response.getToken());
-        assertEquals(0, response.getFileCount());
-        assertEquals(0, response.getLockedFileCount());
+        assertEquals(2, response.length());
+        assertSame(stream, response.stream());
     }
 
     @Test

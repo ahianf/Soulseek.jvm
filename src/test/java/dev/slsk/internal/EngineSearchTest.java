@@ -200,7 +200,7 @@ class EngineSearchTest {
         fixture.client
                 .events()
                 .on(Kind.SEARCH_RESPONSE_RECEIVED, (dev.slsk.internal.events.SearchResponseReceivedEvent eventData) -> {
-                    assertEquals("alice", eventData.getResponse().getUsername());
+                    assertEquals("alice", eventData.getResponse().username());
                     clientResponses.incrementAndGet();
                 });
         fixture.client
@@ -226,8 +226,8 @@ class EngineSearchTest {
 
         SearchResult result = task.join();
         assertEquals(1, result.responses().size());
-        assertEquals(response.getUsername(), result.responses().get(0).getUsername());
-        assertEquals(response.getToken(), result.responses().get(0).getToken());
+        assertEquals(response.username(), result.responses().getFirst().username());
+        assertEquals(response.token(), result.responses().getFirst().token());
         assertEquals(1, result.search().getResponseCount());
         assertEquals(1, result.search().getFileCount());
         assertEquals(
@@ -263,8 +263,8 @@ class EngineSearchTest {
 
         Search search = task.join();
         assertEquals(1, responses.size());
-        assertEquals(response.getUsername(), responses.get(0).getUsername());
-        assertEquals(response.getToken(), responses.get(0).getToken());
+        assertEquals(response.username(), responses.getFirst().username());
+        assertEquals(response.token(), responses.getFirst().token());
         assertEquals(31, search.getToken());
         assertEquals(1, search.getResponseCount());
         fixture.close();

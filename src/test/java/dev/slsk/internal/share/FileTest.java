@@ -25,12 +25,12 @@ class FileTest {
 
         File file = new File(7, "music/file.mp3", 45_678L, "mp3", attributes);
 
-        assertEquals(7, file.getCode());
-        assertEquals("music/file.mp3", file.getFilename());
-        assertEquals(45_678L, file.getSize());
-        assertEquals("mp3", file.getExtension());
-        assertEquals(2, file.getAttributeCount());
-        assertEquals(attributes, file.getAttributes());
+        assertEquals(7, file.code());
+        assertEquals("music/file.mp3", file.filename());
+        assertEquals(45_678L, file.size());
+        assertEquals("mp3", file.extension());
+        assertEquals(2, file.attributeCount());
+        assertEquals(attributes, file.attributes());
     }
 
     @Test
@@ -38,8 +38,8 @@ class FileTest {
     void instantiatesWithEmptyAttributesGivenNoAttributeList() {
         File file = new File(1, "a", 2, "b");
 
-        assertTrue(file.getAttributes().isEmpty());
-        assertEquals(0, file.getAttributeCount());
+        assertTrue(file.attributes().isEmpty());
+        assertEquals(0, file.attributeCount());
     }
 
     @Test
@@ -47,7 +47,7 @@ class FileTest {
     void treatsNullAttributeListAsEmpty() {
         File file = new File(1, "a", 2, "b", null);
 
-        assertTrue(file.getAttributes().isEmpty());
+        assertTrue(file.attributes().isEmpty());
     }
 
     @Test
@@ -59,10 +59,10 @@ class FileTest {
 
         source.clear();
 
-        assertEquals(1, file.getAttributeCount());
-        assertSame(attribute, file.getAttributes().getFirst());
+        assertEquals(1, file.attributeCount());
+        assertSame(attribute, file.attributes().getFirst());
         assertThrows(
-                UnsupportedOperationException.class, () -> file.getAttributes().add(attribute));
+                UnsupportedOperationException.class, () -> file.attributes().add(attribute));
     }
 
     @Test
@@ -79,10 +79,10 @@ class FileTest {
                         new FileAttribute(FileAttributeType.SAMPLE_RATE, 96),
                         new FileAttribute(FileAttributeType.LENGTH, 180)));
 
-        assertEquals(24, file.getBitDepth());
-        assertEquals(320, file.getBitRate());
-        assertEquals(96, file.getSampleRate());
-        assertEquals(180, file.getLength());
+        assertEquals(24, file.bitDepth());
+        assertEquals(320, file.bitRate());
+        assertEquals(96, file.sampleRate());
+        assertEquals(180, file.length());
     }
 
     @Test
@@ -90,11 +90,11 @@ class FileTest {
     void derivedAttributesReturnNullWhenNoValue() {
         File file = new File(1, "a", 2, "b");
 
-        assertNull(file.getBitDepth());
-        assertNull(file.getBitRate());
-        assertNull(file.getSampleRate());
-        assertNull(file.getLength());
-        assertNull(file.isVariableBitRate());
+        assertNull(file.bitDepth());
+        assertNull(file.bitRate());
+        assertNull(file.sampleRate());
+        assertNull(file.length());
+        assertNull(file.variableBitRate());
     }
 
     @Test
@@ -102,7 +102,7 @@ class FileTest {
     void variableBitRateReturnsTrueWhenAttributeIsNonzero() {
         File file = new File(1, "a", 2, "b", List.of(new FileAttribute(FileAttributeType.VARIABLE_BIT_RATE, -1)));
 
-        assertTrue(file.isVariableBitRate());
+        assertTrue(file.variableBitRate());
     }
 
     @Test
@@ -110,7 +110,7 @@ class FileTest {
     void variableBitRateReturnsFalseWhenAttributeIsZero() {
         File file = new File(1, "a", 2, "b", List.of(new FileAttribute(FileAttributeType.VARIABLE_BIT_RATE, 0)));
 
-        assertFalse(file.isVariableBitRate());
+        assertFalse(file.variableBitRate());
     }
 
     @Test
@@ -125,8 +125,8 @@ class FileTest {
                         new FileAttribute(FileAttributeType.BIT_RATE, 128),
                         new FileAttribute(FileAttributeType.BIT_RATE, 256)));
 
-        assertEquals(256, file.getBitRate());
-        assertEquals(2, file.getAttributeCount());
+        assertEquals(256, file.bitRate());
+        assertEquals(2, file.attributeCount());
     }
 
     @Test
@@ -134,8 +134,8 @@ class FileTest {
     void preservesNullFilenameAndExtension() {
         File file = new File(1, null, 2, null);
 
-        assertNull(file.getFilename());
-        assertNull(file.getExtension());
+        assertNull(file.filename());
+        assertNull(file.extension());
     }
 
     @Test

@@ -20,10 +20,10 @@ class BrowseResponseTest {
     void defaultsDirectoryListsToEmpty() {
         BrowseResponse response = new BrowseResponse();
 
-        assertEquals(0, response.getDirectoryCount());
-        assertEquals(List.of(), response.getDirectories());
-        assertEquals(0, response.getLockedDirectoryCount());
-        assertEquals(List.of(), response.getLockedDirectories());
+        assertEquals(0, response.directoryCount());
+        assertEquals(List.of(), response.directories());
+        assertEquals(0, response.lockedDirectoryCount());
+        assertEquals(List.of(), response.lockedDirectories());
     }
 
     @Test
@@ -38,26 +38,28 @@ class BrowseResponseTest {
         unlockedSource.clear();
         lockedSource.clear();
 
-        assertEquals(1, response.getDirectoryCount());
-        assertSame(unlocked, response.getDirectories().getFirst());
-        assertEquals(1, response.getLockedDirectoryCount());
-        assertSame(locked, response.getLockedDirectories().getFirst());
+        assertEquals(1, response.directoryCount());
+        assertSame(unlocked, response.directories().getFirst());
+        assertEquals(1, response.lockedDirectoryCount());
+        assertSame(locked, response.lockedDirectories().getFirst());
         assertThrows(
                 UnsupportedOperationException.class,
-                () -> response.getDirectories().clear());
+                () -> response.directories().clear());
         assertThrows(
                 UnsupportedOperationException.class,
-                () -> response.getLockedDirectories().clear());
+                () -> response.lockedDirectories().clear());
     }
 
     @Test
-    @DisplayName("BrowseResponse supports null lists and null elements")
+    @DisplayName("BrowseResponse defaults null lists and rejects null elements")
     void supportsSourceNullSemantics() {
-        BrowseResponse response = new BrowseResponse(null, java.util.Arrays.asList((Directory) null));
+        BrowseResponse response = new BrowseResponse(null, null);
 
-        assertEquals(0, response.getDirectoryCount());
-        assertEquals(1, response.getLockedDirectoryCount());
-        assertSame(null, response.getLockedDirectories().getFirst());
+        assertEquals(0, response.directoryCount());
+        assertEquals(0, response.lockedDirectoryCount());
+        assertThrows(
+                NullPointerException.class,
+                () -> new BrowseResponse(List.of(), java.util.Arrays.asList((Directory) null)));
     }
 
     @Test
@@ -66,10 +68,8 @@ class BrowseResponseTest {
         ByteArrayInputStream stream = new ByteArrayInputStream(new byte[] {1, 2});
         RawBrowseResponse response = new RawBrowseResponse(2, stream);
 
-        assertEquals(2, response.getLength());
-        assertSame(stream, response.getStream());
-        assertEquals(0, response.getDirectoryCount());
-        assertEquals(0, response.getLockedDirectoryCount());
+        assertEquals(2, response.length());
+        assertSame(stream, response.stream());
     }
 
     @Test

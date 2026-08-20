@@ -21,14 +21,14 @@ class UserModelsTest {
     void userDataInstantiatesWithTheGivenData() {
         UserData data = new UserData("alice", UserPresence.AWAY, 123, 456L, 7, 8, "CL", 2);
 
-        assertEquals("alice", data.getUsername());
-        assertEquals(UserPresence.AWAY, data.getStatus());
-        assertEquals(123, data.getAverageSpeed());
-        assertEquals(456L, data.getUploadCount());
-        assertEquals(7, data.getFileCount());
-        assertEquals(8, data.getDirectoryCount());
-        assertEquals("CL", data.getCountryCode());
-        assertEquals(2, data.getSlotsFree());
+        assertEquals("alice", data.username());
+        assertEquals(UserPresence.AWAY, data.status());
+        assertEquals(123, data.averageSpeed());
+        assertEquals(456L, data.uploadCount());
+        assertEquals(7, data.fileCount());
+        assertEquals(8, data.directoryCount());
+        assertEquals("CL", data.countryCode());
+        assertEquals(2, data.slotsFree());
     }
 
     @Test
@@ -36,8 +36,8 @@ class UserModelsTest {
     void userDataDefaultsSlotsFreeToNull() {
         UserData data = new UserData("alice", UserPresence.ONLINE, 1, 2, 3, 4, null);
 
-        assertNull(data.getSlotsFree());
-        assertNull(data.getCountryCode());
+        assertNull(data.slotsFree());
+        assertNull(data.countryCode());
     }
 
     @Test
@@ -52,13 +52,13 @@ class UserModelsTest {
         byte[] picture = {1, 2, 3};
         UserInfo info = new UserInfo("description", 4, 5, true, picture);
 
-        assertEquals("description", info.getDescription());
-        assertEquals(4, info.getUploadSlots());
-        assertEquals(5, info.getQueueLength());
-        assertTrue(info.hasFreeUploadSlot());
+        assertEquals("description", info.description());
+        assertEquals(4, info.uploadSlots());
+        assertEquals(5, info.queueLength());
+        assertTrue(info.freeUploadSlot());
         assertTrue(info.hasPicture());
-        assertArrayEquals(picture, info.getPicture());
-        assertNotSame(picture, info.getPicture());
+        assertArrayEquals(picture, info.picture());
+        assertNotSame(picture, info.picture());
     }
 
     @Test
@@ -68,11 +68,11 @@ class UserModelsTest {
         UserInfo info = new UserInfo(null, 0, 0, false, picture);
 
         picture[0] = 9;
-        byte[] returned = info.getPicture();
+        byte[] returned = info.picture();
         returned[0] = 8;
 
-        assertEquals(1, info.getPicture()[0]);
-        assertFalse(info.hasFreeUploadSlot());
+        assertEquals(1, info.picture()[0]);
+        assertFalse(info.freeUploadSlot());
     }
 
     @Test
@@ -81,7 +81,7 @@ class UserModelsTest {
         UserInfo info = new UserInfo("description", 4, 5, false);
 
         assertFalse(info.hasPicture());
-        assertNull(info.getPicture());
+        assertNull(info.picture());
     }
 
     @Test
@@ -97,11 +97,11 @@ class UserModelsTest {
     void userStatisticsInstantiatesWithTheGivenData() {
         UserStatistics statistics = new UserStatistics(null, -1, Long.MAX_VALUE, -2, -3);
 
-        assertNull(statistics.getUsername());
-        assertEquals(-1, statistics.getAverageSpeed());
-        assertEquals(Long.MAX_VALUE, statistics.getUploadCount());
-        assertEquals(-2, statistics.getFileCount());
-        assertEquals(-3, statistics.getDirectoryCount());
+        assertNull(statistics.username());
+        assertEquals(-1, statistics.averageSpeed());
+        assertEquals(Long.MAX_VALUE, statistics.uploadCount());
+        assertEquals(-2, statistics.fileCount());
+        assertEquals(-3, statistics.directoryCount());
     }
 
     @Test
@@ -109,9 +109,9 @@ class UserModelsTest {
     void userStatusInstantiatesWithTheGivenData() {
         UserStatus status = new UserStatus(null, UserPresence.OFFLINE, true);
 
-        assertNull(status.getUsername());
-        assertEquals(UserPresence.OFFLINE, status.getPresence());
-        assertTrue(status.isPrivileged());
+        assertNull(status.username());
+        assertEquals(UserPresence.OFFLINE, status.presence());
+        assertTrue(status.privileged());
     }
 
     @Test

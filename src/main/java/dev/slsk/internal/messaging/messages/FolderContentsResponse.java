@@ -10,46 +10,20 @@ import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
 import dev.slsk.internal.share.Directory;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
 /** The response to a peer folder-contents request. */
-public final class FolderContentsResponse implements IncomingMessage, OutgoingMessage {
-    private final int directoryCount;
-    private final String directoryName;
-    private final List<Directory> directories;
-    private final int token;
-
-    /** Creates a folder-contents response. */
-    public FolderContentsResponse(int token, String directoryName, Iterable<? extends Directory> directories) {
-        this.token = token;
-        this.directoryName = directoryName;
+public record FolderContentsResponse(int token, String directoryName, List<Directory> directories)
+        implements IncomingMessage, OutgoingMessage {
+    public FolderContentsResponse {
         Objects.requireNonNull(directories, "directories");
-        List<Directory> copy = new ArrayList<>();
-        directories.forEach(copy::add);
-        this.directories = Collections.unmodifiableList(copy);
-        directoryCount = copy.size();
-    }
-
-    /** Returns the immutable directory snapshot. */
-    public List<Directory> getDirectories() {
-        return directories;
+        directories = List.copyOf(directories);
     }
 
     /** Returns the number of directories. */
-    public int getDirectoryCount() {
-        return directoryCount;
-    }
-
-    /** Returns the requested root-directory name. */
-    public String getDirectoryName() {
-        return directoryName;
-    }
-
-    /** Returns the response token. */
-    public int getToken() {
-        return token;
+    public int directoryCount() {
+        return directories.size();
     }
 
     /** Parses a compressed folder-contents response. */
@@ -78,7 +52,7 @@ public final class FolderContentsResponse implements IncomingMessage, OutgoingMe
                 .writeCode(MessageCode.Peer.FOLDER_CONTENTS_RESPONSE)
                 .writeInteger(token)
                 .writeString(directoryName)
-                .writeInteger(directoryCount);
+                .writeInteger(directoryCount());
         for (Directory directory : directories) {
             builder.writeDirectory(directory);
         }

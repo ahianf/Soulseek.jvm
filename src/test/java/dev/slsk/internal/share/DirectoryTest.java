@@ -21,9 +21,9 @@ class DirectoryTest {
     void instantiatesWithEmptyFileListGivenNoList() {
         Directory directory = new Directory("music");
 
-        assertEquals("music", directory.getName());
-        assertTrue(directory.getFiles().isEmpty());
-        assertEquals(0, directory.getFileCount());
+        assertEquals("music", directory.name());
+        assertTrue(directory.files().isEmpty());
+        assertEquals(0, directory.fileCount());
     }
 
     @Test
@@ -33,8 +33,8 @@ class DirectoryTest {
 
         Directory directory = new Directory("music", List.of(file));
 
-        assertEquals(1, directory.getFileCount());
-        assertSame(file, directory.getFiles().getFirst());
+        assertEquals(1, directory.fileCount());
+        assertSame(file, directory.files().getFirst());
     }
 
     @Test
@@ -42,7 +42,7 @@ class DirectoryTest {
     void treatsNullFileListAsEmpty() {
         Directory directory = new Directory("music", null);
 
-        assertTrue(directory.getFiles().isEmpty());
+        assertTrue(directory.files().isEmpty());
     }
 
     @Test
@@ -54,19 +54,18 @@ class DirectoryTest {
 
         source.clear();
 
-        assertEquals(1, directory.getFileCount());
-        assertSame(file, directory.getFiles().getFirst());
+        assertEquals(1, directory.fileCount());
+        assertSame(file, directory.files().getFirst());
         assertThrows(
-                UnsupportedOperationException.class, () -> directory.getFiles().add(file));
+                UnsupportedOperationException.class, () -> directory.files().add(file));
     }
 
     @Test
-    @DisplayName("Preserves null name and null file elements")
-    void preservesNullNameAndNullFileElements() {
-        Directory directory = new Directory(null, java.util.Arrays.asList((File) null));
+    @DisplayName("Preserves a null name and rejects null file elements")
+    void preservesNullNameAndRejectsNullFileElements() {
+        Directory directory = new Directory(null);
 
-        assertNull(directory.getName());
-        assertEquals(1, directory.getFileCount());
-        assertNull(directory.getFiles().getFirst());
+        assertNull(directory.name());
+        assertThrows(NullPointerException.class, () -> new Directory("music", java.util.Arrays.asList((File) null)));
     }
 }

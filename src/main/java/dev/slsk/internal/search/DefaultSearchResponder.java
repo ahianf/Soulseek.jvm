@@ -188,7 +188,7 @@ public final class DefaultSearchResponder implements SearchResponder {
             warnResolution(username, token, query, failure);
             return false;
         }
-        if (response.getFileCount() + response.getLockedFileCount() <= 0) {
+        if (response.fileCount() + response.lockedFileCount() <= 0) {
             return false;
         }
         return deliverResolvedResponse(username, token, query, response);
@@ -244,7 +244,7 @@ public final class DefaultSearchResponder implements SearchResponder {
     }
 
     private boolean deliverResolvedResponse(String username, int token, String query, SearchResponse response) {
-        diagnostic.debug("Resolved " + response.getFileCount() + " files for query '" + query + "' with token " + token
+        diagnostic.debug("Resolved " + response.fileCount() + " files for query '" + query + "' with token " + token
                 + " from " + username);
 
         try {
@@ -279,15 +279,6 @@ public final class DefaultSearchResponder implements SearchResponder {
     }
 
     private void writeResponse(MessageConnection connection, SearchResponse response) throws Exception {
-        if (response instanceof RawSearchResponse raw) {
-            connection.write(raw.getLength(), raw.getStream());
-            try {
-                raw.getStream().close();
-            } catch (Throwable ignored) {
-                // Source intentionally ignores stream-close failures.
-            }
-            return;
-        }
         connection.write(response.toByteArray());
     }
 
@@ -382,6 +373,6 @@ public final class DefaultSearchResponder implements SearchResponder {
     }
 
     private static int totalFiles(SearchResponse response) {
-        return response.getFileCount() + response.getLockedFileCount();
+        return response.fileCount() + response.lockedFileCount();
     }
 }

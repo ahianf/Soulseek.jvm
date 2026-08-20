@@ -48,18 +48,18 @@ public final class SearchResponseFactory {
         Objects.requireNonNull(searchResponse, "searchResponse");
         MessageBuilder builder = new MessageBuilder()
                 .writeCode(MessageCode.Peer.SEARCH_RESPONSE)
-                .writeString(searchResponse.getUsername())
-                .writeInteger(searchResponse.getToken())
-                .writeInteger(searchResponse.getFileCount());
-        for (File file : searchResponse.getFiles()) {
+                .writeString(searchResponse.username())
+                .writeInteger(searchResponse.token())
+                .writeInteger(searchResponse.fileCount());
+        for (File file : searchResponse.files()) {
             builder.writeFile(file);
         }
         builder.writeByte(searchResponse.hasFreeUploadSlot() ? 1 : 0)
-                .writeInteger(searchResponse.getUploadSpeed())
-                .writeInteger(searchResponse.getQueueLength())
+                .writeInteger(searchResponse.uploadSpeed())
+                .writeInteger(searchResponse.queueLength())
                 .writeInteger(0)
-                .writeInteger(searchResponse.getLockedFileCount());
-        for (File file : searchResponse.getLockedFiles()) {
+                .writeInteger(searchResponse.lockedFileCount());
+        for (File file : searchResponse.lockedFiles()) {
             builder.writeFile(file);
         }
         return builder.compress().build();

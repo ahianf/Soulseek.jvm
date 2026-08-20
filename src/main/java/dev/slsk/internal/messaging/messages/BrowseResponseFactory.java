@@ -51,12 +51,12 @@ public final class BrowseResponseFactory {
         Objects.requireNonNull(browseResponse, "browseResponse");
         MessageBuilder builder = new MessageBuilder()
                 .writeCode(MessageCode.Peer.BROWSE_RESPONSE)
-                .writeInteger(browseResponse.getDirectoryCount());
-        for (Directory directory : browseResponse.getDirectories()) {
+                .writeInteger(browseResponse.directoryCount());
+        for (Directory directory : browseResponse.directories()) {
             builder.writeDirectory(directory);
         }
-        builder.writeInteger(0).writeInteger(browseResponse.getLockedDirectoryCount());
-        for (Directory directory : browseResponse.getLockedDirectories()) {
+        builder.writeInteger(0).writeInteger(browseResponse.lockedDirectoryCount());
+        for (Directory directory : browseResponse.lockedDirectories()) {
             builder.writeDirectory(directory);
         }
         return builder.compress().build();

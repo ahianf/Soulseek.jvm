@@ -34,14 +34,14 @@ class FolderContentsResponseTest {
         FolderContentsResponse response = new FolderContentsResponse(17, "root", source);
         source.clear();
 
-        assertEquals(17, response.getToken());
-        assertEquals("root", response.getDirectoryName());
-        assertEquals(1, response.getDirectoryCount());
-        assertEquals(1, response.getDirectories().size());
-        assertSame(directory, response.getDirectories().getFirst());
+        assertEquals(17, response.token());
+        assertEquals("root", response.directoryName());
+        assertEquals(1, response.directoryCount());
+        assertEquals(1, response.directories().size());
+        assertSame(directory, response.directories().getFirst());
         assertThrows(
                 UnsupportedOperationException.class,
-                () -> response.getDirectories().clear());
+                () -> response.directories().clear());
         assertThrows(NullPointerException.class, () -> new FolderContentsResponse(1, "root", null));
     }
 
@@ -53,11 +53,11 @@ class FolderContentsResponseTest {
 
         FolderContentsResponse parsed = FolderContentsResponse.fromByteArray(outgoing.toByteArray());
 
-        assertEquals(0x12345678, parsed.getToken());
-        assertEquals("root", parsed.getDirectoryName());
-        assertEquals(1, parsed.getDirectoryCount());
-        assertEquals("root", parsed.getDirectories().getFirst().getName());
-        assertEquals(0, parsed.getDirectories().getFirst().getFileCount());
+        assertEquals(0x12345678, parsed.token());
+        assertEquals("root", parsed.directoryName());
+        assertEquals(1, parsed.directoryCount());
+        assertEquals("root", parsed.directories().getFirst().name());
+        assertEquals(0, parsed.directories().getFirst().fileCount());
     }
 
     @Test
@@ -80,11 +80,11 @@ class FolderContentsResponseTest {
         FolderContentsResponse parsed = FolderContentsResponse.fromByteArray(
                 new FolderContentsResponse(-17, "root", List.of(root, child)).toByteArray());
 
-        assertEquals(-17, parsed.getToken());
-        assertEquals("root", parsed.getDirectoryName());
-        assertEquals(2, parsed.getDirectoryCount());
-        assertDirectoryEquals(root, parsed.getDirectories().get(0));
-        assertDirectoryEquals(child, parsed.getDirectories().get(1));
+        assertEquals(-17, parsed.token());
+        assertEquals("root", parsed.directoryName());
+        assertEquals(2, parsed.directoryCount());
+        assertDirectoryEquals(root, parsed.directories().get(0));
+        assertDirectoryEquals(child, parsed.directories().get(1));
     }
 
     @Test
@@ -145,23 +145,23 @@ class FolderContentsResponseTest {
     }
 
     private static void assertDirectoryEquals(Directory expected, Directory actual) {
-        assertEquals(expected.getName(), actual.getName());
-        assertEquals(expected.getFileCount(), actual.getFileCount());
-        for (int index = 0; index < expected.getFileCount(); index++) {
-            File expectedFile = expected.getFiles().get(index);
-            File actualFile = actual.getFiles().get(index);
-            assertEquals(expectedFile.getCode(), actualFile.getCode());
-            assertEquals(expectedFile.getFilename(), actualFile.getFilename());
-            assertEquals(expectedFile.getSize(), actualFile.getSize());
-            assertEquals(expectedFile.getExtension(), actualFile.getExtension());
-            assertEquals(expectedFile.getAttributeCount(), actualFile.getAttributeCount());
-            for (int attribute = 0; attribute < expectedFile.getAttributeCount(); attribute++) {
+        assertEquals(expected.name(), actual.name());
+        assertEquals(expected.fileCount(), actual.fileCount());
+        for (int index = 0; index < expected.fileCount(); index++) {
+            File expectedFile = expected.files().get(index);
+            File actualFile = actual.files().get(index);
+            assertEquals(expectedFile.code(), actualFile.code());
+            assertEquals(expectedFile.filename(), actualFile.filename());
+            assertEquals(expectedFile.size(), actualFile.size());
+            assertEquals(expectedFile.extension(), actualFile.extension());
+            assertEquals(expectedFile.attributeCount(), actualFile.attributeCount());
+            for (int attribute = 0; attribute < expectedFile.attributeCount(); attribute++) {
                 assertEquals(
-                        expectedFile.getAttributes().get(attribute).getType(),
-                        actualFile.getAttributes().get(attribute).getType());
+                        expectedFile.attributes().get(attribute).type(),
+                        actualFile.attributes().get(attribute).type());
                 assertEquals(
-                        expectedFile.getAttributes().get(attribute).getValue(),
-                        actualFile.getAttributes().get(attribute).getValue());
+                        expectedFile.attributes().get(attribute).value(),
+                        actualFile.attributes().get(attribute).value());
             }
         }
     }

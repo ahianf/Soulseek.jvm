@@ -5,66 +5,37 @@
 package dev.slsk.internal.share;
 
 import dev.slsk.internal.messaging.messages.BrowseResponseFactory;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /** A response to a peer browse request. */
-public class BrowseResponse {
-    private final List<Directory> directories;
-    private final int directoryCount;
-    private final List<Directory> lockedDirectories;
-    private final int lockedDirectoryCount;
+public record BrowseResponse(List<Directory> directories, List<Directory> lockedDirectories) {
+    public BrowseResponse {
+        directories = directories == null ? List.of() : List.copyOf(directories);
+        lockedDirectories = lockedDirectories == null ? List.of() : List.copyOf(lockedDirectories);
+    }
 
     /** Creates an empty browse response. */
     public BrowseResponse() {
-        this(null, null);
+        this(List.of(), List.of());
     }
 
     /** Creates a browse response with unlocked directories. */
-    public BrowseResponse(Iterable<? extends Directory> directoryList) {
-        this(directoryList, null);
-    }
-
-    /** Creates a browse response. */
-    public BrowseResponse(
-            Iterable<? extends Directory> directoryList, Iterable<? extends Directory> lockedDirectoryList) {
-        directories = immutableCopy(directoryList);
-        directoryCount = directories.size();
-        lockedDirectories = immutableCopy(lockedDirectoryList);
-        lockedDirectoryCount = lockedDirectories.size();
-    }
-
-    /** Returns the unlocked-directory snapshot. */
-    public List<Directory> getDirectories() {
-        return directories;
+    public BrowseResponse(List<Directory> directories) {
+        this(directories, List.of());
     }
 
     /** Returns the unlocked-directory count. */
-    public int getDirectoryCount() {
-        return directoryCount;
-    }
-
-    /** Returns the locked-directory snapshot. */
-    public List<Directory> getLockedDirectories() {
-        return lockedDirectories;
+    public int directoryCount() {
+        return directories.size();
     }
 
     /** Returns the locked-directory count. */
-    public int getLockedDirectoryCount() {
-        return lockedDirectoryCount;
+    public int lockedDirectoryCount() {
+        return lockedDirectories.size();
     }
 
     /** Serializes this response to its peer protocol message. */
     public byte[] toByteArray() {
         return BrowseResponseFactory.toByteArray(this);
-    }
-
-    private static List<Directory> immutableCopy(Iterable<? extends Directory> source) {
-        List<Directory> copy = new ArrayList<>();
-        if (source != null) {
-            source.forEach(copy::add);
-        }
-        return Collections.unmodifiableList(copy);
     }
 }

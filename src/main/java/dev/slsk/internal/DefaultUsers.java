@@ -88,7 +88,7 @@ final class DefaultUsers implements Users {
 
     /** Updates the watch's snapshot and publishes the transition. */
     private void onStatus(dev.slsk.internal.user.UserStatus source) {
-        Username user = source == null ? null : Usernames.fromWire(source.getUsername());
+        Username user = source == null ? null : Usernames.fromWire(source.username());
         if (user == null) {
             return;
         }
@@ -150,7 +150,7 @@ final class DefaultUsers implements Users {
     }
 
     private void onStatistics(dev.slsk.internal.user.UserStatistics source) {
-        Username user = source == null ? null : Usernames.fromWire(source.getUsername());
+        Username user = source == null ? null : Usernames.fromWire(source.username());
         if (user == null) {
             return;
         }
@@ -159,15 +159,15 @@ final class DefaultUsers implements Users {
 
     private static UserStatistics statistics(dev.slsk.internal.user.UserStatistics source) {
         return new UserStatistics(
-                Username.of(source.getUsername()),
-                source.getAverageSpeed(),
-                source.getUploadCount(),
-                source.getFileCount(),
-                source.getDirectoryCount());
+                Username.of(source.username()),
+                source.averageSpeed(),
+                source.uploadCount(),
+                source.fileCount(),
+                source.directoryCount());
     }
 
     private static UserStatus status(dev.slsk.internal.user.UserStatus source) {
-        return new UserStatus(Username.of(source.getUsername()), presence(source.getPresence()), source.isPrivileged());
+        return new UserStatus(Username.of(source.username()), presence(source.presence()), source.privileged());
     }
 
     private static UserPresence presence(dev.slsk.internal.user.UserPresence source) {
@@ -196,11 +196,11 @@ final class DefaultUsers implements Users {
         dev.slsk.internal.user.UserInfo source = directory.getUserInfo(user.value(), signal);
         return new UserInfo(
                 user,
-                source.getDescription() == null ? "" : source.getDescription(),
+                source.description() == null ? "" : source.description(),
                 Optional.empty(),
-                source.getUploadSlots(),
-                source.getQueueLength(),
-                source.hasFreeUploadSlot());
+                source.uploadSlots(),
+                source.queueLength(),
+                source.freeUploadSlot());
     }
 
     @Override
@@ -272,8 +272,8 @@ final class DefaultUsers implements Users {
         return new Browse(
                 request.user(),
                 Instant.now(),
-                directories(response.getDirectories()),
-                directories(response.getLockedDirectories()));
+                directories(response.directories()),
+                directories(response.lockedDirectories()));
     }
 
     @Override
@@ -301,11 +301,11 @@ final class DefaultUsers implements Users {
         }
         List<Directory> converted = new ArrayList<>(source.size());
         for (dev.slsk.internal.share.Directory entry : source) {
-            List<SearchFile> files = new ArrayList<>(entry.getFiles().size());
-            for (dev.slsk.internal.share.File file : entry.getFiles()) {
-                files.add(new SearchFile(file.getFilename(), file.getSize(), FileAttributes.none()));
+            List<SearchFile> files = new ArrayList<>(entry.files().size());
+            for (dev.slsk.internal.share.File file : entry.files()) {
+                files.add(new SearchFile(file.filename(), file.size(), FileAttributes.none()));
             }
-            converted.add(new Directory(entry.getName(), files));
+            converted.add(new Directory(entry.name(), files));
         }
         return List.copyOf(converted);
     }
@@ -331,7 +331,7 @@ final class DefaultUsers implements Users {
                     try {
                         dev.slsk.internal.user.UserData data = directory.watchUser(user.value());
                         if (data != null) {
-                            registration.status = new UserStatus(user, presence(data.getStatus()), false);
+                            registration.status = new UserStatus(user, presence(data.status()), false);
                         }
                     } catch (InterruptedException interrupted) {
                         // watch() is a frozen no-throws signature; the interrupt

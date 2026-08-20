@@ -115,8 +115,8 @@ class SearchInternalTest {
             search.setResponseReceived(accepted::set);
             search.tryAddResponse(response(42, 1, 0, List.of(keep, remove), List.of(keep, remove)));
 
-            assertEquals(List.of(keep), accepted.get().getFiles());
-            assertEquals(List.of(keep), accepted.get().getLockedFiles());
+            assertEquals(List.of(keep), accepted.get().files());
+            assertEquals(List.of(keep), accepted.get().lockedFiles());
             assertEquals(1, search.getResponseCount());
             assertEquals(1, search.getFileCount());
             assertEquals(1, search.getLockedFileCount());

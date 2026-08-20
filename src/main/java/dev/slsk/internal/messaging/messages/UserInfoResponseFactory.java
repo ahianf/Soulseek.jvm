@@ -41,14 +41,14 @@ public final class UserInfoResponseFactory {
         Objects.requireNonNull(userInfo, "userInfo");
         MessageBuilder builder = new MessageBuilder()
                 .writeCode(MessageCode.Peer.INFO_RESPONSE)
-                .writeString(userInfo.getDescription())
+                .writeString(userInfo.description())
                 .writeByte(userInfo.hasPicture() ? 1 : 0);
         if (userInfo.hasPicture()) {
-            builder.writeInteger(userInfo.getPicture().length).writeBytes(userInfo.getPicture());
+            builder.writeInteger(userInfo.picture().length).writeBytes(userInfo.picture());
         }
-        return builder.writeInteger(userInfo.getUploadSlots())
-                .writeInteger(userInfo.getQueueLength())
-                .writeByte(userInfo.hasFreeUploadSlot() ? 1 : 0)
+        return builder.writeInteger(userInfo.uploadSlots())
+                .writeInteger(userInfo.queueLength())
+                .writeByte(userInfo.freeUploadSlot() ? 1 : 0)
                 .build();
     }
 }

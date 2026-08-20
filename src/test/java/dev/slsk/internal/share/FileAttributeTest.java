@@ -16,8 +16,8 @@ class FileAttributeTest {
     void instantiatesWithTheGivenData() {
         FileAttribute attribute = new FileAttribute(FileAttributeType.SAMPLE_RATE, 44100);
 
-        assertEquals(FileAttributeType.SAMPLE_RATE, attribute.getType());
-        assertEquals(44100, attribute.getValue());
+        assertEquals(FileAttributeType.SAMPLE_RATE, attribute.type());
+        assertEquals(44100, attribute.value());
     }
 
     @Test

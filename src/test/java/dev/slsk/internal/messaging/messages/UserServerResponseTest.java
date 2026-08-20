@@ -81,11 +81,11 @@ class UserServerResponseTest {
                 .writeInteger(56)
                 .build());
 
-        assertEquals("alice", statistics.getUsername());
-        assertEquals(-12, statistics.getAverageSpeed());
-        assertEquals(9_876_543_210L, statistics.getUploadCount());
-        assertEquals(34, statistics.getFileCount());
-        assertEquals(56, statistics.getDirectoryCount());
+        assertEquals("alice", statistics.username());
+        assertEquals(-12, statistics.averageSpeed());
+        assertEquals(9_876_543_210L, statistics.uploadCount());
+        assertEquals(34, statistics.fileCount());
+        assertEquals(56, statistics.directoryCount());
     }
 
     @Test
@@ -98,9 +98,9 @@ class UserServerResponseTest {
                 .writeByte(255)
                 .build());
 
-        assertEquals("alice", status.getUsername());
-        assertEquals(UserPresence.AWAY, status.getPresence());
-        assertTrue(status.isPrivileged());
+        assertEquals("alice", status.username());
+        assertEquals(UserPresence.AWAY, status.presence());
+        assertTrue(status.privileged());
     }
 
     @Test
@@ -121,13 +121,13 @@ class UserServerResponseTest {
 
         assertTrue(response.isExists());
         UserData data = response.getUserData();
-        assertEquals("alice", data.getUsername());
-        assertEquals(UserPresence.ONLINE, data.getStatus());
-        assertEquals(12, data.getAverageSpeed());
-        assertEquals(9_876_543_210L, data.getUploadCount());
-        assertEquals(34, data.getFileCount());
-        assertEquals(56, data.getDirectoryCount());
-        assertEquals("CL", data.getCountryCode());
+        assertEquals("alice", data.username());
+        assertEquals(UserPresence.ONLINE, data.status());
+        assertEquals(12, data.averageSpeed());
+        assertEquals(9_876_543_210L, data.uploadCount());
+        assertEquals(34, data.fileCount());
+        assertEquals(56, data.directoryCount());
+        assertEquals("CL", data.countryCode());
     }
 
     @Test
@@ -137,7 +137,7 @@ class UserServerResponseTest {
                 "",
                 WatchUserResponse.fromByteArray(watchFrame(true, ""))
                         .getUserData()
-                        .getCountryCode());
+                        .countryCode());
 
         byte[] missingCountry = new MessageBuilder()
                 .writeCode(MessageCode.Server.WATCH_USER)
@@ -149,7 +149,7 @@ class UserServerResponseTest {
                 .writeInteger(34)
                 .writeInteger(56)
                 .build();
-        assertNull(WatchUserResponse.fromByteArray(missingCountry).getUserData().getCountryCode());
+        assertNull(WatchUserResponse.fromByteArray(missingCountry).getUserData().countryCode());
     }
 
     @Test

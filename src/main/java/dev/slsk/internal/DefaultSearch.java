@@ -157,7 +157,7 @@ final class DefaultSearch implements Search {
             if (requester != null && event.getSearchResponse() != null) {
                 dev.slsk.internal.search.SearchResponse delivered = event.getSearchResponse();
                 events.publish(new SearchEvent.ResponseDelivered(
-                        requester, event.getToken(), delivered.getFileCount(), Instant.now()));
+                        requester, event.getToken(), delivered.fileCount(), Instant.now()));
             }
         });
         client.events().on(Kind.SEARCH_RESPONSE_DELIVERY_FAILED, (SearchRequestResponseEvent event) -> {
@@ -179,42 +179,37 @@ final class DefaultSearch implements Search {
     // --- translation -------------------------------------------------------
 
     private static FileAttributes attributes(dev.slsk.internal.share.File file) {
-        if (file.getAttributes() == null) {
+        if (file.attributes() == null) {
             return FileAttributes.none();
         }
         Map<FileAttributeType, Integer> raw = new HashMap<>();
-        for (dev.slsk.internal.share.FileAttribute attribute : file.getAttributes()) {
-            FileAttributeType type =
-                    FileAttributeType.fromCode(attribute.getType().getValue());
+        for (dev.slsk.internal.share.FileAttribute attribute : file.attributes()) {
+            FileAttributeType type = FileAttributeType.fromCode(attribute.type().getValue());
             if (type != null) {
-                raw.put(type, attribute.getValue());
+                raw.put(type, attribute.value());
             }
         }
         return new FileAttributes(raw);
     }
 
     private static SearchFile file(dev.slsk.internal.share.File source) {
-        return new SearchFile(source.getFilename(), source.getSize(), attributes(source));
+        return new SearchFile(source.filename(), source.size(), attributes(source));
     }
 
     private static SearchResponse response(dev.slsk.internal.search.SearchResponse source, SearchFilters filters) {
-        List<SearchFile> files = source.getFiles() == null
-                ? List.of()
-                : source.getFiles().stream()
-                        .map(DefaultSearch::file)
-                        .filter(candidate -> filters.accepts(candidate, false))
-                        .toList();
-        List<SearchFile> locked = source.getLockedFiles() == null
-                ? List.of()
-                : source.getLockedFiles().stream()
-                        .map(DefaultSearch::file)
-                        .filter(candidate -> filters.accepts(candidate, true))
-                        .toList();
+        List<SearchFile> files = source.files().stream()
+                .map(DefaultSearch::file)
+                .filter(candidate -> filters.accepts(candidate, false))
+                .toList();
+        List<SearchFile> locked = source.lockedFiles().stream()
+                .map(DefaultSearch::file)
+                .filter(candidate -> filters.accepts(candidate, true))
+                .toList();
         return new SearchResponse(
-                Username.of(source.getUsername()),
+                Username.of(source.username()),
                 source.hasFreeUploadSlot() ? 1 : 0,
-                source.getUploadSpeed(),
-                source.getQueueLength(),
+                source.uploadSpeed(),
+                source.queueLength(),
                 files,
                 locked);
     }
@@ -401,7 +396,7 @@ final class DefaultSearch implements Search {
     private void accept(State state, dev.slsk.internal.search.SearchResponse source, SearchFilters filters) {
         // The username is peer-supplied; a value no username can represent
         // drops the response rather than throwing out of the read dispatch.
-        if (source == null || Usernames.fromWire(source.getUsername()) == null) {
+        if (source == null || Usernames.fromWire(source.username()) == null) {
             return;
         }
         SearchResponse response = response(source, filters);

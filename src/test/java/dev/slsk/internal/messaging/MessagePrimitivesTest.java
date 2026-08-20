@@ -249,16 +249,16 @@ class MessagePrimitivesTest {
 
         Directory decoded = reader.readDirectory();
 
-        assertEquals("music", decoded.getName());
-        assertEquals(1, decoded.getFileCount());
-        File decodedFile = decoded.getFiles().get(0);
-        assertEquals(file.getCode(), decodedFile.getCode());
-        assertEquals(file.getFilename(), decodedFile.getFilename());
-        assertEquals(file.getSize(), decodedFile.getSize());
-        assertEquals(file.getExtension(), decodedFile.getExtension());
-        assertEquals(2, decodedFile.getAttributeCount());
-        assertEquals(320, decodedFile.getBitRate());
-        assertEquals(180, decodedFile.getLength());
+        assertEquals("music", decoded.name());
+        assertEquals(1, decoded.fileCount());
+        File decodedFile = decoded.files().get(0);
+        assertEquals(file.code(), decodedFile.code());
+        assertEquals(file.filename(), decodedFile.filename());
+        assertEquals(file.size(), decodedFile.size());
+        assertEquals(file.extension(), decodedFile.extension());
+        assertEquals(2, decodedFile.attributeCount());
+        assertEquals(320, decodedFile.bitRate());
+        assertEquals(180, decodedFile.length());
     }
 
     @Test
@@ -275,7 +275,7 @@ class MessagePrimitivesTest {
                 .build();
         File file = new MessageReader<>(message, MessageCode.Peer.class).readFile();
 
-        assertEquals(3_000_000_000L, file.getSize());
+        assertEquals(3_000_000_000L, file.size());
     }
 
     /**
@@ -303,10 +303,10 @@ class MessagePrimitivesTest {
 
         File file = new MessageReader<>(message, MessageCode.Peer.class).readFile();
 
-        assertEquals("song.mp3", file.getFilename());
-        assertEquals(2, file.getAttributeCount());
-        assertEquals(320, file.getBitRate());
-        assertEquals(180, file.getLength());
+        assertEquals("song.mp3", file.filename());
+        assertEquals(2, file.attributeCount());
+        assertEquals(320, file.bitRate());
+        assertEquals(180, file.length());
     }
 
     @Test

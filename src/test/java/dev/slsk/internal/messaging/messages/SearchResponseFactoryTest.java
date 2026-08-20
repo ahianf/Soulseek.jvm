@@ -55,15 +55,15 @@ class SearchResponseFactoryTest {
         assertEquals(0, reader.getRemaining());
 
         SearchResponse parsed = SearchResponseFactory.fromByteArray(bytes);
-        assertEquals("alice", parsed.getUsername());
-        assertEquals(0x12345678, parsed.getToken());
+        assertEquals("alice", parsed.username());
+        assertEquals(0x12345678, parsed.token());
         assertTrue(parsed.hasFreeUploadSlot());
-        assertEquals(1000, parsed.getUploadSpeed());
-        assertEquals(7, parsed.getQueueLength());
-        assertEquals(1, parsed.getFileCount());
-        assertFileEquals(open, parsed.getFiles().getFirst());
-        assertEquals(1, parsed.getLockedFileCount());
-        assertFileEquals(locked, parsed.getLockedFiles().getFirst());
+        assertEquals(1000, parsed.uploadSpeed());
+        assertEquals(7, parsed.queueLength());
+        assertEquals(1, parsed.fileCount());
+        assertFileEquals(open, parsed.files().getFirst());
+        assertEquals(1, parsed.lockedFileCount());
+        assertFileEquals(locked, parsed.lockedFiles().getFirst());
     }
 
     @Test
@@ -82,13 +82,13 @@ class SearchResponseFactoryTest {
 
         SearchResponse parsed = SearchResponseFactory.fromByteArray(bytes);
 
-        assertEquals("u", parsed.getUsername());
-        assertEquals(1, parsed.getToken());
+        assertEquals("u", parsed.username());
+        assertEquals(1, parsed.token());
         assertFalse(parsed.hasFreeUploadSlot());
-        assertEquals(2, parsed.getUploadSpeed());
-        assertEquals(3, parsed.getQueueLength());
-        assertEquals(0, parsed.getFileCount());
-        assertEquals(0, parsed.getLockedFileCount());
+        assertEquals(2, parsed.uploadSpeed());
+        assertEquals(3, parsed.queueLength());
+        assertEquals(0, parsed.fileCount());
+        assertEquals(0, parsed.lockedFileCount());
     }
 
     @Test
@@ -111,9 +111,9 @@ class SearchResponseFactoryTest {
         SearchResponse parsed = SearchResponseFactory.fromByteArray(bytes);
 
         assertTrue(parsed.hasFreeUploadSlot());
-        assertEquals(3, parsed.getQueueLength());
-        assertEquals(1, parsed.getLockedFileCount());
-        assertFileEquals(locked, parsed.getLockedFiles().getFirst());
+        assertEquals(3, parsed.queueLength());
+        assertEquals(1, parsed.lockedFileCount());
+        assertFileEquals(locked, parsed.lockedFiles().getFirst());
     }
 
     @Test
@@ -135,7 +135,7 @@ class SearchResponseFactoryTest {
         SearchResponse parsed = SearchResponseFactory.fromByteArray(bytes);
 
         assertTrue(parsed.hasFreeUploadSlot());
-        assertEquals(0, parsed.getLockedFileCount());
+        assertEquals(0, parsed.lockedFileCount());
     }
 
     @Test
@@ -175,18 +175,18 @@ class SearchResponseFactoryTest {
     }
 
     private static void assertFileEquals(File expected, File actual) {
-        assertEquals(expected.getCode(), actual.getCode());
-        assertEquals(expected.getFilename(), actual.getFilename());
-        assertEquals(expected.getSize(), actual.getSize());
-        assertEquals(expected.getExtension(), actual.getExtension());
-        assertEquals(expected.getAttributeCount(), actual.getAttributeCount());
-        for (int index = 0; index < expected.getAttributeCount(); index++) {
+        assertEquals(expected.code(), actual.code());
+        assertEquals(expected.filename(), actual.filename());
+        assertEquals(expected.size(), actual.size());
+        assertEquals(expected.extension(), actual.extension());
+        assertEquals(expected.attributeCount(), actual.attributeCount());
+        for (int index = 0; index < expected.attributeCount(); index++) {
             assertEquals(
-                    expected.getAttributes().get(index).getType(),
-                    actual.getAttributes().get(index).getType());
+                    expected.attributes().get(index).type(),
+                    actual.attributes().get(index).type());
             assertEquals(
-                    expected.getAttributes().get(index).getValue(),
-                    actual.getAttributes().get(index).getValue());
+                    expected.attributes().get(index).value(),
+                    actual.attributes().get(index).value());
         }
     }
 }

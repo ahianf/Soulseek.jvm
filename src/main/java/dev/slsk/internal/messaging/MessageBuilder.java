@@ -170,14 +170,14 @@ public final class MessageBuilder {
      */
     public MessageBuilder writeFile(File file) {
         Objects.requireNonNull(file, "file");
-        writeByte(file.getCode())
-                .writeString(file.getFilename())
-                .writeLong(file.getSize())
-                .writeString(file.getExtension())
-                .writeInteger(file.getAttributeCount());
+        writeByte(file.code())
+                .writeString(file.filename())
+                .writeLong(file.size())
+                .writeString(file.extension())
+                .writeInteger(file.attributeCount());
 
-        for (FileAttribute attribute : file.getAttributes()) {
-            writeInteger(attribute.getType().getValue()).writeInteger(attribute.getValue());
+        for (FileAttribute attribute : file.attributes()) {
+            writeInteger(attribute.type().getValue()).writeInteger(attribute.value());
         }
         return this;
     }
@@ -187,8 +187,8 @@ public final class MessageBuilder {
      */
     public MessageBuilder writeDirectory(Directory directory) {
         Objects.requireNonNull(directory, "directory");
-        writeString(directory.getName()).writeInteger(directory.getFileCount());
-        for (File file : directory.getFiles()) {
+        writeString(directory.name()).writeInteger(directory.fileCount());
+        for (File file : directory.files()) {
             writeFile(file);
         }
         return this;

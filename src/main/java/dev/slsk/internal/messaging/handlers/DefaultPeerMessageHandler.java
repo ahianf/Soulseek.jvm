@@ -36,19 +36,18 @@ import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.MessageEvent;
 import dev.slsk.internal.network.MessageReceivedEvent;
 import dev.slsk.internal.options.SoulseekClientOptions;
-import dev.slsk.internal.search.RawSearchResponse;
 import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.search.SearchResponse;
 import dev.slsk.internal.share.BrowseResponse;
 import dev.slsk.internal.share.Catalogs;
 import dev.slsk.internal.share.Directory;
-import dev.slsk.internal.share.RawBrowseResponse;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.internal.user.UserInfo;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -216,8 +215,8 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                             new WaitKey(
                                     MessageCode.Peer.FOLDER_CONTENTS_RESPONSE,
                                     connection.getUsername(),
-                                    response.getToken()),
-                            response.getDirectories());
+                                    response.token()),
+                            response.directories());
                 }
                 case INFO_RESPONSE -> {
                     UserInfo info = UserInfoResponseFactory.fromByteArray(message);
@@ -337,7 +336,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
 
     private void handleSearchResponse(byte[] message) {
         SearchResponse response = SearchResponseFactory.fromByteArray(message);
-        SearchInternal search = searches.get().get(response.getToken());
+        SearchInternal search = searches.get().get(response.token());
         if (search != null) {
             search.tryAddResponse(response);
         }
@@ -398,10 +397,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                         cause);
                 return;
             }
-            if (response instanceof RawSearchResponse raw) {
-                connection.write(raw.getLength(), raw.getStream());
-                closeQuietly(raw.getStream());
-            } else if (response != null && response.getFileCount() + response.getLockedFileCount() > 0) {
+            if (response != null && response.fileCount() + response.lockedFileCount() > 0) {
                 connection.write(response.toByteArray());
             }
         });
@@ -422,12 +418,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 diagnostic.warning("The share catalog failed to answer a browse: " + Failures.message(cause), cause);
                 response = new BrowseResponse();
             }
-            if (response instanceof RawBrowseResponse raw) {
-                connection.write(raw.getLength(), raw.getStream());
-                closeQuietly(raw.getStream());
-            } else {
-                connection.write(response.toByteArray());
-            }
+            connection.write(response.toByteArray());
             diagnostic.info("Share contents sent to " + connection.getUsername());
         });
     }
@@ -435,7 +426,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     private void handleFolderContentsRequest(MessageConnection connection, byte[] message) {
         FolderContentsRequest request = FolderContentsRequest.fromByteArray(message);
         answer(MessageCode.Peer.FOLDER_CONTENTS_REQUEST, connection, () -> {
-            Iterable<Directory> directories;
+            List<Directory> directories;
             try {
                 directories = Catalogs.directories(services.catalog()
                         .directory(dev.slsk.user.Username.of(connection.getUsername()), request.getDirectoryName()));

@@ -6,51 +6,9 @@ package dev.slsk.internal.user;
 
 import java.util.Objects;
 
-/**
- * User status.
- */
-public class UserStatus {
-    private final boolean privileged;
-    private final UserPresence presence;
-    private final String username;
-
-    /**
-     * Creates a user status.
-     *
-     * @param username the username
-     * @param presence the user's network presence
-     * @param isPrivileged whether the user is privileged
-     */
-    public UserStatus(String username, UserPresence presence, boolean isPrivileged) {
-        this.username = username;
-        this.presence = Objects.requireNonNull(presence, "presence");
-        this.privileged = isPrivileged;
-    }
-
-    /**
-     * Returns whether the user is privileged.
-     *
-     * @return whether the user is privileged
-     */
-    public final boolean isPrivileged() {
-        return privileged;
-    }
-
-    /**
-     * Returns the user's network presence.
-     *
-     * @return the user's network presence
-     */
-    public final UserPresence getPresence() {
-        return presence;
-    }
-
-    /**
-     * Returns the username.
-     *
-     * @return the username
-     */
-    public final String getUsername() {
-        return username;
+/** A user's presence and privilege state. */
+public record UserStatus(String username, UserPresence presence, boolean privileged) {
+    public UserStatus {
+        presence = Objects.requireNonNull(presence, "presence");
     }
 }

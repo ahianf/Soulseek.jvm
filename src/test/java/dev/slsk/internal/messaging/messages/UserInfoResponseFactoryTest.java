@@ -63,13 +63,13 @@ class UserInfoResponseFactoryTest {
                 bytes);
 
         UserInfo parsed = UserInfoResponseFactory.fromByteArray(bytes);
-        assertEquals("d", parsed.getDescription());
+        assertEquals("d", parsed.description());
         assertTrue(parsed.hasPicture());
-        assertArrayEquals(picture, parsed.getPicture());
-        assertEquals(2, parsed.getUploadSlots());
-        assertEquals(3, parsed.getQueueLength());
-        assertTrue(parsed.hasFreeUploadSlot());
-        assertArrayEquals(picture, outgoing.getPicture());
+        assertArrayEquals(picture, parsed.picture());
+        assertEquals(2, parsed.uploadSlots());
+        assertEquals(3, parsed.queueLength());
+        assertTrue(parsed.freeUploadSlot());
+        assertArrayEquals(picture, outgoing.picture());
     }
 
     @Test
@@ -107,12 +107,12 @@ class UserInfoResponseFactoryTest {
                 bytes);
 
         UserInfo parsed = UserInfoResponseFactory.fromByteArray(bytes);
-        assertEquals("d", parsed.getDescription());
+        assertEquals("d", parsed.description());
         assertFalse(parsed.hasPicture());
-        assertNull(parsed.getPicture());
-        assertEquals(-2, parsed.getUploadSlots());
-        assertEquals(-3, parsed.getQueueLength());
-        assertFalse(parsed.hasFreeUploadSlot());
+        assertNull(parsed.picture());
+        assertEquals(-2, parsed.uploadSlots());
+        assertEquals(-3, parsed.queueLength());
+        assertFalse(parsed.freeUploadSlot());
     }
 
     @Test
@@ -131,8 +131,8 @@ class UserInfoResponseFactoryTest {
         UserInfo parsed = UserInfoResponseFactory.fromByteArray(bytes);
 
         assertTrue(parsed.hasPicture());
-        assertEquals(0, parsed.getPicture().length);
-        assertTrue(parsed.hasFreeUploadSlot());
+        assertEquals(0, parsed.picture().length);
+        assertTrue(parsed.freeUploadSlot());
     }
 
     @Test

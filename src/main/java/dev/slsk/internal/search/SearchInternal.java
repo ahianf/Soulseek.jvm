@@ -199,10 +199,10 @@ public final class SearchInternal implements AutoCloseable {
      */
     public void tryAddResponse(SearchResponse initialResponse) {
         Objects.requireNonNull(initialResponse, "response");
-        if (initialResponse.getToken() != token) {
+        if (initialResponse.token() != token) {
             throw new IllegalArgumentException("Search for '" + query + "' with token " + token
                     + " received response with search token "
-                    + initialResponse.getToken());
+                    + initialResponse.token());
         }
         if (disposed.get()) {
             return;
@@ -221,31 +221,31 @@ public final class SearchInternal implements AutoCloseable {
                         return;
                     }
 
-                    List<dev.slsk.internal.share.File> files = stream(response.getFiles())
+                    List<dev.slsk.internal.share.File> files = stream(response.files())
                             .filter(file -> options.fileFilter() == null
                                     || options.fileFilter().test(file))
                             .toList();
-                    List<dev.slsk.internal.share.File> lockedFiles = stream(response.getLockedFiles())
+                    List<dev.slsk.internal.share.File> lockedFiles = stream(response.lockedFiles())
                             .filter(file -> options.fileFilter() == null
                                     || options.fileFilter().test(file))
                             .toList();
                     response = new SearchResponse(
-                            response.getUsername(),
-                            response.getToken(),
+                            response.username(),
+                            response.token(),
                             response.hasFreeUploadSlot(),
-                            response.getUploadSpeed(),
-                            response.getQueueLength(),
+                            response.uploadSpeed(),
+                            response.queueLength(),
                             files,
                             lockedFiles);
 
-                    if (response.getFileCount() + response.getLockedFileCount() < options.minimumResponseFileCount()) {
+                    if (response.fileCount() + response.lockedFileCount() < options.minimumResponseFileCount()) {
                         return;
                     }
                 }
 
                 responseCount++;
-                fileCount += response.getFileCount();
-                lockedFileCount += response.getLockedFileCount();
+                fileCount += response.fileCount();
+                lockedFileCount += response.lockedFileCount();
 
                 Consumer<SearchResponse> callback = responseReceived;
                 if (callback != null) {
@@ -349,9 +349,9 @@ public final class SearchInternal implements AutoCloseable {
 
     private boolean responseMeetsOptionCriteria(SearchResponse response) {
         return !options.filterResponses()
-                || (response.getFileCount() + response.getLockedFileCount() >= options.minimumResponseFileCount()
-                        && response.getUploadSpeed() >= options.minimumPeerUploadSpeed()
-                        && response.getQueueLength() < options.maximumPeerQueueLength());
+                || (response.fileCount() + response.lockedFileCount() >= options.minimumResponseFileCount()
+                        && response.uploadSpeed() >= options.minimumPeerUploadSpeed()
+                        && response.queueLength() < options.maximumPeerQueueLength());
     }
 
     private void resetTimeout() {

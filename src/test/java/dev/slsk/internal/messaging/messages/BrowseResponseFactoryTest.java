@@ -37,8 +37,8 @@ class BrowseResponseFactoryTest {
         assertEquals(0, reader.getRemaining());
 
         BrowseResponse parsed = BrowseResponseFactory.fromByteArray(bytes);
-        assertEquals(0, parsed.getDirectoryCount());
-        assertEquals(0, parsed.getLockedDirectoryCount());
+        assertEquals(0, parsed.directoryCount());
+        assertEquals(0, parsed.lockedDirectoryCount());
     }
 
     @Test
@@ -57,10 +57,10 @@ class BrowseResponseFactoryTest {
         BrowseResponse parsed =
                 BrowseResponseFactory.fromByteArray(new BrowseResponse(List.of(open), List.of(locked)).toByteArray());
 
-        assertEquals(1, parsed.getDirectoryCount());
-        assertDirectoryEquals(open, parsed.getDirectories().getFirst());
-        assertEquals(1, parsed.getLockedDirectoryCount());
-        assertDirectoryEquals(locked, parsed.getLockedDirectories().getFirst());
+        assertEquals(1, parsed.directoryCount());
+        assertDirectoryEquals(open, parsed.directories().getFirst());
+        assertEquals(1, parsed.lockedDirectoryCount());
+        assertDirectoryEquals(locked, parsed.lockedDirectories().getFirst());
     }
 
     @Test
@@ -82,11 +82,11 @@ class BrowseResponseFactoryTest {
         BrowseResponse one = BrowseResponseFactory.fromByteArray(withoutCompatibilityFields);
         BrowseResponse two = BrowseResponseFactory.fromByteArray(withUnknownOnly);
 
-        assertEquals(1, one.getDirectoryCount());
-        assertEquals("root", one.getDirectories().getFirst().getName());
-        assertEquals(0, one.getLockedDirectoryCount());
-        assertEquals(0, two.getDirectoryCount());
-        assertEquals(0, two.getLockedDirectoryCount());
+        assertEquals(1, one.directoryCount());
+        assertEquals("root", one.directories().getFirst().name());
+        assertEquals(0, one.lockedDirectoryCount());
+        assertEquals(0, two.directoryCount());
+        assertEquals(0, two.lockedDirectoryCount());
     }
 
     @Test
@@ -106,12 +106,12 @@ class BrowseResponseFactoryTest {
                 .build();
 
         File file = BrowseResponseFactory.fromByteArray(bytes)
-                .getDirectories()
+                .directories()
                 .getFirst()
-                .getFiles()
+                .files()
                 .getFirst();
 
-        assertEquals(3114948969L, file.getSize());
+        assertEquals(3114948969L, file.size());
     }
 
     @Test
@@ -137,23 +137,23 @@ class BrowseResponseFactoryTest {
     }
 
     private static void assertDirectoryEquals(Directory expected, Directory actual) {
-        assertEquals(expected.getName(), actual.getName());
-        assertEquals(expected.getFileCount(), actual.getFileCount());
-        for (int index = 0; index < expected.getFileCount(); index++) {
-            File left = expected.getFiles().get(index);
-            File right = actual.getFiles().get(index);
-            assertEquals(left.getCode(), right.getCode());
-            assertEquals(left.getFilename(), right.getFilename());
-            assertEquals(left.getSize(), right.getSize());
-            assertEquals(left.getExtension(), right.getExtension());
-            assertEquals(left.getAttributeCount(), right.getAttributeCount());
-            for (int attribute = 0; attribute < left.getAttributeCount(); attribute++) {
+        assertEquals(expected.name(), actual.name());
+        assertEquals(expected.fileCount(), actual.fileCount());
+        for (int index = 0; index < expected.fileCount(); index++) {
+            File left = expected.files().get(index);
+            File right = actual.files().get(index);
+            assertEquals(left.code(), right.code());
+            assertEquals(left.filename(), right.filename());
+            assertEquals(left.size(), right.size());
+            assertEquals(left.extension(), right.extension());
+            assertEquals(left.attributeCount(), right.attributeCount());
+            for (int attribute = 0; attribute < left.attributeCount(); attribute++) {
                 assertEquals(
-                        left.getAttributes().get(attribute).getType(),
-                        right.getAttributes().get(attribute).getType());
+                        left.attributes().get(attribute).type(),
+                        right.attributes().get(attribute).type());
                 assertEquals(
-                        left.getAttributes().get(attribute).getValue(),
-                        right.getAttributes().get(attribute).getValue());
+                        left.attributes().get(attribute).value(),
+                        right.attributes().get(attribute).value());
             }
         }
     }
