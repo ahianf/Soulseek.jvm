@@ -231,56 +231,55 @@ public final class SearchInternal implements AutoCloseable {
         }
 
         SearchResponse response = initialResponse;
-        try {
-            synchronized (stateLock) {
-                if (state != SearchPhase.IN_PROGRESS || !responseMeetsOptionCriteria(response)) {
+        synchronized (stateLock) {
+            if (disposed.get() || state != SearchPhase.IN_PROGRESS || !responseMeetsOptionCriteria(response)) {
+                return;
+            }
+
+            if (options.filterResponses()) {
+                if (options.responseFilter() != null
+                        && !options.responseFilter().test(response)) {
                     return;
                 }
 
-                if (options.filterResponses()) {
-                    if (options.responseFilter() != null
-                            && !options.responseFilter().test(response)) {
-                        return;
-                    }
+                List<dev.slsk.internal.share.File> files = stream(response.files())
+                        .filter(file -> options.fileFilter() == null
+                                || options.fileFilter().test(file))
+                        .toList();
+                List<dev.slsk.internal.share.File> lockedFiles = stream(response.lockedFiles())
+                        .filter(file -> options.fileFilter() == null
+                                || options.fileFilter().test(file))
+                        .toList();
+                response = new SearchResponse(
+                        response.username(),
+                        response.token(),
+                        response.hasFreeUploadSlot(),
+                        response.uploadSpeed(),
+                        response.queueLength(),
+                        files,
+                        lockedFiles);
 
-                    List<dev.slsk.internal.share.File> files = stream(response.files())
-                            .filter(file -> options.fileFilter() == null
-                                    || options.fileFilter().test(file))
-                            .toList();
-                    List<dev.slsk.internal.share.File> lockedFiles = stream(response.lockedFiles())
-                            .filter(file -> options.fileFilter() == null
-                                    || options.fileFilter().test(file))
-                            .toList();
-                    response = new SearchResponse(
-                            response.username(),
-                            response.token(),
-                            response.hasFreeUploadSlot(),
-                            response.uploadSpeed(),
-                            response.queueLength(),
-                            files,
-                            lockedFiles);
-
-                    if (response.fileCount() + response.lockedFileCount() < options.minimumResponseFileCount()) {
-                        return;
-                    }
-                }
-
-                responseCount++;
-                fileCount += response.fileCount();
-                lockedFileCount += response.lockedFileCount();
-
-                for (Consumer<SearchResponse> callback : List.copyOf(responseCallbacks)) {
-                    callback.accept(response);
-                }
-                resetTimeout();
-                if (responseCount >= options.responseLimit()) {
-                    complete(SearchTermination.RESPONSE_LIMIT_REACHED);
-                } else if (fileCount >= options.fileLimit()) {
-                    complete(SearchTermination.FILE_LIMIT_REACHED);
+                if (response.fileCount() + response.lockedFileCount() < options.minimumResponseFileCount()) {
+                    return;
                 }
             }
-        } catch (IllegalStateException ignored) {
-            // Java adaptation of the source's late ObjectDisposedException.
+
+            responseCount++;
+            fileCount += response.fileCount();
+            lockedFileCount += response.lockedFileCount();
+
+            for (Consumer<SearchResponse> callback : List.copyOf(responseCallbacks)) {
+                callback.accept(response);
+            }
+            if (disposed.get()) {
+                return;
+            }
+            resetTimeout();
+            if (responseCount >= options.responseLimit()) {
+                complete(SearchTermination.RESPONSE_LIMIT_REACHED);
+            } else if (fileCount >= options.fileLimit()) {
+                complete(SearchTermination.FILE_LIMIT_REACHED);
+            }
         }
     }
 

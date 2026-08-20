@@ -147,7 +147,7 @@ class SearchInternalTest {
     }
 
     @Test
-    void returnsWithoutCallbackAfterCloseAndSwallowsDisposedFailure() {
+    void returnsWithoutCallbackAfterCloseAndSurfacesCallbackFailure() {
         AtomicInteger count = new AtomicInteger();
         SearchInternal search = search(42, new SearchOptions());
         search.setState(SearchPhase.IN_PROGRESS);
@@ -158,10 +158,14 @@ class SearchInternalTest {
 
         try (SearchInternal second = search(42, new SearchOptions())) {
             second.setState(SearchPhase.IN_PROGRESS);
+            IllegalStateException callbackFailure = new IllegalStateException("callback failed");
             second.setResponseReceived(response -> {
-                throw new IllegalStateException("disposed");
+                throw callbackFailure;
             });
-            second.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of()));
+            IllegalStateException thrown = assertThrows(
+                    IllegalStateException.class,
+                    () -> second.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of())));
+            assertSame(callbackFailure, thrown);
             assertEquals(1, second.getResponseCount());
         }
     }
