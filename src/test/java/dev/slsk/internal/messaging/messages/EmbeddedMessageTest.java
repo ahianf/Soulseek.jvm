@@ -59,7 +59,7 @@ class EmbeddedMessageTest {
     @DisplayName("Parser rejects a mismatched server message code")
     void parserRejectsCodeMismatch() {
         MessageException exception = assertThrows(
-                MessageException.class, () -> EmbeddedMessage.fromByteArray(new BrowseRequest().toByteArray()));
+                MessageException.class, () -> EmbeddedMessage.fromByteArray(new BrowseRequestMessage().toByteArray()));
 
         assertEquals(
                 "Message Code mismatch creating EmbeddedMessage " + "(expected: 93, received: 4)",

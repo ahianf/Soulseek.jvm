@@ -142,7 +142,8 @@ class SearchResponseFactoryTest {
     @DisplayName("Parser rejects mismatch compression and malformed data")
     void parserRejectsInvalidMessages() {
         assertThrows(
-                MessageException.class, () -> SearchResponseFactory.fromByteArray(new BrowseRequest().toByteArray()));
+                MessageException.class,
+                () -> SearchResponseFactory.fromByteArray(new BrowseRequestMessage().toByteArray()));
         byte[] uncompressed = new MessageBuilder()
                 .writeCode(MessageCode.Peer.SEARCH_RESPONSE)
                 .writeBytes(new byte[] {0, 1, 2, 3})

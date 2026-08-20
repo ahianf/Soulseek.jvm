@@ -8,11 +8,11 @@ import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
 
 /** Requests a distributed search. */
-public final class SearchRequest implements OutgoingMessage {
+public final class SearchRequestMessage implements OutgoingMessage {
     private final String searchText;
     private final int token;
 
-    public SearchRequest(String searchText, int token) {
+    public SearchRequestMessage(String searchText, int token) {
         this.searchText = searchText;
         this.token = token;
     }

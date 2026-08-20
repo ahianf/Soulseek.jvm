@@ -20,7 +20,7 @@ import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.concurrent.InterruptedOperationException;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.handlers.BrowseResponseConnection;
-import dev.slsk.internal.messaging.messages.BrowseRequest;
+import dev.slsk.internal.messaging.messages.BrowseRequestMessage;
 import dev.slsk.internal.messaging.messages.FolderContentsRequest;
 import dev.slsk.internal.messaging.messages.GivePrivilegesCommand;
 import dev.slsk.internal.messaging.messages.UnwatchUserCommand;
@@ -253,7 +253,7 @@ final class UserDirectory {
                 InetSocketAddress endpoint = getUserEndpoint(requestedUsername, token);
                 MessageConnection peer = context.getPeerConnectionManager()
                         .getOrAddMessageConnection(requestedUsername, endpoint, token);
-                peer.write(new BrowseRequest(), CommonUtils.token(token));
+                peer.write(new BrowseRequestMessage(), CommonUtils.token(token));
                 responseConnection = connectionWait.await();
             } catch (Throwable failure) {
                 // The browse wait has no deadline, so nothing else would ever

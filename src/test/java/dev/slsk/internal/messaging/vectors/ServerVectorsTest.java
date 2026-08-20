@@ -267,7 +267,8 @@ class ServerVectorsTest {
         @DisplayName("test_FileSearch_Request_deserialize, test_FileSearch_Request_serialize")
         void fileSearch_Request_deserialize() {
             assertArrayEquals(
-                    hex("110000001a000000d2040000050000005175657279"), new SearchRequest("Query", 1234).toByteArray());
+                    hex("110000001a000000d2040000050000005175657279"),
+                    new SearchRequestMessage("Query", 1234).toByteArray());
         }
 
         @Test

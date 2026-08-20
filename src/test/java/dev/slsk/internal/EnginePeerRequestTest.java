@@ -29,7 +29,7 @@ import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.BrowseProgressUpdatedEvent;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.handlers.BrowseResponseConnection;
-import dev.slsk.internal.messaging.messages.BrowseRequest;
+import dev.slsk.internal.messaging.messages.BrowseRequestMessage;
 import dev.slsk.internal.messaging.messages.FolderContentsRequest;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.messaging.messages.PlaceInQueueRequest;
@@ -416,7 +416,7 @@ class EnginePeerRequestTest {
                         token);
 
         assertSame(response, actual);
-        assertInstanceOf(BrowseRequest.class, fixture.peer.message);
+        assertInstanceOf(BrowseRequestMessage.class, fixture.peer.message);
         assertEquals(
                 List.of(
                         new WaitKey(MessageCode.Peer.BROWSE_RESPONSE, "alice"),

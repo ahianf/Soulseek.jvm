@@ -8,9 +8,9 @@ import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
 
 /** Requests the shared file list from a peer. */
-public final class BrowseRequest implements OutgoingMessage {
+public final class BrowseRequestMessage implements OutgoingMessage {
     /** Creates a browse request. */
-    public BrowseRequest() {}
+    public BrowseRequestMessage() {}
 
     @Override
     public byte[] toByteArray() {

@@ -118,7 +118,6 @@ final class SearchDomain {
      * @return the completed search and collected responses
      */
     SearchResult search(dev.slsk.internal.search.SearchRequest request) {
-        // Qualified: this file also talks to the wire message of the same name.
         java.util.Objects.requireNonNull(request, "request");
         return search(
                 request.query(), request.scope(), request.token(), request.options(), request.cancellationSignal());
@@ -326,7 +325,7 @@ final class SearchDomain {
             }
             case WISHLIST -> new WishlistSearchRequest(text, search.getToken()).toByteArray();
             case NETWORK ->
-                new dev.slsk.internal.messaging.messages.SearchRequest(text, search.getToken()).toByteArray();
+                new dev.slsk.internal.messaging.messages.SearchRequestMessage(text, search.getToken()).toByteArray();
         };
     }
 }

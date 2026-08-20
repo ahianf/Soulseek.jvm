@@ -24,7 +24,7 @@ import dev.slsk.internal.events.DownloadDeniedEvent;
 import dev.slsk.internal.events.DownloadFailedEvent;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
-import dev.slsk.internal.messaging.messages.BrowseRequest;
+import dev.slsk.internal.messaging.messages.BrowseRequestMessage;
 import dev.slsk.internal.messaging.messages.FolderContentsRequest;
 import dev.slsk.internal.messaging.messages.FolderContentsResponse;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
@@ -289,7 +289,7 @@ class PeerMessageHandlerTest {
         Fixture resolved =
                 new Fixture(catalog(requester -> dev.slsk.share.BrowseResponse.of(List.of(shared)), null, null));
 
-        resolved.handler.handleMessageRead(resolved.connection.proxy, new BrowseRequest().toByteArray());
+        resolved.handler.handleMessageRead(resolved.connection.proxy, new BrowseRequestMessage().toByteArray());
 
         assertArrayEquals(
                 Catalogs.browse(dev.slsk.share.BrowseResponse.of(List.of(shared)))
@@ -304,7 +304,7 @@ class PeerMessageHandlerTest {
                 },
                 null,
                 null));
-        failed.handler.handleMessageRead(failed.connection.proxy, new BrowseRequest().toByteArray());
+        failed.handler.handleMessageRead(failed.connection.proxy, new BrowseRequestMessage().toByteArray());
         assertEquals(1, failed.connection.bytes.size());
         assertArrayEquals(new BrowseResponse().toByteArray(), failed.connection.bytes.getFirst());
         assertTrue(failed.diagnostic.containsWarning("The share catalog failed to answer a browse"));
@@ -539,9 +539,9 @@ class PeerMessageHandlerTest {
         assertSame(fixture.connection.proxy, browse.connection());
 
         fixture.handler.handleMessageReceived(new MessageReceivedEvent(
-                fixture.connection.proxy, 8, Arrays.copyOfRange(new BrowseRequest().toByteArray(), 4, 8)));
+                fixture.connection.proxy, 8, Arrays.copyOfRange(new BrowseRequestMessage().toByteArray(), 4, 8)));
         fixture.handler.handleMessageWritten(
-                new MessageEvent(fixture.connection.proxy, new BrowseRequest().toByteArray()));
+                new MessageEvent(fixture.connection.proxy, new BrowseRequestMessage().toByteArray()));
         assertTrue(fixture.diagnostic.contains("Peer message sent: BROWSE_REQUEST"));
     }
 

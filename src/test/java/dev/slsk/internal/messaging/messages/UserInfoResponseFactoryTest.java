@@ -139,7 +139,8 @@ class UserInfoResponseFactoryTest {
     @DisplayName("Parser rejects code mismatch and missing data")
     void parserRejectsInvalidData() {
         assertThrows(
-                MessageException.class, () -> UserInfoResponseFactory.fromByteArray(new BrowseRequest().toByteArray()));
+                MessageException.class,
+                () -> UserInfoResponseFactory.fromByteArray(new BrowseRequestMessage().toByteArray()));
         byte[] missing = new MessageBuilder()
                 .writeCode(MessageCode.Peer.INFO_RESPONSE)
                 .writeString("d")

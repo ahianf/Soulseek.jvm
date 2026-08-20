@@ -77,7 +77,7 @@ class MultiFieldServerCommandTest {
     @Test
     @DisplayName("Search commands preserve scope fields and wire order")
     void searchCommandsPreserveData() {
-        SearchRequest network = new SearchRequest("n", 1);
+        SearchRequestMessage network = new SearchRequestMessage("n", 1);
         WishlistSearchRequest wishlist = new WishlistSearchRequest("w", 2);
         RoomSearchRequest room = new RoomSearchRequest("r", "q", 3);
         UserSearchRequest user = new UserSearchRequest("u", "q", 4);

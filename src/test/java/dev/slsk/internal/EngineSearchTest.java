@@ -146,7 +146,7 @@ class EngineSearchTest {
                         .build());
 
         assertArrayEquals(
-                new dev.slsk.internal.messaging.messages.SearchRequest("a", 10).toByteArray(),
+                new dev.slsk.internal.messaging.messages.SearchRequestMessage("a", 10).toByteArray(),
                 fixture.server.messages.get(0));
         assertEquals(SearchPhase.COMPLETED, result.search().state());
         assertEquals(SearchTermination.TIMED_OUT, result.search().termination());
@@ -168,7 +168,7 @@ class EngineSearchTest {
                         .build());
 
         assertArrayEquals(
-                new dev.slsk.internal.messaging.messages.SearchRequest("foo -bar", 11).toByteArray(),
+                new dev.slsk.internal.messaging.messages.SearchRequestMessage("foo -bar", 11).toByteArray(),
                 fixture.server.messages.get(0));
         assertEquals(
                 List.of(SearchPhase.REQUESTED, SearchPhase.QUEUED, SearchPhase.IN_PROGRESS, SearchPhase.COMPLETED),
@@ -376,7 +376,7 @@ class EngineSearchTest {
         assertInstanceOf(CancellationException.class, completionCause(() -> first.join()));
         waitUntil(() -> fixture.server.messages.size() == 3);
         assertArrayEquals(
-                new dev.slsk.internal.messaging.messages.SearchRequest("three", 53).toByteArray(),
+                new dev.slsk.internal.messaging.messages.SearchRequestMessage("three", 53).toByteArray(),
                 fixture.server.messages.get(2));
         secondSource.cancel();
         thirdSource.cancel();

@@ -149,7 +149,7 @@ class PeerVectorsTest {
         @Test
         @DisplayName("test_PeerSharesRequest_Request_deserialize, test_PeerSharesRequest_Request_serialize")
         void peerSharesRequest_Request_deserialize() {
-            assertArrayEquals(hex("0400000004000000"), new BrowseRequest().toByteArray());
+            assertArrayEquals(hex("0400000004000000"), new BrowseRequestMessage().toByteArray());
         }
     }
 

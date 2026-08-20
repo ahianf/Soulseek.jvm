@@ -18,9 +18,9 @@ import org.junit.jupiter.api.Test;
 
 class PeerRequestMessageTest {
     @Test
-    @DisplayName("BrowseRequest has the source empty peer-message vector")
+    @DisplayName("BrowseRequestMessage has the source empty peer-message vector")
     void browseRequestHasWireVector() {
-        assertArrayEquals(new byte[] {4, 0, 0, 0, 4, 0, 0, 0}, new BrowseRequest().toByteArray());
+        assertArrayEquals(new byte[] {4, 0, 0, 0, 4, 0, 0, 0}, new BrowseRequestMessage().toByteArray());
     }
 
     @Test
@@ -101,7 +101,7 @@ class PeerRequestMessageTest {
     @Test
     @DisplayName("Peer request parsers reject mismatched message codes")
     void parsersRejectMismatchedCodes() {
-        byte[] browse = new BrowseRequest().toByteArray();
+        byte[] browse = new BrowseRequestMessage().toByteArray();
 
         assertThrows(MessageException.class, () -> FolderContentsRequest.fromByteArray(browse));
         assertThrows(MessageException.class, () -> PeerSearchRequest.fromByteArray(browse));

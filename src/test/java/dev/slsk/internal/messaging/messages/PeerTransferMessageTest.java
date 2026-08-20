@@ -203,7 +203,7 @@ class PeerTransferMessageTest {
     @Test
     @DisplayName("Peer transfer parsers reject mismatches and missing data")
     void peerTransferParsersRejectInvalidData() {
-        byte[] browse = new BrowseRequest().toByteArray();
+        byte[] browse = new BrowseRequestMessage().toByteArray();
 
         assertThrows(MessageException.class, () -> TransferRequest.fromByteArray(browse));
         assertThrows(MessageException.class, () -> TransferResponse.fromByteArray(browse));
