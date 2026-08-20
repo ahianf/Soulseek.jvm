@@ -31,8 +31,8 @@ import dev.slsk.internal.search.SearchExecutionResult;
 import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.search.SearchPhase;
 import dev.slsk.internal.search.SearchResponseMessage;
-import dev.slsk.internal.search.SearchSnapshot;
 import dev.slsk.internal.search.SearchSpecification;
+import dev.slsk.internal.search.SearchStateSnapshot;
 import dev.slsk.internal.search.SearchTarget;
 import dev.slsk.internal.search.SearchTermination;
 import dev.slsk.internal.share.File;
@@ -252,7 +252,7 @@ class EngineSearchTest {
         List<SearchResponseMessage> responses = new ArrayList<>();
         SearchOptions options = options(2_000, 1, true);
 
-        CompletableFuture<SearchSnapshot> task = inBackground(() -> fixture.client
+        CompletableFuture<SearchStateSnapshot> task = inBackground(() -> fixture.client
                 .searches()
                 .search(
                         SearchSpecification.of(ParsedSearchQuery.fromText("query"))
@@ -267,7 +267,7 @@ class EngineSearchTest {
                 new SearchResponseMessage("bob", 31, true, 1, 0, List.of(new File(2, "file", 3, "ext")));
         fixture.client.getSearches().get(31).tryAddResponse(response);
 
-        SearchSnapshot search = task.join();
+        SearchStateSnapshot search = task.join();
         assertEquals(1, responses.size());
         assertEquals(response.username(), responses.getFirst().username());
         assertEquals(response.token(), responses.getFirst().token());

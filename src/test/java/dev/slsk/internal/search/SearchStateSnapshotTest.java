@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class SearchSnapshotTest {
+class SearchStateSnapshotTest {
     @Test
     @DisplayName("Instantiates with expected data")
     void instantiatesWithExpectedData() {
@@ -19,7 +19,8 @@ class SearchSnapshotTest {
         SearchTarget scope = SearchTarget.getNetwork();
         SearchPhase state = SearchPhase.COMPLETED;
 
-        SearchSnapshot search = new SearchSnapshot(query, scope, 42, state, SearchTermination.TIMED_OUT, 3, 4, 5);
+        SearchStateSnapshot search =
+                new SearchStateSnapshot(query, scope, 42, state, SearchTermination.TIMED_OUT, 3, 4, 5);
 
         assertEquals("foo bar", search.query().searchText());
         assertEquals(SearchScopeType.NETWORK, search.scope().type());
@@ -34,7 +35,7 @@ class SearchSnapshotTest {
     @Test
     @DisplayName("Preserves nullable query and scope references")
     void preservesNullableQueryAndScopeReferences() {
-        SearchSnapshot search = new SearchSnapshot(null, null, 0, SearchPhase.NONE, null, 0, 0, 0);
+        SearchStateSnapshot search = new SearchStateSnapshot(null, null, 0, SearchPhase.NONE, null, 0, 0, 0);
 
         assertNull(search.query());
         assertNull(search.scope());
@@ -43,12 +44,13 @@ class SearchSnapshotTest {
     @Test
     @DisplayName("Rejects null state and inconsistent termination data")
     void rejectsNullState() {
-        assertThrows(NullPointerException.class, () -> new SearchSnapshot(null, null, 0, null, null, 0, 0, 0));
+        assertThrows(NullPointerException.class, () -> new SearchStateSnapshot(null, null, 0, null, null, 0, 0, 0));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new SearchSnapshot(null, null, 0, SearchPhase.COMPLETED, null, 0, 0, 0));
+                () -> new SearchStateSnapshot(null, null, 0, SearchPhase.COMPLETED, null, 0, 0, 0));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new SearchSnapshot(null, null, 0, SearchPhase.IN_PROGRESS, SearchTermination.TIMED_OUT, 0, 0, 0));
+                () -> new SearchStateSnapshot(
+                        null, null, 0, SearchPhase.IN_PROGRESS, SearchTermination.TIMED_OUT, 0, 0, 0));
     }
 }

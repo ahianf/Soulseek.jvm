@@ -5,8 +5,8 @@
 package dev.slsk.internal.events;
 
 import dev.slsk.internal.search.SearchResponseMessage;
-import dev.slsk.internal.search.SearchSnapshot;
+import dev.slsk.internal.search.SearchStateSnapshot;
 
 /** Event payload emitted when a search response is received. */
-public record SearchResponseReceivedEvent(SearchResponseMessage response, SearchSnapshot search)
+public record SearchResponseReceivedEvent(SearchResponseMessage response, SearchStateSnapshot search)
         implements SoulseekClientEvent {}

@@ -5,11 +5,12 @@
 package dev.slsk.internal.events;
 
 import dev.slsk.internal.search.SearchPhase;
-import dev.slsk.internal.search.SearchSnapshot;
+import dev.slsk.internal.search.SearchStateSnapshot;
 import java.util.Objects;
 
 /** Event payload emitted by a search-state change. */
-public record SearchStateChangedEvent(SearchPhase previousState, SearchSnapshot search) implements SoulseekClientEvent {
+public record SearchStateChangedEvent(SearchPhase previousState, SearchStateSnapshot search)
+        implements SoulseekClientEvent {
 
     /**
      * Creates search-state event payload.

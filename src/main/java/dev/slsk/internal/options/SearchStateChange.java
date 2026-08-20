@@ -5,7 +5,7 @@
 package dev.slsk.internal.options;
 
 import dev.slsk.internal.search.SearchPhase;
-import dev.slsk.internal.search.SearchSnapshot;
+import dev.slsk.internal.search.SearchStateSnapshot;
 
 /**
  * A search state-change callback payload.
@@ -13,4 +13,4 @@ import dev.slsk.internal.search.SearchSnapshot;
  * @param previousState the previous search state
  * @param search the search after the state change
  */
-public record SearchStateChange(SearchPhase previousState, SearchSnapshot search) {}
+public record SearchStateChange(SearchPhase previousState, SearchStateSnapshot search) {}

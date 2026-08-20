@@ -5,16 +5,16 @@
 package dev.slsk.internal.search;
 
 /**
- * SearchSnapshot scope type.
+ * SearchStateSnapshot scope type.
  */
 public enum SearchScopeType {
-    /** SearchSnapshot the network. */
+    /** SearchStateSnapshot the network. */
     NETWORK(0),
 
-    /** SearchSnapshot a user. */
+    /** SearchStateSnapshot a user. */
     USER(1),
 
-    /** SearchSnapshot a room. */
+    /** SearchStateSnapshot a room. */
     ROOM(2),
 
     /** Run a wishlist search. */

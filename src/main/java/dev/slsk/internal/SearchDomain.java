@@ -23,7 +23,7 @@ import dev.slsk.internal.search.SearchExecutionResult;
 import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.search.SearchPhase;
 import dev.slsk.internal.search.SearchResponseMessage;
-import dev.slsk.internal.search.SearchSnapshot;
+import dev.slsk.internal.search.SearchStateSnapshot;
 import dev.slsk.internal.search.SearchTarget;
 import dev.slsk.internal.search.SearchTermination;
 import java.io.ByteArrayOutputStream;
@@ -130,7 +130,7 @@ final class SearchDomain {
      * @param responseHandler receives each accepted response
      * @return the completed search
      */
-    SearchSnapshot search(
+    SearchStateSnapshot search(
             dev.slsk.internal.search.SearchSpecification request, Consumer<SearchResponseMessage> responseHandler) {
         java.util.Objects.requireNonNull(request, "request");
         java.util.Objects.requireNonNull(responseHandler, "responseHandler");
@@ -151,7 +151,8 @@ final class SearchDomain {
             CancellationSignal cancellationSignal) {
         SearchInvocation invocation = validateSearch(query, scope, token, searchOptions);
         List<SearchResponseMessage> responses = Collections.synchronizedList(new ArrayList<>());
-        SearchSnapshot search = searchToCallback(invocation, responses::add, CommonUtils.token(cancellationSignal));
+        SearchStateSnapshot search =
+                searchToCallback(invocation, responses::add, CommonUtils.token(cancellationSignal));
         synchronized (responses) {
             return new SearchExecutionResult(search, responses);
         }
@@ -163,7 +164,7 @@ final class SearchDomain {
      * @param responseHandler the response handler
      * @return the completed search
      */
-    SearchSnapshot search(
+    SearchStateSnapshot search(
             ParsedSearchQuery query,
             Consumer<SearchResponseMessage> responseHandler,
             SearchTarget scope,
@@ -215,7 +216,7 @@ final class SearchDomain {
 
     record SearchInvocation(ParsedSearchQuery query, SearchTarget scope, int token, SearchOptions options) {}
 
-    SearchSnapshot searchToCallback(
+    SearchStateSnapshot searchToCallback(
             SearchInvocation invocation,
             Consumer<SearchResponseMessage> responseHandler,
             CancellationSignal cancellationSignal) {
@@ -228,7 +229,7 @@ final class SearchDomain {
         SearchPhase[] previousState = {SearchPhase.NONE};
         Consumer<SearchPhase> updateState = newState -> {
             search.setState(newState);
-            SearchSnapshot snapshot = search.toSearch();
+            SearchStateSnapshot snapshot = search.toSearch();
             SearchStateChangedEvent eventData = new SearchStateChangedEvent(previousState[0], snapshot);
             previousState[0] = newState;
             if (invocation.options().stateChanged() != null) {
@@ -277,7 +278,7 @@ final class SearchDomain {
                 search.waitForCompletion(cancellationSignal);
                 updateState.accept(search.getState());
                 context.getDiagnostic()
-                        .debug("SearchSnapshot for '"
+                        .debug("SearchStateSnapshot for '"
                                 + invocation.query().searchText()
                                 + "' completed: "
                                 + search.getState());

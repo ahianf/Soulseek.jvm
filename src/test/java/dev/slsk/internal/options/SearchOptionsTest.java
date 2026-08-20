@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.internal.search.SearchPhase;
 import dev.slsk.internal.search.SearchResponseMessage;
-import dev.slsk.internal.search.SearchSnapshot;
+import dev.slsk.internal.search.SearchStateSnapshot;
 import dev.slsk.internal.search.SearchTermination;
 import dev.slsk.internal.share.File;
 import java.time.Duration;
@@ -106,8 +106,8 @@ class SearchOptionsTest {
                 .stateChanged(state::set)
                 .responseReceived(received::set)
                 .build();
-        SearchSnapshot search =
-                new SearchSnapshot(null, null, 9, SearchPhase.COMPLETED, SearchTermination.TIMED_OUT, 0, 0, 0);
+        SearchStateSnapshot search =
+                new SearchStateSnapshot(null, null, 9, SearchPhase.COMPLETED, SearchTermination.TIMED_OUT, 0, 0, 0);
         SearchResponseMessage response = new SearchResponseMessage("u", 8, true, 1, 7, List.of());
         File file = new File(1, "x", 2, "ext");
 

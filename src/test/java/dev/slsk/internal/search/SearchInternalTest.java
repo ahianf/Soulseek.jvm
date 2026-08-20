@@ -243,7 +243,7 @@ class SearchInternalTest {
         try (SearchInternal search = search(42, new SearchOptions())) {
             search.setState(SearchPhase.IN_PROGRESS);
             search.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of(FILE)));
-            SearchSnapshot snapshot = search.toSearch();
+            SearchStateSnapshot snapshot = search.toSearch();
             assertSame(search.getQuery(), snapshot.query());
             assertSame(search.getScope(), snapshot.scope());
             assertEquals(42, snapshot.token());

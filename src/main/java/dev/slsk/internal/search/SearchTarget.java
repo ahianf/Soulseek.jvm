@@ -8,7 +8,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-/** SearchSnapshot scope definition. */
+/** SearchStateSnapshot scope definition. */
 public record SearchTarget(SearchScopeType type, List<String> subjects) {
 
     public SearchTarget {

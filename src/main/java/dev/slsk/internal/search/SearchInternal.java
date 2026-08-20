@@ -223,7 +223,7 @@ public final class SearchInternal implements AutoCloseable {
     public void tryAddResponse(SearchResponseMessage initialResponse) {
         Objects.requireNonNull(initialResponse, "response");
         if (initialResponse.token() != token) {
-            throw new IllegalArgumentException("SearchSnapshot for '" + query + "' with token " + token
+            throw new IllegalArgumentException("SearchStateSnapshot for '" + query + "' with token " + token
                     + " received response with search token "
                     + initialResponse.token());
         }
@@ -331,9 +331,9 @@ public final class SearchInternal implements AutoCloseable {
     }
 
     /** Creates the public immutable snapshot of this search. */
-    public SearchSnapshot toSearch() {
+    public SearchStateSnapshot toSearch() {
         synchronized (stateLock) {
-            return new SearchSnapshot(
+            return new SearchStateSnapshot(
                     query, scope, token, state, termination, responseCount, fileCount, lockedFileCount);
         }
     }

@@ -5,7 +5,7 @@
 package dev.slsk.internal.options;
 
 import dev.slsk.internal.search.SearchResponseMessage;
-import dev.slsk.internal.search.SearchSnapshot;
+import dev.slsk.internal.search.SearchStateSnapshot;
 
 /**
  * A received search-response callback payload.
@@ -13,4 +13,4 @@ import dev.slsk.internal.search.SearchSnapshot;
  * @param search the receiving search
  * @param response the received response
  */
-public record SearchResponseReceived(SearchSnapshot search, SearchResponseMessage response) {}
+public record SearchResponseReceived(SearchStateSnapshot search, SearchResponseMessage response) {}

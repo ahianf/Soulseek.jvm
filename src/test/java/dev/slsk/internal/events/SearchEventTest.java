@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import dev.slsk.internal.search.ParsedSearchQuery;
 import dev.slsk.internal.search.SearchPhase;
 import dev.slsk.internal.search.SearchResponseMessage;
-import dev.slsk.internal.search.SearchSnapshot;
+import dev.slsk.internal.search.SearchStateSnapshot;
 import dev.slsk.internal.search.SearchTarget;
 import dev.slsk.internal.search.SearchTermination;
 import org.junit.jupiter.api.DisplayName;
@@ -20,9 +20,9 @@ import org.junit.jupiter.api.Test;
 
 class SearchEventTest {
     @Test
-    @DisplayName("SearchStateChangedEvent instantiates with valid SearchSnapshot")
+    @DisplayName("SearchStateChangedEvent instantiates with valid SearchStateSnapshot")
     void stateChangedInstantiatesWithValidSearch() {
-        SearchSnapshot search = new SearchSnapshot(
+        SearchStateSnapshot search = new SearchStateSnapshot(
                 new ParsedSearchQuery("foo"),
                 SearchTarget.getNetwork(),
                 42,
@@ -58,7 +58,7 @@ class SearchEventTest {
     }
 
     @Test
-    @DisplayName("SearchSnapshot event base preserves a null search")
+    @DisplayName("SearchStateSnapshot event base preserves a null search")
     void searchEventBasePreservesNullSearch() {
         SearchStateChangedEvent args = new SearchStateChangedEvent(SearchPhase.NONE, null);
 
@@ -73,7 +73,7 @@ class SearchEventTest {
 
     @Test
     void responseReceivedInstantiatesWithSearchAndResponse() {
-        SearchSnapshot search = new SearchSnapshot(null, null, 42, SearchPhase.IN_PROGRESS, null, 1, 2, 3);
+        SearchStateSnapshot search = new SearchStateSnapshot(null, null, 42, SearchPhase.IN_PROGRESS, null, 1, 2, 3);
         SearchResponseMessage response = new SearchResponseMessage("alice", 42, true, 1, 2, null);
 
         SearchResponseReceivedEvent args = new SearchResponseReceivedEvent(response, search);
