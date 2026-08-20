@@ -18,13 +18,13 @@ import dev.slsk.internal.messaging.messages.WishlistSearchRequest;
 import dev.slsk.internal.options.SearchOptions;
 import dev.slsk.internal.options.SearchResponseReceived;
 import dev.slsk.internal.options.SearchStateChange;
-import dev.slsk.internal.search.Search;
+import dev.slsk.internal.search.ParsedSearchQuery;
+import dev.slsk.internal.search.SearchExecutionResult;
 import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.search.SearchPhase;
-import dev.slsk.internal.search.SearchQuery;
-import dev.slsk.internal.search.SearchResponse;
-import dev.slsk.internal.search.SearchResult;
-import dev.slsk.internal.search.SearchScope;
+import dev.slsk.internal.search.SearchResponseMessage;
+import dev.slsk.internal.search.SearchSnapshot;
+import dev.slsk.internal.search.SearchTarget;
 import dev.slsk.internal.search.SearchTermination;
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
@@ -117,7 +117,7 @@ final class SearchDomain {
      * @param request the search to perform
      * @return the completed search and collected responses
      */
-    SearchResult search(dev.slsk.internal.search.SearchRequest request) {
+    SearchExecutionResult search(dev.slsk.internal.search.SearchSpecification request) {
         java.util.Objects.requireNonNull(request, "request");
         return search(
                 request.query(), request.scope(), request.token(), request.options(), request.cancellationSignal());
@@ -130,7 +130,8 @@ final class SearchDomain {
      * @param responseHandler receives each accepted response
      * @return the completed search
      */
-    Search search(dev.slsk.internal.search.SearchRequest request, Consumer<SearchResponse> responseHandler) {
+    SearchSnapshot search(
+            dev.slsk.internal.search.SearchSpecification request, Consumer<SearchResponseMessage> responseHandler) {
         java.util.Objects.requireNonNull(request, "request");
         java.util.Objects.requireNonNull(responseHandler, "responseHandler");
         return search(
@@ -142,17 +143,17 @@ final class SearchDomain {
                 request.cancellationSignal());
     }
 
-    SearchResult search(
-            SearchQuery query,
-            SearchScope scope,
+    SearchExecutionResult search(
+            ParsedSearchQuery query,
+            SearchTarget scope,
             Integer token,
             SearchOptions searchOptions,
             CancellationSignal cancellationSignal) {
         SearchInvocation invocation = validateSearch(query, scope, token, searchOptions);
-        List<SearchResponse> responses = Collections.synchronizedList(new ArrayList<>());
-        Search search = searchToCallback(invocation, responses::add, CommonUtils.token(cancellationSignal));
+        List<SearchResponseMessage> responses = Collections.synchronizedList(new ArrayList<>());
+        SearchSnapshot search = searchToCallback(invocation, responses::add, CommonUtils.token(cancellationSignal));
         synchronized (responses) {
-            return new SearchResult(search, responses);
+            return new SearchExecutionResult(search, responses);
         }
     }
     /**
@@ -162,22 +163,25 @@ final class SearchDomain {
      * @param responseHandler the response handler
      * @return the completed search
      */
-    Search search(
-            SearchQuery query,
-            Consumer<SearchResponse> responseHandler,
-            SearchScope scope,
+    SearchSnapshot search(
+            ParsedSearchQuery query,
+            Consumer<SearchResponseMessage> responseHandler,
+            SearchTarget scope,
             Integer token,
             SearchOptions searchOptions,
             CancellationSignal cancellationSignal) {
-        SearchQuery validatedQuery = validateSearchQuery(query);
+        ParsedSearchQuery validatedQuery = validateSearchQuery(query);
         Objects.requireNonNull(responseHandler, "responseHandler");
         SearchInvocation invocation = validateSearch(validatedQuery, scope, token, searchOptions);
         return searchToCallback(invocation, responseHandler, CommonUtils.token(cancellationSignal));
     }
 
     SearchInvocation validateSearch(
-            SearchQuery initialQuery, SearchScope initialScope, Integer initialToken, SearchOptions initialOptions) {
-        SearchQuery query = validateSearchQuery(initialQuery);
+            ParsedSearchQuery initialQuery,
+            SearchTarget initialScope,
+            Integer initialToken,
+            SearchOptions initialOptions) {
+        ParsedSearchQuery query = validateSearchQuery(initialQuery);
         server.requireLoggedIn("perform a search");
 
         int token = initialToken == null ? context.getTokenFactory().nextToken() : initialToken;
@@ -185,10 +189,10 @@ final class SearchDomain {
             throw new DuplicateTokenException("An active search with token " + token + " is already in progress");
         }
 
-        SearchScope scope = initialScope == null ? SearchScope.getNetwork() : initialScope;
+        SearchTarget scope = initialScope == null ? SearchTarget.getNetwork() : initialScope;
         SearchOptions searchOptions = initialOptions == null ? new SearchOptions() : initialOptions;
         if (searchOptions.removeSingleCharacterSearchTerms()) {
-            query = new SearchQuery(
+            query = new ParsedSearchQuery(
                     query.terms().stream().filter(term -> term.length() > 1).toList(), query.exclusions());
         }
         if (query.terms().isEmpty()) {
@@ -198,8 +202,8 @@ final class SearchDomain {
         return new SearchInvocation(query, scope, token, searchOptions);
     }
 
-    static SearchQuery validateSearchQuery(SearchQuery initialQuery) {
-        SearchQuery query = Objects.requireNonNull(initialQuery, "query");
+    static ParsedSearchQuery validateSearchQuery(ParsedSearchQuery initialQuery) {
+        ParsedSearchQuery query = Objects.requireNonNull(initialQuery, "query");
         if (dev.slsk.internal.common.CommonUtils.isNullOrUnicodeWhitespace(query.searchText())) {
             throw new IllegalArgumentException("query must contain non-whitespace text");
         }
@@ -209,11 +213,11 @@ final class SearchDomain {
         return query;
     }
 
-    record SearchInvocation(SearchQuery query, SearchScope scope, int token, SearchOptions options) {}
+    record SearchInvocation(ParsedSearchQuery query, SearchTarget scope, int token, SearchOptions options) {}
 
-    Search searchToCallback(
+    SearchSnapshot searchToCallback(
             SearchInvocation invocation,
-            Consumer<SearchResponse> responseHandler,
+            Consumer<SearchResponseMessage> responseHandler,
             CancellationSignal cancellationSignal) {
         SearchInternal search = new SearchInternal(
                 invocation.query(),
@@ -224,7 +228,7 @@ final class SearchDomain {
         SearchPhase[] previousState = {SearchPhase.NONE};
         Consumer<SearchPhase> updateState = newState -> {
             search.setState(newState);
-            Search snapshot = search.toSearch();
+            SearchSnapshot snapshot = search.toSearch();
             SearchStateChangedEvent eventData = new SearchStateChangedEvent(previousState[0], snapshot);
             previousState[0] = newState;
             if (invocation.options().stateChanged() != null) {
@@ -273,7 +277,10 @@ final class SearchDomain {
                 search.waitForCompletion(cancellationSignal);
                 updateState.accept(search.getState());
                 context.getDiagnostic()
-                        .debug("Search for '" + invocation.query().searchText() + "' completed: " + search.getState());
+                        .debug("SearchSnapshot for '"
+                                + invocation.query().searchText()
+                                + "' completed: "
+                                + search.getState());
                 return search.toSearch();
             } finally {
                 searchSemaphore.release();
@@ -311,7 +318,7 @@ final class SearchDomain {
         Permits.acquire(searchSemaphore, cancellationSignal);
     }
 
-    static byte[] buildSearchMessage(SearchScope scope, SearchInternal search) {
+    static byte[] buildSearchMessage(SearchTarget scope, SearchInternal search) {
         String text = search.getQuery().searchText();
         return switch (scope.type()) {
             case ROOM ->

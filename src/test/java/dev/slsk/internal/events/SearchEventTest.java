@@ -9,22 +9,22 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import dev.slsk.internal.search.Search;
+import dev.slsk.internal.search.ParsedSearchQuery;
 import dev.slsk.internal.search.SearchPhase;
-import dev.slsk.internal.search.SearchQuery;
-import dev.slsk.internal.search.SearchResponse;
-import dev.slsk.internal.search.SearchScope;
+import dev.slsk.internal.search.SearchResponseMessage;
+import dev.slsk.internal.search.SearchSnapshot;
+import dev.slsk.internal.search.SearchTarget;
 import dev.slsk.internal.search.SearchTermination;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class SearchEventTest {
     @Test
-    @DisplayName("SearchStateChangedEvent instantiates with valid Search")
+    @DisplayName("SearchStateChangedEvent instantiates with valid SearchSnapshot")
     void stateChangedInstantiatesWithValidSearch() {
-        Search search = new Search(
-                new SearchQuery("foo"),
-                SearchScope.getNetwork(),
+        SearchSnapshot search = new SearchSnapshot(
+                new ParsedSearchQuery("foo"),
+                SearchTarget.getNetwork(),
                 42,
                 SearchPhase.COMPLETED,
                 SearchTermination.TIMED_OUT,
@@ -58,7 +58,7 @@ class SearchEventTest {
     }
 
     @Test
-    @DisplayName("Search event base preserves a null search")
+    @DisplayName("SearchSnapshot event base preserves a null search")
     void searchEventBasePreservesNullSearch() {
         SearchStateChangedEvent args = new SearchStateChangedEvent(SearchPhase.NONE, null);
 
@@ -73,8 +73,8 @@ class SearchEventTest {
 
     @Test
     void responseReceivedInstantiatesWithSearchAndResponse() {
-        Search search = new Search(null, null, 42, SearchPhase.IN_PROGRESS, null, 1, 2, 3);
-        SearchResponse response = new SearchResponse("alice", 42, true, 1, 2, null);
+        SearchSnapshot search = new SearchSnapshot(null, null, 42, SearchPhase.IN_PROGRESS, null, 1, 2, 3);
+        SearchResponseMessage response = new SearchResponseMessage("alice", 42, true, 1, 2, null);
 
         SearchResponseReceivedEvent args = new SearchResponseReceivedEvent(response, search);
 

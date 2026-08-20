@@ -50,12 +50,12 @@ class SearchResponderTest {
     /** What the responder is told we upload at, and what a response must advertise. */
     private static final int ADVERTISED_SPEED = 4321;
 
-    private static SearchResponse expectedResponse(int token) {
+    private static SearchResponseMessage expectedResponse(int token) {
         return dev.slsk.internal.share.Catalogs.searchResponse("me", token, MATCHES, true, ADVERTISED_SPEED, 0);
     }
 
-    private static final SearchResponse RESPONSE =
-            new SearchResponse("local", 7, true, 1, 0, List.of(new File(1, "file", 2, "ext")));
+    private static final SearchResponseMessage RESPONSE =
+            new SearchResponseMessage("local", 7, true, 1, 0, List.of(new File(1, "file", 2, "ext")));
 
     @Test
     void constructorValidatesPortsAndUsesSuppliedDiagnostic() {

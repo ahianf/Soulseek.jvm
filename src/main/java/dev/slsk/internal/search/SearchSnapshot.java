@@ -7,9 +7,9 @@ package dev.slsk.internal.search;
 import java.util.Objects;
 
 /** A snapshot of a single file search. */
-public record Search(
-        SearchQuery query,
-        SearchScope scope,
+public record SearchSnapshot(
+        ParsedSearchQuery query,
+        SearchTarget scope,
         int token,
         SearchPhase state,
         SearchTermination termination,
@@ -17,7 +17,7 @@ public record Search(
         int fileCount,
         int lockedFileCount) {
 
-    public Search {
+    public SearchSnapshot {
         state = Objects.requireNonNull(state, "state");
         if ((state == SearchPhase.COMPLETED) != (termination != null)) {
             throw new IllegalArgumentException("only completed searches have a termination reason");

@@ -9,7 +9,7 @@ import dev.slsk.internal.share.File;
 import java.util.List;
 
 /** A response to a file search. */
-public record SearchResponse(
+public record SearchResponseMessage(
         String username,
         int token,
         boolean hasFreeUploadSlot,
@@ -17,19 +17,19 @@ public record SearchResponse(
         int queueLength,
         List<File> files,
         List<File> lockedFiles) {
-    public SearchResponse {
+    public SearchResponseMessage {
         files = files == null ? List.of() : List.copyOf(files);
         lockedFiles = lockedFiles == null ? List.of() : List.copyOf(lockedFiles);
     }
 
     /** Creates a search response without locked files. */
-    public SearchResponse(
+    public SearchResponseMessage(
             String username, int token, boolean hasFreeUploadSlot, int uploadSpeed, int queueLength, List<File> files) {
         this(username, token, hasFreeUploadSlot, uploadSpeed, queueLength, files, List.of());
     }
 
     /** Creates a copy with replacement file lists. */
-    SearchResponse(SearchResponse source, List<File> files, List<File> lockedFiles) {
+    SearchResponseMessage(SearchResponseMessage source, List<File> files, List<File> lockedFiles) {
         this(
                 source.username,
                 source.token,

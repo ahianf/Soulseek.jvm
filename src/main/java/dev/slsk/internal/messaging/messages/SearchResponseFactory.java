@@ -8,7 +8,7 @@ import dev.slsk.exceptions.MessageException;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
-import dev.slsk.internal.search.SearchResponse;
+import dev.slsk.internal.search.SearchResponseMessage;
 import dev.slsk.internal.share.File;
 import java.util.List;
 import java.util.Objects;
@@ -18,12 +18,12 @@ public final class SearchResponseFactory {
     private SearchResponseFactory() {}
 
     /** Parses a compressed search response. */
-    public static SearchResponse fromByteArray(byte[] bytes) {
+    public static SearchResponseMessage fromByteArray(byte[] bytes) {
         MessageReader<MessageCode.Peer> reader = new MessageReader<>(bytes, MessageCode.Peer.class);
         MessageCode.Peer code = reader.readCode();
         if (code != MessageCode.Peer.SEARCH_RESPONSE) {
-            throw new MessageException(
-                    "Message Code mismatch creating SearchResponse " + "(expected: 9, received: " + code.getValue());
+            throw new MessageException("Message Code mismatch creating SearchResponseMessage "
+                    + "(expected: 9, received: " + code.getValue());
         }
 
         reader.decompress();
@@ -40,11 +40,12 @@ public final class SearchResponseFactory {
         if (reader.hasMoreData()) {
             lockedFiles = reader.readFiles(reader.readInteger());
         }
-        return new SearchResponse(username, token, hasFreeUploadSlot, uploadSpeed, queueLength, files, lockedFiles);
+        return new SearchResponseMessage(
+                username, token, hasFreeUploadSlot, uploadSpeed, queueLength, files, lockedFiles);
     }
 
     /** Serializes a search response. */
-    public static byte[] toByteArray(SearchResponse searchResponse) {
+    public static byte[] toByteArray(SearchResponseMessage searchResponse) {
         Objects.requireNonNull(searchResponse, "searchResponse");
         MessageBuilder builder = new MessageBuilder()
                 .writeCode(MessageCode.Peer.SEARCH_RESPONSE)

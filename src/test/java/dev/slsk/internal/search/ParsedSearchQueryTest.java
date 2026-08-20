@@ -17,11 +17,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-class SearchQueryTest {
+class ParsedSearchQueryTest {
     @Test
     @DisplayName("Instantiates with given values")
     void instantiatesWithGivenValues() {
-        SearchQuery query = new SearchQuery("foo bar", List.of("baz", "qux"));
+        ParsedSearchQuery query = new ParsedSearchQuery("foo bar", List.of("baz", "qux"));
 
         assertEquals("foo bar", query.query());
         assertEquals(List.of("baz", "qux"), query.exclusions());
@@ -30,7 +30,7 @@ class SearchQueryTest {
     @Test
     @DisplayName("Instantiates with null searchText")
     void instantiatesWithNullSearchText() {
-        SearchQuery query = new SearchQuery((String) null);
+        ParsedSearchQuery query = new ParsedSearchQuery((String) null);
 
         assertEmptyQuery(query);
     }
@@ -38,7 +38,7 @@ class SearchQueryTest {
     @Test
     @DisplayName("Instantiates with null query and exclusions")
     void instantiatesWithNullQueryAndExclusions() {
-        SearchQuery query = new SearchQuery((String) null, null);
+        ParsedSearchQuery query = new ParsedSearchQuery((String) null, null);
 
         assertEmptyQuery(query);
     }
@@ -46,7 +46,7 @@ class SearchQueryTest {
     @Test
     @DisplayName("Instantiates with null terms and exclusions")
     void instantiatesWithNullTermsAndExclusions() {
-        SearchQuery query = new SearchQuery((List<String>) null, null);
+        ParsedSearchQuery query = new ParsedSearchQuery((List<String>) null, null);
 
         assertEmptyQuery(query);
     }
@@ -54,7 +54,7 @@ class SearchQueryTest {
     @Test
     @DisplayName("Splits terms and exclusions")
     void splitsTermsAndExclusions() {
-        SearchQuery query = new SearchQuery("foo bar -baz -qux");
+        ParsedSearchQuery query = new ParsedSearchQuery("foo bar -baz -qux");
 
         assertEquals(List.of("foo", "bar"), query.terms());
         assertEquals(List.of("baz", "qux"), query.exclusions());
@@ -64,7 +64,7 @@ class SearchQueryTest {
     @MethodSource("expectedSearchTexts")
     @DisplayName("Constructs expected search text")
     void constructsExpectedSearchText(String queryText, List<String> exclusions, String expected) {
-        SearchQuery query = new SearchQuery(queryText, exclusions);
+        ParsedSearchQuery query = new ParsedSearchQuery(queryText, exclusions);
 
         assertEquals(expected, query.searchText());
     }
@@ -72,7 +72,7 @@ class SearchQueryTest {
     @Test
     @DisplayName("Parses query-only search text")
     void parsesQueryOnlySearchText() {
-        SearchQuery query = new SearchQuery("foo");
+        ParsedSearchQuery query = new ParsedSearchQuery("foo");
 
         assertEquals("foo", query.query());
         assertEquals("foo", query.searchText());
@@ -85,7 +85,7 @@ class SearchQueryTest {
         String input = "a ! b @ c # d % e ^ f & g * h ( i ) j - k _ l + m = n "
                 + "-big_old_exclusion ~ o ` p [ q { r ] s } t | u \\ v ; w : x ' y \" z , "
                 + "a < b . c > d / e ?";
-        SearchQuery query = new SearchQuery(input);
+        ParsedSearchQuery query = new ParsedSearchQuery(input);
 
         assertEquals(
                 "a ! b @ c # d % e ^ f & g * h ( i ) j - k _ l + m = n ~ o ` p [ q { "
@@ -102,7 +102,7 @@ class SearchQueryTest {
     @Test
     @DisplayName("Parses exclusions")
     void parsesExclusions() {
-        SearchQuery query = new SearchQuery("foo -bar -baz");
+        ParsedSearchQuery query = new ParsedSearchQuery("foo -bar -baz");
 
         assertEquals("foo", query.query());
         assertEquals("foo -bar -baz", query.searchText());
@@ -112,7 +112,7 @@ class SearchQueryTest {
     @Test
     @DisplayName("Parses exclusions out of order")
     void parsesExclusionsOutOfOrder() {
-        SearchQuery query = new SearchQuery("-bar foo -baz");
+        ParsedSearchQuery query = new ParsedSearchQuery("-bar foo -baz");
 
         assertEquals("foo", query.query());
         assertEquals("foo -bar -baz", query.searchText());
@@ -122,7 +122,7 @@ class SearchQueryTest {
     @Test
     @DisplayName("Parses repeated exclusions singly")
     void parsesRepeatedExclusionsSingly() {
-        SearchQuery query = new SearchQuery("-bar foo -baz -baz -bar");
+        ParsedSearchQuery query = new ParsedSearchQuery("-bar foo -baz -baz -bar");
 
         assertEquals("foo", query.query());
         assertEquals("foo -bar -baz", query.searchText());
@@ -132,7 +132,7 @@ class SearchQueryTest {
     @Test
     @DisplayName("Preserves duplicate terms")
     void preservesDuplicateTerms() {
-        SearchQuery query = new SearchQuery("foo bar foo foo");
+        ParsedSearchQuery query = new ParsedSearchQuery("foo bar foo foo");
 
         assertEquals("foo bar foo foo", query.query());
         assertEquals("foo bar foo foo", query.searchText());
@@ -142,7 +142,7 @@ class SearchQueryTest {
     @Test
     @DisplayName("FromText returns new instance from given text")
     void fromTextReturnsNewInstanceFromGivenText() {
-        SearchQuery query = SearchQuery.fromText("foo bar");
+        ParsedSearchQuery query = ParsedSearchQuery.fromText("foo bar");
 
         assertEquals("foo bar", query.searchText());
     }
@@ -150,7 +150,7 @@ class SearchQueryTest {
     @Test
     @DisplayName("Preserves empty tokens from repeated and trailing spaces")
     void preservesEmptyTokensFromRepeatedAndTrailingSpaces() {
-        SearchQuery query = new SearchQuery("foo  bar ");
+        ParsedSearchQuery query = new ParsedSearchQuery("foo  bar ");
 
         assertEquals(List.of("foo", "", "bar", ""), query.terms());
         assertEquals("foo  bar ", query.searchText());
@@ -159,7 +159,7 @@ class SearchQueryTest {
     @Test
     @DisplayName("Trims every leading hyphen from exclusions")
     void trimsEveryLeadingHyphenFromExclusions() {
-        SearchQuery query = new SearchQuery("foo ---bar");
+        ParsedSearchQuery query = new ParsedSearchQuery("foo ---bar");
 
         assertEquals(List.of("bar"), query.exclusions());
         assertEquals("foo -bar", query.searchText());
@@ -168,7 +168,7 @@ class SearchQueryTest {
     @Test
     @DisplayName("Exclusion distinctness is case-sensitive")
     void exclusionDistinctnessIsCaseSensitive() {
-        SearchQuery query = new SearchQuery("foo -bar -BAR");
+        ParsedSearchQuery query = new ParsedSearchQuery("foo -bar -BAR");
 
         assertEquals(List.of("bar", "BAR"), query.exclusions());
     }
@@ -178,7 +178,7 @@ class SearchQueryTest {
     void copiesAndProtectsExplicitTermsAndExclusions() {
         List<String> terms = new ArrayList<>(List.of("foo"));
         List<String> exclusions = new ArrayList<>(List.of("bar"));
-        SearchQuery query = new SearchQuery(terms, exclusions);
+        ParsedSearchQuery query = new ParsedSearchQuery(terms, exclusions);
 
         terms.clear();
         exclusions.clear();
@@ -195,10 +195,10 @@ class SearchQueryTest {
     void rejectsNullCollectionElements() {
         assertThrows(
                 NullPointerException.class,
-                () -> new SearchQuery(java.util.Arrays.asList("foo", null, "bar"), List.of()));
+                () -> new ParsedSearchQuery(java.util.Arrays.asList("foo", null, "bar"), List.of()));
         assertThrows(
                 NullPointerException.class,
-                () -> new SearchQuery(List.of("foo"), java.util.Arrays.asList((String) null)));
+                () -> new ParsedSearchQuery(List.of("foo"), java.util.Arrays.asList((String) null)));
     }
 
     private static Stream<Arguments> expectedSearchTexts() {
@@ -208,7 +208,7 @@ class SearchQueryTest {
                 Arguments.of("foo", null, "foo"));
     }
 
-    private static void assertEmptyQuery(SearchQuery query) {
+    private static void assertEmptyQuery(ParsedSearchQuery query) {
         assertTrue(query.terms().isEmpty());
         assertTrue(query.exclusions().isEmpty());
         assertEquals("", query.query());

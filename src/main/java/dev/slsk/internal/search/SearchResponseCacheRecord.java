@@ -12,4 +12,5 @@ package dev.slsk.internal.search;
  * @param query the original search query text
  * @param searchResponse the response
  */
-public record SearchResponseCacheRecord(String username, int token, String query, SearchResponse searchResponse) {}
+public record SearchResponseCacheRecord(
+        String username, int token, String query, SearchResponseMessage searchResponse) {}

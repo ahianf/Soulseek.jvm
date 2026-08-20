@@ -56,10 +56,10 @@ import dev.slsk.internal.options.SoulseekClientOptionsPatch;
 import dev.slsk.internal.room.RoomData;
 import dev.slsk.internal.room.RoomInfo;
 import dev.slsk.internal.room.RoomList;
+import dev.slsk.internal.search.ParsedSearchQuery;
 import dev.slsk.internal.search.SearchInternal;
-import dev.slsk.internal.search.SearchQuery;
 import dev.slsk.internal.search.SearchResponder;
-import dev.slsk.internal.search.SearchScope;
+import dev.slsk.internal.search.SearchTarget;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.internal.user.UserPresence;
@@ -532,19 +532,22 @@ class ServerMessageHandlerTest {
         fixture.handle(searchRequest(LOCAL_USER, TOKEN, "self"));
         assertEquals(1, fixture.responder.requests.size());
 
-        SearchInternal network = new SearchInternal(SearchQuery.fromText("self"), SearchScope.getNetwork(), TOKEN);
+        SearchInternal network =
+                new SearchInternal(ParsedSearchQuery.fromText("self"), SearchTarget.getNetwork(), TOKEN);
         fixture.client.searches.put(TOKEN, network);
         fixture.handle(searchRequest(LOCAL_USER, TOKEN, "self"));
         assertEquals(1, fixture.responder.requests.size());
         network.close();
 
-        SearchInternal otherUser = new SearchInternal(SearchQuery.fromText("self"), SearchScope.user("other"), TOKEN);
+        SearchInternal otherUser =
+                new SearchInternal(ParsedSearchQuery.fromText("self"), SearchTarget.user("other"), TOKEN);
         fixture.client.searches.put(TOKEN, otherUser);
         fixture.handle(searchRequest(LOCAL_USER, TOKEN, "self"));
         assertEquals(1, fixture.responder.requests.size());
         otherUser.close();
 
-        SearchInternal deliberate = new SearchInternal(SearchQuery.fromText("self"), SearchScope.user("LOCAL"), TOKEN);
+        SearchInternal deliberate =
+                new SearchInternal(ParsedSearchQuery.fromText("self"), SearchTarget.user("LOCAL"), TOKEN);
         fixture.client.searches.put(TOKEN, deliberate);
         fixture.handle(searchRequest(LOCAL_USER, TOKEN, "self"));
         assertTrue(Eventually.holds(() -> fixture.responder.requests.size() == 2));

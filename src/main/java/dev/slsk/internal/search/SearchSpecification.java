@@ -8,38 +8,38 @@ import dev.slsk.internal.options.SearchOptions;
 import java.util.Objects;
 
 /** Everything one search needs, in one value. */
-public record SearchRequest(
-        SearchQuery query,
-        SearchScope scope,
+public record SearchSpecification(
+        ParsedSearchQuery query,
+        SearchTarget scope,
         Integer token,
         SearchOptions options,
         CancellationSignal cancellationSignal) {
 
-    public SearchRequest {
+    public SearchSpecification {
         query = Objects.requireNonNull(query, "query");
         cancellationSignal = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
     }
 
-    private SearchRequest(Builder builder) {
+    private SearchSpecification(Builder builder) {
         this(builder.query, builder.scope, builder.token, builder.options, builder.cancellationSignal);
     }
 
-    public static Builder of(SearchQuery query) {
+    public static Builder of(ParsedSearchQuery query) {
         return new Builder(query);
     }
 
     public static final class Builder {
-        private final SearchQuery query;
-        private SearchScope scope;
+        private final ParsedSearchQuery query;
+        private SearchTarget scope;
         private Integer token;
         private SearchOptions options;
         private CancellationSignal cancellationSignal = CancellationSignal.none();
 
-        private Builder(SearchQuery query) {
+        private Builder(ParsedSearchQuery query) {
             this.query = Objects.requireNonNull(query, "query");
         }
 
-        public Builder scope(SearchScope scope) {
+        public Builder scope(SearchTarget scope) {
             this.scope = scope;
             return this;
         }
@@ -59,8 +59,8 @@ public record SearchRequest(
             return this;
         }
 
-        public SearchRequest build() {
-            return new SearchRequest(this);
+        public SearchSpecification build() {
+            return new SearchSpecification(this);
         }
     }
 }

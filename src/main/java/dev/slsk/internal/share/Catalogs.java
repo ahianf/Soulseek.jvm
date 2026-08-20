@@ -3,7 +3,7 @@
 
 package dev.slsk.internal.share;
 
-import dev.slsk.internal.search.SearchResponse;
+import dev.slsk.internal.search.SearchResponseMessage;
 import dev.slsk.search.SearchFile;
 import java.util.ArrayList;
 import java.util.List;
@@ -95,7 +95,7 @@ public final class Catalogs {
      * @param queueLength how many uploads are waiting
      * @return the wire response
      */
-    public static SearchResponse searchResponse(
+    public static SearchResponseMessage searchResponse(
             String username,
             int token,
             List<SearchFile> matches,
@@ -106,6 +106,6 @@ public final class Catalogs {
         for (SearchFile match : matches) {
             files.add(file(match));
         }
-        return new SearchResponse(username, token, hasFreeUploadSlot, uploadSpeed, queueLength, files);
+        return new SearchResponseMessage(username, token, hasFreeUploadSlot, uploadSpeed, queueLength, files);
     }
 }

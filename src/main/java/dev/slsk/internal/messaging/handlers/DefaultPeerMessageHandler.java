@@ -38,7 +38,7 @@ import dev.slsk.internal.network.MessageEvent;
 import dev.slsk.internal.network.MessageReceivedEvent;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.search.SearchInternal;
-import dev.slsk.internal.search.SearchResponse;
+import dev.slsk.internal.search.SearchResponseMessage;
 import dev.slsk.internal.share.BrowseResponse;
 import dev.slsk.internal.share.Catalogs;
 import dev.slsk.internal.share.Directory;
@@ -328,7 +328,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     private void handleSearchResponse(byte[] message) {
-        SearchResponse response = SearchResponseFactory.fromByteArray(message);
+        SearchResponseMessage response = SearchResponseFactory.fromByteArray(message);
         SearchInternal search = searches.get().get(response.token());
         if (search != null) {
             search.tryAddResponse(response);
@@ -364,7 +364,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     private void handleSearchRequest(MessageConnection connection, byte[] message) {
         PeerSearchRequest request = PeerSearchRequest.fromByteArray(message);
         answer(MessageCode.Peer.SEARCH_REQUEST, connection, () -> {
-            SearchResponse response;
+            SearchResponseMessage response;
             try {
                 response = Catalogs.searchResponse(
                         loggedInUsername.get(),

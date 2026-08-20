@@ -44,11 +44,11 @@ public final class SearchInternal implements AutoCloseable {
     private int fileCount;
     private int lockedFileCount;
     private final SearchOptions options;
-    private final SearchQuery query;
-    private final List<Consumer<SearchResponse>> responseCallbacks = new ArrayList<>();
+    private final ParsedSearchQuery query;
+    private final List<Consumer<SearchResponseMessage>> responseCallbacks = new ArrayList<>();
     private int responseCount;
     private final Object stateLock = new Object();
-    private final SearchScope scope;
+    private final SearchTarget scope;
     private final Scheduler timerExecutor;
     private final boolean ownsScheduler;
     private final int token;
@@ -62,12 +62,12 @@ public final class SearchInternal implements AutoCloseable {
     private final Object timeoutLock = new Object();
 
     /** Creates a search using default options. */
-    public SearchInternal(SearchQuery query, SearchScope scope, int token) {
+    public SearchInternal(ParsedSearchQuery query, SearchTarget scope, int token) {
         this(query, scope, token, null);
     }
 
     /** Creates a search. */
-    public SearchInternal(SearchQuery query, SearchScope scope, int token, SearchOptions options) {
+    public SearchInternal(ParsedSearchQuery query, SearchTarget scope, int token, SearchOptions options) {
         this(query, scope, token, options, null);
     }
 
@@ -80,7 +80,8 @@ public final class SearchInternal implements AutoCloseable {
      * @param options the search options
      * @param scheduler the shared scheduler, or {@code null} to own one
      */
-    public SearchInternal(SearchQuery query, SearchScope scope, int token, SearchOptions options, Scheduler scheduler) {
+    public SearchInternal(
+            ParsedSearchQuery query, SearchTarget scope, int token, SearchOptions options, Scheduler scheduler) {
         this.query = query;
         this.scope = scope;
         this.token = token;
@@ -113,7 +114,7 @@ public final class SearchInternal implements AutoCloseable {
     }
 
     /** Returns the search query. */
-    public SearchQuery getQuery() {
+    public ParsedSearchQuery getQuery() {
         return query;
     }
 
@@ -125,7 +126,7 @@ public final class SearchInternal implements AutoCloseable {
     }
 
     /** Returns the search scope. */
-    public SearchScope getScope() {
+    public SearchTarget getScope() {
         return scope;
     }
 
@@ -159,7 +160,7 @@ public final class SearchInternal implements AutoCloseable {
     }
 
     /** Replaces the response callback. */
-    public void setResponseReceived(Consumer<SearchResponse> callback) {
+    public void setResponseReceived(Consumer<SearchResponseMessage> callback) {
         synchronized (stateLock) {
             responseCallbacks.clear();
             if (callback != null) {
@@ -169,7 +170,7 @@ public final class SearchInternal implements AutoCloseable {
     }
 
     /** Adds a response callback after callbacks already registered. */
-    public void addResponseReceived(Consumer<SearchResponse> callback) {
+    public void addResponseReceived(Consumer<SearchResponseMessage> callback) {
         synchronized (stateLock) {
             responseCallbacks.add(Objects.requireNonNull(callback, "callback"));
         }
@@ -219,10 +220,10 @@ public final class SearchInternal implements AutoCloseable {
      *
      * @throws IllegalArgumentException when the response token differs
      */
-    public void tryAddResponse(SearchResponse initialResponse) {
+    public void tryAddResponse(SearchResponseMessage initialResponse) {
         Objects.requireNonNull(initialResponse, "response");
         if (initialResponse.token() != token) {
-            throw new IllegalArgumentException("Search for '" + query + "' with token " + token
+            throw new IllegalArgumentException("SearchSnapshot for '" + query + "' with token " + token
                     + " received response with search token "
                     + initialResponse.token());
         }
@@ -230,7 +231,7 @@ public final class SearchInternal implements AutoCloseable {
             return;
         }
 
-        SearchResponse response = initialResponse;
+        SearchResponseMessage response = initialResponse;
         synchronized (stateLock) {
             if (closed.get() || state != SearchPhase.IN_PROGRESS || !responseMeetsOptionCriteria(response)) {
                 return;
@@ -250,7 +251,7 @@ public final class SearchInternal implements AutoCloseable {
                         .filter(file -> options.fileFilter() == null
                                 || options.fileFilter().test(file))
                         .toList();
-                response = new SearchResponse(
+                response = new SearchResponseMessage(
                         response.username(),
                         response.token(),
                         response.hasFreeUploadSlot(),
@@ -268,7 +269,7 @@ public final class SearchInternal implements AutoCloseable {
             fileCount += response.fileCount();
             lockedFileCount += response.lockedFileCount();
 
-            for (Consumer<SearchResponse> callback : List.copyOf(responseCallbacks)) {
+            for (Consumer<SearchResponseMessage> callback : List.copyOf(responseCallbacks)) {
                 callback.accept(response);
             }
             if (closed.get()) {
@@ -330,9 +331,10 @@ public final class SearchInternal implements AutoCloseable {
     }
 
     /** Creates the public immutable snapshot of this search. */
-    public Search toSearch() {
+    public SearchSnapshot toSearch() {
         synchronized (stateLock) {
-            return new Search(query, scope, token, state, termination, responseCount, fileCount, lockedFileCount);
+            return new SearchSnapshot(
+                    query, scope, token, state, termination, responseCount, fileCount, lockedFileCount);
         }
     }
 
@@ -367,7 +369,7 @@ public final class SearchInternal implements AutoCloseable {
         }
     }
 
-    private boolean responseMeetsOptionCriteria(SearchResponse response) {
+    private boolean responseMeetsOptionCriteria(SearchResponseMessage response) {
         return !options.filterResponses()
                 || (response.fileCount() + response.lockedFileCount() >= options.minimumResponseFileCount()
                         && response.uploadSpeed() >= options.minimumPeerUploadSpeed()

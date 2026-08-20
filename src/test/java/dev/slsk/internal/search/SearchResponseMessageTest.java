@@ -15,15 +15,15 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class SearchResponseTest {
+class SearchResponseMessageTest {
     @Test
-    @DisplayName("SearchResponse preserves scalar and file data")
+    @DisplayName("SearchResponseMessage preserves scalar and file data")
     void preservesConstructorData() {
         File file = new File(1, "f", 2, "e");
         List<File> files = new ArrayList<>(List.of(file));
         List<File> locked = new ArrayList<>(List.of(file, file));
 
-        SearchResponse response = new SearchResponse("alice", 17, true, 99, 3, files, locked);
+        SearchResponseMessage response = new SearchResponseMessage("alice", 17, true, 99, 3, files, locked);
         files.clear();
         locked.clear();
 
@@ -43,9 +43,9 @@ class SearchResponseTest {
     }
 
     @Test
-    @DisplayName("SearchResponse defaults null lists to empty")
+    @DisplayName("SearchResponseMessage defaults null lists to empty")
     void defaultsNullListsToEmpty() {
-        SearchResponse response = new SearchResponse(null, 0, false, 0, 0, null, null);
+        SearchResponseMessage response = new SearchResponseMessage(null, 0, false, 0, 0, null, null);
 
         assertSame(null, response.username());
         assertEquals(0, response.fileCount());
@@ -55,22 +55,22 @@ class SearchResponseTest {
     }
 
     @Test
-    @DisplayName("SearchResponse rejects null list elements")
+    @DisplayName("SearchResponseMessage rejects null list elements")
     void rejectsNullListElements() {
         assertThrows(
                 NullPointerException.class,
-                () -> new SearchResponse("u", 1, false, 2, 3, java.util.Arrays.asList((File) null), List.of()));
+                () -> new SearchResponseMessage("u", 1, false, 2, 3, java.util.Arrays.asList((File) null), List.of()));
         assertThrows(
                 NullPointerException.class,
-                () -> new SearchResponse("u", 1, false, 2, 3, List.of(), java.util.Arrays.asList((File) null)));
+                () -> new SearchResponseMessage("u", 1, false, 2, 3, List.of(), java.util.Arrays.asList((File) null)));
     }
 
     @Test
     @DisplayName("Internal copy replaces file lists and preserves metadata")
     void copyReplacesFilesAndPreservesMetadata() {
-        SearchResponse original = new SearchResponse("alice", 17, true, 99, 3, null);
+        SearchResponseMessage original = new SearchResponseMessage("alice", 17, true, 99, 3, null);
         File replacement = new File(1, "f", 2, "e");
-        SearchResponse copy = new SearchResponse(original, List.of(replacement), null);
+        SearchResponseMessage copy = new SearchResponseMessage(original, List.of(replacement), null);
 
         assertEquals("alice", copy.username());
         assertEquals(17, copy.token());

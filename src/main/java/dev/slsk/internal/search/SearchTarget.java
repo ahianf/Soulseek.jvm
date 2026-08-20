@@ -8,10 +8,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-/** Search scope definition. */
-public record SearchScope(SearchScopeType type, List<String> subjects) {
+/** SearchSnapshot scope definition. */
+public record SearchTarget(SearchScopeType type, List<String> subjects) {
 
-    public SearchScope {
+    public SearchTarget {
         type = Objects.requireNonNull(type, "type");
         List<String> suppliedSubjects = subjects == null ? List.of() : subjects;
         if ((type == SearchScopeType.NETWORK || type == SearchScopeType.WISHLIST) && !suppliedSubjects.isEmpty()) {
@@ -37,24 +37,24 @@ public record SearchScope(SearchScopeType type, List<String> subjects) {
         subjects = List.copyOf(suppliedSubjects);
     }
 
-    public SearchScope(SearchScopeType type, String... subjects) {
+    public SearchTarget(SearchScopeType type, String... subjects) {
         this(type, subjects == null ? List.of() : Arrays.asList(subjects));
     }
 
-    public static SearchScope getNetwork() {
-        return new SearchScope(SearchScopeType.NETWORK);
+    public static SearchTarget getNetwork() {
+        return new SearchTarget(SearchScopeType.NETWORK);
     }
 
-    public static SearchScope getWishlist() {
-        return new SearchScope(SearchScopeType.WISHLIST);
+    public static SearchTarget getWishlist() {
+        return new SearchTarget(SearchScopeType.WISHLIST);
     }
 
-    public static SearchScope room(String roomName) {
-        return new SearchScope(SearchScopeType.ROOM, roomName);
+    public static SearchTarget room(String roomName) {
+        return new SearchTarget(SearchScopeType.ROOM, roomName);
     }
 
-    public static SearchScope user(String... usernames) {
-        return new SearchScope(SearchScopeType.USER, usernames);
+    public static SearchTarget user(String... usernames) {
+        return new SearchTarget(SearchScopeType.USER, usernames);
     }
 
     private static String displayName(SearchScopeType type) {

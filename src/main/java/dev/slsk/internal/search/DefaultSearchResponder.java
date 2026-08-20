@@ -153,7 +153,7 @@ public final class DefaultSearchResponder implements SearchResponder {
     public boolean tryRespond(String username, int token, String query) {
         publishRequestReceived(new SearchRequestEvent(username, token, query));
 
-        SearchResponse response;
+        SearchResponseMessage response;
         try {
             // On this thread. It used to be dispatched and composed onto, so
             // that a blocking SPI could not stall the read loop that called
@@ -225,7 +225,7 @@ public final class DefaultSearchResponder implements SearchResponder {
         return diagnostic;
     }
 
-    private boolean deliverResolvedResponse(String username, int token, String query, SearchResponse response) {
+    private boolean deliverResolvedResponse(String username, int token, String query, SearchResponseMessage response) {
         diagnostic.debug(() -> "Resolved " + response.fileCount() + " files for query '" + query + "' with token "
                 + token + " from " + username);
 
@@ -260,7 +260,7 @@ public final class DefaultSearchResponder implements SearchResponder {
         }
     }
 
-    private void writeResponse(MessageConnection connection, SearchResponse response) throws Exception {
+    private void writeResponse(MessageConnection connection, SearchResponseMessage response) throws Exception {
         connection.write(response.toByteArray());
     }
 
@@ -300,7 +300,7 @@ public final class DefaultSearchResponder implements SearchResponder {
     }
 
     private void cacheUndelivered(
-            int responseToken, String username, int token, String query, SearchResponse response) {
+            int responseToken, String username, int token, String query, SearchResponseMessage response) {
         SearchResponseCache cache = options.get().searchResponseCache();
         if (cache == null) {
             return;
@@ -354,7 +354,7 @@ public final class DefaultSearchResponder implements SearchResponder {
                 record.username(), record.token(), record.query(), record.searchResponse());
     }
 
-    private static int totalFiles(SearchResponse response) {
+    private static int totalFiles(SearchResponseMessage response) {
         return response.fileCount() + response.lockedFileCount();
     }
 }

@@ -41,10 +41,10 @@ import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.PeerConnectionManager;
 import dev.slsk.internal.network.PeerEndpoint;
 import dev.slsk.internal.options.SoulseekClientOptions;
+import dev.slsk.internal.search.ParsedSearchQuery;
 import dev.slsk.internal.search.SearchInternal;
-import dev.slsk.internal.search.SearchQuery;
 import dev.slsk.internal.search.SearchResponder;
-import dev.slsk.internal.search.SearchScope;
+import dev.slsk.internal.search.SearchTarget;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.upload.Upload;
@@ -158,7 +158,7 @@ class EngineTest {
     void disconnectUsesSourceReasonsCancelsSearchesAndRetainsDownloads() {
         Fixture fixture = new Fixture();
         fixture.client.setStateForTest(SoulseekClientState.LOGGED_IN);
-        SearchInternal search = new SearchInternal(SearchQuery.fromText("query"), SearchScope.getNetwork(), 1);
+        SearchInternal search = new SearchInternal(ParsedSearchQuery.fromText("query"), SearchTarget.getNetwork(), 1);
         Map<Integer, SearchInternal> searches = new HashMap<>();
         searches.put(1, search);
         fixture.client.setSearchesForTest(searches);

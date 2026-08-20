@@ -11,15 +11,15 @@ import java.util.Objects;
  * The completed search context and collected responses.
  *
  * <p>This record is the named Java equivalent of the C# method's
- * {@code (Search Search, IReadOnlyCollection<SearchResponse> Responses)}
+ * {@code (SearchSnapshot SearchSnapshot, IReadOnlyCollection<SearchResponseMessage> Responses)}
  * tuple.</p>
  *
  * @param search the completed search snapshot
  * @param responses the accepted search responses
  */
-public record SearchResult(Search search, List<SearchResponse> responses) {
+public record SearchExecutionResult(SearchSnapshot search, List<SearchResponseMessage> responses) {
     /** Creates an immutable search result. */
-    public SearchResult {
+    public SearchExecutionResult {
         Objects.requireNonNull(search, "search");
         responses = List.copyOf(Objects.requireNonNull(responses, "responses"));
     }

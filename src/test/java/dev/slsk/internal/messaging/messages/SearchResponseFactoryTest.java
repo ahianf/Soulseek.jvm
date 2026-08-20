@@ -15,7 +15,7 @@ import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
-import dev.slsk.internal.search.SearchResponse;
+import dev.slsk.internal.search.SearchResponseMessage;
 import dev.slsk.internal.share.File;
 import dev.slsk.internal.share.FileAttribute;
 import dev.slsk.internal.share.FileAttributeType;
@@ -36,8 +36,8 @@ class SearchResponseFactoryTest {
                         new FileAttribute(FileAttributeType.BIT_DEPTH, 24),
                         new FileAttribute(FileAttributeType.BIT_RATE, 320)));
         File locked = new File(3, "locked", 42, ".txt");
-        byte[] bytes =
-                new SearchResponse("alice", 0x12345678, true, 1000, 7, List.of(open), List.of(locked)).toByteArray();
+        byte[] bytes = new SearchResponseMessage("alice", 0x12345678, true, 1000, 7, List.of(open), List.of(locked))
+                .toByteArray();
 
         MessageReader<MessageCode.Peer> reader = new MessageReader<>(bytes, MessageCode.Peer.class);
         assertEquals(MessageCode.Peer.SEARCH_RESPONSE, reader.readCode());
@@ -54,7 +54,7 @@ class SearchResponseFactoryTest {
         assertFileEquals(locked, reader.readFile());
         assertEquals(0, reader.getRemaining());
 
-        SearchResponse parsed = SearchResponseFactory.fromByteArray(bytes);
+        SearchResponseMessage parsed = SearchResponseFactory.fromByteArray(bytes);
         assertEquals("alice", parsed.username());
         assertEquals(0x12345678, parsed.token());
         assertTrue(parsed.hasFreeUploadSlot());
@@ -80,7 +80,7 @@ class SearchResponseFactoryTest {
                 .compress()
                 .build();
 
-        SearchResponse parsed = SearchResponseFactory.fromByteArray(bytes);
+        SearchResponseMessage parsed = SearchResponseFactory.fromByteArray(bytes);
 
         assertEquals("u", parsed.username());
         assertEquals(1, parsed.token());
@@ -108,7 +108,7 @@ class SearchResponseFactoryTest {
                 .compress()
                 .build();
 
-        SearchResponse parsed = SearchResponseFactory.fromByteArray(bytes);
+        SearchResponseMessage parsed = SearchResponseFactory.fromByteArray(bytes);
 
         assertTrue(parsed.hasFreeUploadSlot());
         assertEquals(3, parsed.queueLength());
@@ -132,7 +132,7 @@ class SearchResponseFactoryTest {
                 .compress()
                 .build();
 
-        SearchResponse parsed = SearchResponseFactory.fromByteArray(bytes);
+        SearchResponseMessage parsed = SearchResponseFactory.fromByteArray(bytes);
 
         assertTrue(parsed.hasFreeUploadSlot());
         assertEquals(0, parsed.lockedFileCount());

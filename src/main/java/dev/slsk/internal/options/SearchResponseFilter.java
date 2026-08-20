@@ -4,7 +4,7 @@
 
 package dev.slsk.internal.options;
 
-import dev.slsk.internal.search.SearchResponse;
+import dev.slsk.internal.search.SearchResponseMessage;
 
 /** Determines whether a search response is accepted. */
 @FunctionalInterface
@@ -15,5 +15,5 @@ public interface SearchResponseFilter {
      * @param response the response
      * @return whether the response is accepted
      */
-    boolean test(SearchResponse response);
+    boolean test(SearchResponseMessage response);
 }

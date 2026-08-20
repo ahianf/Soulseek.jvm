@@ -10,27 +10,27 @@ import java.util.List;
 import java.util.Set;
 
 /** A search query. */
-public record SearchQuery(List<String> terms, List<String> exclusions) {
+public record ParsedSearchQuery(List<String> terms, List<String> exclusions) {
 
-    public SearchQuery {
+    public ParsedSearchQuery {
         terms = terms == null ? List.of() : List.copyOf(terms);
         exclusions = exclusions == null ? List.of() : List.copyOf(exclusions);
     }
 
-    public SearchQuery(String query, List<String> exclusions) {
+    public ParsedSearchQuery(String query, List<String> exclusions) {
         this(query == null ? null : List.of(query.split(" ", -1)), exclusions);
     }
 
-    public SearchQuery(String searchText) {
+    public ParsedSearchQuery(String searchText) {
         this(parse(searchText));
     }
 
-    private SearchQuery(Parsed parsed) {
+    private ParsedSearchQuery(Parsed parsed) {
         this(parsed.terms(), parsed.exclusions());
     }
 
-    public static SearchQuery fromText(String searchText) {
-        return new SearchQuery(searchText);
+    public static ParsedSearchQuery fromText(String searchText) {
+        return new ParsedSearchQuery(searchText);
     }
 
     public String query() {

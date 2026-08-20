@@ -26,14 +26,14 @@ import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.options.SearchOptions;
 import dev.slsk.internal.options.SearchResponseReceived;
 import dev.slsk.internal.options.SearchStateChange;
-import dev.slsk.internal.search.Search;
+import dev.slsk.internal.search.ParsedSearchQuery;
+import dev.slsk.internal.search.SearchExecutionResult;
 import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.search.SearchPhase;
-import dev.slsk.internal.search.SearchQuery;
-import dev.slsk.internal.search.SearchRequest;
-import dev.slsk.internal.search.SearchResponse;
-import dev.slsk.internal.search.SearchResult;
-import dev.slsk.internal.search.SearchScope;
+import dev.slsk.internal.search.SearchResponseMessage;
+import dev.slsk.internal.search.SearchSnapshot;
+import dev.slsk.internal.search.SearchSpecification;
+import dev.slsk.internal.search.SearchTarget;
 import dev.slsk.internal.search.SearchTermination;
 import dev.slsk.internal.share.File;
 import java.io.ByteArrayOutputStream;
@@ -59,43 +59,48 @@ class EngineSearchTest {
                 NullPointerException.class,
                 () -> fixture.client
                         .searches()
-                        .search(SearchRequest.of((SearchQuery) null).build()));
+                        .search(SearchSpecification.of((ParsedSearchQuery) null).build()));
         for (String invalid :
                 new String[] {"", " ", "\t", "-excluded", "\u00A0", "\u2003", "\u202F", "\u3000", " \u2003\t"}) {
             assertThrows(
                     IllegalArgumentException.class,
                     () -> fixture.client
                             .searches()
-                            .search(SearchRequest.of(SearchQuery.fromText(invalid))
+                            .search(SearchSpecification.of(ParsedSearchQuery.fromText(invalid))
                                     .build()));
         }
         assertThrows(
                 IllegalArgumentException.class,
                 () -> fixture.client
                         .searches()
-                        .search(SearchRequest.of(SearchQuery.fromText("a")).build()));
+                        .search(SearchSpecification.of(ParsedSearchQuery.fromText("a"))
+                                .build()));
         assertThrows(
                 NullPointerException.class,
                 () -> fixture.client
                         .searches()
-                        .search(SearchRequest.of(SearchQuery.fromText("valid")).build(), (Consumer<SearchResponse>)
-                                null));
+                        .search(
+                                SearchSpecification.of(ParsedSearchQuery.fromText("valid"))
+                                        .build(),
+                                (Consumer<SearchResponseMessage>) null));
 
         fixture.client.setStateForTest(SoulseekClientState.DISCONNECTED);
         assertThrows(
                 IllegalStateException.class,
                 () -> fixture.client
                         .searches()
-                        .search(SearchRequest.of(SearchQuery.fromText("valid")).build()));
+                        .search(SearchSpecification.of(ParsedSearchQuery.fromText("valid"))
+                                .build()));
 
         fixture.client.setStateForTest(loggedIn());
-        SearchInternal existing = new SearchInternal(SearchQuery.fromText("existing"), SearchScope.getNetwork(), 42);
+        SearchInternal existing =
+                new SearchInternal(ParsedSearchQuery.fromText("existing"), SearchTarget.getNetwork(), 42);
         fixture.client.getSearches().put(42, existing);
         assertThrows(
                 DuplicateTokenException.class,
                 () -> fixture.client
                         .searches()
-                        .search(SearchRequest.of(SearchQuery.fromText("valid"))
+                        .search(SearchSpecification.of(ParsedSearchQuery.fromText("valid"))
                                 .token(42)
                                 .build()));
         fixture.client.getSearches().remove(42);
@@ -106,7 +111,8 @@ class EngineSearchTest {
     @Test
     void tokenCollisionAtInsertionThrowsInsteadOfBeingDiscarded() {
         Fixture fixture = new Fixture();
-        SearchInternal existing = new SearchInternal(SearchQuery.fromText("existing"), SearchScope.getNetwork(), 42);
+        SearchInternal existing =
+                new SearchInternal(ParsedSearchQuery.fromText("existing"), SearchTarget.getNetwork(), 42);
         // A registry whose containsKey lies, simulating a competing search
         // claiming the token between the validate-time check and the insert:
         // the insert is the authoritative claim and must refuse the loser.
@@ -124,7 +130,7 @@ class EngineSearchTest {
                 DuplicateTokenException.class,
                 () -> fixture.client
                         .searches()
-                        .search(SearchRequest.of(SearchQuery.fromText("valid"))
+                        .search(SearchSpecification.of(ParsedSearchQuery.fromText("valid"))
                                 .token(42)
                                 .options(options(40, 250, true))
                                 .build()));
@@ -138,9 +144,9 @@ class EngineSearchTest {
         Fixture fixture = new Fixture();
         SearchOptions options = options(40, 250, false);
 
-        SearchResult result = fixture.client
+        SearchExecutionResult result = fixture.client
                 .searches()
-                .search(SearchRequest.of(SearchQuery.fromText("a"))
+                .search(SearchSpecification.of(ParsedSearchQuery.fromText("a"))
                         .token(10)
                         .options(options)
                         .build());
@@ -160,9 +166,9 @@ class EngineSearchTest {
         SearchOptions options =
                 options(40, 250, true, change -> states.add(change.search().state()), null);
 
-        SearchResult result = fixture.client
+        SearchExecutionResult result = fixture.client
                 .searches()
-                .search(SearchRequest.of(SearchQuery.fromText("foo a -bar"))
+                .search(SearchSpecification.of(ParsedSearchQuery.fromText("foo a -bar"))
                         .token(11)
                         .options(options)
                         .build());
@@ -182,13 +188,13 @@ class EngineSearchTest {
 
     @Test
     void sendsScopeSpecificMessagesIncludingMultipleUsers() {
-        assertScopeMessage(SearchScope.getWishlist(), new WishlistSearchRequest("query", 20).toByteArray());
-        assertScopeMessage(SearchScope.room("room"), new RoomSearchRequest("room", "query", 20).toByteArray());
+        assertScopeMessage(SearchTarget.getWishlist(), new WishlistSearchRequest("query", 20).toByteArray());
+        assertScopeMessage(SearchTarget.room("room"), new RoomSearchRequest("room", "query", 20).toByteArray());
 
         ByteArrayOutputStream expected = new ByteArrayOutputStream();
         expected.writeBytes(new UserSearchRequest("alice", "query", 20).toByteArray());
         expected.writeBytes(new UserSearchRequest("bob", "query", 20).toByteArray());
-        assertScopeMessage(SearchScope.user("alice", "bob"), expected.toByteArray());
+        assertScopeMessage(SearchTarget.user("alice", "bob"), expected.toByteArray());
     }
 
     @Test
@@ -210,9 +216,9 @@ class EngineSearchTest {
                         (dev.slsk.internal.events.SearchStateChangedEvent eventData) -> clientStates.incrementAndGet());
         SearchOptions options = options(2_000, 1, true, null, received -> optionResponses.incrementAndGet());
 
-        CompletableFuture<SearchResult> task = inBackground(() -> fixture.client
+        CompletableFuture<SearchExecutionResult> task = inBackground(() -> fixture.client
                 .searches()
-                .search(SearchRequest.of(SearchQuery.fromText("query"))
+                .search(SearchSpecification.of(ParsedSearchQuery.fromText("query"))
                         .token(30)
                         .options(options)
                         .build()));
@@ -220,11 +226,11 @@ class EngineSearchTest {
             SearchInternal active = fixture.client.getSearches().get(30);
             return active != null && active.getState().equals(SearchPhase.IN_PROGRESS);
         });
-        SearchResponse response =
-                new SearchResponse("alice", 30, true, 100, 0, List.of(new File(2, "file.mp3", 3, "mp3")));
+        SearchResponseMessage response =
+                new SearchResponseMessage("alice", 30, true, 100, 0, List.of(new File(2, "file.mp3", 3, "mp3")));
         fixture.client.getSearches().get(30).tryAddResponse(response);
 
-        SearchResult result = task.join();
+        SearchExecutionResult result = task.join();
         assertEquals(1, result.responses().size());
         assertEquals(response.username(), result.responses().getFirst().username());
         assertEquals(response.token(), result.responses().getFirst().token());
@@ -243,24 +249,25 @@ class EngineSearchTest {
     @Test
     void callbackOverloadReceivesResponseAndReturnsSnapshot() {
         Fixture fixture = new Fixture();
-        List<SearchResponse> responses = new ArrayList<>();
+        List<SearchResponseMessage> responses = new ArrayList<>();
         SearchOptions options = options(2_000, 1, true);
 
-        CompletableFuture<Search> task = inBackground(() -> fixture.client
+        CompletableFuture<SearchSnapshot> task = inBackground(() -> fixture.client
                 .searches()
                 .search(
-                        SearchRequest.of(SearchQuery.fromText("query"))
-                                .scope(SearchScope.getNetwork())
+                        SearchSpecification.of(ParsedSearchQuery.fromText("query"))
+                                .scope(SearchTarget.getNetwork())
                                 .token(31)
                                 .options(options)
                                 .build(),
                         responses::add));
         waitUntil(() -> fixture.client.getSearches().containsKey(31)
                 && fixture.client.getSearches().get(31).getState().equals(SearchPhase.IN_PROGRESS));
-        SearchResponse response = new SearchResponse("bob", 31, true, 1, 0, List.of(new File(2, "file", 3, "ext")));
+        SearchResponseMessage response =
+                new SearchResponseMessage("bob", 31, true, 1, 0, List.of(new File(2, "file", 3, "ext")));
         fixture.client.getSearches().get(31).tryAddResponse(response);
 
-        Search search = task.join();
+        SearchSnapshot search = task.join();
         assertEquals(1, responses.size());
         assertEquals(response.username(), responses.getFirst().username());
         assertEquals(response.token(), responses.getFirst().token());
@@ -273,9 +280,9 @@ class EngineSearchTest {
     void generatesTokenAndTracksActiveSearch() {
         Fixture fixture = new Fixture();
         CancellationController source = new CancellationController();
-        CompletableFuture<SearchResult> task = inBackground(() -> fixture.client
+        CompletableFuture<SearchExecutionResult> task = inBackground(() -> fixture.client
                 .searches()
-                .search(SearchRequest.of(SearchQuery.fromText("query"))
+                .search(SearchSpecification.of(ParsedSearchQuery.fromText("query"))
                         .options(options(2_000, 250, true))
                         .cancellation(source.getSignal())
                         .build()));
@@ -294,9 +301,9 @@ class EngineSearchTest {
         Fixture fixture = new Fixture();
         CancellationController source = new CancellationController();
         source.cancel();
-        CompletableFuture<SearchResult> cancelled = inBackground(() -> fixture.client
+        CompletableFuture<SearchExecutionResult> cancelled = inBackground(() -> fixture.client
                 .searches()
-                .search(SearchRequest.of(SearchQuery.fromText("cancelled"))
+                .search(SearchSpecification.of(ParsedSearchQuery.fromText("cancelled"))
                         .token(40)
                         .options(options(2_000, 250, true))
                         .cancellation(source.getSignal())
@@ -305,9 +312,9 @@ class EngineSearchTest {
 
         TimeoutException timeout = new TimeoutException("write");
         fixture.server.result = CompletableFuture.failedFuture(timeout);
-        CompletableFuture<SearchResult> timedOut = inBackground(() -> fixture.client
+        CompletableFuture<SearchExecutionResult> timedOut = inBackground(() -> fixture.client
                 .searches()
-                .search(SearchRequest.of(SearchQuery.fromText("timeout"))
+                .search(SearchSpecification.of(ParsedSearchQuery.fromText("timeout"))
                         .token(41)
                         .options(options(2_000, 250, true))
                         .build()));
@@ -318,9 +325,9 @@ class EngineSearchTest {
 
         IllegalStateException error = new IllegalStateException("boom");
         fixture.server.result = CompletableFuture.failedFuture(error);
-        CompletableFuture<SearchResult> failed = inBackground(() -> fixture.client
+        CompletableFuture<SearchExecutionResult> failed = inBackground(() -> fixture.client
                 .searches()
-                .search(SearchRequest.of(SearchQuery.fromText("error"))
+                .search(SearchSpecification.of(ParsedSearchQuery.fromText("error"))
                         .token(42)
                         .options(options(2_000, 250, true))
                         .build()));
@@ -342,25 +349,25 @@ class EngineSearchTest {
         // on independent threads now, so without this the two that win the
         // concurrency semaphore are whichever two get scheduled first — and the
         // test would be asserting on a race.
-        CompletableFuture<SearchResult> first = inBackground(() -> fixture.client
+        CompletableFuture<SearchExecutionResult> first = inBackground(() -> fixture.client
                 .searches()
-                .search(SearchRequest.of(SearchQuery.fromText("one"))
+                .search(SearchSpecification.of(ParsedSearchQuery.fromText("one"))
                         .token(51)
                         .options(options)
                         .cancellation(firstSource.getSignal())
                         .build()));
         waitUntil(() -> fixture.server.messages.size() == 1);
-        CompletableFuture<SearchResult> second = inBackground(() -> fixture.client
+        CompletableFuture<SearchExecutionResult> second = inBackground(() -> fixture.client
                 .searches()
-                .search(SearchRequest.of(SearchQuery.fromText("two"))
+                .search(SearchSpecification.of(ParsedSearchQuery.fromText("two"))
                         .token(52)
                         .options(options)
                         .cancellation(secondSource.getSignal())
                         .build()));
         waitUntil(() -> fixture.server.messages.size() == 2);
-        CompletableFuture<SearchResult> third = inBackground(() -> fixture.client
+        CompletableFuture<SearchExecutionResult> third = inBackground(() -> fixture.client
                 .searches()
-                .search(SearchRequest.of(SearchQuery.fromText("three"))
+                .search(SearchSpecification.of(ParsedSearchQuery.fromText("three"))
                         .token(53)
                         .options(options)
                         .cancellation(thirdSource.getSignal())
@@ -385,11 +392,11 @@ class EngineSearchTest {
         fixture.close();
     }
 
-    private static void assertScopeMessage(SearchScope scope, byte[] expected) {
+    private static void assertScopeMessage(SearchTarget scope, byte[] expected) {
         Fixture fixture = new Fixture();
-        SearchResult result = fixture.client
+        SearchExecutionResult result = fixture.client
                 .searches()
-                .search(SearchRequest.of(SearchQuery.fromText("query"))
+                .search(SearchSpecification.of(ParsedSearchQuery.fromText("query"))
                         .scope(scope)
                         .token(20)
                         .options(options(30, 250, true))

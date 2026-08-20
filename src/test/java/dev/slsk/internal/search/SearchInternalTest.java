@@ -28,8 +28,8 @@ class SearchInternalTest {
 
     @Test
     void instantiatesWithExpectedDataAndDefaults() {
-        SearchQuery query = new SearchQuery("foo");
-        SearchScope scope = SearchScope.getNetwork();
+        ParsedSearchQuery query = new ParsedSearchQuery("foo");
+        SearchTarget scope = SearchTarget.getNetwork();
         SearchOptions options = new SearchOptions();
         try (SearchInternal search = new SearchInternal(query, scope, 42, options)) {
             assertSame(query, search.getQuery());
@@ -109,7 +109,7 @@ class SearchInternalTest {
         File keep = new File(1, "keep", 1, "x");
         File remove = new File(1, "remove", 1, "x");
         SearchOptions options = options(1000).fileFilter(file -> file == keep).build();
-        AtomicReference<SearchResponse> accepted = new AtomicReference<>();
+        AtomicReference<SearchResponseMessage> accepted = new AtomicReference<>();
 
         try (SearchInternal search = search(42, options)) {
             search.setState(SearchPhase.IN_PROGRESS);
@@ -243,7 +243,7 @@ class SearchInternalTest {
         try (SearchInternal search = search(42, new SearchOptions())) {
             search.setState(SearchPhase.IN_PROGRESS);
             search.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of(FILE)));
-            Search snapshot = search.toSearch();
+            SearchSnapshot snapshot = search.toSearch();
             assertSame(search.getQuery(), snapshot.query());
             assertSame(search.getScope(), snapshot.scope());
             assertEquals(42, snapshot.token());
@@ -261,7 +261,7 @@ class SearchInternalTest {
     }
 
     private static SearchInternal search(int token, SearchOptions options) {
-        return new SearchInternal(new SearchQuery("foo"), SearchScope.getNetwork(), token, options);
+        return new SearchInternal(new ParsedSearchQuery("foo"), SearchTarget.getNetwork(), token, options);
     }
 
     private static SearchOptions.Builder options(int timeoutMillis) {
@@ -284,12 +284,12 @@ class SearchInternalTest {
                 .build();
     }
 
-    private static SearchResponse response(
+    private static SearchResponseMessage response(
             int token, int uploadSpeed, int queueLength, List<File> files, List<File> lockedFiles) {
-        return new SearchResponse("user", token, true, uploadSpeed, queueLength, files, lockedFiles);
+        return new SearchResponseMessage("user", token, true, uploadSpeed, queueLength, files, lockedFiles);
     }
 
-    private static void assertAccepted(SearchOptions options, SearchResponse response) {
+    private static void assertAccepted(SearchOptions options, SearchResponseMessage response) {
         try (SearchInternal search = search(42, options)) {
             search.setState(SearchPhase.IN_PROGRESS);
             search.tryAddResponse(response);
@@ -297,7 +297,7 @@ class SearchInternalTest {
         }
     }
 
-    private static void assertRejected(SearchOptions options, SearchResponse response) {
+    private static void assertRejected(SearchOptions options, SearchResponseMessage response) {
         try (SearchInternal search = search(42, options)) {
             search.setState(SearchPhase.IN_PROGRESS);
             search.tryAddResponse(response);

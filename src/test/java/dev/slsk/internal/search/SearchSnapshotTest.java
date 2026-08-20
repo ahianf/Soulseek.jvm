@@ -11,15 +11,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class SearchTest {
+class SearchSnapshotTest {
     @Test
     @DisplayName("Instantiates with expected data")
     void instantiatesWithExpectedData() {
-        SearchQuery query = new SearchQuery("foo bar");
-        SearchScope scope = SearchScope.getNetwork();
+        ParsedSearchQuery query = new ParsedSearchQuery("foo bar");
+        SearchTarget scope = SearchTarget.getNetwork();
         SearchPhase state = SearchPhase.COMPLETED;
 
-        Search search = new Search(query, scope, 42, state, SearchTermination.TIMED_OUT, 3, 4, 5);
+        SearchSnapshot search = new SearchSnapshot(query, scope, 42, state, SearchTermination.TIMED_OUT, 3, 4, 5);
 
         assertEquals("foo bar", search.query().searchText());
         assertEquals(SearchScopeType.NETWORK, search.scope().type());
@@ -34,7 +34,7 @@ class SearchTest {
     @Test
     @DisplayName("Preserves nullable query and scope references")
     void preservesNullableQueryAndScopeReferences() {
-        Search search = new Search(null, null, 0, SearchPhase.NONE, null, 0, 0, 0);
+        SearchSnapshot search = new SearchSnapshot(null, null, 0, SearchPhase.NONE, null, 0, 0, 0);
 
         assertNull(search.query());
         assertNull(search.scope());
@@ -43,11 +43,12 @@ class SearchTest {
     @Test
     @DisplayName("Rejects null state and inconsistent termination data")
     void rejectsNullState() {
-        assertThrows(NullPointerException.class, () -> new Search(null, null, 0, null, null, 0, 0, 0));
-        assertThrows(
-                IllegalArgumentException.class, () -> new Search(null, null, 0, SearchPhase.COMPLETED, null, 0, 0, 0));
+        assertThrows(NullPointerException.class, () -> new SearchSnapshot(null, null, 0, null, null, 0, 0, 0));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new Search(null, null, 0, SearchPhase.IN_PROGRESS, SearchTermination.TIMED_OUT, 0, 0, 0));
+                () -> new SearchSnapshot(null, null, 0, SearchPhase.COMPLETED, null, 0, 0, 0));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new SearchSnapshot(null, null, 0, SearchPhase.IN_PROGRESS, SearchTermination.TIMED_OUT, 0, 0, 0));
     }
 }
