@@ -8,10 +8,10 @@ import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
 
 /** Shared mechanical serialization for scalar server commands. */
-abstract class ServerMessageBase implements OutgoingMessage {
+abstract class ServerMessage implements OutgoingMessage {
     private final MessageCode.Server code;
 
-    ServerMessageBase(MessageCode.Server code) {
+    ServerMessage(MessageCode.Server code) {
         this.code = code;
     }
 
@@ -20,7 +20,7 @@ abstract class ServerMessageBase implements OutgoingMessage {
     }
 }
 
-abstract class EmptyServerMessage extends ServerMessageBase {
+abstract class EmptyServerMessage extends ServerMessage {
     EmptyServerMessage(MessageCode.Server code) {
         super(code);
     }
@@ -31,7 +31,7 @@ abstract class EmptyServerMessage extends ServerMessageBase {
     }
 }
 
-abstract class IntegerServerMessage extends ServerMessageBase {
+abstract class IntegerServerMessage extends ServerMessage {
     private final int value;
 
     IntegerServerMessage(MessageCode.Server code, int value) {
@@ -49,7 +49,7 @@ abstract class IntegerServerMessage extends ServerMessageBase {
     }
 }
 
-abstract class ByteServerMessage extends ServerMessageBase {
+abstract class ByteServerMessage extends ServerMessage {
     private final boolean value;
 
     ByteServerMessage(MessageCode.Server code, boolean value) {
@@ -67,7 +67,7 @@ abstract class ByteServerMessage extends ServerMessageBase {
     }
 }
 
-abstract class StringServerMessage extends ServerMessageBase {
+abstract class StringServerMessage extends ServerMessage {
     private final String value;
 
     StringServerMessage(MessageCode.Server code, String value) {
