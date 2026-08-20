@@ -163,7 +163,7 @@ class ConnectionTest {
 
         assertEquals(0, client.connectCalls);
         assertEquals(1, client.proxyCalls);
-        assertEquals(proxy.getIpAddress(), client.lastProxyAddress);
+        assertEquals(proxy.ipAddress(), client.lastProxyAddress);
         assertEquals(1080, client.lastProxyPort);
         assertEquals(ENDPOINT.getAddress(), client.lastDestination);
         assertEquals(2234, client.lastDestinationPort);

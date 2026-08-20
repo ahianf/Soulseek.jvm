@@ -28,14 +28,14 @@ class RoomListResponseFactoryTest {
         builder.writeInteger(2).writeString("moderated-a").writeString("moderated-b");
 
         RoomList result = RoomListResponseFactory.fromByteArray(builder.build());
-        assertRooms(List.of(new ExpectedRoom("public-a", 12), new ExpectedRoom("public-b", 34)), result.getPublic());
-        assertRooms(List.of(new ExpectedRoom("private", 78)), result.getPrivate());
-        assertRooms(List.of(new ExpectedRoom("owned", 56)), result.getOwned());
-        assertEquals(List.of("moderated-a", "moderated-b"), result.getModeratedRoomNames());
-        assertEquals(2, result.getPublicCount());
-        assertEquals(1, result.getPrivateCount());
-        assertEquals(1, result.getOwnedCount());
-        assertEquals(2, result.getModeratedRoomNameCount());
+        assertRooms(List.of(new ExpectedRoom("public-a", 12), new ExpectedRoom("public-b", 34)), result.publicRooms());
+        assertRooms(List.of(new ExpectedRoom("private", 78)), result.privateRooms());
+        assertRooms(List.of(new ExpectedRoom("owned", 56)), result.ownedRooms());
+        assertEquals(List.of("moderated-a", "moderated-b"), result.moderatedRoomNames());
+        assertEquals(2, result.publicCount());
+        assertEquals(1, result.privateCount());
+        assertEquals(1, result.ownedCount());
+        assertEquals(2, result.moderatedRoomNameCount());
     }
 
     @Test
@@ -52,10 +52,10 @@ class RoomListResponseFactoryTest {
                 .writeInteger(0)
                 .build());
 
-        assertEquals(List.of(), result.getPublic());
-        assertEquals(List.of(), result.getOwned());
-        assertEquals(List.of(), result.getPrivate());
-        assertEquals(List.of(), result.getModeratedRoomNames());
+        assertEquals(List.of(), result.publicRooms());
+        assertEquals(List.of(), result.ownedRooms());
+        assertEquals(List.of(), result.privateRooms());
+        assertEquals(List.of(), result.moderatedRoomNames());
     }
 
     @Test
@@ -90,19 +90,19 @@ class RoomListResponseFactoryTest {
     private static void writeRooms(MessageBuilder builder, List<RoomInfo> rooms) {
         builder.writeInteger(rooms.size());
         for (RoomInfo room : rooms) {
-            builder.writeString(room.getName());
+            builder.writeString(room.name());
         }
         builder.writeInteger(rooms.size());
         for (RoomInfo room : rooms) {
-            builder.writeInteger(room.getUserCount());
+            builder.writeInteger(room.userCount());
         }
     }
 
     private static void assertRooms(List<ExpectedRoom> expected, List<RoomInfo> actual) {
         assertEquals(expected.size(), actual.size());
         for (int index = 0; index < expected.size(); index++) {
-            assertEquals(expected.get(index).name(), actual.get(index).getName());
-            assertEquals(expected.get(index).userCount(), actual.get(index).getUserCount());
+            assertEquals(expected.get(index).name(), actual.get(index).name());
+            assertEquals(expected.get(index).userCount(), actual.get(index).userCount());
         }
     }
 

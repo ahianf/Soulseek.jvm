@@ -32,7 +32,7 @@ final class Transfers {
 
     /** Derives an id from the transfer's token, which is unique per transfer. */
     static TransferId id(Transfer transfer) {
-        return TransferId.of(transfer.getDirection() + ":" + transfer.getToken());
+        return TransferId.of(transfer.direction() + ":" + transfer.token());
     }
 
     /**
@@ -61,7 +61,7 @@ final class Transfers {
      * match an earlier, non-terminal case.
      */
     static TransferState state(Transfer transfer) {
-        return state(transfer, transfer.getState());
+        return state(transfer, transfer.state());
     }
 
     /**
@@ -111,22 +111,22 @@ final class Transfers {
     private static TransferOutcome outcome(Transfer transfer, dev.slsk.internal.transfer.TransferState source) {
         if (source.contains(dev.slsk.internal.transfer.TransferState.SUCCEEDED)) {
             return new TransferOutcome.Succeeded(
-                    transfer.getBytesTransferred(),
-                    transfer.getElapsedTime() == null ? Duration.ZERO : transfer.getElapsedTime());
+                    transfer.bytesTransferred(),
+                    transfer.elapsedTime() == null ? Duration.ZERO : transfer.elapsedTime());
         }
         if (source.contains(dev.slsk.internal.transfer.TransferState.CANCELLED)) {
             return new TransferOutcome.Cancelled();
         }
         if (source.contains(dev.slsk.internal.transfer.TransferState.REJECTED)) {
-            Throwable cause = transfer.getException();
+            Throwable cause = transfer.exception();
             String message = cause == null ? "" : String.valueOf(cause.getMessage());
             return new TransferOutcome.Rejected(RejectionReasons.parse(message), message);
         }
         if (source.contains(dev.slsk.internal.transfer.TransferState.TIMED_OUT)) {
             return new TransferOutcome.Failed(
-                    transfer.getException() == null
+                    transfer.exception() == null
                             ? new java.util.concurrent.TimeoutException("the transfer timed out")
-                            : transfer.getException(),
+                            : transfer.exception(),
                     true);
         }
         if (source.contains(dev.slsk.internal.transfer.TransferState.ABORTED)) {
@@ -136,27 +136,25 @@ final class Transfers {
             // classifies the mismatch as terminal; falling through to the
             // retryable branch below is what made it retried forever.
             return new TransferOutcome.Failed(
-                    transfer.getException() == null
+                    transfer.exception() == null
                             ? new IllegalStateException("the transfer was aborted")
-                            : transfer.getException(),
+                            : transfer.exception(),
                     false);
         }
         return new TransferOutcome.Failed(
-                transfer.getException() == null
-                        ? new IllegalStateException("the transfer failed")
-                        : transfer.getException(),
+                transfer.exception() == null ? new IllegalStateException("the transfer failed") : transfer.exception(),
                 true);
     }
 
     static Progress progress(Transfer transfer) {
-        return Progress.of(transfer.getBytesTransferred(), transfer.getSize(), transfer.getAverageSpeed());
+        return Progress.of(transfer.bytesTransferred(), transfer.size(), transfer.averageSpeed());
     }
 
     static Optional<Instant> startedAt(Transfer transfer) {
-        return Optional.ofNullable(transfer.getStartTime());
+        return Optional.ofNullable(transfer.startTime());
     }
 
     static Optional<Instant> endedAt(Transfer transfer) {
-        return Optional.ofNullable(transfer.getEndTime());
+        return Optional.ofNullable(transfer.endTime());
     }
 }

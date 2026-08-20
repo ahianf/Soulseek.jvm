@@ -17,10 +17,10 @@ class ServerInfoTest {
     void instantiatesWithGivenValues() {
         ServerInfo info = new ServerInfo(1, 2, 3, false);
 
-        assertEquals(1, info.getParentMinSpeed());
-        assertEquals(2, info.getParentSpeedRatio());
-        assertEquals(3, info.getWishlistInterval());
-        assertFalse(info.isSupporter());
+        assertEquals(1, info.parentMinSpeed());
+        assertEquals(2, info.parentSpeedRatio());
+        assertEquals(3, info.wishlistInterval());
+        assertFalse(info.supporter());
     }
 
     @Test
@@ -31,13 +31,13 @@ class ServerInfoTest {
         ServerInfo two = new ServerInfo(1, 2);
         ServerInfo three = new ServerInfo(1, 2, 3);
 
-        assertNull(empty.getParentMinSpeed());
-        assertNull(empty.getParentSpeedRatio());
-        assertNull(empty.getWishlistInterval());
-        assertNull(empty.isSupporter());
-        assertNull(one.getParentSpeedRatio());
-        assertNull(two.getWishlistInterval());
-        assertNull(three.isSupporter());
+        assertNull(empty.parentMinSpeed());
+        assertNull(empty.parentSpeedRatio());
+        assertNull(empty.wishlistInterval());
+        assertNull(empty.supporter());
+        assertNull(one.parentSpeedRatio());
+        assertNull(two.wishlistInterval());
+        assertNull(three.supporter());
     }
 
     @Test
@@ -45,10 +45,10 @@ class ServerInfoTest {
     void withOverlaysSubstitutions() {
         ServerInfo info = new ServerInfo().with(1, 2, 3, false);
 
-        assertEquals(1, info.getParentMinSpeed());
-        assertEquals(2, info.getParentSpeedRatio());
-        assertEquals(3, info.getWishlistInterval());
-        assertFalse(info.isSupporter());
+        assertEquals(1, info.parentMinSpeed());
+        assertEquals(2, info.parentSpeedRatio());
+        assertEquals(3, info.wishlistInterval());
+        assertFalse(info.supporter());
     }
 
     @Test
@@ -58,10 +58,10 @@ class ServerInfoTest {
 
         ServerInfo info = original.with(null, null, null, null);
 
-        assertEquals(1, info.getParentMinSpeed());
-        assertEquals(2, info.getParentSpeedRatio());
-        assertEquals(3, info.getWishlistInterval());
-        assertFalse(info.isSupporter());
+        assertEquals(1, info.parentMinSpeed());
+        assertEquals(2, info.parentSpeedRatio());
+        assertEquals(3, info.wishlistInterval());
+        assertFalse(info.supporter());
     }
 
     @Test
@@ -69,9 +69,9 @@ class ServerInfoTest {
     void withCanOverlaySubset() {
         ServerInfo info = new ServerInfo(1, 2, 3, false).with(null, 20, null, true);
 
-        assertEquals(1, info.getParentMinSpeed());
-        assertEquals(20, info.getParentSpeedRatio());
-        assertEquals(3, info.getWishlistInterval());
-        assertEquals(true, info.isSupporter());
+        assertEquals(1, info.parentMinSpeed());
+        assertEquals(20, info.parentSpeedRatio());
+        assertEquals(3, info.wishlistInterval());
+        assertEquals(true, info.supporter());
     }
 }

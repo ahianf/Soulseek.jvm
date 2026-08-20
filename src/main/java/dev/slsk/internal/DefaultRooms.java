@@ -120,7 +120,7 @@ final class DefaultRooms implements Rooms {
         client.events().on(Kind.ROOM_TICKER_ADDED, (RoomTickerAddedEvent event) -> {
             if (event == null
                     || event.getTicker() == null
-                    || Usernames.fromWire(event.getTicker().getUsername()) == null) {
+                    || Usernames.fromWire(event.getTicker().username()) == null) {
                 return;
             }
             events.mutateAndPublish(() -> {
@@ -223,14 +223,14 @@ final class DefaultRooms implements Rooms {
     // --- translation -------------------------------------------------------
 
     private static RoomTicker ticker(dev.slsk.internal.room.RoomTicker source) {
-        return new RoomTicker(Username.of(source.getUsername()), source.getMessage());
+        return new RoomTicker(Username.of(source.username()), source.message());
     }
 
     private static List<RoomTicker> tickers(List<dev.slsk.internal.room.RoomTicker> source) {
         return source == null
                 ? List.of()
                 : source.stream()
-                        .filter(entry -> Usernames.fromWire(entry.getUsername()) != null)
+                        .filter(entry -> Usernames.fromWire(entry.username()) != null)
                         .map(DefaultRooms::ticker)
                         .toList();
     }
@@ -267,26 +267,26 @@ final class DefaultRooms implements Rooms {
         if (data == null) {
             return blank("");
         }
-        List<RoomUser> users = data.getUsers() == null
+        List<RoomUser> users = data.users() == null
                 ? List.of()
-                : data.getUsers().stream()
+                : data.users().stream()
                         .filter(entry -> entry != null && Usernames.fromWire(entry.username()) != null)
                         .map(entry -> user(Username.of(entry.username()), entry))
                         .toList();
-        Set<Username> operators = data.getOperators() == null
+        Set<Username> operators = data.operators() == null
                 ? Set.of()
-                : data.getOperators().stream()
+                : data.operators().stream()
                         .map(Usernames::fromWire)
                         .filter(Objects::nonNull)
                         .collect(Collectors.toUnmodifiableSet());
         return new Room(
-                data.getName(),
+                data.name(),
                 users,
                 List.of(),
-                data.isPrivate(),
-                data.getOwner() == null || data.getOwner().isBlank()
+                data.privateRoom(),
+                data.owner() == null || data.owner().isBlank()
                         ? Optional.empty()
-                        : Optional.of(Username.of(data.getOwner())),
+                        : Optional.of(Username.of(data.owner())),
                 operators);
     }
 
@@ -295,17 +295,17 @@ final class DefaultRooms implements Rooms {
             return RoomList.empty();
         }
         return new RoomList(
-                infos(source.getPublic()),
-                infos(source.getPrivate()),
-                infos(source.getOwned()),
-                source.getModeratedRoomNames() == null ? List.of() : List.copyOf(source.getModeratedRoomNames()));
+                infos(source.publicRooms()),
+                infos(source.privateRooms()),
+                infos(source.ownedRooms()),
+                source.moderatedRoomNames());
     }
 
     private static List<RoomInfo> infos(List<dev.slsk.internal.room.RoomInfo> source) {
         return source == null
                 ? List.of()
                 : source.stream()
-                        .map(info -> new RoomInfo(info.getName(), info.getUserCount()))
+                        .map(info -> new RoomInfo(info.name(), info.userCount()))
                         .toList();
     }
 

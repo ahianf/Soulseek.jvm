@@ -289,14 +289,12 @@ final class DefaultConnection implements Connection {
             return ServerInfo.empty();
         }
         return new ServerInfo(
-                source.getParentMinSpeed() == null ? OptionalInt.empty() : OptionalInt.of(source.getParentMinSpeed()),
-                source.getParentSpeedRatio() == null
-                        ? OptionalInt.empty()
-                        : OptionalInt.of(source.getParentSpeedRatio()),
-                source.getWishlistInterval() == null
+                source.parentMinSpeed() == null ? OptionalInt.empty() : OptionalInt.of(source.parentMinSpeed()),
+                source.parentSpeedRatio() == null ? OptionalInt.empty() : OptionalInt.of(source.parentSpeedRatio()),
+                source.wishlistInterval() == null
                         ? Optional.empty()
-                        : Optional.of(Duration.ofSeconds(source.getWishlistInterval())),
-                Optional.ofNullable(source.isSupporter()));
+                        : Optional.of(Duration.ofSeconds(source.wishlistInterval())),
+                Optional.ofNullable(source.supporter()));
     }
 
     @Override

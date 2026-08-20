@@ -46,24 +46,24 @@ class TransferTest {
                 endpoint,
                 exception);
 
-        assertEquals(TransferDirection.DOWNLOAD, transfer.getDirection());
-        assertEquals("alice", transfer.getUsername());
-        assertEquals("music/file.mp3", transfer.getFilename());
-        assertEquals(42, transfer.getToken());
-        assertEquals(TransferState.IN_PROGRESS, transfer.getState());
-        assertEquals(1000, transfer.getSize());
-        assertEquals(10, transfer.getStartOffset());
-        assertEquals(400, transfer.getBytesTransferred());
-        assertEquals(200, transfer.getAverageSpeed());
-        assertEquals(startTime, transfer.getStartTime());
-        assertEquals(endTime, transfer.getEndTime());
-        assertEquals(24, transfer.getRemoteToken());
-        assertSame(endpoint, transfer.getIpEndpoint());
-        assertSame(exception, transfer.getException());
-        assertEquals(600, transfer.getBytesRemaining());
-        assertEquals(Duration.ofDays(1), transfer.getElapsedTime());
-        assertEquals(40, transfer.getPercentComplete());
-        assertEquals(Duration.ofSeconds(3), transfer.getRemainingTime());
+        assertEquals(TransferDirection.DOWNLOAD, transfer.direction());
+        assertEquals("alice", transfer.username());
+        assertEquals("music/file.mp3", transfer.filename());
+        assertEquals(42, transfer.token());
+        assertEquals(TransferState.IN_PROGRESS, transfer.state());
+        assertEquals(1000, transfer.size());
+        assertEquals(10, transfer.startOffset());
+        assertEquals(400, transfer.bytesTransferred());
+        assertEquals(200, transfer.averageSpeed());
+        assertEquals(startTime, transfer.startTime());
+        assertEquals(endTime, transfer.endTime());
+        assertEquals(24, transfer.remoteToken());
+        assertSame(endpoint, transfer.ipEndpoint());
+        assertSame(exception, transfer.exception());
+        assertEquals(600, transfer.bytesRemaining());
+        assertEquals(Duration.ofDays(1), transfer.elapsedTime());
+        assertEquals(40, transfer.percentComplete());
+        assertEquals(Duration.ofSeconds(3), transfer.remainingTime());
     }
 
     @Test
@@ -71,16 +71,16 @@ class TransferTest {
     void optionalValuesUseSourceDefaults() {
         Transfer transfer = transfer(TransferState.NONE, 0, 0, 0);
 
-        assertEquals(0, transfer.getBytesTransferred());
-        assertEquals(0, transfer.getAverageSpeed());
-        assertNull(transfer.getStartTime());
-        assertNull(transfer.getEndTime());
-        assertNull(transfer.getRemoteToken());
-        assertNull(transfer.getIpEndpoint());
-        assertNull(transfer.getException());
-        assertEquals(0, transfer.getPercentComplete());
-        assertNull(transfer.getElapsedTime());
-        assertNull(transfer.getRemainingTime());
+        assertEquals(0, transfer.bytesTransferred());
+        assertEquals(0, transfer.averageSpeed());
+        assertNull(transfer.startTime());
+        assertNull(transfer.endTime());
+        assertNull(transfer.remoteToken());
+        assertNull(transfer.ipEndpoint());
+        assertNull(transfer.exception());
+        assertEquals(0, transfer.percentComplete());
+        assertNull(transfer.elapsedTime());
+        assertNull(transfer.remainingTime());
     }
 
     @Test
@@ -103,8 +103,8 @@ class TransferTest {
                 null,
                 null);
 
-        assertTrue(transfer.getElapsedTime().compareTo(Duration.ofSeconds(2)) >= 0);
-        assertTrue(transfer.getElapsedTime().compareTo(Duration.ofSeconds(5)) < 0);
+        assertTrue(transfer.elapsedTime().compareTo(Duration.ofSeconds(2)) >= 0);
+        assertTrue(transfer.elapsedTime().compareTo(Duration.ofSeconds(5)) < 0);
     }
 
     @Test
@@ -112,8 +112,8 @@ class TransferTest {
     void percentCompleteReturnsZeroIfSizeIsZero() {
         Transfer transfer = transfer(TransferState.NONE, 0, 10, 0);
 
-        assertEquals(0, transfer.getPercentComplete());
-        assertEquals(-10, transfer.getBytesRemaining());
+        assertEquals(0, transfer.percentComplete());
+        assertEquals(-10, transfer.bytesRemaining());
     }
 
     @Test
@@ -122,8 +122,8 @@ class TransferTest {
         Transfer positive = transfer(TransferState.NONE, 1, 0, 600);
         Transfer negative = transfer(TransferState.NONE, -1, 0, 600);
 
-        assertEquals(Duration.ofNanos(1_666_666), positive.getRemainingTime());
-        assertEquals(Duration.ofNanos(-1_666_666), negative.getRemainingTime());
+        assertEquals(Duration.ofNanos(1_666_666), positive.remainingTime());
+        assertEquals(Duration.ofNanos(-1_666_666), negative.remainingTime());
     }
 
     @Test

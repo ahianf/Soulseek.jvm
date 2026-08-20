@@ -27,7 +27,7 @@ class SearchEventTest {
 
         assertSame(search, args.getSearch());
         assertEquals(SearchState.NONE, args.getPreviousState());
-        assertEquals(SearchState.COMPLETED, args.getSearch().getState());
+        assertEquals(SearchState.COMPLETED, args.getSearch().state());
     }
 
     @Test

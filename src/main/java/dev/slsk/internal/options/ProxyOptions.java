@@ -10,126 +10,54 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 
-/**
- * SOCKS proxy configuration.
- */
-public class ProxyOptions {
-    private final String address;
-    private final InetAddress ipAddress;
-    private final InetSocketAddress ipEndpoint;
-    private final String password;
-    private final int port;
-    private final String username;
+/** SOCKS proxy configuration. */
+public record ProxyOptions(
+        String address,
+        int port,
+        String username,
+        String password,
+        InetAddress ipAddress,
+        InetSocketAddress ipEndpoint) {
 
-    /**
-     * Creates proxy options without credentials.
-     *
-     * @param address the proxy address
-     * @param port the proxy port
-     */
     public ProxyOptions(String address, int port) {
         this(address, port, null, null);
     }
 
-    /**
-     * Creates proxy options.
-     *
-     * @param address the proxy address
-     * @param port the proxy port
-     * @param username the proxy username
-     * @param password the proxy password
-     */
     public ProxyOptions(String address, int port, String username, String password) {
-        if (isNullOrWhiteSpace(address)) {
-            throw new IllegalArgumentException(
-                    "Address must not be a null or empty string, or one consisting only of whitespace");
+        this(address, port, username, password, resolve(address, port, username, password));
+    }
+
+    private ProxyOptions(String address, int port, String username, String password, Resolved resolved) {
+        this(address, port, username, password, resolved.address(), resolved.endpoint());
+    }
+
+    private static Resolved resolve(String address, int port, String username, String password) {
+        if (CommonUtils.isNullOrWhiteSpace(address)) {
+            throw new IllegalArgumentException("address must contain non-whitespace text");
         }
         if (port < 0 || port > 65_535) {
-            throw new IllegalArgumentException("The port must be within the range 0-65535 (specified: " + port + ")");
+            throw new IllegalArgumentException("port must be between 0 and 65535: " + port);
         }
         if ((username == null) != (password == null)) {
-            throw new IllegalArgumentException("Username and password must both be specified");
+            throw new IllegalArgumentException("username and password must both be specified");
         }
         if (username != null) {
             if (username.isEmpty() || username.length() > 255) {
-                throw new IllegalArgumentException("The username must be between 1 and 255 characters");
+                throw new IllegalArgumentException("username length must be between 1 and 255");
             }
             if (password.isEmpty() || password.length() > 255) {
-                throw new IllegalArgumentException("The password must be between 1 and 255 characters");
+                throw new IllegalArgumentException("password length must be between 1 and 255");
             }
         }
 
-        InetAddress resolvedAddress;
         try {
-            resolvedAddress = InetAddress.getAllByName(address)[0];
+            InetAddress resolvedAddress = InetAddress.getAllByName(address)[0];
+            return new Resolved(resolvedAddress, new InetSocketAddress(resolvedAddress, port));
         } catch (UnknownHostException exception) {
             throw new AddressException(
                     "Failed to resolve address '" + address + "': " + exception.getMessage(), exception);
         }
-
-        this.address = address;
-        this.ipAddress = resolvedAddress;
-        this.port = port;
-        this.ipEndpoint = new InetSocketAddress(resolvedAddress, port);
-        this.username = username;
-        this.password = password;
     }
 
-    /**
-     * Returns the configured proxy address.
-     *
-     * @return the address
-     */
-    public final String getAddress() {
-        return address;
-    }
-
-    /**
-     * Returns the resolved proxy address.
-     *
-     * @return the resolved address
-     */
-    public final InetAddress getIpAddress() {
-        return ipAddress;
-    }
-
-    /**
-     * Returns the resolved proxy endpoint.
-     *
-     * @return the resolved endpoint
-     */
-    public final InetSocketAddress getIpEndpoint() {
-        return ipEndpoint;
-    }
-
-    /**
-     * Returns the proxy password.
-     *
-     * @return the password, or {@code null}
-     */
-    public final String getPassword() {
-        return password;
-    }
-
-    /**
-     * Returns the proxy port.
-     *
-     * @return the port
-     */
-    public final int getPort() {
-        return port;
-    }
-
-    /**
-     * Returns the proxy username.
-     *
-     * @return the username, or {@code null}
-     */
-    public final String getUsername() {
-        return username;
-    }
-
-    private static boolean isNullOrWhiteSpace(String value) {
-        return CommonUtils.isNullOrWhiteSpace(value);
-    }
+    private record Resolved(InetAddress address, InetSocketAddress endpoint) {}
 }

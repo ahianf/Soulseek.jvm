@@ -894,10 +894,10 @@ final class SoulseekEngine implements AutoCloseable {
         forwardServer(ServerMessageEvent.EXCLUDED_SEARCH_PHRASES_RECEIVED, Kind.EXCLUDED_SEARCH_PHRASES_RECEIVED);
         serverMessageHandler.<ServerInfo>addListener(ServerMessageEvent.SERVER_INFO_RECEIVED, (sender, eventData) -> {
             serverInfo = serverInfo.with(
-                    eventData.getParentMinSpeed(),
-                    eventData.getParentSpeedRatio(),
-                    eventData.getWishlistInterval(),
-                    eventData.isSupporter());
+                    eventData.parentMinSpeed(),
+                    eventData.parentSpeedRatio(),
+                    eventData.wishlistInterval(),
+                    eventData.supporter());
             events.raise(Kind.SERVER_INFO_RECEIVED, serverInfo);
         });
         serverMessageHandler.<Void>addListener(ServerMessageEvent.KICKED_FROM_SERVER, (sender, eventData) -> {

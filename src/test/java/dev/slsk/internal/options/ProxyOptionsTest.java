@@ -26,12 +26,12 @@ class ProxyOptionsTest {
     void instantiatesProperly() throws Exception {
         ProxyOptions options = new ProxyOptions("127.0.0.1", 1234, "user", "password");
 
-        assertEquals("127.0.0.1", options.getAddress());
-        assertEquals(1234, options.getPort());
-        assertEquals("user", options.getUsername());
-        assertEquals("password", options.getPassword());
-        assertEquals(InetAddress.getByName("127.0.0.1"), options.getIpAddress());
-        assertEquals(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 1234), options.getIpEndpoint());
+        assertEquals("127.0.0.1", options.address());
+        assertEquals(1234, options.port());
+        assertEquals("user", options.username());
+        assertEquals("password", options.password());
+        assertEquals(InetAddress.getByName("127.0.0.1"), options.ipAddress());
+        assertEquals(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 1234), options.ipEndpoint());
     }
 
     @Test
@@ -49,7 +49,7 @@ class ProxyOptionsTest {
     void doesNotThrowOnResolvableAddress() {
         ProxyOptions options = new ProxyOptions("localhost", 1, "u", "p");
 
-        assertTrue(options.getIpAddress().isLoopbackAddress());
+        assertTrue(options.ipAddress().isLoopbackAddress());
     }
 
     @ParameterizedTest
@@ -71,8 +71,8 @@ class ProxyOptionsTest {
     void doesNotThrowIfUsernameAndPasswordAreNull() {
         ProxyOptions options = new ProxyOptions("127.0.0.1", 1, null, null);
 
-        assertNull(options.getUsername());
-        assertNull(options.getPassword());
+        assertNull(options.username());
+        assertNull(options.password());
     }
 
     @ParameterizedTest
@@ -87,11 +87,11 @@ class ProxyOptionsTest {
     void acceptsPortAndCredentialBoundaries() {
         String maxCredential = "a".repeat(255);
 
-        assertEquals(0, new ProxyOptions("127.0.0.1", 0).getPort());
-        assertEquals(65_535, new ProxyOptions("127.0.0.1", 65_535).getPort());
+        assertEquals(0, new ProxyOptions("127.0.0.1", 0).port());
+        assertEquals(65_535, new ProxyOptions("127.0.0.1", 65_535).port());
         ProxyOptions options = new ProxyOptions("127.0.0.1", 1, maxCredential, maxCredential);
-        assertEquals(255, options.getUsername().length());
-        assertEquals(255, options.getPassword().length());
+        assertEquals(255, options.username().length());
+        assertEquals(255, options.password().length());
     }
 
     private static Stream<Arguments> badInputs() {

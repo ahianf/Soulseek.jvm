@@ -16,8 +16,8 @@ class RoomTickerTest {
     void instantiatesWithTheGivenData() {
         RoomTicker ticker = new RoomTicker("alice", "hello");
 
-        assertEquals("alice", ticker.getUsername());
-        assertEquals("hello", ticker.getMessage());
+        assertEquals("alice", ticker.username());
+        assertEquals("hello", ticker.message());
     }
 
     @Test
@@ -25,7 +25,7 @@ class RoomTickerTest {
     void preservesNullData() {
         RoomTicker ticker = new RoomTicker(null, null);
 
-        assertNull(ticker.getUsername());
-        assertNull(ticker.getMessage());
+        assertNull(ticker.username());
+        assertNull(ticker.message());
     }
 }

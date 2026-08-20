@@ -24,14 +24,14 @@ class RoomListTest {
 
         RoomList list = new RoomList(publicRooms, privateRooms, ownedRooms, moderated);
 
-        assertEquals(publicRooms, list.getPublic());
-        assertEquals(1, list.getPublicCount());
-        assertEquals(privateRooms, list.getPrivate());
-        assertEquals(1, list.getPrivateCount());
-        assertEquals(ownedRooms, list.getOwned());
-        assertEquals(1, list.getOwnedCount());
-        assertEquals(moderated, list.getModeratedRoomNames());
-        assertEquals(1, list.getModeratedRoomNameCount());
+        assertEquals(publicRooms, list.publicRooms());
+        assertEquals(1, list.publicCount());
+        assertEquals(privateRooms, list.privateRooms());
+        assertEquals(1, list.privateCount());
+        assertEquals(ownedRooms, list.ownedRooms());
+        assertEquals(1, list.ownedCount());
+        assertEquals(moderated, list.moderatedRoomNames());
+        assertEquals(1, list.moderatedRoomNameCount());
     }
 
     @Test
@@ -39,14 +39,14 @@ class RoomListTest {
     void instantiatesWithEmptyListsIfNotGiven() {
         RoomList list = new RoomList(null, null, null, null);
 
-        assertTrue(list.getPublic().isEmpty());
-        assertEquals(0, list.getPublicCount());
-        assertTrue(list.getPrivate().isEmpty());
-        assertEquals(0, list.getPrivateCount());
-        assertTrue(list.getOwned().isEmpty());
-        assertEquals(0, list.getOwnedCount());
-        assertTrue(list.getModeratedRoomNames().isEmpty());
-        assertEquals(0, list.getModeratedRoomNameCount());
+        assertTrue(list.publicRooms().isEmpty());
+        assertEquals(0, list.publicCount());
+        assertTrue(list.privateRooms().isEmpty());
+        assertEquals(0, list.privateCount());
+        assertTrue(list.ownedRooms().isEmpty());
+        assertEquals(0, list.ownedCount());
+        assertTrue(list.moderatedRoomNames().isEmpty());
+        assertEquals(0, list.moderatedRoomNameCount());
     }
 
     @Test
@@ -60,13 +60,14 @@ class RoomListTest {
         rooms.clear();
         names.clear();
 
-        assertEquals(1, list.getPublicCount());
-        assertEquals(1, list.getPrivateCount());
-        assertEquals(1, list.getOwnedCount());
-        assertEquals(1, list.getModeratedRoomNameCount());
-        assertThrows(UnsupportedOperationException.class, () -> list.getPublic().add(room));
+        assertEquals(1, list.publicCount());
+        assertEquals(1, list.privateCount());
+        assertEquals(1, list.ownedCount());
+        assertEquals(1, list.moderatedRoomNameCount());
+        assertThrows(
+                UnsupportedOperationException.class, () -> list.publicRooms().add(room));
         assertThrows(
                 UnsupportedOperationException.class,
-                () -> list.getModeratedRoomNames().add("other"));
+                () -> list.moderatedRoomNames().add("other"));
     }
 }

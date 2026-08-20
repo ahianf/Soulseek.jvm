@@ -21,9 +21,9 @@ class RoomInfoTest {
         List<String> users = List.of("alice", "bob");
         RoomInfo info = new RoomInfo("room", users);
 
-        assertEquals("room", info.getName());
-        assertEquals(users.size(), info.getUserCount());
-        assertEquals(users, info.getUsers());
+        assertEquals("room", info.name());
+        assertEquals(users.size(), info.userCount());
+        assertEquals(users, info.users());
     }
 
     @Test
@@ -31,18 +31,18 @@ class RoomInfoTest {
     void instantiatesProperlyWithCountOnly() {
         RoomInfo info = new RoomInfo("room", -3);
 
-        assertEquals("room", info.getName());
-        assertEquals(-3, info.getUserCount());
-        assertTrue(info.getUsers().isEmpty());
+        assertEquals("room", info.name());
+        assertEquals(-3, info.userCount());
+        assertTrue(info.users().isEmpty());
     }
 
     @Test
     @DisplayName("RoomInfo instantiates with empty user list if none is given")
     void instantiatesWithEmptyUserListIfNotGiven() {
-        RoomInfo info = new RoomInfo("room", (Iterable<String>) null);
+        RoomInfo info = new RoomInfo("room", (List<String>) null);
 
-        assertEquals(0, info.getUserCount());
-        assertTrue(info.getUsers().isEmpty());
+        assertEquals(0, info.userCount());
+        assertTrue(info.users().isEmpty());
     }
 
     @Test
@@ -53,8 +53,8 @@ class RoomInfoTest {
 
         source.clear();
 
-        assertNull(info.getName());
-        assertEquals(List.of("alice"), info.getUsers());
-        assertThrows(UnsupportedOperationException.class, () -> info.getUsers().add("bob"));
+        assertNull(info.name());
+        assertEquals(List.of("alice"), info.users());
+        assertThrows(UnsupportedOperationException.class, () -> info.users().add("bob"));
     }
 }

@@ -145,7 +145,7 @@ class EngineSearchTest {
         assertArrayEquals(
                 new dev.slsk.internal.messaging.messages.SearchRequest("a", 10).toByteArray(),
                 fixture.server.messages.get(0));
-        assertTrue(result.search().getState().contains(SearchState.TIMED_OUT));
+        assertTrue(result.search().state().contains(SearchState.TIMED_OUT));
         fixture.close();
     }
 
@@ -154,7 +154,7 @@ class EngineSearchTest {
         Fixture fixture = new Fixture();
         List<SearchState> states = new ArrayList<>();
         SearchOptions options =
-                options(40, 250, true, change -> states.add(change.search().getState()), null);
+                options(40, 250, true, change -> states.add(change.search().state()), null);
 
         SearchResult result = fixture.client
                 .searches()
@@ -173,8 +173,8 @@ class EngineSearchTest {
                         SearchState.IN_PROGRESS,
                         SearchState.COMPLETED.or(SearchState.TIMED_OUT)),
                 states);
-        assertEquals("foo -bar", result.search().getQuery().getSearchText());
-        assertEquals(11, result.search().getToken());
+        assertEquals("foo -bar", result.search().query().searchText());
+        assertEquals(11, result.search().token());
         assertTrue(result.responses().isEmpty());
         assertFalse(fixture.client.getSearches().containsKey(11));
         fixture.close();
@@ -228,11 +228,11 @@ class EngineSearchTest {
         assertEquals(1, result.responses().size());
         assertEquals(response.username(), result.responses().getFirst().username());
         assertEquals(response.token(), result.responses().getFirst().token());
-        assertEquals(1, result.search().getResponseCount());
-        assertEquals(1, result.search().getFileCount());
+        assertEquals(1, result.search().responseCount());
+        assertEquals(1, result.search().fileCount());
         assertEquals(
                 SearchState.COMPLETED.or(SearchState.RESPONSE_LIMIT_REACHED),
-                result.search().getState());
+                result.search().state());
         assertEquals(1, optionResponses.get());
         assertEquals(1, clientResponses.get());
         assertEquals(4, clientStates.get());
@@ -265,8 +265,8 @@ class EngineSearchTest {
         assertEquals(1, responses.size());
         assertEquals(response.username(), responses.getFirst().username());
         assertEquals(response.token(), responses.getFirst().token());
-        assertEquals(31, search.getToken());
-        assertEquals(1, search.getResponseCount());
+        assertEquals(31, search.token());
+        assertEquals(1, search.responseCount());
         fixture.close();
     }
 
@@ -283,7 +283,7 @@ class EngineSearchTest {
 
         waitUntil(() -> fixture.client.getSearches().size() == 1);
         SearchInternal active = fixture.client.getSearches().values().iterator().next();
-        assertEquals("query", active.getQuery().getSearchText());
+        assertEquals("query", active.getQuery().searchText());
         source.cancel();
         assertInstanceOf(CancellationException.class, completionCause(task::join));
         assertTrue(fixture.client.getSearches().isEmpty());
@@ -396,7 +396,7 @@ class EngineSearchTest {
                         .options(options(30, 250, true))
                         .build());
         assertArrayEquals(expected, fixture.server.messages.get(0));
-        assertTrue(result.search().getState().contains(SearchState.TIMED_OUT));
+        assertTrue(result.search().state().contains(SearchState.TIMED_OUT));
         fixture.close();
     }
 

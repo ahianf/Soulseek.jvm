@@ -50,11 +50,11 @@ class RoomMembershipResponseTest {
                 .writeInteger(0)
                 .build());
 
-        assertEquals("room", room.getName());
-        assertEquals(0, room.getUserCount());
-        assertEquals(false, room.isPrivate());
-        assertNull(room.getOwner());
-        assertNull(room.getOperators());
+        assertEquals("room", room.name());
+        assertEquals(0, room.userCount());
+        assertEquals(false, room.privateRoom());
+        assertNull(room.owner());
+        assertNull(room.operators());
     }
 
     @Test
@@ -62,9 +62,9 @@ class RoomMembershipResponseTest {
     void publicRoomUsersParse() {
         RoomData room = JoinRoomResponse.fromByteArray(joinedRoomFrame(false));
 
-        assertEquals("room", room.getName());
-        assertEquals(2, room.getUserCount());
-        UserData alice = room.getUsers().get(0);
+        assertEquals("room", room.name());
+        assertEquals(2, room.userCount());
+        UserData alice = room.users().get(0);
         assertEquals("alice", alice.username());
         assertEquals(UserPresence.ONLINE, alice.status());
         assertEquals(10, alice.averageSpeed());
@@ -73,7 +73,7 @@ class RoomMembershipResponseTest {
         assertEquals(13, alice.directoryCount());
         assertEquals(14, alice.slotsFree());
         assertEquals("CL", alice.countryCode());
-        assertEquals(UserPresence.AWAY, room.getUsers().get(1).status());
+        assertEquals(UserPresence.AWAY, room.users().get(1).status());
     }
 
     @Test
@@ -81,10 +81,10 @@ class RoomMembershipResponseTest {
     void privateRoomParses() {
         RoomData room = JoinRoomResponse.fromByteArray(joinedRoomFrame(true));
 
-        assertTrue(room.isPrivate());
-        assertEquals("owner", room.getOwner());
-        assertEquals(2, room.getOperatorCount());
-        assertEquals(List.of("op1", "op2"), room.getOperators());
+        assertTrue(room.privateRoom());
+        assertEquals("owner", room.owner());
+        assertEquals(2, room.operatorCount());
+        assertEquals(List.of("op1", "op2"), room.operators());
     }
 
     @Test

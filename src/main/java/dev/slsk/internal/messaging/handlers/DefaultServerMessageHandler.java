@@ -355,7 +355,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 }
                 case JOIN_ROOM -> {
                     RoomData response = JoinRoomResponse.fromByteArray(message);
-                    waiter.complete(new WaitKey(code, response.getName()), response);
+                    waiter.complete(new WaitKey(code, response.name()), response);
                 }
                 case LEAVE_ROOM -> {
                     LeaveRoomResponse response = LeaveRoomResponse.fromByteArray(message);

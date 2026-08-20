@@ -85,7 +85,7 @@ class EngineTest {
             assertNull(client.getIpEndpoint());
             assertNull(client.getIpAddress());
             assertNull(client.getPort());
-            assertNull(client.getServerInfo().getParentMinSpeed());
+            assertNull(client.getServerInfo().parentMinSpeed());
         }
     }
 
@@ -245,8 +245,8 @@ class EngineTest {
         fixture.server.raise(ServerMessageEvent.KICKED_FROM_SERVER, null);
 
         assertEquals("global", global.get());
-        assertEquals(2, serverInfo.get().getParentSpeedRatio());
-        assertEquals(true, fixture.client.getServerInfo().isSupporter());
+        assertEquals(2, serverInfo.get().parentSpeedRatio());
+        assertEquals(true, fixture.client.getServerInfo().supporter());
         assertEquals(1, kicked.get());
         assertEquals(SoulseekClientState.DISCONNECTED, fixture.client.getState());
         AtomicReference<SoulseekClientDisconnectedEvent> disconnect = new AtomicReference<>();

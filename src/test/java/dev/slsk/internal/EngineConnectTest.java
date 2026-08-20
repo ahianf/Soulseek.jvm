@@ -198,7 +198,7 @@ class EngineConnectTest {
         fixture.waiter.response = new LoginResponse(true, "", null, null, true);
         List<String> sequence = new ArrayList<>();
         fixture.client.events().on(Kind.SERVER_INFO_RECEIVED, (dev.slsk.internal.connection.ServerInfo eventData) -> {
-            assertTrue(eventData.isSupporter());
+            assertTrue(eventData.supporter());
             assertNull(fixture.client.getUsername());
             sequence.add("server-info");
         });
@@ -213,7 +213,7 @@ class EngineConnectTest {
         fixture.client.connect("127.0.0.1", 2271, "alice", "secret");
 
         assertEquals(List.of("server-info", "logged-in"), sequence);
-        assertTrue(fixture.client.getServerInfo().isSupporter());
+        assertTrue(fixture.client.getServerInfo().supporter());
         fixture.close();
     }
 

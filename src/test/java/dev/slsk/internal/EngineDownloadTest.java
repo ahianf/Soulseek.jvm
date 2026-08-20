@@ -215,9 +215,9 @@ class EngineDownloadTest {
                             .build());
 
             Transfer result = timeline.last();
-            assertEquals(new TransferOutcome.Succeeded(bytes.length, result.getElapsedTime()), outcome);
-            assertEquals(bytes.length, result.getSize());
-            assertEquals(bytes.length, result.getBytesTransferred());
+            assertEquals(new TransferOutcome.Succeeded(bytes.length, result.elapsedTime()), outcome);
+            assertEquals(bytes.length, result.size());
+            assertEquals(bytes.length, result.bytesTransferred());
             assertArrayEquals(bytes, output.toByteArray());
             assertArrayEquals(new byte[8], fixture.transfer.offsetBytes);
             QueueDownloadRequest queued = assertInstanceOf(QueueDownloadRequest.class, fixture.message.messages.get(0));
@@ -257,8 +257,8 @@ class EngineDownloadTest {
                     assertInstanceOf(TransferSizeMismatchException.class, causeOf(outcome));
             assertEquals(4, mismatch.getLocalSize());
             assertEquals(5, mismatch.getRemoteSize());
-            assertTrue(timeline.terminal().getState().contains(TransferState.ABORTED));
-            assertSame(mismatch, timeline.terminal().getException());
+            assertTrue(timeline.terminal().state().contains(TransferState.ABORTED));
+            assertSame(mismatch, timeline.terminal().exception());
         }
     }
 
@@ -281,8 +281,8 @@ class EngineDownloadTest {
                     assertInstanceOf(TransferSizeMismatchException.class, causeOf(outcome));
             assertEquals(5, mismatch.getLocalSize());
             assertEquals(6, mismatch.getRemoteSize());
-            assertTrue(timeline.terminal().getState().contains(TransferState.ABORTED));
-            assertSame(mismatch, timeline.terminal().getException());
+            assertTrue(timeline.terminal().state().contains(TransferState.ABORTED));
+            assertSame(mismatch, timeline.terminal().exception());
         }
     }
 
@@ -359,8 +359,8 @@ class EngineDownloadTest {
                             .build());
 
             Transfer result = timeline.last();
-            assertEquals(99, result.getRemoteToken());
-            assertEquals(bytes.length, result.getSize());
+            assertEquals(99, result.remoteToken());
+            assertEquals(bytes.length, result.size());
             assertEquals(1, fixture.peerManager.awaitCalls);
             assertEquals(0, fixture.peerManager.outgoingTransferCalls);
             TransferResponse response = assertInstanceOf(TransferResponse.class, fixture.message.messages.get(1));
@@ -452,7 +452,7 @@ class EngineDownloadTest {
             assertEquals(
                     "rejected",
                     assertInstanceOf(TransferOutcome.Rejected.class, outcome).rawMessage());
-            assertSame(rejection, timeline.terminal().getException());
+            assertSame(rejection, timeline.terminal().exception());
         }
     }
 
@@ -484,8 +484,8 @@ class EngineDownloadTest {
                     fixture.transfer.offsetBytes);
             assertEquals(3, fixture.transfer.readLength);
             assertArrayEquals(new byte[] {1, 2, 3, 4, 5}, output.toByteArray());
-            assertEquals(2, result.getStartOffset());
-            assertEquals(5, result.getBytesTransferred());
+            assertEquals(2, result.startOffset());
+            assertEquals(5, result.bytesTransferred());
         }
     }
 
@@ -520,7 +520,7 @@ class EngineDownloadTest {
                             .build());
             assertEquals(
                     1,
-                    timeline.last().getBytesTransferred(),
+                    timeline.last().bytesTransferred(),
                     "final progress follows stream position when seek is bypassed");
         }
     }
@@ -589,8 +589,8 @@ class EngineDownloadTest {
             // above this reads an outcome.
             Throwable cause = causeOf(outcome);
             assertInstanceOf(TransferReportedFailedException.class, cause);
-            assertSame(cause, timeline.terminal().getException());
-            assertTrue(timeline.terminal().getState().contains(TransferState.ERRORED));
+            assertSame(cause, timeline.terminal().exception());
+            assertTrue(timeline.terminal().state().contains(TransferState.ERRORED));
         }
     }
 
@@ -616,8 +616,8 @@ class EngineDownloadTest {
             assertEquals(
                     "download denied",
                     assertInstanceOf(TransferOutcome.Rejected.class, outcome).rawMessage());
-            assertSame(rejection, timeline.terminal().getException());
-            assertTrue(timeline.terminal().getState().contains(TransferState.REJECTED));
+            assertSame(rejection, timeline.terminal().exception());
+            assertTrue(timeline.terminal().state().contains(TransferState.REJECTED));
         }
     }
 
@@ -662,7 +662,7 @@ class EngineDownloadTest {
             // The deadline itself, rather than the NoResponseException the old
             // blocking wrapper renamed it to on the way out.
             assertSame(timeout, causeOf(lapsed));
-            assertTrue(timedOut.terminal().getState().contains(TransferState.TIMED_OUT));
+            assertTrue(timedOut.terminal().state().contains(TransferState.TIMED_OUT));
 
             CancellationException cancellation = new CancellationException("cancelled");
             cancellationFixture.waiter.startRequest = CompletableFuture.failedFuture(cancellation);
@@ -678,7 +678,7 @@ class EngineDownloadTest {
                             .build());
 
             assertInstanceOf(TransferOutcome.Cancelled.class, stopped);
-            assertTrue(cancelled.terminal().getState().contains(TransferState.CANCELLED));
+            assertTrue(cancelled.terminal().state().contains(TransferState.CANCELLED));
         }
     }
 
@@ -836,7 +836,7 @@ class EngineDownloadTest {
                         }
                     })
                     .progressUpdated(update -> {
-                        progress.add(update.transfer().getBytesTransferred());
+                        progress.add(update.transfer().bytesTransferred());
                         if (base.progressUpdated() != null) {
                             base.progressUpdated().onProgressUpdated(update);
                         }
@@ -845,7 +845,7 @@ class EngineDownloadTest {
         }
 
         private List<TransferState> states() {
-            return snapshots.stream().map(Transfer::getState).toList();
+            return snapshots.stream().map(Transfer::state).toList();
         }
 
         private Transfer last() {
@@ -855,7 +855,7 @@ class EngineDownloadTest {
         /** The snapshot taken as the transfer reached a terminal state. */
         private Transfer terminal() {
             return snapshots.stream()
-                    .filter(snapshot -> snapshot.getState().contains(TransferState.COMPLETED))
+                    .filter(snapshot -> snapshot.state().contains(TransferState.COMPLETED))
                     .findFirst()
                     .orElseThrow(() -> new AssertionError("the transfer never reached a terminal state"));
         }

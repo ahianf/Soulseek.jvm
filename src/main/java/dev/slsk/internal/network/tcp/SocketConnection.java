@@ -356,12 +356,12 @@ public class SocketConnection implements Connection {
                 ProxyOptions proxy = options.proxyOptions();
                 if (proxy != null) {
                     tcpClient.connectThroughProxy(
-                            proxy.getIpEndpoint().getAddress(),
-                            proxy.getIpEndpoint().getPort(),
+                            proxy.ipEndpoint().getAddress(),
+                            proxy.ipEndpoint().getPort(),
                             ipEndpoint.getAddress(),
                             ipEndpoint.getPort(),
-                            proxy.getUsername(),
-                            proxy.getPassword(),
+                            proxy.username(),
+                            proxy.password(),
                             token);
                 } else {
                     tcpClient.connect(ipEndpoint.getAddress(), ipEndpoint.getPort());

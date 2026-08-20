@@ -89,7 +89,7 @@ final class DefaultUploads implements Uploads {
     private void onProgressed(dev.slsk.internal.options.TransferProgressUpdate update) {
         Transfer transfer = update.transfer();
         TransferId id = Transfers.id(transfer);
-        progress.offer(id, transfer.getBytesTransferred(), transfer.getSize())
+        progress.offer(id, transfer.bytesTransferred(), transfer.size())
                 .ifPresent(sample -> events.publish(new UploadEvent.Progressed(id, sample, Instant.now())));
     }
 
@@ -97,12 +97,12 @@ final class DefaultUploads implements Uploads {
         TransferId id = Transfers.id(transfer);
         return new Upload(
                 id,
-                Username.of(transfer.getUsername()),
-                transfer.getFilename(),
-                transfer.getSize(),
+                Username.of(transfer.username()),
+                transfer.filename(),
+                transfer.size(),
                 Transfers.state(transfer),
                 priorities.getOrDefault(id, Priority.NORMAL),
-                transfer.getStartTime() == null ? Instant.now() : transfer.getStartTime(),
+                transfer.startTime() == null ? Instant.now() : transfer.startTime(),
                 Transfers.startedAt(transfer),
                 Transfers.endedAt(transfer));
     }

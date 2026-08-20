@@ -238,13 +238,13 @@ class SearchInternalTest {
             search.setState(SearchState.IN_PROGRESS);
             search.tryAddResponse(response(42, 1, 0, List.of(FILE), List.of(FILE)));
             Search snapshot = search.toSearch();
-            assertSame(search.getQuery(), snapshot.getQuery());
-            assertSame(search.getScope(), snapshot.getScope());
-            assertEquals(42, snapshot.getToken());
-            assertEquals(SearchState.IN_PROGRESS, snapshot.getState());
-            assertEquals(1, snapshot.getResponseCount());
-            assertEquals(1, snapshot.getFileCount());
-            assertEquals(1, snapshot.getLockedFileCount());
+            assertSame(search.getQuery(), snapshot.query());
+            assertSame(search.getScope(), snapshot.scope());
+            assertEquals(42, snapshot.token());
+            assertEquals(SearchState.IN_PROGRESS, snapshot.state());
+            assertEquals(1, snapshot.responseCount());
+            assertEquals(1, snapshot.fileCount());
+            assertEquals(1, snapshot.lockedFileCount());
         }
     }
 

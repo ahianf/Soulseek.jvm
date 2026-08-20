@@ -86,9 +86,9 @@ class SimpleServerNotificationTest {
         RoomInfo room = PrivateRoomOwnedListNotification.fromByteArray(
                 roomList(MessageCode.Server.PRIVATE_ROOM_OWNED, "secret", "alice", "bob"));
 
-        assertEquals("secret", room.getName());
-        assertEquals(2, room.getUserCount());
-        assertEquals(List.of("alice", "bob"), room.getUsers());
+        assertEquals("secret", room.name());
+        assertEquals(2, room.userCount());
+        assertEquals(List.of("alice", "bob"), room.users());
     }
 
     @Test
@@ -97,9 +97,9 @@ class SimpleServerNotificationTest {
         RoomInfo room = PrivateRoomUserListNotification.fromByteArray(
                 roomList(MessageCode.Server.PRIVATE_ROOM_USERS, "secret", "alice", "bob"));
 
-        assertEquals("secret", room.getName());
-        assertEquals(2, room.getUserCount());
-        assertEquals(List.of("alice", "bob"), room.getUsers());
+        assertEquals("secret", room.name());
+        assertEquals(2, room.userCount());
+        assertEquals(List.of("alice", "bob"), room.users());
     }
 
     @Test

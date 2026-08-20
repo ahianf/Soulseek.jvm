@@ -236,24 +236,24 @@ class TransferInternalTest {
 
         Transfer transfer = internal.toTransfer();
 
-        assertEquals(TransferDirection.DOWNLOAD, transfer.getDirection());
-        assertEquals("alice", transfer.getUsername());
-        assertEquals("file", transfer.getFilename());
-        assertEquals(42, transfer.getToken());
-        assertEquals(TransferState.IN_PROGRESS, transfer.getState());
-        assertEquals(100, transfer.getSize());
-        assertEquals(10, transfer.getStartOffset());
-        assertEquals(60, transfer.getBytesTransferred());
-        assertEquals(50, transfer.getAverageSpeed());
-        assertEquals(EPOCH, transfer.getStartTime());
-        assertEquals(24, transfer.getRemoteToken());
-        assertSame(failure, transfer.getException());
+        assertEquals(TransferDirection.DOWNLOAD, transfer.direction());
+        assertEquals("alice", transfer.username());
+        assertEquals("file", transfer.filename());
+        assertEquals(42, transfer.token());
+        assertEquals(TransferState.IN_PROGRESS, transfer.state());
+        assertEquals(100, transfer.size());
+        assertEquals(10, transfer.startOffset());
+        assertEquals(60, transfer.bytesTransferred());
+        assertEquals(50, transfer.averageSpeed());
+        assertEquals(EPOCH, transfer.startTime());
+        assertEquals(24, transfer.remoteToken());
+        assertSame(failure, transfer.exception());
     }
 
     @Test
     void nullSizeSnapshotUsesZero() {
         Transfer transfer = transfer(fixed(EPOCH), 1000).toTransfer();
-        assertEquals(0, transfer.getSize());
+        assertEquals(0, transfer.size());
     }
 
     private static TransferInternal transfer(Clock clock, int progressUpdateLimit) {

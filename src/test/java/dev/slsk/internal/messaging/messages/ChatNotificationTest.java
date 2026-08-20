@@ -101,8 +101,8 @@ class ChatNotificationTest {
                 .build());
 
         assertEquals("room", added.getRoomName());
-        assertEquals("üser", added.getTicker().getUsername());
-        assertEquals("message", added.getTicker().getMessage());
+        assertEquals("üser", added.getTicker().username());
+        assertEquals("message", added.getTicker().message());
         assertEquals("room", removed.getRoomName());
         assertEquals("üser", removed.getUsername());
     }
@@ -132,7 +132,7 @@ class ChatNotificationTest {
                 .writeString("bye")
                 .build());
         assertEquals(2, parsed.getTickerCount());
-        assertEquals("bob", parsed.getTickers().get(1).getUsername());
+        assertEquals("bob", parsed.getTickers().get(1).username());
     }
 
     @Test

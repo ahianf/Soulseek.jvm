@@ -813,7 +813,7 @@ final class TransferDomain implements PeerServices {
      */
     TransferOutcome download(DownloadRequest request) {
         Objects.requireNonNull(request, "request");
-        return Transfers.outcomeOf(request.isToStream() ? downloadToStream(request) : downloadToFile(request));
+        return Transfers.outcomeOf(request.toStream() ? downloadToStream(request) : downloadToFile(request));
     }
 
     /**
@@ -826,7 +826,7 @@ final class TransferDomain implements PeerServices {
      */
     TransferOutcome upload(UploadRequest request) {
         Objects.requireNonNull(request, "request");
-        return Transfers.outcomeOf(request.isFromStream() ? uploadFromStream(request) : uploadFromFile(request));
+        return Transfers.outcomeOf(request.fromStream() ? uploadFromStream(request) : uploadFromFile(request));
     }
 
     /** Returns a local file's size, or zero when there is no file yet. */
@@ -840,21 +840,21 @@ final class TransferDomain implements PeerServices {
 
     /** Downloads to a local path, opening it as the destination stream. */
     private Transfer downloadToFile(DownloadRequest request) {
-        String requestedUsername = request.getUsername();
-        String remoteFilename = request.getRemoteFilename();
-        String localFilename = request.getLocalFilename();
-        long startOffset = request.getStartOffset();
+        String requestedUsername = request.username();
+        String remoteFilename = request.remoteFilename();
+        String localFilename = request.localFilename();
+        long startOffset = request.startOffset();
         CommonUtils.requireText(requestedUsername, "username");
         CommonUtils.requireText(remoteFilename, "remoteFilename");
         CommonUtils.requireText(localFilename, "localFilename");
-        validateDownloadRange(request.getSize(), startOffset);
+        validateDownloadRange(request.size(), startOffset);
         server.requireLoggedIn("download files");
-        int transferToken = request.getToken() == null ? tokens.nextToken() : request.getToken();
+        int transferToken = request.token() == null ? tokens.nextToken() : request.token();
         validateDownloadUniqueness(requestedUsername, remoteFilename, transferToken);
         // A stream this opened is a stream this closes, whatever the request
         // said about a stream it did not open.
-        TransferOptions options = (request.getOptions() == null ? new TransferOptions() : request.getOptions())
-                .withDisposalOptions(null, true);
+        TransferOptions options =
+                (request.options() == null ? new TransferOptions() : request.options()).withDisposalOptions(null, true);
         return runDownload(
                 requestedUsername,
                 remoteFilename,
@@ -880,42 +880,42 @@ final class TransferDomain implements PeerServices {
                         throw new UncheckedIOException(failure);
                     }
                 },
-                request.getSize(),
+                request.size(),
                 startOffset,
                 transferToken,
                 options,
-                request.getOffer(),
-                CommonUtils.token(request.getCancellationSignal()));
+                request.offer(),
+                CommonUtils.token(request.cancellationSignal()));
     }
 
     /** Downloads to a caller-supplied stream. */
     private Transfer downloadToStream(DownloadRequest request) {
-        String requestedUsername = request.getUsername();
-        String remoteFilename = request.getRemoteFilename();
+        String requestedUsername = request.username();
+        String remoteFilename = request.remoteFilename();
         CommonUtils.requireText(requestedUsername, "username");
         CommonUtils.requireText(remoteFilename, "remoteFilename");
-        validateDownloadRange(request.getSize(), request.getStartOffset());
-        Objects.requireNonNull(request.getOutputStreamFactory(), "outputStreamFactory");
+        validateDownloadRange(request.size(), request.startOffset());
+        Objects.requireNonNull(request.outputStreamFactory(), "outputStreamFactory");
         server.requireLoggedIn("download files");
-        int transferToken = request.getToken() == null ? tokens.nextToken() : request.getToken();
+        int transferToken = request.token() == null ? tokens.nextToken() : request.token();
         validateDownloadUniqueness(requestedUsername, remoteFilename, transferToken);
         return runDownload(
                 requestedUsername,
                 remoteFilename,
-                request.getOutputStreamFactory(),
-                request.getSize(),
-                request.getStartOffset(),
+                request.outputStreamFactory(),
+                request.size(),
+                request.startOffset(),
                 transferToken,
-                request.getOptions() == null ? new TransferOptions() : request.getOptions(),
-                request.getOffer(),
-                CommonUtils.token(request.getCancellationSignal()));
+                request.options() == null ? new TransferOptions() : request.options(),
+                request.offer(),
+                CommonUtils.token(request.cancellationSignal()));
     }
 
     /** Uploads a local path, opening it as the source stream. */
     private Transfer uploadFromFile(UploadRequest request) {
-        String requestedUsername = request.getUsername();
-        String remoteFilename = request.getRemoteFilename();
-        String localFilename = request.getLocalFilename();
+        String requestedUsername = request.username();
+        String remoteFilename = request.remoteFilename();
+        String localFilename = request.localFilename();
         CommonUtils.requireText(requestedUsername, "username");
         CommonUtils.requireText(remoteFilename, "remoteFilename");
         CommonUtils.requireText(localFilename, "localFilename");
@@ -933,10 +933,10 @@ final class TransferDomain implements PeerServices {
                     failure);
         }
 
-        int transferToken = request.getToken() == null ? tokens.nextToken() : request.getToken();
+        int transferToken = request.token() == null ? tokens.nextToken() : request.token();
         validateUploadUniqueness(requestedUsername, remoteFilename, transferToken);
-        TransferOptions fileOptions = (request.getOptions() == null ? new TransferOptions() : request.getOptions())
-                .withDisposalOptions(true, null);
+        TransferOptions fileOptions =
+                (request.options() == null ? new TransferOptions() : request.options()).withDisposalOptions(true, null);
         long size;
         try {
             size = io.getFileInfo(localFilename).size();
@@ -956,30 +956,30 @@ final class TransferDomain implements PeerServices {
                 },
                 transferToken,
                 fileOptions,
-                CommonUtils.token(request.getCancellationSignal()));
+                CommonUtils.token(request.cancellationSignal()));
     }
 
     /** Uploads from a caller-supplied stream. */
     private Transfer uploadFromStream(UploadRequest request) {
-        String requestedUsername = request.getUsername();
-        String remoteFilename = request.getRemoteFilename();
+        String requestedUsername = request.username();
+        String remoteFilename = request.remoteFilename();
         CommonUtils.requireText(requestedUsername, "username");
         CommonUtils.requireText(remoteFilename, "remoteFilename");
-        if (request.getSize() < 0) {
+        if (request.size() < 0) {
             throw new IllegalArgumentException("size must be greater than or equal to zero");
         }
-        Objects.requireNonNull(request.getInputStreamFactory(), "inputStreamFactory");
+        Objects.requireNonNull(request.inputStreamFactory(), "inputStreamFactory");
         server.requireLoggedIn("upload files");
-        int transferToken = request.getToken() == null ? tokens.nextToken() : request.getToken();
+        int transferToken = request.token() == null ? tokens.nextToken() : request.token();
         validateUploadUniqueness(requestedUsername, remoteFilename, transferToken);
         return runUpload(
                 requestedUsername,
                 remoteFilename,
-                request.getSize(),
-                request.getInputStreamFactory(),
+                request.size(),
+                request.inputStreamFactory(),
                 transferToken,
-                request.getOptions() == null ? new TransferOptions() : request.getOptions(),
-                CommonUtils.token(request.getCancellationSignal()));
+                request.options() == null ? new TransferOptions() : request.options(),
+                CommonUtils.token(request.cancellationSignal()));
     }
 
     /**

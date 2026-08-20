@@ -165,9 +165,9 @@ class ServerMessageHandlerTest {
                 .writeByte(1)
                 .build());
 
-        assertEquals(11, info.get(0).getParentMinSpeed());
-        assertEquals(22, info.get(1).getParentSpeedRatio());
-        assertEquals(33, info.get(2).getWishlistInterval());
+        assertEquals(11, info.get(0).parentMinSpeed());
+        assertEquals(22, info.get(1).parentSpeedRatio());
+        assertEquals(33, info.get(2).wishlistInterval());
         assertEquals(44, fixture.waiter.completed.get(new WaitKey(MessageCode.Server.CHECK_PRIVILEGES)));
         assertTrue(fixture.waiter.completed.containsKey(new WaitKey(MessageCode.Server.PING)));
         assertEquals("secret", fixture.waiter.completed.get(new WaitKey(MessageCode.Server.NEW_PASSWORD)));
@@ -249,7 +249,7 @@ class ServerMessageHandlerTest {
 
         RoomData joined = assertInstanceOf(
                 RoomData.class, fixture.waiter.completed.get(new WaitKey(MessageCode.Server.JOIN_ROOM, ROOM)));
-        assertEquals(ROOM, joined.getName());
+        assertEquals(ROOM, joined.name());
         assertTrue(fixture.waiter.completed.containsKey(new WaitKey(MessageCode.Server.LEAVE_ROOM, ROOM)));
         assertEquals(LOCAL_USER, left.get().getUsername());
         assertEquals(ROOM, left.get().getRoomName());
@@ -269,10 +269,10 @@ class ServerMessageHandlerTest {
 
         Object waited = fixture.waiter.completed.get(new WaitKey(MessageCode.Server.ROOM_LIST));
         assertSame(event.get(), waited);
-        assertEquals("public", event.get().getPublic().getFirst().getName());
-        assertEquals("private", event.get().getPrivate().getFirst().getName());
-        assertEquals("owned", event.get().getOwned().getFirst().getName());
-        assertEquals("moderated", event.get().getModeratedRoomNames().getFirst());
+        assertEquals("public", event.get().publicRooms().getFirst().name());
+        assertEquals("private", event.get().privateRooms().getFirst().name());
+        assertEquals("owned", event.get().ownedRooms().getFirst().name());
+        assertEquals("moderated", event.get().moderatedRoomNames().getFirst());
     }
 
     @Test
@@ -321,7 +321,7 @@ class ServerMessageHandlerTest {
         assertEquals(USERNAME, joined.get().getUsername());
         assertEquals(USERNAME, left.get().getUsername());
         assertEquals(1, tickers.get().getTickerCount());
-        assertEquals("added", tickerAdded.get().getTicker().getMessage());
+        assertEquals("added", tickerAdded.get().getTicker().message());
         assertEquals(USERNAME, tickerRemoved.get().getUsername());
     }
 
@@ -427,8 +427,8 @@ class ServerMessageHandlerTest {
         assertEquals(ROOM, membershipRemoved.get());
         assertEquals(ROOM, moderationAdded.get());
         assertEquals(ROOM, moderationRemoved.get());
-        assertEquals(List.of(USERNAME), users.get().getUsers());
-        assertEquals(List.of(USERNAME), moderated.get().getUsers());
+        assertEquals(List.of(USERNAME), users.get().users());
+        assertEquals(List.of(USERNAME), moderated.get().users());
         assertTrue(fixture.waiter.completed.containsKey(new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVED, ROOM)));
         assertTrue(fixture.waiter.completed.containsKey(
                 new WaitKey(MessageCode.Server.PRIVATE_ROOM_OPERATOR_REMOVED, ROOM)));

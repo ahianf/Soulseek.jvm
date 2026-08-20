@@ -24,10 +24,10 @@ class RoomDataTest {
     void usersUsesEmptyListIfOneIsOmitted() {
         RoomData data = new RoomData("room", null);
 
-        assertTrue(data.getUsers().isEmpty());
-        assertEquals(0, data.getUserCount());
-        assertFalse(data.isPrivate());
-        assertNull(data.getOwner());
+        assertTrue(data.users().isEmpty());
+        assertEquals(0, data.userCount());
+        assertFalse(data.privateRoom());
+        assertNull(data.owner());
     }
 
     @Test
@@ -35,8 +35,8 @@ class RoomDataTest {
     void operatorsUsesNullListIfOneIsOmitted() {
         RoomData data = new RoomData("room", null, false, null, null);
 
-        assertNull(data.getOperators());
-        assertNull(data.getOperatorCount());
+        assertNull(data.operators());
+        assertNull(data.operatorCount());
     }
 
     @Test
@@ -45,13 +45,13 @@ class RoomDataTest {
         UserData user = new UserData("alice", UserPresence.ONLINE, 1, 2, 3, 4, "CL");
         RoomData data = new RoomData("room", List.of(user), true, "owner", List.of("operator"));
 
-        assertEquals("room", data.getName());
-        assertTrue(data.isPrivate());
-        assertEquals("owner", data.getOwner());
-        assertEquals(1, data.getUserCount());
-        assertSame(user, data.getUsers().getFirst());
-        assertEquals(1, data.getOperatorCount());
-        assertEquals(List.of("operator"), data.getOperators());
+        assertEquals("room", data.name());
+        assertTrue(data.privateRoom());
+        assertEquals("owner", data.owner());
+        assertEquals(1, data.userCount());
+        assertSame(user, data.users().getFirst());
+        assertEquals(1, data.operatorCount());
+        assertEquals(List.of("operator"), data.operators());
     }
 
     @Test
@@ -65,11 +65,10 @@ class RoomDataTest {
         users.clear();
         operators.clear();
 
-        assertNull(data.getName());
-        assertEquals(1, data.getUserCount());
-        assertEquals(1, data.getOperatorCount());
-        assertThrows(UnsupportedOperationException.class, () -> data.getUsers().add(user));
-        assertThrows(
-                UnsupportedOperationException.class, () -> data.getOperators().add("other"));
+        assertNull(data.name());
+        assertEquals(1, data.userCount());
+        assertEquals(1, data.operatorCount());
+        assertThrows(UnsupportedOperationException.class, () -> data.users().add(user));
+        assertThrows(UnsupportedOperationException.class, () -> data.operators().add("other"));
     }
 }

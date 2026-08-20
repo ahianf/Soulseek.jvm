@@ -120,11 +120,7 @@ final class SearchDomain {
         // Qualified: this file also talks to the wire message of the same name.
         java.util.Objects.requireNonNull(request, "request");
         return search(
-                request.getQuery(),
-                request.getScope(),
-                request.getToken(),
-                request.getOptions(),
-                request.getCancellationSignal());
+                request.query(), request.scope(), request.token(), request.options(), request.cancellationSignal());
     }
 
     /**
@@ -138,12 +134,12 @@ final class SearchDomain {
         java.util.Objects.requireNonNull(request, "request");
         java.util.Objects.requireNonNull(responseHandler, "responseHandler");
         return search(
-                request.getQuery(),
+                request.query(),
                 responseHandler,
-                request.getScope(),
-                request.getToken(),
-                request.getOptions(),
-                request.getCancellationSignal());
+                request.scope(),
+                request.token(),
+                request.options(),
+                request.cancellationSignal());
     }
 
     SearchResult search(
@@ -193,9 +189,9 @@ final class SearchDomain {
         SearchOptions searchOptions = initialOptions == null ? new SearchOptions() : initialOptions;
         if (searchOptions.removeSingleCharacterSearchTerms()) {
             query = new SearchQuery(
-                    query.getTerms().stream().filter(term -> term.length() > 1).toList(), query.getExclusions());
+                    query.terms().stream().filter(term -> term.length() > 1).toList(), query.exclusions());
         }
-        if (query.getTerms().isEmpty()) {
+        if (query.terms().isEmpty()) {
             throw new IllegalArgumentException(
                     "Search query must contain at least one non-exclusion " + "term with length greater than 1");
         }
@@ -204,10 +200,10 @@ final class SearchDomain {
 
     static SearchQuery validateSearchQuery(SearchQuery initialQuery) {
         SearchQuery query = Objects.requireNonNull(initialQuery, "query");
-        if (dev.slsk.internal.common.CommonUtils.isNullOrWhiteSpace(query.getSearchText())) {
+        if (dev.slsk.internal.common.CommonUtils.isNullOrWhiteSpace(query.searchText())) {
             throw new IllegalArgumentException("Search text must not be null, empty, or whitespace");
         }
-        if (query.getTerms().isEmpty()) {
+        if (query.terms().isEmpty()) {
             throw new IllegalArgumentException("Search query must contain at least one " + "non-exclusion term");
         }
         return query;
@@ -250,14 +246,14 @@ final class SearchDomain {
             updateState.accept(SearchState.REQUESTED);
             context.getDiagnostic()
                     .debug("Attempting to acquire search semaphore for search '"
-                            + invocation.query().getSearchText() + "' ("
+                            + invocation.query().searchText() + "' ("
                             + searchSemaphore.availablePermits()
                             + " available)");
             updateState.accept(SearchState.QUEUED);
             acquireSearchPermit(cancellationSignal);
             context.getDiagnostic()
                     .debug("Acquired search semaphore for search '"
-                            + invocation.query().getSearchText() + "'");
+                            + invocation.query().searchText() + "'");
             try {
                 byte[] message = buildSearchMessage(invocation.scope(), search);
                 search.setResponseReceived(response -> {
@@ -278,16 +274,13 @@ final class SearchDomain {
                 search.waitForCompletion(cancellationSignal);
                 updateState.accept(SearchState.COMPLETED.or(search.getState()));
                 context.getDiagnostic()
-                        .debug("Search for '"
-                                + invocation.query().getSearchText()
-                                + "' completed: "
-                                + search.getState());
+                        .debug("Search for '" + invocation.query().searchText() + "' completed: " + search.getState());
                 return search.toSearch();
             } finally {
                 searchSemaphore.release();
                 context.getDiagnostic()
                         .debug("Released search semaphore for search '"
-                                + invocation.query().getSearchText()
+                                + invocation.query().searchText()
                                 + "' ("
                                 + searchSemaphore.availablePermits()
                                 + " available)");
@@ -305,7 +298,7 @@ final class SearchDomain {
             }
             throw new SoulseekClientException(
                     "Failed to search for "
-                            + invocation.query().getSearchText()
+                            + invocation.query().searchText()
                             + " (" + invocation.token() + "): "
                             + Failures.message(cause),
                     cause);
@@ -320,7 +313,7 @@ final class SearchDomain {
     }
 
     static byte[] buildSearchMessage(SearchScope scope, SearchInternal search) {
-        String text = search.getQuery().getSearchText();
+        String text = search.getQuery().searchText();
         return switch (scope.getType()) {
             case ROOM ->
                 new RoomSearchRequest(scope.getSubjects().iterator().next(), text, search.getToken()).toByteArray();

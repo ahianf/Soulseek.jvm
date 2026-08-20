@@ -23,8 +23,8 @@ class SearchQueryTest {
     void instantiatesWithGivenValues() {
         SearchQuery query = new SearchQuery("foo bar", List.of("baz", "qux"));
 
-        assertEquals("foo bar", query.getQuery());
-        assertEquals(List.of("baz", "qux"), query.getExclusions());
+        assertEquals("foo bar", query.query());
+        assertEquals(List.of("baz", "qux"), query.exclusions());
     }
 
     @Test
@@ -46,7 +46,7 @@ class SearchQueryTest {
     @Test
     @DisplayName("Instantiates with null terms and exclusions")
     void instantiatesWithNullTermsAndExclusions() {
-        SearchQuery query = new SearchQuery((Iterable<String>) null, null);
+        SearchQuery query = new SearchQuery((List<String>) null, null);
 
         assertEmptyQuery(query);
     }
@@ -56,8 +56,8 @@ class SearchQueryTest {
     void splitsTermsAndExclusions() {
         SearchQuery query = new SearchQuery("foo bar -baz -qux");
 
-        assertEquals(List.of("foo", "bar"), query.getTerms());
-        assertEquals(List.of("baz", "qux"), query.getExclusions());
+        assertEquals(List.of("foo", "bar"), query.terms());
+        assertEquals(List.of("baz", "qux"), query.exclusions());
     }
 
     @ParameterizedTest
@@ -66,7 +66,7 @@ class SearchQueryTest {
     void constructsExpectedSearchText(String queryText, List<String> exclusions, String expected) {
         SearchQuery query = new SearchQuery(queryText, exclusions);
 
-        assertEquals(expected, query.getSearchText());
+        assertEquals(expected, query.searchText());
     }
 
     @Test
@@ -74,9 +74,9 @@ class SearchQueryTest {
     void parsesQueryOnlySearchText() {
         SearchQuery query = new SearchQuery("foo");
 
-        assertEquals("foo", query.getQuery());
-        assertEquals("foo", query.getSearchText());
-        assertTrue(query.getExclusions().isEmpty());
+        assertEquals("foo", query.query());
+        assertEquals("foo", query.searchText());
+        assertTrue(query.exclusions().isEmpty());
     }
 
     @Test
@@ -90,13 +90,13 @@ class SearchQueryTest {
         assertEquals(
                 "a ! b @ c # d % e ^ f & g * h ( i ) j - k _ l + m = n ~ o ` p [ q { "
                         + "r ] s } t | u \\ v ; w : x ' y \" z , a < b . c > d / e ?",
-                query.getQuery());
+                query.query());
         assertEquals(
                 "a ! b @ c # d % e ^ f & g * h ( i ) j - k _ l + m = n ~ o ` p [ q { "
                         + "r ] s } t | u \\ v ; w : x ' y \" z , a < b . c > d / e ? "
                         + "-big_old_exclusion",
-                query.getSearchText());
-        assertEquals(List.of("big_old_exclusion"), query.getExclusions());
+                query.searchText());
+        assertEquals(List.of("big_old_exclusion"), query.exclusions());
     }
 
     @Test
@@ -104,9 +104,9 @@ class SearchQueryTest {
     void parsesExclusions() {
         SearchQuery query = new SearchQuery("foo -bar -baz");
 
-        assertEquals("foo", query.getQuery());
-        assertEquals("foo -bar -baz", query.getSearchText());
-        assertEquals(List.of("bar", "baz"), query.getExclusions());
+        assertEquals("foo", query.query());
+        assertEquals("foo -bar -baz", query.searchText());
+        assertEquals(List.of("bar", "baz"), query.exclusions());
     }
 
     @Test
@@ -114,9 +114,9 @@ class SearchQueryTest {
     void parsesExclusionsOutOfOrder() {
         SearchQuery query = new SearchQuery("-bar foo -baz");
 
-        assertEquals("foo", query.getQuery());
-        assertEquals("foo -bar -baz", query.getSearchText());
-        assertEquals(List.of("bar", "baz"), query.getExclusions());
+        assertEquals("foo", query.query());
+        assertEquals("foo -bar -baz", query.searchText());
+        assertEquals(List.of("bar", "baz"), query.exclusions());
     }
 
     @Test
@@ -124,9 +124,9 @@ class SearchQueryTest {
     void parsesRepeatedExclusionsSingly() {
         SearchQuery query = new SearchQuery("-bar foo -baz -baz -bar");
 
-        assertEquals("foo", query.getQuery());
-        assertEquals("foo -bar -baz", query.getSearchText());
-        assertEquals(List.of("bar", "baz"), query.getExclusions());
+        assertEquals("foo", query.query());
+        assertEquals("foo -bar -baz", query.searchText());
+        assertEquals(List.of("bar", "baz"), query.exclusions());
     }
 
     @Test
@@ -134,9 +134,9 @@ class SearchQueryTest {
     void preservesDuplicateTerms() {
         SearchQuery query = new SearchQuery("foo bar foo foo");
 
-        assertEquals("foo bar foo foo", query.getQuery());
-        assertEquals("foo bar foo foo", query.getSearchText());
-        assertTrue(query.getExclusions().isEmpty());
+        assertEquals("foo bar foo foo", query.query());
+        assertEquals("foo bar foo foo", query.searchText());
+        assertTrue(query.exclusions().isEmpty());
     }
 
     @Test
@@ -144,7 +144,7 @@ class SearchQueryTest {
     void fromTextReturnsNewInstanceFromGivenText() {
         SearchQuery query = SearchQuery.fromText("foo bar");
 
-        assertEquals("foo bar", query.getSearchText());
+        assertEquals("foo bar", query.searchText());
     }
 
     @Test
@@ -152,8 +152,8 @@ class SearchQueryTest {
     void preservesEmptyTokensFromRepeatedAndTrailingSpaces() {
         SearchQuery query = new SearchQuery("foo  bar ");
 
-        assertEquals(List.of("foo", "", "bar", ""), query.getTerms());
-        assertEquals("foo  bar ", query.getSearchText());
+        assertEquals(List.of("foo", "", "bar", ""), query.terms());
+        assertEquals("foo  bar ", query.searchText());
     }
 
     @Test
@@ -161,8 +161,8 @@ class SearchQueryTest {
     void trimsEveryLeadingHyphenFromExclusions() {
         SearchQuery query = new SearchQuery("foo ---bar");
 
-        assertEquals(List.of("bar"), query.getExclusions());
-        assertEquals("foo -bar", query.getSearchText());
+        assertEquals(List.of("bar"), query.exclusions());
+        assertEquals("foo -bar", query.searchText());
     }
 
     @Test
@@ -170,7 +170,7 @@ class SearchQueryTest {
     void exclusionDistinctnessIsCaseSensitive() {
         SearchQuery query = new SearchQuery("foo -bar -BAR");
 
-        assertEquals(List.of("bar", "BAR"), query.getExclusions());
+        assertEquals(List.of("bar", "BAR"), query.exclusions());
     }
 
     @Test
@@ -183,21 +183,22 @@ class SearchQueryTest {
         terms.clear();
         exclusions.clear();
 
-        assertEquals(List.of("foo"), query.getTerms());
-        assertEquals(List.of("bar"), query.getExclusions());
-        assertThrows(UnsupportedOperationException.class, () -> query.getTerms().add("baz"));
+        assertEquals(List.of("foo"), query.terms());
+        assertEquals(List.of("bar"), query.exclusions());
+        assertThrows(UnsupportedOperationException.class, () -> query.terms().add("baz"));
         assertThrows(
-                UnsupportedOperationException.class, () -> query.getExclusions().add("qux"));
+                UnsupportedOperationException.class, () -> query.exclusions().add("qux"));
     }
 
     @Test
-    @DisplayName("Formats null collection elements like C# string.Join and interpolation")
-    void formatsNullCollectionElementsLikeCSharp() {
-        SearchQuery query =
-                new SearchQuery(java.util.Arrays.asList("foo", null, "bar"), java.util.Arrays.asList((String) null));
-
-        assertEquals("foo  bar", query.getQuery());
-        assertEquals("foo  bar -", query.getSearchText());
+    @DisplayName("Rejects null collection elements")
+    void rejectsNullCollectionElements() {
+        assertThrows(
+                NullPointerException.class,
+                () -> new SearchQuery(java.util.Arrays.asList("foo", null, "bar"), List.of()));
+        assertThrows(
+                NullPointerException.class,
+                () -> new SearchQuery(List.of("foo"), java.util.Arrays.asList((String) null)));
     }
 
     private static Stream<Arguments> expectedSearchTexts() {
@@ -208,9 +209,9 @@ class SearchQueryTest {
     }
 
     private static void assertEmptyQuery(SearchQuery query) {
-        assertTrue(query.getTerms().isEmpty());
-        assertTrue(query.getExclusions().isEmpty());
-        assertEquals("", query.getQuery());
-        assertEquals("", query.getSearchText());
+        assertTrue(query.terms().isEmpty());
+        assertTrue(query.exclusions().isEmpty());
+        assertEquals("", query.query());
+        assertEquals("", query.searchText());
     }
 }

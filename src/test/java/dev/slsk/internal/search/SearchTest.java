@@ -21,13 +21,13 @@ class SearchTest {
 
         Search search = new Search(query, scope, 42, state, 3, 4, 5);
 
-        assertEquals("foo bar", search.getQuery().getSearchText());
-        assertEquals(SearchScopeType.NETWORK, search.getScope().getType());
-        assertEquals(42, search.getToken());
-        assertEquals(state, search.getState());
-        assertEquals(3, search.getResponseCount());
-        assertEquals(4, search.getFileCount());
-        assertEquals(5, search.getLockedFileCount());
+        assertEquals("foo bar", search.query().searchText());
+        assertEquals(SearchScopeType.NETWORK, search.scope().getType());
+        assertEquals(42, search.token());
+        assertEquals(state, search.state());
+        assertEquals(3, search.responseCount());
+        assertEquals(4, search.fileCount());
+        assertEquals(5, search.lockedFileCount());
     }
 
     @Test
@@ -35,8 +35,8 @@ class SearchTest {
     void preservesNullableQueryAndScopeReferences() {
         Search search = new Search(null, null, 0, SearchState.NONE, 0, 0, 0);
 
-        assertNull(search.getQuery());
-        assertNull(search.getScope());
+        assertNull(search.query());
+        assertNull(search.scope());
     }
 
     @Test

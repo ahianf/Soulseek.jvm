@@ -26,15 +26,15 @@ class DistributedNetworkInfoTest {
         DistributedNetworkInfo info =
                 new DistributedNetworkInfo(1.5, 3, "root", true, 4, true, List.of(child), parent, true);
 
-        assertEquals(1.5, info.getAverageBroadcastLatency());
-        assertEquals(3, info.getBranchLevel());
-        assertEquals("root", info.getBranchRoot());
-        assertTrue(info.isBranchRoot());
-        assertEquals(4, info.getChildLimit());
-        assertTrue(info.canAcceptChildren());
-        assertEquals(List.of(child), info.getChildren());
-        assertSame(parent, info.getParent());
-        assertTrue(info.hasParent());
+        assertEquals(1.5, info.averageBroadcastLatency());
+        assertEquals(3, info.branchLevel());
+        assertEquals("root", info.branchRoot());
+        assertTrue(info.branchRootNode());
+        assertEquals(4, info.childLimit());
+        assertTrue(info.acceptChildren());
+        assertEquals(List.of(child), info.children());
+        assertSame(parent, info.parent());
+        assertTrue(info.parentPresent());
     }
 
     @Test
@@ -45,14 +45,14 @@ class DistributedNetworkInfoTest {
         DistributedNetworkInfo info =
                 new DistributedNetworkInfo(null, 0, null, false, 0, false, null, defaultParent, false);
 
-        assertNull(info.getAverageBroadcastLatency());
-        assertNull(info.getBranchRoot());
-        assertNull(info.getChildren());
-        assertFalse(info.isBranchRoot());
-        assertFalse(info.canAcceptChildren());
-        assertFalse(info.hasParent());
-        assertNull(info.getParent().username());
-        assertNull(info.getParent().ipEndpoint());
+        assertNull(info.averageBroadcastLatency());
+        assertNull(info.branchRoot());
+        assertNull(info.children());
+        assertFalse(info.branchRootNode());
+        assertFalse(info.acceptChildren());
+        assertFalse(info.parentPresent());
+        assertNull(info.parent().username());
+        assertNull(info.parent().ipEndpoint());
     }
 
     @Test
@@ -65,9 +65,8 @@ class DistributedNetworkInfoTest {
 
         source.clear();
 
-        assertEquals(List.of(child), info.getChildren());
-        assertThrows(
-                UnsupportedOperationException.class, () -> info.getChildren().add(child));
+        assertEquals(List.of(child), info.children());
+        assertThrows(UnsupportedOperationException.class, () -> info.children().add(child));
     }
 
     @Test

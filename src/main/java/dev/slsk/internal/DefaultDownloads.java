@@ -254,7 +254,7 @@ final class DefaultDownloads implements Downloads {
      * bounded by the library rather than by how fast the network happens to be.
      */
     private void progressed(TransferId id, Transfer transfer) {
-        progress.offer(id, transfer.getBytesTransferred(), transfer.getSize()).ifPresent(value -> {
+        progress.offer(id, transfer.bytesTransferred(), transfer.size()).ifPresent(value -> {
             // Both, and neither is redundant. The event is for a consumer that
             // subscribes; the queue update is for one that polls `all()`, which
             // would otherwise read a byte count frozen at the moment the

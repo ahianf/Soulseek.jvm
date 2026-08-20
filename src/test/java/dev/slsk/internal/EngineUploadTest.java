@@ -150,7 +150,7 @@ class EngineUploadTest {
                             .cancellation(source.getSignal())
                             .build());
 
-            assertEquals(0, timeline.last().getSize());
+            assertEquals(0, timeline.last().size());
             assertSame(source.getSignal(), fixture.message.lastToken);
             assertSame(source.getSignal(), fixture.peerManager.transferToken);
             assertInstanceOf(TransferOutcome.Succeeded.class, outcome);
@@ -172,7 +172,7 @@ class EngineUploadTest {
                             .options(timeline.on(options(20)))
                             .build());
 
-            assertEquals(bytes.length, timeline.last().getSize());
+            assertEquals(bytes.length, timeline.last().size());
             assertArrayEquals(bytes, fixture.transfer.written.toByteArray());
         } finally {
             Files.deleteIfExists(file);
@@ -346,7 +346,7 @@ class EngineUploadTest {
                     20,
                     null,
                     change -> {
-                        if (change.transfer().getState().contains(TransferState.REQUESTED)) {
+                        if (change.transfer().state().contains(TransferState.REQUESTED)) {
                             requested.countDown();
                         }
                     },
@@ -376,7 +376,7 @@ class EngineUploadTest {
             List<TransferState> optionStates = new ArrayList<>();
             Timeline timeline = new Timeline();
             TransferOptions options = timeline.on(options(
-                    20, null, change -> optionStates.add(change.transfer().getState()), null));
+                    20, null, change -> optionStates.add(change.transfer().state()), null));
 
             fixture.client
                     .transfers()
@@ -394,7 +394,7 @@ class EngineUploadTest {
                     TransferState.COMPLETED.or(TransferState.SUCCEEDED));
             assertEquals(expected, optionStates, "a caller's own callback still sees every transition");
             assertEquals(expected, timeline.states());
-            assertEquals(bytes.length, timeline.last().getBytesTransferred());
+            assertEquals(bytes.length, timeline.last().bytesTransferred());
             assertArrayEquals(bytes, fixture.transfer.written.toByteArray());
             assertEquals(bytes.length, fixture.transfer.writeLength);
             TransferRequest request = assertInstanceOf(TransferRequest.class, fixture.message.messages.get(0));
@@ -424,10 +424,10 @@ class EngineUploadTest {
                             .options(timeline.on(options(20)))
                             .build());
 
-            assertEquals(2, timeline.last().getStartOffset());
+            assertEquals(2, timeline.last().startOffset());
             assertEquals(3, fixture.transfer.writeLength);
             assertArrayEquals(new byte[] {3, 4, 5}, fixture.transfer.written.toByteArray());
-            assertEquals(5, timeline.last().getBytesTransferred());
+            assertEquals(5, timeline.last().bytesTransferred());
         }
     }
 
@@ -447,7 +447,7 @@ class EngineUploadTest {
                             .build());
 
             assertEquals(0, fixture.transfer.writeCalls);
-            assertEquals(3, timeline.last().getBytesTransferred());
+            assertEquals(3, timeline.last().bytesTransferred());
         }
     }
 
@@ -506,7 +506,7 @@ class EngineUploadTest {
                             .build());
 
             assertArrayEquals(new byte[] {9, 8}, fixture.transfer.written.toByteArray());
-            assertEquals(3, timeline.last().getBytesTransferred());
+            assertEquals(3, timeline.last().bytesTransferred());
         }
     }
 
@@ -550,9 +550,9 @@ class EngineUploadTest {
             assertEquals(
                     "Transfer rejected: not shared",
                     assertInstanceOf(TransferOutcome.Rejected.class, outcome).rawMessage());
-            assertTrue(timeline.terminal().getState().contains(TransferState.REJECTED));
+            assertTrue(timeline.terminal().state().contains(TransferState.REJECTED));
             assertInstanceOf(
-                    TransferRejectedException.class, timeline.terminal().getException());
+                    TransferRejectedException.class, timeline.terminal().exception());
             assertInstanceOf(UploadFailed.class, fixture.message.messages.get(fixture.message.messages.size() - 1));
         }
     }
@@ -574,7 +574,7 @@ class EngineUploadTest {
                     20,
                     null,
                     change -> {
-                        if (change.transfer().getState().contains(TransferState.COMPLETED)) {
+                        if (change.transfer().state().contains(TransferState.COMPLETED)) {
                             terminal.add(change.transfer());
                         }
                     },
@@ -589,7 +589,7 @@ class EngineUploadTest {
                             .build());
 
             assertInstanceOf(TransferOutcome.Cancelled.class, outcome);
-            assertTrue(terminal.get(0).getState().contains(TransferState.CANCELLED));
+            assertTrue(terminal.get(0).state().contains(TransferState.CANCELLED));
             assertEquals(0, released.get(), "a slot that was not acquired is not released");
             assertInstanceOf(UploadDenied.class, fixture.message.messages.get(fixture.message.messages.size() - 1));
         }
@@ -680,7 +680,7 @@ class EngineUploadTest {
                     20,
                     null,
                     change -> {
-                        if (change.transfer().getState().contains(TransferState.COMPLETED)) {
+                        if (change.transfer().state().contains(TransferState.COMPLETED)) {
                             terminal.add(change.transfer());
                         }
                     },
@@ -696,7 +696,7 @@ class EngineUploadTest {
             // The deadline itself, rather than the NoResponseException the old
             // blocking wrapper renamed it to on the way out.
             assertSame(timeout, causeOf(outcome));
-            assertTrue(terminal.get(0).getState().contains(TransferState.TIMED_OUT));
+            assertTrue(terminal.get(0).state().contains(TransferState.TIMED_OUT));
         }
     }
 
@@ -801,8 +801,8 @@ class EngineUploadTest {
 
             ConnectionException connection = assertInstanceOf(ConnectionException.class, causeOf(outcome));
             assertSame(socketFailure, connection.getCause());
-            assertSame(connection, timeline.terminal().getException());
-            assertTrue(timeline.terminal().getState().contains(TransferState.ERRORED));
+            assertSame(connection, timeline.terminal().exception());
+            assertTrue(timeline.terminal().state().contains(TransferState.ERRORED));
         }
     }
 
@@ -823,7 +823,7 @@ class EngineUploadTest {
                         }
                     })
                     .progressUpdated(update -> {
-                        progress.add(update.transfer().getBytesTransferred());
+                        progress.add(update.transfer().bytesTransferred());
                         if (base.progressUpdated() != null) {
                             base.progressUpdated().onProgressUpdated(update);
                         }
@@ -832,7 +832,7 @@ class EngineUploadTest {
         }
 
         private List<TransferState> states() {
-            return snapshots.stream().map(Transfer::getState).toList();
+            return snapshots.stream().map(Transfer::state).toList();
         }
 
         private Transfer last() {
@@ -842,7 +842,7 @@ class EngineUploadTest {
         /** The snapshot taken as the transfer reached a terminal state. */
         private Transfer terminal() {
             return snapshots.stream()
-                    .filter(snapshot -> snapshot.getState().contains(TransferState.COMPLETED))
+                    .filter(snapshot -> snapshot.state().contains(TransferState.COMPLETED))
                     .findFirst()
                     .orElseThrow(() -> new AssertionError("the transfer never reached a terminal state"));
         }
