@@ -39,7 +39,6 @@ import dev.slsk.internal.network.tcp.ConnectionGovernor;
 import dev.slsk.internal.network.tcp.ConnectionReporter;
 import dev.slsk.internal.network.tcp.TransportConnection;
 import dev.slsk.internal.network.tcp.TransportState;
-import dev.slsk.internal.options.PositionableOutputStream;
 import dev.slsk.internal.options.TransferOptions;
 import dev.slsk.internal.transfer.DownloadSpecification;
 import dev.slsk.internal.transfer.Transfer;
@@ -59,6 +58,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.channels.WritableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -471,13 +471,16 @@ class EngineDownloadTest {
             fixture.transfer.data = new byte[] {3, 4, 5};
             fixture.waiter.startRequest =
                     CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 18, "file", 5));
-            PositionableBuffer output = new PositionableBuffer(new byte[] {1, 2});
+            BufferChannel output = new BufferChannel(new byte[] {1, 2});
 
             Timeline timeline = new Timeline();
 
             fixture.client
                     .transfers()
-                    .download(DownloadSpecification.toStream("alice", "file", () -> output)
+                    .download(DownloadSpecification.toChannel("alice", "file", offset -> {
+                                output.position(offset);
+                                return output;
+                            })
                             .size(5L)
                             .startOffset(2)
                             .token(18)
@@ -816,8 +819,6 @@ class EngineDownloadTest {
             assertTrue(diagnostic.warnings.stream().anyMatch(warning -> warning.contains("Failed to cancel wait")));
             assertTrue(diagnostic.warnings.stream()
                     .anyMatch(warning -> warning.contains("Failed to close transfer connection")));
-            assertTrue(diagnostic.warnings.stream()
-                    .anyMatch(warning -> warning.contains("Failed to determine final position")));
             assertTrue(diagnostic.warnings.stream()
                     .anyMatch(warning -> warning.contains("Failed to finalize output stream")));
         }
@@ -1209,7 +1210,7 @@ class EngineDownloadTest {
                 if (blockRead) {
                     new CompletableFuture<Void>().join();
                 }
-                OutputStream output = (OutputStream) arguments[1];
+                WritableByteChannel output = (WritableByteChannel) arguments[1];
                 ConnectionGovernor governor = (ConnectionGovernor) arguments[2];
                 ConnectionReporter reporter = (ConnectionReporter) arguments[3];
                 CancellationSignal token = (CancellationSignal) arguments[4];
@@ -1222,7 +1223,10 @@ class EngineDownloadTest {
                     if (actual <= 0) {
                         throw new IOException("source ended early");
                     }
-                    output.write(data, sourceOffset, actual);
+                    ByteBuffer buffer = ByteBuffer.wrap(data, sourceOffset, actual);
+                    while (buffer.hasRemaining()) {
+                        output.write(buffer);
+                    }
                     sourceOffset += actual;
                     transferred += actual;
                     if (reporter != null) {
@@ -1271,44 +1275,34 @@ class EngineDownloadTest {
         }
     }
 
-    private static final class PositionableBuffer extends OutputStream implements PositionableOutputStream {
+    private static final class BufferChannel implements WritableByteChannel {
         private byte[] bytes = new byte[16];
         private int length;
         private int position;
+        private boolean open = true;
 
-        private PositionableBuffer(byte[] initial) {
+        private BufferChannel(byte[] initial) {
             writeBytes(initial);
         }
 
-        @Override
-        public long getPosition() {
-            return position;
-        }
-
-        @Override
-        public void setPosition(long value) {
+        private void position(long value) {
             position = Math.toIntExact(value);
             ensure(position);
             length = Math.max(length, position);
         }
 
         @Override
-        public void write(int value) {
-            ensure(position + 1);
-            bytes[position++] = (byte) value;
-            length = Math.max(length, position);
-        }
-
-        @Override
-        public void write(byte[] source, int offset, int count) {
+        public int write(ByteBuffer source) {
+            int count = source.remaining();
             ensure(position + count);
-            System.arraycopy(source, offset, bytes, position, count);
+            source.get(bytes, position, count);
             position += count;
             length = Math.max(length, position);
+            return count;
         }
 
         private void writeBytes(byte[] source) {
-            write(source, 0, source.length);
+            write(ByteBuffer.wrap(source));
         }
 
         private void ensure(int required) {
@@ -1324,6 +1318,16 @@ class EngineDownloadTest {
             byte[] result = new byte[length];
             System.arraycopy(bytes, 0, result, 0, length);
             return result;
+        }
+
+        @Override
+        public boolean isOpen() {
+            return open;
+        }
+
+        @Override
+        public void close() {
+            open = false;
         }
     }
 
@@ -1344,33 +1348,12 @@ class EngineDownloadTest {
         }
     }
 
-    private static final class FailingCleanupOutputStream extends OutputStream implements PositionableOutputStream {
-        private long position;
-        private int positionReads;
+    private static final class FailingCleanupOutputStream extends OutputStream {
+        @Override
+        public void write(int value) {}
 
         @Override
-        public long getPosition() throws IOException {
-            positionReads++;
-            if (positionReads > 1) {
-                throw new IOException("position failed");
-            }
-            return position;
-        }
-
-        @Override
-        public void setPosition(long value) {
-            position = value;
-        }
-
-        @Override
-        public void write(int value) {
-            position++;
-        }
-
-        @Override
-        public void write(byte[] bytes, int offset, int length) {
-            position += length;
-        }
+        public void write(byte[] bytes, int offset, int length) {}
 
         @Override
         public void flush() throws IOException {

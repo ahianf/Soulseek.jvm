@@ -78,7 +78,11 @@ class CancellationSoak {
 
                 CancellationController controller = new CancellationController();
                 CompletableFuture<Void> transfer = reader(() -> connection.read(
-                        TRANSFER_BYTES, OutputStream.nullOutputStream(), null, null, controller.getSignal()));
+                        TRANSFER_BYTES,
+                        java.nio.channels.Channels.newChannel(OutputStream.nullOutputStream()),
+                        null,
+                        null,
+                        controller.getSignal()));
 
                 Thread.sleep(250);
 
@@ -121,7 +125,11 @@ class CancellationSoak {
 
                 CancellationController controller = new CancellationController();
                 CompletableFuture<Void> read = reader(() -> connection.read(
-                        TRANSFER_BYTES, OutputStream.nullOutputStream(), null, null, controller.getSignal()));
+                        TRANSFER_BYTES,
+                        java.nio.channels.Channels.newChannel(OutputStream.nullOutputStream()),
+                        null,
+                        null,
+                        controller.getSignal()));
 
                 // Long enough that the reader is parked in the socket read with
                 // nothing to return.
@@ -164,7 +172,11 @@ class CancellationSoak {
 
                 CancellationController controller = new CancellationController();
                 CompletableFuture<Void> doomed = reader(() -> cancelled.read(
-                        TRANSFER_BYTES, OutputStream.nullOutputStream(), null, null, controller.getSignal()));
+                        TRANSFER_BYTES,
+                        java.nio.channels.Channels.newChannel(OutputStream.nullOutputStream()),
+                        null,
+                        null,
+                        controller.getSignal()));
                 CompletableFuture<byte[]> survivor = CompletableFuture.supplyAsync(
                         () -> {
                             try {

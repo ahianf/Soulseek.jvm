@@ -19,11 +19,13 @@ import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.ProxyOptions;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.net.SocketTimeoutException;
+import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
@@ -87,7 +89,7 @@ public class SocketConnection implements TransportConnection {
      *
      * <p>The queue is the backpressure mechanism: there is no second semaphore
      * or caller-owned write lock. Transfer streaming deliberately bypasses it;
-     * see {@link #write(long, InputStream, ConnectionGovernor,
+     * see {@link #write(long, ReadableByteChannel, ConnectionGovernor,
      * ConnectionReporter, CancellationSignal)}.
      */
     private final ArrayBlockingQueue<FrameWrite> frameWrites;
@@ -439,14 +441,14 @@ public class SocketConnection implements TransportConnection {
         validateRead(length);
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        readTo(length, output, SocketConnection::grantAll, null, scopedProgress, token);
+        readTo(length, Channels.newChannel(output), SocketConnection::grantAll, null, scopedProgress, token);
         return output.toByteArray();
     }
 
     @Override
     public void read(
             long length,
-            OutputStream outputStream,
+            WritableByteChannel destination,
             ConnectionGovernor governor,
             ConnectionReporter reporter,
             CancellationSignal cancellationSignal)
@@ -454,11 +456,11 @@ public class SocketConnection implements TransportConnection {
         if (length < 0) {
             throw new IllegalArgumentException("length must be greater than or equal to zero: " + length);
         }
-        Objects.requireNonNull(outputStream, "outputStream");
+        Objects.requireNonNull(destination, "destination");
         validateConnected();
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         ConnectionGovernor effectiveGovernor = governor == null ? SocketConnection::grantAll : governor;
-        readTo(length, outputStream, effectiveGovernor, reporter, null, token);
+        readTo(length, destination, effectiveGovernor, reporter, null, token);
     }
 
     @Override
@@ -505,7 +507,7 @@ public class SocketConnection implements TransportConnection {
     @Override
     public void write(
             long length,
-            InputStream inputStream,
+            ReadableByteChannel source,
             ConnectionGovernor governor,
             ConnectionReporter reporter,
             CancellationSignal cancellationSignal)
@@ -515,11 +517,11 @@ public class SocketConnection implements TransportConnection {
         if (length <= 0) {
             throw new IllegalArgumentException("length must be greater than zero: " + length);
         }
-        Objects.requireNonNull(inputStream, "inputStream");
+        Objects.requireNonNull(source, "source");
         validateConnected();
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         ConnectionGovernor effectiveGovernor = governor == null ? SocketConnection::grantAll : governor;
-        writeStreaming(length, inputStream, effectiveGovernor, reporter, token);
+        writeStreaming(length, source, effectiveGovernor, reporter, token);
     }
 
     @Override
@@ -620,7 +622,7 @@ public class SocketConnection implements TransportConnection {
 
     private void readTo(
             long length,
-            OutputStream outputStream,
+            WritableByteChannel destination,
             ConnectionGovernor governor,
             ConnectionReporter reporter,
             Consumer<ConnectionDataEvent> scopedProgress,
@@ -665,7 +667,12 @@ public class SocketConnection implements TransportConnection {
                     throw new ConnectionException("Remote connection closed");
                 }
                 cancellationSignal.throwIfCancellationRequested();
-                outputStream.write(buffer, 0, bytesRead);
+                ByteBuffer transferred = ByteBuffer.wrap(buffer, 0, bytesRead);
+                while (transferred.hasRemaining()) {
+                    if (destination.write(transferred) <= 0) {
+                        throw new IOException("Destination channel accepted no bytes");
+                    }
+                }
                 totalBytesRead += bytesRead;
                 if (reporter != null) {
                     reporter.report(bytesToRead, bytesGranted, bytesRead);
@@ -674,7 +681,6 @@ public class SocketConnection implements TransportConnection {
                 resetInactivityTime();
             }
             cancellationSignal.throwIfCancellationRequested();
-            outputStream.flush();
         } catch (Exception actual) {
             disconnect("Read error: " + actual.getMessage(), actual);
             if (actual instanceof TimeoutException timeout) {
@@ -702,14 +708,14 @@ public class SocketConnection implements TransportConnection {
      */
     private void writeStreaming(
             long length,
-            InputStream inputStream,
+            ReadableByteChannel source,
             ConnectionGovernor governor,
             ConnectionReporter reporter,
             CancellationSignal cancellationSignal)
             throws InterruptedException, TimeoutException {
         try {
             resetInactivityTime();
-            byte[] buffer = new byte[(int) Math.min(options.writeBufferSize(), Math.max(1L, length))];
+            ByteBuffer buffer = ByteBuffer.allocate((int) Math.min(options.writeBufferSize(), Math.max(1L, length)));
             long totalBytesWritten = 0;
 
             while (totalBytesWritten < length) {
@@ -722,13 +728,15 @@ public class SocketConnection implements TransportConnection {
                             + (closing ? "closed" : "disconnected"));
                 }
                 long bytesRemaining = length - totalBytesWritten;
-                int bytesToRead = bytesRemaining >= buffer.length ? buffer.length : (int) bytesRemaining;
+                int bytesToRead = bytesRemaining >= buffer.capacity() ? buffer.capacity() : (int) bytesRemaining;
                 int bytesGranted = Math.min(bytesToRead, governor.grant(bytesToRead, cancellationSignal));
-                int bytesRead = inputStream.read(buffer, 0, bytesGranted);
-                if (bytesRead < 0) {
-                    bytesRead = 0;
+                buffer.clear();
+                buffer.limit(bytesGranted);
+                int bytesRead = source.read(buffer);
+                if (bytesRead <= 0) {
+                    throw new IOException("Source channel ended before " + length + " bytes were written");
                 }
-                transport.write(buffer, 0, bytesRead);
+                transport.write(buffer.array(), 0, bytesRead);
                 totalBytesWritten += bytesRead;
                 if (reporter != null) {
                     reporter.report(bytesToRead, bytesGranted, bytesRead);

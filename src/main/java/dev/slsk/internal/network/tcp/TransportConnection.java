@@ -7,9 +7,9 @@ package dev.slsk.internal.network.tcp;
 import dev.slsk.Subscription;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.options.ConnectionOptions;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
@@ -97,19 +97,19 @@ public interface TransportConnection extends AutoCloseable {
         return read(length, CancellationSignal.none());
     }
 
-    /** Reads an exact byte count into a stream. */
+    /** Reads an exact byte count into a channel. */
     void read(
             long length,
-            OutputStream outputStream,
+            WritableByteChannel destination,
             ConnectionGovernor governor,
             ConnectionReporter reporter,
             CancellationSignal cancellationSignal)
             throws InterruptedException, TimeoutException;
 
-    /** Reads to a stream using source defaults. */
-    default void read(long length, OutputStream outputStream, ConnectionGovernor governor)
+    /** Reads to a channel using source defaults. */
+    default void read(long length, WritableByteChannel destination, ConnectionGovernor governor)
             throws InterruptedException, TimeoutException {
-        read(length, outputStream, governor, null, CancellationSignal.none());
+        read(length, destination, governor, null, CancellationSignal.none());
     }
 
     /**
@@ -181,24 +181,24 @@ public interface TransportConnection extends AutoCloseable {
         return () -> {};
     }
 
-    /** Writes an exact byte count from a stream. */
+    /** Writes an exact byte count from a channel. */
     void write(
             long length,
-            InputStream inputStream,
+            ReadableByteChannel source,
             ConnectionGovernor governor,
             ConnectionReporter reporter,
             CancellationSignal cancellationSignal)
             throws InterruptedException, TimeoutException;
 
-    /** Writes from a stream using source defaults. */
-    default void write(long length, InputStream inputStream) throws InterruptedException, TimeoutException {
-        write(length, inputStream, null, null, CancellationSignal.none());
+    /** Writes from a channel using source defaults. */
+    default void write(long length, ReadableByteChannel source) throws InterruptedException, TimeoutException {
+        write(length, source, null, null, CancellationSignal.none());
     }
 
-    /** Writes from a stream using a governor. */
-    default void write(long length, InputStream inputStream, ConnectionGovernor governor)
+    /** Writes from a channel using a governor. */
+    default void write(long length, ReadableByteChannel source, ConnectionGovernor governor)
             throws InterruptedException, TimeoutException {
-        write(length, inputStream, governor, null, CancellationSignal.none());
+        write(length, source, governor, null, CancellationSignal.none());
     }
 
     /** Closes the connection. */

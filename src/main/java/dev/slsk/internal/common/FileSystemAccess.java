@@ -4,11 +4,7 @@
 
 package dev.slsk.internal.common;
 
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
@@ -39,29 +35,6 @@ public class FileSystemAccess {
      */
     public FileChannel openChannel(String path, OpenOption... options) throws IOException {
         return FileChannel.open(Path.of(path), options);
-    }
-
-    /**
-     * Opens a seekable file input stream.
-     *
-     * @param path the path to open
-     * @return the input stream
-     * @throws IOException when the file cannot be opened
-     */
-    public InputStream openInputStream(String path) throws IOException {
-        return new FileInputStream(path);
-    }
-
-    /**
-     * Opens a file output stream.
-     *
-     * @param path the path to open
-     * @param append whether to append rather than overwrite
-     * @return the output stream
-     * @throws IOException when the file cannot be opened
-     */
-    public OutputStream openOutputStream(String path, boolean append) throws IOException {
-        return new FileOutputStream(path, append);
     }
 
     /**

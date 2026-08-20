@@ -32,10 +32,10 @@ import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.options.TransferOptions;
 import dev.slsk.internal.transfer.DownloadSpecification;
 import dev.slsk.internal.transfer.Transfer;
+import dev.slsk.internal.transfer.TransferChannels;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.internal.transfer.TransferPhase;
-import dev.slsk.internal.transfer.TransferStreams;
 import dev.slsk.internal.transfer.UploadSpecification;
 import dev.slsk.spi.ResolvedFile;
 import dev.slsk.spi.ShareCatalog;
@@ -46,16 +46,15 @@ import dev.slsk.user.UserProfile;
 import dev.slsk.user.Username;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
-import java.util.function.LongFunction;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
@@ -568,11 +567,9 @@ final class TransferDomain implements PeerServices {
                     // waited for.
                     try {
                         TransferOutcome outcome =
-                                upload(UploadSpecification.fromStream(user.value(), path, file.size(), offset -> {
+                                upload(UploadSpecification.fromChannel(user.value(), path, file.size(), offset -> {
                                             try {
-                                                // Positioned rather than plain, so a resume can say
-                                                // where it starts; see TransferStreams.positionedStream.
-                                                return TransferStreams.positionedStream(file.open(offset), offset);
+                                                return file.open(offset);
                                             } catch (IOException failure) {
                                                 throw new UncheckedIOException(failure);
                                             }
@@ -814,7 +811,7 @@ final class TransferDomain implements PeerServices {
      */
     TransferOutcome download(DownloadSpecification request) {
         Objects.requireNonNull(request, "request");
-        return Transfers.outcomeOf(request.toStream() ? downloadToStream(request) : downloadToFile(request));
+        return Transfers.outcomeOf(request.toChannel() ? downloadToChannel(request) : downloadToFile(request));
     }
 
     /**
@@ -827,7 +824,7 @@ final class TransferDomain implements PeerServices {
      */
     TransferOutcome upload(UploadSpecification request) {
         Objects.requireNonNull(request, "request");
-        return Transfers.outcomeOf(request.fromStream() ? uploadFromStream(request) : uploadFromFile(request));
+        return Transfers.outcomeOf(request.fromChannel() ? uploadFromChannel(request) : uploadFromFile(request));
     }
 
     /** Returns a local file's size, or zero when there is no file yet. */
@@ -839,7 +836,7 @@ final class TransferDomain implements PeerServices {
         }
     }
 
-    /** Downloads to a local path, opening it as the destination stream. */
+    /** Downloads to a local path, opening it as the destination channel. */
     private Transfer downloadToFile(DownloadSpecification request) {
         String requestedUsername = request.username();
         String remoteFilename = request.remoteFilename();
@@ -859,7 +856,7 @@ final class TransferDomain implements PeerServices {
         return runDownload(
                 requestedUsername,
                 remoteFilename,
-                () -> {
+                (offset, ignored) -> {
                     try {
                         if (startOffset > 0) {
                             // Appending ignores position: O_APPEND puts every
@@ -876,7 +873,15 @@ final class TransferDomain implements PeerServices {
                                         + " requested bytes at the wrong place silently");
                             }
                         }
-                        return files.openOutputStream(localFilename, startOffset > 0);
+                        FileChannel channel = startOffset > 0
+                                ? files.openChannel(localFilename, StandardOpenOption.CREATE, StandardOpenOption.WRITE)
+                                : files.openChannel(
+                                        localFilename,
+                                        StandardOpenOption.CREATE,
+                                        StandardOpenOption.WRITE,
+                                        StandardOpenOption.TRUNCATE_EXISTING);
+                        channel.position(offset);
+                        return TransferChannels.trackWritable(channel, offset);
                     } catch (IOException failure) {
                         throw new UncheckedIOException(failure);
                     }
@@ -889,21 +894,21 @@ final class TransferDomain implements PeerServices {
                 CancellationSignals.orNone(request.cancellationSignal()));
     }
 
-    /** Downloads to a caller-supplied stream. */
-    private Transfer downloadToStream(DownloadSpecification request) {
+    /** Downloads to a caller-supplied destination channel. */
+    private Transfer downloadToChannel(DownloadSpecification request) {
         String requestedUsername = request.username();
         String remoteFilename = request.remoteFilename();
         Text.requireText(requestedUsername, "username");
         Text.requireText(remoteFilename, "remoteFilename");
         validateDownloadRange(request.size(), request.startOffset());
-        Objects.requireNonNull(request.outputStreamFactory(), "outputStreamFactory");
+        Objects.requireNonNull(request.destinationFactory(), "destinationFactory");
         server.requireLoggedIn("download files");
         int transferToken = request.token() == null ? tokens.nextToken() : request.token();
         validateDownloadUniqueness(requestedUsername, remoteFilename, transferToken);
         return runDownload(
                 requestedUsername,
                 remoteFilename,
-                request.outputStreamFactory(),
+                request.destinationFactory(),
                 request.size(),
                 request.startOffset(),
                 transferToken,
@@ -912,7 +917,7 @@ final class TransferDomain implements PeerServices {
                 CancellationSignals.orNone(request.cancellationSignal()));
     }
 
-    /** Uploads a local path, opening it as the source stream. */
+    /** Uploads a local path, opening it as the source channel. */
     private Transfer uploadFromFile(UploadSpecification request) {
         String requestedUsername = request.username();
         String remoteFilename = request.remoteFilename();
@@ -925,7 +930,7 @@ final class TransferDomain implements PeerServices {
                     new FileNotFoundException("The local file does not exist: " + localFilename));
         }
         server.requireLoggedIn("upload files");
-        try (InputStream ignored = files.openInputStream(localFilename)) {
+        try (FileChannel ignored = files.openChannel(localFilename, StandardOpenOption.READ)) {
             // Probe readability before allocating a transfer token.
         } catch (IOException failure) {
             throw new UncheckedIOException(
@@ -948,9 +953,11 @@ final class TransferDomain implements PeerServices {
                 requestedUsername,
                 remoteFilename,
                 size,
-                ignoredOffset -> {
+                (offset, ignored) -> {
                     try {
-                        return files.openInputStream(localFilename);
+                        FileChannel channel = files.openChannel(localFilename, StandardOpenOption.READ);
+                        channel.position(offset);
+                        return TransferChannels.trackReadable(channel, offset);
                     } catch (IOException failure) {
                         throw new UncheckedIOException(failure);
                     }
@@ -960,8 +967,8 @@ final class TransferDomain implements PeerServices {
                 CancellationSignals.orNone(request.cancellationSignal()));
     }
 
-    /** Uploads from a caller-supplied stream. */
-    private Transfer uploadFromStream(UploadSpecification request) {
+    /** Uploads from a caller-supplied source channel. */
+    private Transfer uploadFromChannel(UploadSpecification request) {
         String requestedUsername = request.username();
         String remoteFilename = request.remoteFilename();
         Text.requireText(requestedUsername, "username");
@@ -969,7 +976,7 @@ final class TransferDomain implements PeerServices {
         if (request.size() < 0) {
             throw new IllegalArgumentException("size must be greater than or equal to zero");
         }
-        Objects.requireNonNull(request.inputStreamFactory(), "inputStreamFactory");
+        Objects.requireNonNull(request.sourceFactory(), "sourceFactory");
         server.requireLoggedIn("upload files");
         int transferToken = request.token() == null ? tokens.nextToken() : request.token();
         validateUploadUniqueness(requestedUsername, remoteFilename, transferToken);
@@ -977,7 +984,7 @@ final class TransferDomain implements PeerServices {
                 requestedUsername,
                 remoteFilename,
                 request.size(),
-                request.inputStreamFactory(),
+                request.sourceFactory(),
                 transferToken,
                 request.options() == null ? new TransferOptions() : request.options(),
                 CancellationSignals.orNone(request.cancellationSignal()));
@@ -1036,7 +1043,7 @@ final class TransferDomain implements PeerServices {
     private Transfer runDownload(
             String requestedUsername,
             String remoteFilename,
-            Supplier<OutputStream> outputStreamFactory,
+            TransferChannels.DestinationFactory destinationFactory,
             Long size,
             long startOffset,
             int token,
@@ -1060,7 +1067,7 @@ final class TransferDomain implements PeerServices {
         }
 
         return new DownloadRun(
-                        this, download, outputStreamFactory, transferOptions, offer, cancellationSignal, uniqueKey)
+                        this, download, destinationFactory, transferOptions, offer, cancellationSignal, uniqueKey)
                 .execute();
     }
 
@@ -1068,7 +1075,7 @@ final class TransferDomain implements PeerServices {
             String requestedUsername,
             String remoteFilename,
             long size,
-            LongFunction<InputStream> inputStreamFactory,
+            TransferChannels.SourceFactory sourceFactory,
             int token,
             TransferOptions transferOptions,
             CancellationSignal cancellationSignal) {
@@ -1087,8 +1094,7 @@ final class TransferDomain implements PeerServices {
                     "Duplicate upload of " + remoteFilename + " to " + requestedUsername + " aborted");
         }
 
-        return new UploadRun(this, upload, inputStreamFactory, transferOptions, cancellationSignal, uniqueKey)
-                .execute();
+        return new UploadRun(this, upload, sourceFactory, transferOptions, cancellationSignal, uniqueKey).execute();
     }
 
     // --- rules --------------------------------------------------------------

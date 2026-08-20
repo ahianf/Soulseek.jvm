@@ -6,7 +6,8 @@ package dev.slsk.internal.transfer;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.options.TransferOptions;
 import java.io.OutputStream;
-import java.util.Objects;
+import java.nio.channels.WritableByteChannel;
+import java.util.function.LongFunction;
 import java.util.function.Supplier;
 
 /** Everything one download needs, in one value. */
@@ -14,13 +15,13 @@ public record DownloadSpecification(
         String username,
         String remoteFilename,
         String localFilename,
-        Supplier<OutputStream> outputStreamFactory,
+        TransferChannels.DestinationFactory destinationFactory,
         Long size,
         long startOffset,
         Integer token,
         TransferOptions options,
         CancellationSignal cancellationSignal,
-        boolean toStream,
+        boolean toChannel,
         dev.slsk.internal.messaging.messages.TransferRequest offer) {
 
     public DownloadSpecification {
@@ -32,13 +33,13 @@ public record DownloadSpecification(
                 builder.username,
                 builder.remoteFilename,
                 builder.localFilename,
-                builder.outputStreamFactory,
+                builder.destinationFactory,
                 builder.size,
                 builder.startOffset,
                 builder.token,
                 builder.options,
                 builder.cancellationSignal,
-                builder.toStream,
+                builder.toChannel,
                 builder.offer);
     }
 
@@ -50,8 +51,16 @@ public record DownloadSpecification(
 
     public static Builder toStream(String username, String remoteFilename, Supplier<OutputStream> outputStreamFactory) {
         Builder builder = new Builder(username, remoteFilename);
-        builder.outputStreamFactory = Objects.requireNonNull(outputStreamFactory, "outputStreamFactory");
-        builder.toStream = true;
+        builder.destinationFactory = TransferChannels.destination(outputStreamFactory);
+        builder.toChannel = true;
+        return builder;
+    }
+
+    public static Builder toChannel(
+            String username, String remoteFilename, LongFunction<? extends WritableByteChannel> outputChannelFactory) {
+        Builder builder = new Builder(username, remoteFilename);
+        builder.destinationFactory = TransferChannels.destination(outputChannelFactory);
+        builder.toChannel = true;
         return builder;
     }
 
@@ -59,13 +68,13 @@ public record DownloadSpecification(
         private final String username;
         private final String remoteFilename;
         private String localFilename;
-        private Supplier<OutputStream> outputStreamFactory;
+        private TransferChannels.DestinationFactory destinationFactory;
         private Long size;
         private long startOffset;
         private Integer token;
         private TransferOptions options;
         private CancellationSignal cancellationSignal = CancellationSignal.none();
-        private boolean toStream;
+        private boolean toChannel;
         private dev.slsk.internal.messaging.messages.TransferRequest offer;
 
         private Builder(String username, String remoteFilename) {

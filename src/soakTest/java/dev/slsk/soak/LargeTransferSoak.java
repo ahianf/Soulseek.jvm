@@ -43,7 +43,12 @@ class LargeTransferSoak {
                 long wallStart = System.nanoTime();
 
                 CountingOutputStream sink = new CountingOutputStream();
-                connection.read(TRANSFER_BYTES, sink, null, null, CancellationSignal.none());
+                connection.read(
+                        TRANSFER_BYTES,
+                        java.nio.channels.Channels.newChannel(sink),
+                        null,
+                        null,
+                        CancellationSignal.none());
 
                 long wallElapsed = System.nanoTime() - wallStart;
                 long allocated = HeapProbe.totalAllocatedBytes() - allocStart;
@@ -97,7 +102,12 @@ class LargeTransferSoak {
                     new SocketConnection(peer.endpoint(), new ConnectionOptions(), null, Monitors.shared());
             try {
                 connection.connect(CancellationSignal.none());
-                connection.read(TRANSFER_BYTES, new CountingOutputStream(), null, null, CancellationSignal.none());
+                connection.read(
+                        TRANSFER_BYTES,
+                        java.nio.channels.Channels.newChannel(new CountingOutputStream()),
+                        null,
+                        null,
+                        CancellationSignal.none());
 
                 int depth = SchedulerProbe.connectionTimerQueueDepth();
                 assertTrue(

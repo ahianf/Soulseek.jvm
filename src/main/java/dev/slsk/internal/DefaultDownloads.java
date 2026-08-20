@@ -141,17 +141,17 @@ final class DefaultDownloads implements Downloads {
     private TransferOutcome fetch(DownloadQueue.Entry entry) {
         DownloadRequest request = entry.request();
         TransferId id = entry.id();
-        AtomicReference<SinkOutputStream> stream = new AtomicReference<>();
+        AtomicReference<SinkChannel> channel = new AtomicReference<>();
         // What the last attempt left on disk. The peer is asked to start there
         // and the sink is opened there, so a download interrupted at ninety
         // percent costs ten percent to finish rather than another whole file.
         long resumeFrom = entry.resumeOffset();
         dev.slsk.internal.transfer.DownloadSpecification internal =
-                dev.slsk.internal.transfer.DownloadSpecification.toStream(
-                                request.user().value(), request.path(), () -> {
+                dev.slsk.internal.transfer.DownloadSpecification.toChannel(
+                                request.user().value(), request.path(), offset -> {
                                     try {
-                                        SinkOutputStream opened = new SinkOutputStream(request.sink(), resumeFrom);
-                                        stream.set(opened);
+                                        SinkChannel opened = new SinkChannel(request.sink(), offset);
+                                        channel.set(opened);
                                         return opened;
                                     } catch (IOException failure) {
                                         // The transfer path treats a stream it cannot
@@ -177,19 +177,19 @@ final class DefaultDownloads implements Downloads {
 
         try {
             TransferOutcome outcome = client.transfers().download(internal);
-            settle(stream.get(), outcome);
+            settle(channel.get(), outcome);
             return outcome;
         } catch (RuntimeException refused) {
             // A request that never became a transfer: a duplicate, or a client
             // that is not logged in. The transfer path reports everything that
             // happened to a transfer as an outcome.
             TransferOutcome outcome = outcomeOf(refused);
-            settle(stream.get(), outcome);
+            settle(channel.get(), outcome);
             return outcome;
         } finally {
             progress.forget(id);
-            SinkOutputStream opened = stream.get();
-            entry.resumeOffset(opened == null ? resumeFrom : opened.getPosition());
+            SinkChannel opened = channel.get();
+            entry.resumeOffset(opened == null ? resumeFrom : opened.position());
         }
     }
 
@@ -284,19 +284,19 @@ final class DefaultDownloads implements Downloads {
      * out for itself whether a transfer that stopped is one whose bytes are safe
      * to publish.
      */
-    private void settle(SinkOutputStream stream, TransferOutcome outcome) {
-        if (stream == null) {
+    private void settle(SinkChannel channel, TransferOutcome outcome) {
+        if (channel == null) {
             return;
         }
         if (outcome instanceof TransferOutcome.Succeeded) {
             try {
-                stream.commit();
+                channel.commit();
                 return;
             } catch (IOException failure) {
                 client.getDiagnostic().warning("Failed to commit a completed download", failure);
             }
         }
-        stream.discard();
+        channel.discard();
     }
 
     /** Turns a queue transition into the events a consumer sees. */

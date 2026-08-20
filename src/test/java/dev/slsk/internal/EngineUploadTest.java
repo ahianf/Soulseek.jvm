@@ -62,6 +62,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.channels.ReadableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -1156,7 +1157,7 @@ class EngineUploadTest {
                 if (writeFailure != null) {
                     return Outcomes.raise(CompletableFuture.<Void>failedFuture(writeFailure));
                 }
-                InputStream stream = (InputStream) arguments[1];
+                ReadableByteChannel source = (ReadableByteChannel) arguments[1];
                 ConnectionGovernor governor = (ConnectionGovernor) arguments[2];
                 ConnectionReporter reporter = (ConnectionReporter) arguments[3];
                 CancellationSignal token = (CancellationSignal) arguments[4];
@@ -1165,14 +1166,18 @@ class EngineUploadTest {
                     int attempted = (int) Math.min(Integer.MAX_VALUE, length - transferred);
                     int granted = governor == null ? attempted : governor.grant(attempted, token);
                     int target = Math.min(granted, maximumActualPerIteration);
-                    byte[] buffer = stream.readNBytes(target);
-                    written.write(buffer);
-                    transferred += buffer.length;
-                    if (reporter != null) {
-                        reporter.report(attempted, granted, buffer.length);
+                    ByteBuffer buffer = ByteBuffer.allocate(target);
+                    int count = source.read(buffer);
+                    if (count < 0) {
+                        count = 0;
                     }
-                    if (buffer.length == 0) {
-                        throw new IOException("stream ended early");
+                    written.write(buffer.array(), 0, count);
+                    transferred += count;
+                    if (reporter != null) {
+                        reporter.report(attempted, granted, count);
+                    }
+                    if (count == 0) {
+                        throw new IOException("channel ended early");
                     }
                     if (dataWrittenListener != null) {
                         dataWrittenListener.accept(new ConnectionDataEvent(proxy, transferred, length));

@@ -3,15 +3,12 @@
 
 package dev.slsk.internal;
 
-import static dev.slsk.internal.transfer.TransferStreams.determineOutputPosition;
-import static dev.slsk.internal.transfer.TransferStreams.filenameOnly;
-import static dev.slsk.internal.transfer.TransferStreams.seekOutputStream;
+import static dev.slsk.internal.transfer.TransferChannels.filenameOnly;
 
 import dev.slsk.Subscription;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferSizeMismatchException;
-import dev.slsk.exceptions.TransferStreamException;
 import dev.slsk.internal.common.CancellationSignals;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.Permits;
@@ -33,13 +30,12 @@ import dev.slsk.internal.options.TransferOptions;
 import dev.slsk.internal.options.TransferProgressUpdate;
 import dev.slsk.internal.options.TransferStateChange;
 import dev.slsk.internal.transfer.Transfer;
+import dev.slsk.internal.transfer.TransferChannels;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.internal.transfer.TransferPhase;
 import dev.slsk.internal.transfer.TransferQueueLocation;
-import dev.slsk.internal.transfer.TransferStreams;
 import dev.slsk.internal.transfer.TransferTermination;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -47,7 +43,6 @@ import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 /**
  * One download, start to finish, on the thread that asked for it.
@@ -69,7 +64,7 @@ final class DownloadRun {
     private final TransferDomain domain;
 
     private final TransferInternal download;
-    private final Supplier<OutputStream> outputStreamFactory;
+    private final TransferChannels.DestinationFactory destinationFactory;
     private final TransferOptions transferOptions;
 
     /**
@@ -100,8 +95,7 @@ final class DownloadRun {
     private TransferPhase lastPhase = TransferPhase.NONE;
     private InetSocketAddress endpoint;
     private TransportConnection connection;
-    private OutputStream outputStream;
-    private TransferStreams.PositionTrackingOutputStream trackingStream;
+    private TransferChannels.TrackingWritableChannel destination;
     private Consumer<ConnectionDataEvent> dataReadListener;
     private Consumer<ConnectionDisconnectedEvent> disconnectedListener;
     private Subscription dataReadSubscription;
@@ -110,7 +104,7 @@ final class DownloadRun {
     DownloadRun(
             TransferDomain domain,
             TransferInternal download,
-            Supplier<OutputStream> outputStreamFactory,
+            TransferChannels.DestinationFactory destinationFactory,
             TransferOptions transferOptions,
             TransferRequest offer,
             CancellationSignal cancellationSignal,
@@ -118,7 +112,7 @@ final class DownloadRun {
         this.offer = offer;
         this.domain = domain;
         this.download = download;
-        this.outputStreamFactory = outputStreamFactory;
+        this.destinationFactory = destinationFactory;
         this.transferOptions = transferOptions;
         this.cancellationSignal = cancellationSignal;
         this.uniqueKey = uniqueKey;
@@ -204,13 +198,13 @@ final class DownloadRun {
      */
     private void receiveFile() throws IOException, InterruptedException, TimeoutException {
         bindConnectionEvents();
-        outputStream = Objects.requireNonNull(outputStreamFactory.get(), "outputStreamFactory result");
-        positionOutputStream();
-        trackingStream = new TransferStreams.PositionTrackingOutputStream(
-                outputStream,
-                determineOutputPosition(
-                        outputStream, transferOptions.seekOutputStreamAutomatically() ? download.getStartOffset() : 0));
+        destination = Objects.requireNonNull(
+                destinationFactory.open(download.getStartOffset(), transferOptions.seekOutputStreamAutomatically()),
+                "destinationFactory result");
         readTransfer();
+        if (!transferOptions.closeOutputStreamOnCompletion()) {
+            destination.flush();
+        }
 
         updateProgress(currentOutputPosition());
         complete(TransferTermination.SUCCEEDED);
@@ -327,22 +321,6 @@ final class DownloadRun {
         disconnectedSubscription = connection.subscribe(TransportConnection.Kind.DISCONNECTED, disconnectedListener);
     }
 
-    private void positionOutputStream() {
-        if (download.getStartOffset() <= 0 || !transferOptions.seekOutputStreamAutomatically()) {
-            return;
-        }
-        domain.diagnostic.debug("Seeking output stream for download of "
-                + filenameOnly(download.getFilename()) + " from "
-                + download.getUsername() + " to starting offset of "
-                + download.getStartOffset() + " bytes");
-        try {
-            seekOutputStream(outputStream, download.getStartOffset());
-        } catch (IOException failure) {
-            throw new TransferStreamException(
-                    "Requested non-zero start offset but output " + "stream does not support seeking", failure);
-        }
-    }
-
     private void readTransfer() throws InterruptedException, TimeoutException {
         try (CancellationController linkedController = new CancellationController();
                 CancellationSubscription registration = cancellationSignal.register(linkedController::cancel)) {
@@ -368,7 +346,7 @@ final class DownloadRun {
                 try {
                     connection.read(
                             download.getSize() - download.getStartOffset(),
-                            trackingStream,
+                            destination,
                             // The bucket is the whole of the metering now. A
                             // pluggable per-transfer governor sat in front of
                             // it and every implementation granted everything,
@@ -510,13 +488,12 @@ final class DownloadRun {
                             failure);
                 }
             }
-            determineFinalOutputPosition();
-            if (transferOptions.closeOutputStreamOnCompletion() && outputStream != null) {
+            if (transferOptions.closeOutputStreamOnCompletion() && destination != null) {
                 try {
                     try {
-                        outputStream.flush();
+                        destination.flush();
                     } finally {
-                        outputStream.close();
+                        destination.close();
                     }
                 } catch (Throwable failure) {
                     domain.diagnostic.warning(
@@ -601,34 +578,6 @@ final class DownloadRun {
     }
 
     private long currentOutputPosition() {
-        if (trackingStream != null) {
-            return trackingStream.getPosition();
-        }
-        if (outputStream != null) {
-            try {
-                return determineOutputPosition(outputStream, 0);
-            } catch (Throwable ignored) {
-                return 0;
-            }
-        }
-        return 0;
-    }
-
-    private long determineFinalOutputPosition() {
-        if (outputStream == null) {
-            return 0;
-        }
-        try {
-            return determineOutputPosition(outputStream, trackingStream == null ? 0 : trackingStream.getPosition());
-        } catch (Throwable failure) {
-            domain.diagnostic.warning(
-                    "Failed to determine final position of output "
-                            + "stream for file "
-                            + filenameOnly(download.getFilename())
-                            + " from " + download.getUsername() + ": "
-                            + Failures.message(failure),
-                    failure);
-            return 0;
-        }
+        return destination == null ? 0 : destination.position();
     }
 }

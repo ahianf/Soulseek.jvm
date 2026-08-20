@@ -270,7 +270,7 @@ class TransportConnectionTest {
 
         connection.read(
                 5,
-                output,
+                java.nio.channels.Channels.newChannel(output),
                 (requested, token) -> requested,
                 (requested, granted, transferred) -> reports.add(new int[] {requested, granted, transferred}),
                 null);
@@ -346,7 +346,7 @@ class TransportConnectionTest {
 
         connection.write(
                 5,
-                new ByteArrayInputStream(new byte[] {1, 2, 3, 4, 5}),
+                java.nio.channels.Channels.newChannel(new ByteArrayInputStream(new byte[] {1, 2, 3, 4, 5})),
                 (requested, token) -> requested,
                 (requested, granted, transferred) -> reports.add(new int[] {requested, granted, transferred}),
                 null);
@@ -520,18 +520,28 @@ class TransportConnectionTest {
         assertThrows(IllegalArgumentException.class, () -> connection.write(new byte[0], null));
         IllegalArgumentException zeroWrite = assertThrows(
                 IllegalArgumentException.class,
-                () -> connection.write(0, new ByteArrayInputStream(new byte[0]), null, null, null));
+                () -> connection.write(
+                        0,
+                        java.nio.channels.Channels.newChannel(new ByteArrayInputStream(new byte[0])),
+                        null,
+                        null,
+                        null));
         assertEquals("length must be greater than zero: 0", zeroWrite.getMessage());
         IllegalArgumentException negativeRead = assertThrows(
                 IllegalArgumentException.class,
-                () -> connection.read(-1, new java.io.ByteArrayOutputStream(), null, null, null));
+                () -> connection.read(
+                        -1,
+                        java.nio.channels.Channels.newChannel(new java.io.ByteArrayOutputStream()),
+                        null,
+                        null,
+                        null));
         assertEquals("length must be greater than or equal to zero: -1", negativeRead.getMessage());
         NullPointerException nullInput =
                 assertThrows(NullPointerException.class, () -> connection.write(1, null, null, null, null));
-        assertEquals("inputStream", nullInput.getMessage());
+        assertEquals("source", nullInput.getMessage());
         NullPointerException nullOutput =
                 assertThrows(NullPointerException.class, () -> connection.read(1, null, null, null, null));
-        assertEquals("outputStream", nullOutput.getMessage());
+        assertEquals("destination", nullOutput.getMessage());
         assertThrows(IllegalStateException.class, () -> connection.connect(null));
         connection.disconnect();
         assertThrows(IllegalStateException.class, () -> connection.read(1, null));
@@ -588,7 +598,7 @@ class TransportConnectionTest {
 
         Throwable failure = failureOf(() -> connection.read(
                 3,
-                java.io.OutputStream.nullOutputStream(),
+                java.nio.channels.Channels.newChannel(java.io.OutputStream.nullOutputStream()),
                 (requestedBytes, token) -> {
                     throw cause;
                 },

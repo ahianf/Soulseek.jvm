@@ -6,7 +6,7 @@ package dev.slsk.internal.transfer;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.options.TransferOptions;
 import java.io.InputStream;
-import java.util.Objects;
+import java.nio.channels.ReadableByteChannel;
 import java.util.function.LongFunction;
 
 /** Everything one upload needs, in one value. */
@@ -14,12 +14,12 @@ public record UploadSpecification(
         String username,
         String remoteFilename,
         String localFilename,
-        LongFunction<InputStream> inputStreamFactory,
+        TransferChannels.SourceFactory sourceFactory,
         long size,
         Integer token,
         TransferOptions options,
         CancellationSignal cancellationSignal,
-        boolean fromStream) {
+        boolean fromChannel) {
 
     public UploadSpecification {
         cancellationSignal = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
@@ -30,12 +30,12 @@ public record UploadSpecification(
                 builder.username,
                 builder.remoteFilename,
                 builder.localFilename,
-                builder.inputStreamFactory,
+                builder.sourceFactory,
                 builder.size,
                 builder.token,
                 builder.options,
                 builder.cancellationSignal,
-                builder.fromStream);
+                builder.fromChannel);
     }
 
     public static Builder fromFile(String username, String remoteFilename, String localFilename) {
@@ -47,9 +47,21 @@ public record UploadSpecification(
     public static Builder fromStream(
             String username, String remoteFilename, long size, LongFunction<InputStream> inputStreamFactory) {
         Builder builder = new Builder(username, remoteFilename);
-        builder.inputStreamFactory = Objects.requireNonNull(inputStreamFactory, "inputStreamFactory");
+        builder.sourceFactory = TransferChannels.source(inputStreamFactory);
         builder.size = size;
-        builder.fromStream = true;
+        builder.fromChannel = true;
+        return builder;
+    }
+
+    public static Builder fromChannel(
+            String username,
+            String remoteFilename,
+            long size,
+            LongFunction<? extends ReadableByteChannel> inputChannelFactory) {
+        Builder builder = new Builder(username, remoteFilename);
+        builder.sourceFactory = TransferChannels.sourceChannel(inputChannelFactory);
+        builder.size = size;
+        builder.fromChannel = true;
         return builder;
     }
 
@@ -57,12 +69,12 @@ public record UploadSpecification(
         private final String username;
         private final String remoteFilename;
         private String localFilename;
-        private LongFunction<InputStream> inputStreamFactory;
+        private TransferChannels.SourceFactory sourceFactory;
         private long size;
         private Integer token;
         private TransferOptions options;
         private CancellationSignal cancellationSignal = CancellationSignal.none();
-        private boolean fromStream;
+        private boolean fromChannel;
 
         private Builder(String username, String remoteFilename) {
             this.username = username;

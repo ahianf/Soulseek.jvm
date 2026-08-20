@@ -3,9 +3,7 @@
 
 package dev.slsk.internal;
 
-import static dev.slsk.internal.transfer.TransferStreams.determinePosition;
-import static dev.slsk.internal.transfer.TransferStreams.filenameOnly;
-import static dev.slsk.internal.transfer.TransferStreams.seekInputStream;
+import static dev.slsk.internal.transfer.TransferChannels.filenameOnly;
 
 import dev.slsk.Subscription;
 import dev.slsk.exceptions.ConnectionException;
@@ -13,7 +11,6 @@ import dev.slsk.exceptions.ConnectionReadException;
 import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.exceptions.TransferException;
 import dev.slsk.exceptions.TransferRejectedException;
-import dev.slsk.exceptions.TransferStreamException;
 import dev.slsk.internal.common.CancellationSignals;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.Permits;
@@ -35,14 +32,13 @@ import dev.slsk.internal.options.TransferOptions;
 import dev.slsk.internal.options.TransferProgressUpdate;
 import dev.slsk.internal.options.TransferStateChange;
 import dev.slsk.internal.transfer.Transfer;
+import dev.slsk.internal.transfer.TransferChannels;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.internal.transfer.TransferPhase;
 import dev.slsk.internal.transfer.TransferQueueLocation;
-import dev.slsk.internal.transfer.TransferStreams;
 import dev.slsk.internal.transfer.TransferTermination;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -52,7 +48,6 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
-import java.util.function.LongFunction;
 
 /**
  * One upload, start to finish, on the thread that asked for it.
@@ -65,7 +60,7 @@ final class UploadRun {
     private final TransferDomain domain;
 
     private final TransferInternal upload;
-    private final LongFunction<InputStream> inputStreamFactory;
+    private final TransferChannels.SourceFactory sourceFactory;
     private final TransferOptions transferOptions;
     private final CancellationSignal cancellationSignal;
     private final String uniqueKey;
@@ -76,8 +71,7 @@ final class UploadRun {
     private Semaphore perUserSemaphore;
     private InetSocketAddress endpoint;
     private TransportConnection connection;
-    private InputStream inputStream;
-    private TransferStreams.PositionTrackingInputStream trackingStream;
+    private TransferChannels.TrackingReadableChannel source;
     private Consumer<ConnectionDataEvent> dataWrittenListener;
     private Consumer<ConnectionDisconnectedEvent> disconnectedListener;
     private Subscription dataWrittenSubscription;
@@ -86,13 +80,13 @@ final class UploadRun {
     UploadRun(
             TransferDomain domain,
             TransferInternal upload,
-            LongFunction<InputStream> inputStreamFactory,
+            TransferChannels.SourceFactory sourceFactory,
             TransferOptions transferOptions,
             CancellationSignal cancellationSignal,
             String uniqueKey) {
         this.domain = domain;
         this.upload = upload;
-        this.inputStreamFactory = inputStreamFactory;
+        this.sourceFactory = sourceFactory;
         this.transferOptions = transferOptions;
         this.cancellationSignal = cancellationSignal;
         this.uniqueKey = uniqueKey;
@@ -188,13 +182,11 @@ final class UploadRun {
                         + upload.getSize() + " bytes");
             }
 
-            domain.diagnostic.debug("Resolving input stream for upload of " + filenameOnly(upload.getFilename())
+            domain.diagnostic.debug("Resolving input channel for upload of " + filenameOnly(upload.getFilename())
                     + " to " + upload.getUsername());
-            inputStream = Objects.requireNonNull(
-                    inputStreamFactory.apply(upload.getStartOffset()), "inputStreamFactory result");
-            positionInputStream();
-            trackingStream = new TransferStreams.PositionTrackingInputStream(
-                    inputStream, determinePosition(inputStream, upload.getStartOffset()));
+            source = Objects.requireNonNull(
+                    sourceFactory.open(upload.getStartOffset(), transferOptions.seekInputStreamAutomatically()),
+                    "sourceFactory result");
 
             updateState(TransferPhase.IN_PROGRESS);
             updateProgress(upload.getStartOffset());
@@ -244,22 +236,6 @@ final class UploadRun {
         }
     }
 
-    private void positionInputStream() {
-        if (upload.getStartOffset() <= 0 || !transferOptions.seekInputStreamAutomatically()) {
-            return;
-        }
-        domain.diagnostic.debug("Seeking input stream for upload of "
-                + filenameOnly(upload.getFilename()) + " to "
-                + upload.getUsername() + " to starting offset of "
-                + upload.getStartOffset() + " bytes");
-        try {
-            seekInputStream(inputStream, upload.getStartOffset());
-        } catch (IOException failure) {
-            throw new TransferStreamException(
-                    "Requested non-zero start offset but input " + "stream does not support seeking", failure);
-        }
-    }
-
     private void writeAndAwaitDisconnectRace() throws InterruptedException, TimeoutException {
         long remaining = upload.getSize() - upload.getStartOffset();
         Settlement<Void> settlement = upload.settlement();
@@ -275,7 +251,7 @@ final class UploadRun {
                 try {
                     connection.write(
                             remaining,
-                            trackingStream,
+                            source,
                             (requestedBytes, governorToken) ->
                                     domain.uploadTokenBucket.get(requestedBytes, cancellationSignal),
                             (attemptedBytes, grantedBytes, transferredBytes) -> {
@@ -442,10 +418,9 @@ final class UploadRun {
                     // Best-effort connection cleanup.
                 }
             }
-            currentStreamPosition();
-            if (transferOptions.closeInputStreamOnCompletion() && inputStream != null) {
+            if (transferOptions.closeInputStreamOnCompletion() && source != null) {
                 try {
-                    inputStream.close();
+                    source.close();
                 } catch (Throwable ignored) {
                     // Best-effort stream cleanup.
                 }
@@ -575,16 +550,6 @@ final class UploadRun {
     }
 
     private long currentStreamPosition() {
-        if (trackingStream != null) {
-            return trackingStream.getPosition();
-        }
-        if (inputStream != null) {
-            try {
-                return determinePosition(inputStream, 0);
-            } catch (Throwable ignored) {
-                return 0;
-            }
-        }
-        return 0;
+        return source == null ? 0 : source.position();
     }
 }
