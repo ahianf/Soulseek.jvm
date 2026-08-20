@@ -5,4 +5,5 @@
 package dev.slsk.internal.user;
 
 /** User statistics. */
-public record UserStatistics(String username, int averageSpeed, long uploadCount, int fileCount, int directoryCount) {}
+public record UserStatisticsSnapshot(
+        String username, int averageSpeed, long uploadCount, int fileCount, int directoryCount) {}

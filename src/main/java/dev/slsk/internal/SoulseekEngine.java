@@ -873,7 +873,7 @@ final class SoulseekEngine implements AutoCloseable {
     private void bindServerEvents() {
         forwardServer(ServerMessageEvent.USER_CANNOT_CONNECT, Kind.USER_CANNOT_CONNECT);
         forwardServer(ServerMessageEvent.USER_STATUS_CHANGED, Kind.USER_STATUS_CHANGED);
-        serverMessageHandler.<dev.slsk.internal.user.UserStatistics>subscribe(
+        serverMessageHandler.<dev.slsk.internal.user.UserStatisticsSnapshot>subscribe(
                 ServerMessageEvent.USER_STATISTICS_CHANGED, statistics -> {
                     // A statistics response naming us carries the upload
                     // average the server computed from our reports, which is

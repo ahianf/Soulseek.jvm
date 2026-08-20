@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.internal.user.UserData;
-import dev.slsk.internal.user.UserPresence;
+import dev.slsk.internal.user.WireUserPresence;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -42,7 +42,7 @@ class RoomDataTest {
     @Test
     @DisplayName("RoomData instantiates private-room data")
     void instantiatesPrivateRoomData() {
-        UserData user = new UserData("alice", UserPresence.ONLINE, 1, 2, 3, 4, "CL");
+        UserData user = new UserData("alice", WireUserPresence.ONLINE, 1, 2, 3, 4, "CL");
         RoomData data = new RoomData("room", List.of(user), true, "owner", List.of("operator"));
 
         assertEquals("room", data.name());
@@ -57,7 +57,7 @@ class RoomDataTest {
     @Test
     @DisplayName("RoomData copies and protects supplied lists")
     void copiesAndProtectsSuppliedLists() {
-        UserData user = new UserData("alice", UserPresence.ONLINE, 1, 2, 3, 4, "CL");
+        UserData user = new UserData("alice", WireUserPresence.ONLINE, 1, 2, 3, 4, "CL");
         List<UserData> users = new ArrayList<>(List.of(user));
         List<String> operators = new ArrayList<>(List.of("operator"));
         RoomData data = new RoomData(null, users, true, null, operators);

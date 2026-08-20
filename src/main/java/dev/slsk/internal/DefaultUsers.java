@@ -74,12 +74,13 @@ final class DefaultUsers implements Users {
         client.events()
                 .on(
                         Kind.USER_STATISTICS_CHANGED,
-                        (dev.slsk.internal.user.UserStatistics statistics) -> onStatistics(statistics));
+                        (dev.slsk.internal.user.UserStatisticsSnapshot statistics) -> onStatistics(statistics));
         // These two kinds had no subscriber at all, so Watch.status() returned
         // the login-time status forever and UserEvent.StatusChanged and
         // CannotConnect — both public promises — were never published. The
         // status updates are the entire point of the server-side subscription.
-        client.events().on(Kind.USER_STATUS_CHANGED, (dev.slsk.internal.user.UserStatus status) -> onStatus(status));
+        client.events()
+                .on(Kind.USER_STATUS_CHANGED, (dev.slsk.internal.user.UserStatusSnapshot status) -> onStatus(status));
         client.events()
                 .on(
                         Kind.USER_CANNOT_CONNECT,
@@ -87,7 +88,7 @@ final class DefaultUsers implements Users {
     }
 
     /** Updates the watch's snapshot and publishes the transition. */
-    private void onStatus(dev.slsk.internal.user.UserStatus source) {
+    private void onStatus(dev.slsk.internal.user.UserStatusSnapshot source) {
         Username user = source == null ? null : Usernames.fromWire(source.username());
         if (user == null) {
             return;
@@ -149,7 +150,7 @@ final class DefaultUsers implements Users {
         }
     }
 
-    private void onStatistics(dev.slsk.internal.user.UserStatistics source) {
+    private void onStatistics(dev.slsk.internal.user.UserStatisticsSnapshot source) {
         Username user = source == null ? null : Usernames.fromWire(source.username());
         if (user == null) {
             return;
@@ -157,7 +158,7 @@ final class DefaultUsers implements Users {
         events.publish(new UserEvent.StatisticsChanged(user, statistics(source), Instant.now()));
     }
 
-    private static UserStatistics statistics(dev.slsk.internal.user.UserStatistics source) {
+    private static UserStatistics statistics(dev.slsk.internal.user.UserStatisticsSnapshot source) {
         return new UserStatistics(
                 Username.of(source.username()),
                 source.averageSpeed(),
@@ -166,11 +167,11 @@ final class DefaultUsers implements Users {
                 source.directoryCount());
     }
 
-    private static UserStatus status(dev.slsk.internal.user.UserStatus source) {
+    private static UserStatus status(dev.slsk.internal.user.UserStatusSnapshot source) {
         return new UserStatus(Username.of(source.username()), presence(source.presence()), source.privileged());
     }
 
-    private static UserPresence presence(dev.slsk.internal.user.UserPresence source) {
+    private static UserPresence presence(dev.slsk.internal.user.WireUserPresence source) {
         if (source == null) {
             return UserPresence.OFFLINE;
         }
@@ -193,7 +194,7 @@ final class DefaultUsers implements Users {
 
     private UserInfo info(Username user, CancellationSignal signal) throws InterruptedException {
         Objects.requireNonNull(user, "user");
-        dev.slsk.internal.user.UserInfo source = directory.getUserInfo(user.value(), signal);
+        dev.slsk.internal.user.UserInfoMessage source = directory.getUserInfo(user.value(), signal);
         return new UserInfo(
                 user,
                 source.description() == null ? "" : source.description(),

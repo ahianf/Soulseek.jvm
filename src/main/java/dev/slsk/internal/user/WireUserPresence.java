@@ -7,7 +7,7 @@ package dev.slsk.internal.user;
 /**
  * User presence status.
  */
-public enum UserPresence {
+public enum WireUserPresence {
     /** The user is offline. */
     OFFLINE(0),
 
@@ -19,7 +19,7 @@ public enum UserPresence {
 
     private final int value;
 
-    UserPresence(int value) {
+    WireUserPresence(int value) {
         this.value = value;
     }
 
@@ -39,8 +39,8 @@ public enum UserPresence {
      * @return the matching presence
      * @throws IllegalArgumentException when the value is unknown
      */
-    public static UserPresence fromValue(int value) {
-        for (UserPresence presence : values()) {
+    public static WireUserPresence fromValue(int value) {
+        for (WireUserPresence presence : values()) {
             if (presence.value == value) {
                 return presence;
             }

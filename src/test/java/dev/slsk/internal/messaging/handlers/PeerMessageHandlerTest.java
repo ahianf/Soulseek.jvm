@@ -50,7 +50,7 @@ import dev.slsk.internal.share.File;
 import dev.slsk.internal.share.SharedDirectory;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
-import dev.slsk.internal.user.UserInfo;
+import dev.slsk.internal.user.UserInfoMessage;
 import dev.slsk.search.FileAttributes;
 import dev.slsk.search.SearchFile;
 import dev.slsk.share.ShareIndex;
@@ -109,7 +109,7 @@ class PeerMessageHandlerTest {
                 fixture.connection.proxy,
                 new FolderContentsResponse(TOKEN, "dir", List.of(new SharedDirectory("dir"))).toByteArray());
         fixture.handler.handleMessageRead(
-                fixture.connection.proxy, new UserInfo("description", 2, 3, true).toByteArray());
+                fixture.connection.proxy, new UserInfoMessage("description", 2, 3, true).toByteArray());
         fixture.handler.handleMessageRead(fixture.connection.proxy, new TransferResponse(TOKEN, 123L).toByteArray());
         fixture.handler.handleMessageRead(
                 fixture.connection.proxy, new PlaceInQueueResponse(FILENAME, 7).toByteArray());
@@ -118,7 +118,8 @@ class PeerMessageHandlerTest {
                 List.class,
                 fixture.waiter.completed.get(new WaitKey(MessageCode.Peer.FOLDER_CONTENTS_RESPONSE, USERNAME, TOKEN)));
         assertInstanceOf(
-                UserInfo.class, fixture.waiter.completed.get(new WaitKey(MessageCode.Peer.INFO_RESPONSE, USERNAME)));
+                UserInfoMessage.class,
+                fixture.waiter.completed.get(new WaitKey(MessageCode.Peer.INFO_RESPONSE, USERNAME)));
         assertInstanceOf(
                 TransferResponse.class,
                 fixture.waiter.completed.get(new WaitKey(MessageCode.Peer.TRANSFER_RESPONSE, USERNAME, TOKEN)));
@@ -180,7 +181,7 @@ class PeerMessageHandlerTest {
                 fixture.connection.proxy, new dev.slsk.internal.messaging.messages.UserInfoRequest().toByteArray());
 
         assertArrayEquals(
-                new UserInfo("resolved", 2, 3, true, new byte[] {7}).toByteArray(),
+                new UserInfoMessage("resolved", 2, 3, true, new byte[] {7}).toByteArray(),
                 fixture.connection.bytes.getFirst());
         assertTrue(fixture.diagnostic.contains("User info sent to"));
     }
@@ -194,7 +195,7 @@ class PeerMessageHandlerTest {
 
         // Silence reads as a broken client, and clients that look broken do not
         // get served.
-        assertArrayEquals(new UserInfo("", 0, 0, false).toByteArray(), fixture.connection.bytes.getFirst());
+        assertArrayEquals(new UserInfoMessage("", 0, 0, false).toByteArray(), fixture.connection.bytes.getFirst());
     }
 
     /**

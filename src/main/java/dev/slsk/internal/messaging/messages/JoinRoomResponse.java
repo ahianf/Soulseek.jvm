@@ -8,7 +8,7 @@ import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
 import dev.slsk.internal.room.RoomData;
 import dev.slsk.internal.user.UserData;
-import dev.slsk.internal.user.UserPresence;
+import dev.slsk.internal.user.WireUserPresence;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -29,9 +29,9 @@ public final class JoinRoomResponse implements IncomingMessage {
         }
 
         int statusCount = reader.readInteger();
-        List<UserPresence> statuses = new ArrayList<>();
+        List<WireUserPresence> statuses = new ArrayList<>();
         for (int index = 0; index < statusCount; index++) {
-            statuses.add(UserPresence.fromValue(reader.readInteger()));
+            statuses.add(WireUserPresence.fromValue(reader.readInteger()));
         }
 
         int dataCount = reader.readInteger();

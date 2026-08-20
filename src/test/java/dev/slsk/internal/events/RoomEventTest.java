@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.slsk.internal.room.RoomTicker;
 import dev.slsk.internal.user.UserData;
-import dev.slsk.internal.user.UserPresence;
+import dev.slsk.internal.user.WireUserPresence;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -21,7 +21,7 @@ class RoomEventTest {
     @Test
     @DisplayName("RoomJoinedEvent instantiates with expected values")
     void joinedInstantiatesWithExpectedValues() {
-        UserData userData = new UserData("alice", UserPresence.ONLINE, 1, 2, 3, 4, "CL");
+        UserData userData = new UserData("alice", WireUserPresence.ONLINE, 1, 2, 3, 4, "CL");
         RoomJoinedEvent args = new RoomJoinedEvent("lobby", "alice", userData);
 
         assertEquals("lobby", args.roomName());

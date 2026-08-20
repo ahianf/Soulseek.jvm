@@ -44,7 +44,7 @@ import dev.slsk.internal.share.Catalogs;
 import dev.slsk.internal.share.SharedDirectory;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
-import dev.slsk.internal.user.UserInfo;
+import dev.slsk.internal.user.UserInfoMessage;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -210,7 +210,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                             response.directories());
                 }
                 case INFO_RESPONSE -> {
-                    UserInfo info = UserInfoResponseFactory.fromByteArray(message);
+                    UserInfoMessage info = UserInfoResponseFactory.fromByteArray(message);
                     waiter.complete(new WaitKey(MessageCode.Peer.INFO_RESPONSE, connection.getUsername()), info);
                 }
                 case TRANSFER_RESPONSE -> {
@@ -349,7 +349,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         // Read rather than resolved: the profile is a value this account set,
         // not a question to ask on every request.
         dev.slsk.user.UserProfile profile = services.profile();
-        UserInfo info = new UserInfo(
+        UserInfoMessage info = new UserInfoMessage(
                 profile.description(),
                 profile.uploadSlots(),
                 profile.queueLength(),

@@ -7,8 +7,8 @@ package dev.slsk.internal.user;
 import java.util.Objects;
 
 /** A user's presence and privilege state. */
-public record UserStatus(String username, UserPresence presence, boolean privileged) {
-    public UserStatus {
+public record UserStatusSnapshot(String username, WireUserPresence presence, boolean privileged) {
+    public UserStatusSnapshot {
         presence = Objects.requireNonNull(presence, "presence");
     }
 }

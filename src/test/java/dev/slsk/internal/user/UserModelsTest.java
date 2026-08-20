@@ -19,10 +19,10 @@ class UserModelsTest {
     @Test
     @DisplayName("UserData instantiates with the given data")
     void userDataInstantiatesWithTheGivenData() {
-        UserData data = new UserData("alice", UserPresence.AWAY, 123, 456L, 7, 8, "CL", 2);
+        UserData data = new UserData("alice", WireUserPresence.AWAY, 123, 456L, 7, 8, "CL", 2);
 
         assertEquals("alice", data.username());
-        assertEquals(UserPresence.AWAY, data.status());
+        assertEquals(WireUserPresence.AWAY, data.status());
         assertEquals(123, data.averageSpeed());
         assertEquals(456L, data.uploadCount());
         assertEquals(7, data.fileCount());
@@ -34,7 +34,7 @@ class UserModelsTest {
     @Test
     @DisplayName("UserData defaults SlotsFree to null")
     void userDataDefaultsSlotsFreeToNull() {
-        UserData data = new UserData("alice", UserPresence.ONLINE, 1, 2, 3, 4, null);
+        UserData data = new UserData("alice", WireUserPresence.ONLINE, 1, 2, 3, 4, null);
 
         assertNull(data.slotsFree());
         assertNull(data.countryCode());
@@ -47,10 +47,10 @@ class UserModelsTest {
     }
 
     @Test
-    @DisplayName("UserInfo instantiates with the given data")
+    @DisplayName("UserInfoMessage instantiates with the given data")
     void userInfoInstantiatesWithTheGivenData() {
         byte[] picture = {1, 2, 3};
-        UserInfo info = new UserInfo("description", 4, 5, true, picture);
+        UserInfoMessage info = new UserInfoMessage("description", 4, 5, true, picture);
 
         assertEquals("description", info.description());
         assertEquals(4, info.uploadSlots());
@@ -62,10 +62,10 @@ class UserModelsTest {
     }
 
     @Test
-    @DisplayName("UserInfo snapshots and protects picture data")
+    @DisplayName("UserInfoMessage snapshots and protects picture data")
     void userInfoSnapshotsAndProtectsPictureData() {
         byte[] picture = {1};
-        UserInfo info = new UserInfo(null, 0, 0, false, picture);
+        UserInfoMessage info = new UserInfoMessage(null, 0, 0, false, picture);
 
         picture[0] = 9;
         byte[] returned = info.picture();
@@ -76,26 +76,26 @@ class UserModelsTest {
     }
 
     @Test
-    @DisplayName("UserInfo defaults Picture to null")
+    @DisplayName("UserInfoMessage defaults Picture to null")
     void userInfoDefaultsPictureToNull() {
-        UserInfo info = new UserInfo("description", 4, 5, false);
+        UserInfoMessage info = new UserInfoMessage("description", 4, 5, false);
 
         assertFalse(info.hasPicture());
         assertNull(info.picture());
     }
 
     @Test
-    @DisplayName("UserInfo treats an empty picture as configured")
+    @DisplayName("UserInfoMessage treats an empty picture as configured")
     void userInfoTreatsEmptyPictureAsConfigured() {
-        UserInfo info = new UserInfo("description", 4, 5, false, new byte[0]);
+        UserInfoMessage info = new UserInfoMessage("description", 4, 5, false, new byte[0]);
 
         assertTrue(info.hasPicture());
     }
 
     @Test
-    @DisplayName("UserStatistics instantiates with the given data")
+    @DisplayName("UserStatisticsSnapshot instantiates with the given data")
     void userStatisticsInstantiatesWithTheGivenData() {
-        UserStatistics statistics = new UserStatistics(null, -1, Long.MAX_VALUE, -2, -3);
+        UserStatisticsSnapshot statistics = new UserStatisticsSnapshot(null, -1, Long.MAX_VALUE, -2, -3);
 
         assertNull(statistics.username());
         assertEquals(-1, statistics.averageSpeed());
@@ -105,18 +105,18 @@ class UserModelsTest {
     }
 
     @Test
-    @DisplayName("UserStatus instantiates with the given data")
+    @DisplayName("UserStatusSnapshot instantiates with the given data")
     void userStatusInstantiatesWithTheGivenData() {
-        UserStatus status = new UserStatus(null, UserPresence.OFFLINE, true);
+        UserStatusSnapshot status = new UserStatusSnapshot(null, WireUserPresence.OFFLINE, true);
 
         assertNull(status.username());
-        assertEquals(UserPresence.OFFLINE, status.presence());
+        assertEquals(WireUserPresence.OFFLINE, status.presence());
         assertTrue(status.privileged());
     }
 
     @Test
-    @DisplayName("UserStatus rejects null presence because the C# enum is non-nullable")
+    @DisplayName("UserStatusSnapshot rejects null presence because the C# enum is non-nullable")
     void userStatusRejectsNullPresence() {
-        assertThrows(NullPointerException.class, () -> new UserStatus("alice", null, false));
+        assertThrows(NullPointerException.class, () -> new UserStatusSnapshot("alice", null, false));
     }
 }

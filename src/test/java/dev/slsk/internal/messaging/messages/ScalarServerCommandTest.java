@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
-import dev.slsk.internal.user.UserPresence;
+import dev.slsk.internal.user.WireUserPresence;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -91,10 +91,10 @@ class ScalarServerCommandTest {
     @Test
     @DisplayName("Online status command preserves enum and wire value")
     void onlineStatusCommandPreservesData() {
-        SetOnlineStatusCommand command = new SetOnlineStatusCommand(UserPresence.AWAY);
+        SetOnlineStatusCommand command = new SetOnlineStatusCommand(WireUserPresence.AWAY);
 
-        assertEquals(UserPresence.AWAY, command.getStatus());
-        assertInteger(command, MessageCode.Server.SET_ONLINE_STATUS, UserPresence.AWAY.getValue());
+        assertEquals(WireUserPresence.AWAY, command.getStatus());
+        assertInteger(command, MessageCode.Server.SET_ONLINE_STATUS, WireUserPresence.AWAY.getValue());
         assertThrows(NullPointerException.class, () -> new SetOnlineStatusCommand(null));
     }
 

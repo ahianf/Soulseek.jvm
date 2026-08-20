@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.messages.*;
-import dev.slsk.internal.user.UserPresence;
+import dev.slsk.internal.user.WireUserPresence;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import org.junit.jupiter.api.DisplayName;
@@ -880,7 +880,7 @@ class ServerVectorsTest {
         @DisplayName("test_SetStatus_Request_deserialize, test_SetStatus_Request_serialize")
         void setStatus_Request_deserialize() {
             assertArrayEquals(
-                    hex("080000001c00000002000000"), new SetOnlineStatusCommand(UserPresence.ONLINE).toByteArray());
+                    hex("080000001c00000002000000"), new SetOnlineStatusCommand(WireUserPresence.ONLINE).toByteArray());
         }
     }
 

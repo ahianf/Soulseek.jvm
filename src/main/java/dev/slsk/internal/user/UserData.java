@@ -9,7 +9,7 @@ import java.util.Objects;
 /** User data returned by the server. */
 public record UserData(
         String username,
-        UserPresence status,
+        WireUserPresence status,
         int averageSpeed,
         long uploadCount,
         int fileCount,
@@ -23,7 +23,7 @@ public record UserData(
     /** Creates user data without a free-slot count. */
     public UserData(
             String username,
-            UserPresence status,
+            WireUserPresence status,
             int averageSpeed,
             long uploadCount,
             int fileCount,

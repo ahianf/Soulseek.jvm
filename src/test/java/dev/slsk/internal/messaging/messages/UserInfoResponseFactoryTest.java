@@ -15,16 +15,16 @@ import dev.slsk.exceptions.MessageException;
 import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
-import dev.slsk.internal.user.UserInfo;
+import dev.slsk.internal.user.UserInfoMessage;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class UserInfoResponseFactoryTest {
     @Test
-    @DisplayName("UserInfo with a picture preserves its exact wire format")
+    @DisplayName("UserInfoMessage with a picture preserves its exact wire format")
     void responseWithPicturePreservesWireFormat() {
         byte[] picture = {1, 2, (byte) 0xff};
-        UserInfo outgoing = new UserInfo("d", 2, 3, true, picture);
+        UserInfoMessage outgoing = new UserInfoMessage("d", 2, 3, true, picture);
         byte[] bytes = outgoing.toByteArray();
 
         assertArrayEquals(
@@ -62,7 +62,7 @@ class UserInfoResponseFactoryTest {
                 },
                 bytes);
 
-        UserInfo parsed = UserInfoResponseFactory.fromByteArray(bytes);
+        UserInfoMessage parsed = UserInfoResponseFactory.fromByteArray(bytes);
         assertEquals("d", parsed.description());
         assertTrue(parsed.hasPicture());
         assertArrayEquals(picture, parsed.picture());
@@ -73,9 +73,9 @@ class UserInfoResponseFactoryTest {
     }
 
     @Test
-    @DisplayName("UserInfo without a picture preserves its exact wire format")
+    @DisplayName("UserInfoMessage without a picture preserves its exact wire format")
     void responseWithoutPicturePreservesWireFormat() {
-        UserInfo outgoing = new UserInfo("d", -2, -3, false);
+        UserInfoMessage outgoing = new UserInfoMessage("d", -2, -3, false);
         byte[] bytes = outgoing.toByteArray();
 
         assertArrayEquals(
@@ -106,7 +106,7 @@ class UserInfoResponseFactoryTest {
                 },
                 bytes);
 
-        UserInfo parsed = UserInfoResponseFactory.fromByteArray(bytes);
+        UserInfoMessage parsed = UserInfoResponseFactory.fromByteArray(bytes);
         assertEquals("d", parsed.description());
         assertFalse(parsed.hasPicture());
         assertNull(parsed.picture());
@@ -128,7 +128,7 @@ class UserInfoResponseFactoryTest {
                 .writeByte(255)
                 .build();
 
-        UserInfo parsed = UserInfoResponseFactory.fromByteArray(bytes);
+        UserInfoMessage parsed = UserInfoResponseFactory.fromByteArray(bytes);
 
         assertTrue(parsed.hasPicture());
         assertEquals(0, parsed.picture().length);

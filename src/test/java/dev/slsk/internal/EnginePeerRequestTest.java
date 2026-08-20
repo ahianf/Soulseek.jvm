@@ -48,7 +48,7 @@ import dev.slsk.internal.share.BrowseResponseMessage;
 import dev.slsk.internal.share.SharedDirectory;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
-import dev.slsk.internal.user.UserInfo;
+import dev.slsk.internal.user.UserInfoMessage;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.net.InetAddress;
@@ -118,15 +118,15 @@ class EnginePeerRequestTest {
     @Test
     void getUserInfoRegistersWaitThenUsesPeerConnection() throws Exception {
         Fixture fixture = new Fixture();
-        UserInfo expected = new UserInfo("description", 3, 4, true, new byte[] {1, 2});
-        fixture.waiter.results.put(UserInfo.class, CompletableFuture.completedFuture(expected));
+        UserInfoMessage expected = new UserInfoMessage("description", 3, 4, true, new byte[] {1, 2});
+        fixture.waiter.results.put(UserInfoMessage.class, CompletableFuture.completedFuture(expected));
         fixture.waiter.results.put(
                 UserAddressResponse.class,
                 CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));
         CancellationController source = new CancellationController();
         CancellationSignal token = source.getSignal();
 
-        UserInfo actual = fixture.client.users().getUserInfo("alice", token);
+        UserInfoMessage actual = fixture.client.users().getUserInfo("alice", token);
 
         assertSame(expected, actual);
         assertEquals(
@@ -210,8 +210,8 @@ class EnginePeerRequestTest {
     @Test
     void getUserInfoMapsPeerFailuresAndPreservesSpecialCases() {
         Fixture fixture = new Fixture();
-        UserInfo info = new UserInfo("description", 1, 2, false);
-        fixture.waiter.results.put(UserInfo.class, CompletableFuture.completedFuture(info));
+        UserInfoMessage info = new UserInfoMessage("description", 1, 2, false);
+        fixture.waiter.results.put(UserInfoMessage.class, CompletableFuture.completedFuture(info));
         fixture.waiter.results.put(
                 UserAddressResponse.class,
                 CompletableFuture.completedFuture(new UserAddressResponse("alice", ENDPOINT)));

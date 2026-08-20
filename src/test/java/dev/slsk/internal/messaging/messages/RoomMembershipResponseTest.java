@@ -18,7 +18,7 @@ import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.room.RoomData;
 import dev.slsk.internal.user.UserData;
-import dev.slsk.internal.user.UserPresence;
+import dev.slsk.internal.user.WireUserPresence;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -66,14 +66,14 @@ class RoomMembershipResponseTest {
         assertEquals(2, room.userCount());
         UserData alice = room.users().get(0);
         assertEquals("alice", alice.username());
-        assertEquals(UserPresence.ONLINE, alice.status());
+        assertEquals(WireUserPresence.ONLINE, alice.status());
         assertEquals(10, alice.averageSpeed());
         assertEquals(11L, alice.uploadCount());
         assertEquals(12, alice.fileCount());
         assertEquals(13, alice.directoryCount());
         assertEquals(14, alice.slotsFree());
         assertEquals("CL", alice.countryCode());
-        assertEquals(UserPresence.AWAY, room.users().get(1).status());
+        assertEquals(WireUserPresence.AWAY, room.users().get(1).status());
     }
 
     @Test
@@ -94,7 +94,7 @@ class RoomMembershipResponseTest {
                 .writeCode(MessageCode.Server.USER_JOINED_ROOM)
                 .writeString("room")
                 .writeString("alice")
-                .writeInteger(UserPresence.ONLINE.getValue())
+                .writeInteger(WireUserPresence.ONLINE.getValue())
                 .writeInteger(10)
                 .writeLong(11)
                 .writeInteger(12)
@@ -106,7 +106,7 @@ class RoomMembershipResponseTest {
         assertEquals("room", notification.getRoomName());
         assertEquals("alice", notification.getUsername());
         assertEquals("alice", data.username());
-        assertEquals(UserPresence.ONLINE, data.status());
+        assertEquals(WireUserPresence.ONLINE, data.status());
         assertEquals(10, data.averageSpeed());
         assertEquals(11L, data.uploadCount());
         assertEquals(12, data.fileCount());
@@ -180,8 +180,8 @@ class RoomMembershipResponseTest {
                 .writeString("alice")
                 .writeString("bob")
                 .writeInteger(2)
-                .writeInteger(UserPresence.ONLINE.getValue())
-                .writeInteger(UserPresence.AWAY.getValue())
+                .writeInteger(WireUserPresence.ONLINE.getValue())
+                .writeInteger(WireUserPresence.AWAY.getValue())
                 .writeInteger(2)
                 .writeInteger(10)
                 .writeLong(11)

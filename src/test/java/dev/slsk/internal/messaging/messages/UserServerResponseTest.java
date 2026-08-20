@@ -15,9 +15,9 @@ import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.user.UserData;
-import dev.slsk.internal.user.UserPresence;
-import dev.slsk.internal.user.UserStatistics;
-import dev.slsk.internal.user.UserStatus;
+import dev.slsk.internal.user.UserStatisticsSnapshot;
+import dev.slsk.internal.user.UserStatusSnapshot;
+import dev.slsk.internal.user.WireUserPresence;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import org.junit.jupiter.api.DisplayName;
@@ -72,7 +72,7 @@ class UserServerResponseTest {
     @Test
     @DisplayName("Statistics response parses all scalar widths")
     void statisticsParse() {
-        UserStatistics statistics = UserStatisticsResponseFactory.fromByteArray(new MessageBuilder()
+        UserStatisticsSnapshot statistics = UserStatisticsResponseFactory.fromByteArray(new MessageBuilder()
                 .writeCode(MessageCode.Server.GET_USER_STATS)
                 .writeString("alice")
                 .writeInteger(-12)
@@ -91,22 +91,22 @@ class UserServerResponseTest {
     @Test
     @DisplayName("Status response parses presence and privilege")
     void statusParses() {
-        UserStatus status = UserStatusResponseFactory.fromByteArray(new MessageBuilder()
+        UserStatusSnapshot status = UserStatusResponseFactory.fromByteArray(new MessageBuilder()
                 .writeCode(MessageCode.Server.GET_STATUS)
                 .writeString("alice")
-                .writeInteger(UserPresence.AWAY.getValue())
+                .writeInteger(WireUserPresence.AWAY.getValue())
                 .writeByte(255)
                 .build());
 
         assertEquals("alice", status.username());
-        assertEquals(UserPresence.AWAY, status.presence());
+        assertEquals(WireUserPresence.AWAY, status.presence());
         assertTrue(status.privileged());
     }
 
     @Test
     @DisplayName("Watch response retains direct constructor data")
     void watchConstructorRetainsData() {
-        UserData data = new UserData("alice", UserPresence.ONLINE, 12, 34, 56, 78, "CL");
+        UserData data = new UserData("alice", WireUserPresence.ONLINE, 12, 34, 56, 78, "CL");
         WatchUserResponse response = new WatchUserResponse("alice", true, data);
 
         assertEquals("alice", response.getUsername());
@@ -122,7 +122,7 @@ class UserServerResponseTest {
         assertTrue(response.isExists());
         UserData data = response.getUserData();
         assertEquals("alice", data.username());
-        assertEquals(UserPresence.ONLINE, data.status());
+        assertEquals(WireUserPresence.ONLINE, data.status());
         assertEquals(12, data.averageSpeed());
         assertEquals(9_876_543_210L, data.uploadCount());
         assertEquals(34, data.fileCount());
@@ -143,7 +143,7 @@ class UserServerResponseTest {
                 .writeCode(MessageCode.Server.WATCH_USER)
                 .writeString("alice")
                 .writeByte(1)
-                .writeInteger(UserPresence.ONLINE.getValue())
+                .writeInteger(WireUserPresence.ONLINE.getValue())
                 .writeInteger(12)
                 .writeLong(9_876_543_210L)
                 .writeInteger(34)
@@ -194,7 +194,7 @@ class UserServerResponseTest {
         if (!exists) {
             return builder.build();
         }
-        builder.writeInteger(UserPresence.ONLINE.getValue())
+        builder.writeInteger(WireUserPresence.ONLINE.getValue())
                 .writeInteger(12)
                 .writeLong(9_876_543_210L)
                 .writeInteger(34)

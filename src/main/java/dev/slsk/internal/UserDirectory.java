@@ -40,9 +40,9 @@ import dev.slsk.internal.share.BrowseResponseMessage;
 import dev.slsk.internal.share.SharedDirectory;
 import dev.slsk.internal.user.UserData;
 import dev.slsk.internal.user.UserEndpointCache;
-import dev.slsk.internal.user.UserInfo;
-import dev.slsk.internal.user.UserStatistics;
-import dev.slsk.internal.user.UserStatus;
+import dev.slsk.internal.user.UserInfoMessage;
+import dev.slsk.internal.user.UserStatisticsSnapshot;
+import dev.slsk.internal.user.UserStatusSnapshot;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -88,19 +88,20 @@ final class UserDirectory {
         this.server = Objects.requireNonNull(server, "server");
     }
 
-    UserInfo getUserInfo(String requestedUsername) throws InterruptedException {
+    UserInfoMessage getUserInfo(String requestedUsername) throws InterruptedException {
         return getUserInfo(requestedUsername, CancellationSignal.none());
     }
 
-    UserInfo getUserInfo(String requestedUsername, CancellationSignal cancellationSignal) throws InterruptedException {
+    UserInfoMessage getUserInfo(String requestedUsername, CancellationSignal cancellationSignal)
+            throws InterruptedException {
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("fetch user information");
         CancellationSignal token = CommonUtils.token(cancellationSignal);
         try {
             Waiter waiter = context.getWaiter();
-            Wait<UserInfo> infoWait = waiter.register(
+            Wait<UserInfoMessage> infoWait = waiter.register(
                     new WaitKey(MessageCode.Peer.INFO_RESPONSE, requestedUsername),
-                    UserInfo.class,
+                    UserInfoMessage.class,
                     waiter.getDefaultTimeout(),
                     token);
             InetSocketAddress endpoint = getUserEndpoint(requestedUsername, token);
@@ -133,34 +134,34 @@ final class UserDirectory {
                 UserOfflineException.class);
     }
 
-    UserStatistics getUserStatistics(String requestedUsername) throws InterruptedException {
+    UserStatisticsSnapshot getUserStatistics(String requestedUsername) throws InterruptedException {
         return getUserStatistics(requestedUsername, CancellationSignal.none());
     }
 
-    UserStatistics getUserStatistics(String requestedUsername, CancellationSignal cancellationSignal)
+    UserStatisticsSnapshot getUserStatistics(String requestedUsername, CancellationSignal cancellationSignal)
             throws InterruptedException {
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("fetch user statistics");
         return server.request(
                 new UserStatisticsRequest(requestedUsername),
                 new WaitKey(MessageCode.Server.GET_USER_STATS, requestedUsername),
-                UserStatistics.class,
+                UserStatisticsSnapshot.class,
                 cancellationSignal,
                 "Failed to retrieve statistics for user " + requestedUsername + ": ");
     }
 
-    UserStatus getUserStatus(String requestedUsername) throws InterruptedException {
+    UserStatusSnapshot getUserStatus(String requestedUsername) throws InterruptedException {
         return getUserStatus(requestedUsername, CancellationSignal.none());
     }
 
-    UserStatus getUserStatus(String requestedUsername, CancellationSignal cancellationSignal)
+    UserStatusSnapshot getUserStatus(String requestedUsername, CancellationSignal cancellationSignal)
             throws InterruptedException {
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("fetch user status");
         return server.request(
                 new UserStatusRequest(requestedUsername),
                 new WaitKey(MessageCode.Server.GET_STATUS, requestedUsername),
-                UserStatus.class,
+                UserStatusSnapshot.class,
                 cancellationSignal,
                 "Failed to retrieve status for user " + requestedUsername + ": ",
                 UserOfflineException.class);

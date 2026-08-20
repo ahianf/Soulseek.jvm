@@ -8,13 +8,14 @@ import dev.slsk.internal.messaging.messages.UserInfoResponseFactory;
 import java.util.Arrays;
 
 /** The response to a user-info request. */
-public record UserInfo(String description, int uploadSlots, int queueLength, boolean freeUploadSlot, byte[] picture) {
-    public UserInfo {
+public record UserInfoMessage(
+        String description, int uploadSlots, int queueLength, boolean freeUploadSlot, byte[] picture) {
+    public UserInfoMessage {
         picture = picture == null ? null : picture.clone();
     }
 
     /** Creates user information without a picture. */
-    public UserInfo(String description, int uploadSlots, int queueLength, boolean freeUploadSlot) {
+    public UserInfoMessage(String description, int uploadSlots, int queueLength, boolean freeUploadSlot) {
         this(description, uploadSlots, queueLength, freeUploadSlot, null);
     }
 
@@ -37,7 +38,7 @@ public record UserInfo(String description, int uploadSlots, int queueLength, boo
     @Override
     public boolean equals(Object other) {
         return this == other
-                || (other instanceof UserInfo that
+                || (other instanceof UserInfoMessage that
                         && uploadSlots == that.uploadSlots
                         && queueLength == that.queueLength
                         && freeUploadSlot == that.freeUploadSlot

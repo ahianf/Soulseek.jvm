@@ -5,21 +5,21 @@
 package dev.slsk.internal.messaging.messages;
 
 import dev.slsk.internal.messaging.MessageCode;
-import dev.slsk.internal.user.UserPresence;
+import dev.slsk.internal.user.WireUserPresence;
 import java.util.Objects;
 
 /** Reports the local user's current presence. */
 public final class SetOnlineStatusCommand extends IntegerServerMessage {
-    private final UserPresence status;
+    private final WireUserPresence status;
 
-    public SetOnlineStatusCommand(UserPresence status) {
+    public SetOnlineStatusCommand(WireUserPresence status) {
         super(
                 MessageCode.Server.SET_ONLINE_STATUS,
                 Objects.requireNonNull(status, "status").getValue());
         this.status = status;
     }
 
-    public UserPresence getStatus() {
+    public WireUserPresence getStatus() {
         return status;
     }
 }

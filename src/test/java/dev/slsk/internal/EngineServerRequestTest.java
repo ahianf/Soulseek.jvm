@@ -40,9 +40,9 @@ import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.room.RoomData;
 import dev.slsk.internal.room.RoomList;
 import dev.slsk.internal.user.UserData;
-import dev.slsk.internal.user.UserPresence;
-import dev.slsk.internal.user.UserStatistics;
-import dev.slsk.internal.user.UserStatus;
+import dev.slsk.internal.user.UserStatisticsSnapshot;
+import dev.slsk.internal.user.UserStatusSnapshot;
+import dev.slsk.internal.user.WireUserPresence;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.List;
@@ -176,21 +176,21 @@ class EngineServerRequestTest {
                     assertInstanceOf(UserPrivilegesRequest.class, connection.message)
                             .getUsername());
 
-            UserStatistics statistics = new UserStatistics("alice", 10, 20, 30, 40);
+            UserStatisticsSnapshot statistics = new UserStatisticsSnapshot("alice", 10, 20, 30, 40);
             waiter.result = CompletableFuture.completedFuture(statistics);
             assertSame(statistics, client.users().getUserStatistics("alice", token));
             assertEquals(new WaitKey(MessageCode.Server.GET_USER_STATS, "alice"), waiter.key);
-            assertSame(UserStatistics.class, waiter.resultType);
+            assertSame(UserStatisticsSnapshot.class, waiter.resultType);
             assertEquals(
                     "alice",
                     assertInstanceOf(UserStatisticsRequest.class, connection.message)
                             .getUsername());
 
-            UserStatus status = new UserStatus("alice", UserPresence.AWAY, true);
+            UserStatusSnapshot status = new UserStatusSnapshot("alice", WireUserPresence.AWAY, true);
             waiter.result = CompletableFuture.completedFuture(status);
             assertSame(status, client.users().getUserStatus("alice", token));
             assertEquals(new WaitKey(MessageCode.Server.GET_STATUS, "alice"), waiter.key);
-            assertSame(UserStatus.class, waiter.resultType);
+            assertSame(UserStatusSnapshot.class, waiter.resultType);
             assertEquals(
                     "alice",
                     assertInstanceOf(UserStatusRequest.class, connection.message)
@@ -205,7 +205,7 @@ class EngineServerRequestTest {
         WaiterProbe waiter = new WaiterProbe();
         ConnectionProbe connection = new ConnectionProbe();
         try (SoulseekEngine client = loggedInClient(connection, waiter)) {
-            UserData data = new UserData("alice", UserPresence.ONLINE, 10, 20, 30, 40, "CL");
+            UserData data = new UserData("alice", WireUserPresence.ONLINE, 10, 20, 30, 40, "CL");
             waiter.result = CompletableFuture.completedFuture(new WatchUserResponse("alice", true, data));
 
             assertSame(data, client.users().watchUser("alice"));

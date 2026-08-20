@@ -7,7 +7,7 @@ package dev.slsk.internal.messaging.messages;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
 import dev.slsk.internal.user.UserData;
-import dev.slsk.internal.user.UserPresence;
+import dev.slsk.internal.user.WireUserPresence;
 
 /** Notification that a user joined a chat room. */
 public final class UserJoinedRoomNotification implements IncomingMessage {
@@ -41,7 +41,7 @@ public final class UserJoinedRoomNotification implements IncomingMessage {
                 ServerMessageParser.reader(bytes, MessageCode.Server.USER_JOINED_ROOM, "UserJoinedRoomNotification");
         String roomName = reader.readString();
         String username = reader.readString();
-        UserPresence presence = UserPresence.fromValue(reader.readInteger());
+        WireUserPresence presence = WireUserPresence.fromValue(reader.readInteger());
         int averageSpeed = reader.readInteger();
         long uploadCount = reader.readLong();
         int fileCount = reader.readInteger();

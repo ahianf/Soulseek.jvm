@@ -28,7 +28,7 @@ import dev.slsk.internal.messaging.messages.StartPublicChatCommand;
 import dev.slsk.internal.messaging.messages.StopPublicChatCommand;
 import dev.slsk.internal.messaging.messages.UnwatchUserCommand;
 import dev.slsk.internal.network.MessageConnection;
-import dev.slsk.internal.user.UserPresence;
+import dev.slsk.internal.user.WireUserPresence;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
@@ -51,7 +51,7 @@ class EngineCommandTest {
             client.server().sendUploadSpeed(1234, token);
             client.rooms().setRoomTicker("room", "ticker", token);
             client.server().setSharedCounts(12, 34, token);
-            client.server().setStatus(UserPresence.AWAY, token);
+            client.server().setStatus(WireUserPresence.AWAY, token);
             client.server().startPublicChat(token);
             client.server().stopPublicChat(token);
             client.users().unwatchUser("bob", token);
@@ -75,7 +75,7 @@ class EngineCommandTest {
             assertEquals(12, counts.getDirectoryCount());
             assertEquals(34, counts.getFileCount());
             assertEquals(
-                    UserPresence.AWAY,
+                    WireUserPresence.AWAY,
                     assertInstanceOf(SetOnlineStatusCommand.class, connection.messages.get(5))
                             .getStatus());
             assertInstanceOf(StartPublicChatCommand.class, connection.messages.get(6));
@@ -191,7 +191,7 @@ class EngineCommandTest {
                 () -> client.server().sendUploadSpeed(1),
                 () -> client.rooms().setRoomTicker("room", "message"),
                 () -> client.server().setSharedCounts(1, 2),
-                () -> client.server().setStatus(UserPresence.ONLINE),
+                () -> client.server().setStatus(WireUserPresence.ONLINE),
                 () -> client.server().startPublicChat(),
                 () -> client.server().stopPublicChat(),
                 () -> client.users().unwatchUser("user"),

@@ -83,8 +83,8 @@ import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.search.SearchResponder;
 import dev.slsk.internal.search.SearchScopeType;
 import dev.slsk.internal.transfer.TransferInternal;
-import dev.slsk.internal.user.UserStatistics;
-import dev.slsk.internal.user.UserStatus;
+import dev.slsk.internal.user.UserStatisticsSnapshot;
+import dev.slsk.internal.user.UserStatusSnapshot;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -337,12 +337,12 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                     waiter.complete(new WaitKey(code, response.getUsername()), response);
                 }
                 case GET_STATUS -> {
-                    UserStatus status = UserStatusResponseFactory.fromByteArray(message);
+                    UserStatusSnapshot status = UserStatusResponseFactory.fromByteArray(message);
                     waiter.complete(new WaitKey(code, status.username()), status);
                     publish(ServerMessageEvent.USER_STATUS_CHANGED, status);
                 }
                 case GET_USER_STATS -> {
-                    UserStatistics statistics = UserStatisticsResponseFactory.fromByteArray(message);
+                    UserStatisticsSnapshot statistics = UserStatisticsResponseFactory.fromByteArray(message);
                     waiter.complete(new WaitKey(code, statistics.username()), statistics);
                     publish(ServerMessageEvent.USER_STATISTICS_CHANGED, statistics);
                 }

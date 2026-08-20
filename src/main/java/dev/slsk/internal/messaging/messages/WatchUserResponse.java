@@ -7,7 +7,7 @@ package dev.slsk.internal.messaging.messages;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
 import dev.slsk.internal.user.UserData;
-import dev.slsk.internal.user.UserPresence;
+import dev.slsk.internal.user.WireUserPresence;
 
 /** The response to a request to watch a user. */
 public final class WatchUserResponse implements IncomingMessage {
@@ -49,7 +49,7 @@ public final class WatchUserResponse implements IncomingMessage {
             return new WatchUserResponse(username, false);
         }
 
-        UserPresence presence = UserPresence.fromValue(reader.readInteger());
+        WireUserPresence presence = WireUserPresence.fromValue(reader.readInteger());
         int averageSpeed = reader.readInteger();
         long uploadCount = reader.readLong();
         int fileCount = reader.readInteger();

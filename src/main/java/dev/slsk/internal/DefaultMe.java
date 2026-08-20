@@ -144,11 +144,11 @@ final class DefaultMe implements Me {
         events.publish(new MeEvent.PresenceChanged(previous, value, Instant.now()));
     }
 
-    private static dev.slsk.internal.user.UserPresence map(UserPresence presence) {
+    private static dev.slsk.internal.user.WireUserPresence map(UserPresence presence) {
         return switch (presence) {
-            case OFFLINE -> dev.slsk.internal.user.UserPresence.OFFLINE;
-            case AWAY -> dev.slsk.internal.user.UserPresence.AWAY;
-            case ONLINE -> dev.slsk.internal.user.UserPresence.ONLINE;
+            case OFFLINE -> dev.slsk.internal.user.WireUserPresence.OFFLINE;
+            case AWAY -> dev.slsk.internal.user.WireUserPresence.AWAY;
+            case ONLINE -> dev.slsk.internal.user.WireUserPresence.ONLINE;
         };
     }
 

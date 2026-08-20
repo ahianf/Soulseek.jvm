@@ -26,7 +26,7 @@ import dev.slsk.internal.messaging.messages.SetSharedCountsCommand;
 import dev.slsk.internal.messaging.messages.StartPublicChatCommand;
 import dev.slsk.internal.messaging.messages.StopPublicChatCommand;
 import dev.slsk.internal.network.MessageConnection;
-import dev.slsk.internal.user.UserPresence;
+import dev.slsk.internal.user.WireUserPresence;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
@@ -354,11 +354,11 @@ public final class ServerLink {
                 "Failed to set shared counts to " + directories + " directories and " + files + " files: ");
     }
 
-    void setStatus(UserPresence status) throws InterruptedException {
+    void setStatus(WireUserPresence status) throws InterruptedException {
         setStatus(status, CancellationSignal.none());
     }
 
-    void setStatus(UserPresence status, CancellationSignal cancellationSignal) throws InterruptedException {
+    void setStatus(WireUserPresence status, CancellationSignal cancellationSignal) throws InterruptedException {
         requireLoggedIn("set online status");
         send(new SetOnlineStatusCommand(status), cancellationSignal, "Failed to set user status to " + status + ": ");
     }

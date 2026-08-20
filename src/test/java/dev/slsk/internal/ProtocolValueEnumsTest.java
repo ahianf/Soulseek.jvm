@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.internal.search.SearchScopeType;
 import dev.slsk.internal.share.WireFileAttribute;
 import dev.slsk.internal.transfer.TransferDirection;
-import dev.slsk.internal.user.UserPresence;
+import dev.slsk.internal.user.WireUserPresence;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,9 +43,9 @@ class ProtocolValueEnumsTest {
 
     @ParameterizedTest(name = "{0} uses value {1}")
     @MethodSource("userPresences")
-    void preservesUserPresenceValues(UserPresence value, int expected) {
+    void preservesUserPresenceValues(WireUserPresence value, int expected) {
         assertEquals(expected, value.getValue());
-        assertEquals(value, UserPresence.fromValue(expected));
+        assertEquals(value, WireUserPresence.fromValue(expected));
     }
 
     @Test
@@ -55,7 +55,7 @@ class ProtocolValueEnumsTest {
         assertThrows(IllegalArgumentException.class, () -> WireFileAttribute.fromValue(3));
         assertTrue(WireFileAttribute.tryFromValue(3).isEmpty());
         assertThrows(IllegalArgumentException.class, () -> SearchScopeType.fromValue(4));
-        assertThrows(IllegalArgumentException.class, () -> UserPresence.fromValue(3));
+        assertThrows(IllegalArgumentException.class, () -> WireUserPresence.fromValue(3));
     }
 
     private static Stream<Arguments> transferDirections() {
@@ -81,8 +81,8 @@ class ProtocolValueEnumsTest {
 
     private static Stream<Arguments> userPresences() {
         return Stream.of(
-                Arguments.of(UserPresence.OFFLINE, 0),
-                Arguments.of(UserPresence.AWAY, 1),
-                Arguments.of(UserPresence.ONLINE, 2));
+                Arguments.of(WireUserPresence.OFFLINE, 0),
+                Arguments.of(WireUserPresence.AWAY, 1),
+                Arguments.of(WireUserPresence.ONLINE, 2));
     }
 }

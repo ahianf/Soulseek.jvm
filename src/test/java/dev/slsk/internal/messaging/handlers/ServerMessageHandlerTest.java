@@ -62,9 +62,9 @@ import dev.slsk.internal.search.SearchResponder;
 import dev.slsk.internal.search.SearchTarget;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
-import dev.slsk.internal.user.UserPresence;
-import dev.slsk.internal.user.UserStatistics;
-import dev.slsk.internal.user.UserStatus;
+import dev.slsk.internal.user.UserStatisticsSnapshot;
+import dev.slsk.internal.user.UserStatusSnapshot;
+import dev.slsk.internal.user.WireUserPresence;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.net.InetAddress;
@@ -177,10 +177,11 @@ class ServerMessageHandlerTest {
     @Test
     void loginAddressWatchStatusAndStatisticsCompleteAndRaise() {
         Fixture fixture = new Fixture(options(false, false));
-        AtomicReference<UserStatus> statusEvent = new AtomicReference<>();
-        AtomicReference<UserStatistics> statisticsEvent = new AtomicReference<>();
-        fixture.handler.<UserStatus>subscribe(ServerMessageEvent.USER_STATUS_CHANGED, value -> statusEvent.set(value));
-        fixture.handler.<UserStatistics>subscribe(
+        AtomicReference<UserStatusSnapshot> statusEvent = new AtomicReference<>();
+        AtomicReference<UserStatisticsSnapshot> statisticsEvent = new AtomicReference<>();
+        fixture.handler.<UserStatusSnapshot>subscribe(
+                ServerMessageEvent.USER_STATUS_CHANGED, value -> statusEvent.set(value));
+        fixture.handler.<UserStatisticsSnapshot>subscribe(
                 ServerMessageEvent.USER_STATISTICS_CHANGED, value -> statisticsEvent.set(value));
 
         byte[] ip = new byte[] {1, 0, 0, 127};
@@ -202,14 +203,14 @@ class ServerMessageHandlerTest {
                 .writeCode(MessageCode.Server.WATCH_USER)
                 .writeString(USERNAME)
                 .writeByte(1)
-                .writeInteger(UserPresence.ONLINE.getValue())
+                .writeInteger(WireUserPresence.ONLINE.getValue())
                 .writeInteger(100)
                 .writeLong(200L)
                 .writeInteger(300)
                 .writeInteger(400)
                 .writeString("CL")
                 .build());
-        fixture.handle(status(USERNAME, UserPresence.AWAY, true));
+        fixture.handle(status(USERNAME, WireUserPresence.AWAY, true));
         fixture.handle(statistics(USERNAME, 100, 200L, 300, 400));
 
         assertInstanceOf(LoginResponse.class, fixture.waiter.completed.get(new WaitKey(MessageCode.Server.LOGIN)));
@@ -583,7 +584,7 @@ class ServerMessageHandlerTest {
         return builder.build();
     }
 
-    private static byte[] status(String username, UserPresence presence, boolean privileged) {
+    private static byte[] status(String username, WireUserPresence presence, boolean privileged) {
         return new MessageBuilder()
                 .writeCode(MessageCode.Server.GET_STATUS)
                 .writeString(username)
@@ -637,7 +638,7 @@ class ServerMessageHandlerTest {
                 .writeCode(MessageCode.Server.USER_JOINED_ROOM)
                 .writeString(ROOM)
                 .writeString(USERNAME)
-                .writeInteger(UserPresence.ONLINE.getValue())
+                .writeInteger(WireUserPresence.ONLINE.getValue())
                 .writeInteger(100)
                 .writeLong(200L)
                 .writeInteger(300)

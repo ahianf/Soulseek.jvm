@@ -8,7 +8,7 @@ import dev.slsk.exceptions.MessageException;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
-import dev.slsk.internal.user.UserInfo;
+import dev.slsk.internal.user.UserInfoMessage;
 import java.util.Objects;
 
 /** Serializes and parses user-info response messages. */
@@ -16,12 +16,12 @@ public final class UserInfoResponseFactory {
     private UserInfoResponseFactory() {}
 
     /** Parses a user-info response. */
-    public static UserInfo fromByteArray(byte[] bytes) {
+    public static UserInfoMessage fromByteArray(byte[] bytes) {
         MessageReader<MessageCode.Peer> reader = new MessageReader<>(bytes, MessageCode.Peer.class);
         MessageCode.Peer code = reader.readCode();
         if (code != MessageCode.Peer.INFO_RESPONSE) {
-            throw new MessageException(
-                    "Message Code mismatch creating UserInfo " + "(expected: 16, received: " + code.getValue() + ")");
+            throw new MessageException("Message Code mismatch creating UserInfoMessage " + "(expected: 16, received: "
+                    + code.getValue() + ")");
         }
 
         String description = reader.readString();
@@ -33,11 +33,11 @@ public final class UserInfoResponseFactory {
         int uploadSlots = reader.readInteger();
         int queueLength = reader.readInteger();
         boolean hasFreeUploadSlot = reader.readByte() > 0;
-        return new UserInfo(description, uploadSlots, queueLength, hasFreeUploadSlot, picture);
+        return new UserInfoMessage(description, uploadSlots, queueLength, hasFreeUploadSlot, picture);
     }
 
     /** Serializes a user-info response. */
-    public static byte[] toByteArray(UserInfo userInfo) {
+    public static byte[] toByteArray(UserInfoMessage userInfo) {
         Objects.requireNonNull(userInfo, "userInfo");
         MessageBuilder builder = new MessageBuilder()
                 .writeCode(MessageCode.Peer.INFO_RESPONSE)
