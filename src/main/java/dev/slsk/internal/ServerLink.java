@@ -4,8 +4,9 @@
 package dev.slsk.internal;
 
 import dev.slsk.exceptions.SoulseekClientException;
-import dev.slsk.internal.common.CommonUtils;
+import dev.slsk.internal.common.CancellationSignals;
 import dev.slsk.internal.common.Failures;
+import dev.slsk.internal.common.Text;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
@@ -154,7 +155,7 @@ public final class ServerLink {
      */
     public void write(OutgoingMessage message, CancellationSignal cancellationSignal)
             throws InterruptedException, TimeoutException {
-        connection.write(message, CommonUtils.token(cancellationSignal));
+        connection.write(message, CancellationSignals.orNone(cancellationSignal));
     }
 
     /**
@@ -168,7 +169,7 @@ public final class ServerLink {
      */
     public void writeBytes(byte[] message, CancellationSignal cancellationSignal)
             throws InterruptedException, TimeoutException {
-        connection.write(message, CommonUtils.token(cancellationSignal));
+        connection.write(message, CancellationSignals.orNone(cancellationSignal));
     }
 
     /**
@@ -181,7 +182,7 @@ public final class ServerLink {
      */
     void command(OutgoingMessage message, WaitKey waitKey, CancellationSignal cancellationSignal, String failurePrefix)
             throws InterruptedException {
-        CancellationSignal signal = CommonUtils.token(cancellationSignal);
+        CancellationSignal signal = CancellationSignals.orNone(cancellationSignal);
         try {
             Wait<Void> wait = waiter.register(waitKey, waiter.getDefaultTimeout(), signal);
             write(message, signal);
@@ -212,7 +213,7 @@ public final class ServerLink {
             String failurePrefix,
             Class<? extends Throwable>... preservedFailures)
             throws InterruptedException {
-        CancellationSignal signal = CommonUtils.token(cancellationSignal);
+        CancellationSignal signal = CancellationSignals.orNone(cancellationSignal);
         try {
             Wait<T> wait = waiter.register(waitKey, resultType, waiter.getDefaultTimeout(), signal);
             write(message, signal);
@@ -261,7 +262,7 @@ public final class ServerLink {
     }
 
     void changePassword(String password, CancellationSignal cancellationSignal) throws InterruptedException {
-        CommonUtils.requireText(password, "password");
+        Text.requireText(password, "password");
         requireLoggedIn("change a password");
         String response = request(
                 new NewPassword(password),
@@ -296,7 +297,7 @@ public final class ServerLink {
 
     long pingServer(CancellationSignal cancellationSignal) throws InterruptedException {
         requireLoggedIn("send a ping");
-        CancellationSignal token = CommonUtils.token(cancellationSignal);
+        CancellationSignal token = CancellationSignals.orNone(cancellationSignal);
         try {
             Wait<Void> wait = waiter.register(new WaitKey(MessageCode.Server.PING), waiter.getDefaultTimeout(), token);
             long started = System.nanoTime();
@@ -314,8 +315,8 @@ public final class ServerLink {
 
     void sendPrivateMessage(String requestedUsername, String message, CancellationSignal cancellationSignal)
             throws InterruptedException {
-        CommonUtils.requireText(requestedUsername, "username");
-        CommonUtils.requireNonEmpty(message, "message");
+        Text.requireText(requestedUsername, "username");
+        Text.requireNonEmpty(message, "message");
         requireLoggedIn("send a private message");
         send(
                 new PrivateMessageCommand(requestedUsername, message),
@@ -385,7 +386,7 @@ public final class ServerLink {
     private void send(OutgoingMessage message, CancellationSignal cancellationSignal, String failurePrefix)
             throws InterruptedException {
         try {
-            write(message, CommonUtils.token(cancellationSignal));
+            write(message, CancellationSignals.orNone(cancellationSignal));
         } catch (Throwable failure) {
             throw Failures.raise(failure, failurePrefix);
         }

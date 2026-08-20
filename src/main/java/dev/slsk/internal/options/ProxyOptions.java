@@ -5,7 +5,7 @@
 package dev.slsk.internal.options;
 
 import dev.slsk.exceptions.AddressException;
-import dev.slsk.internal.common.CommonUtils;
+import dev.slsk.internal.common.Text;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
@@ -32,7 +32,7 @@ public record ProxyOptions(
     }
 
     private static Resolved resolve(String address, int port, String username, String password) {
-        if (CommonUtils.isNullOrUnicodeWhitespace(address)) {
+        if (Text.isNullOrUnicodeWhitespace(address)) {
             throw new IllegalArgumentException("address must contain non-whitespace text");
         }
         if (port < 0 || port > 65_535) {

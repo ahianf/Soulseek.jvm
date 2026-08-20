@@ -6,7 +6,7 @@ package dev.slsk.internal.network;
 
 import dev.slsk.Subscription;
 import dev.slsk.exceptions.MessageException;
-import dev.slsk.internal.common.CommonUtils;
+import dev.slsk.internal.common.Text;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.events.Subscriptions;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
@@ -78,7 +78,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
             ConnectionMonitor monitor) {
         super(ipEndpoint, options, connector, monitor);
         this.codeLength = codeLength;
-        CommonUtils.requireText(username, "username");
+        Text.requireText(username, "username");
         this.username = username;
         bindConnectedReadLoop();
     }
@@ -94,7 +94,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
             ExecutorService ioExecutor) {
         super(ipEndpoint, options, connector, monitor, ioExecutor);
         this.codeLength = codeLength;
-        CommonUtils.requireText(username, "username");
+        Text.requireText(username, "username");
         this.username = username;
         bindConnectedReadLoop();
     }

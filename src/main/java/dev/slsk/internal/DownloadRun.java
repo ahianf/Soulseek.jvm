@@ -12,7 +12,7 @@ import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferSizeMismatchException;
 import dev.slsk.exceptions.TransferStreamException;
-import dev.slsk.internal.common.CommonUtils;
+import dev.slsk.internal.common.CancellationSignals;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.common.Settlement;
@@ -177,7 +177,7 @@ final class DownloadRun {
             // arrives later and out of band as UploadDenied, which fails the
             // wait registered above.
             peerConnection.write(
-                    new QueueDownloadRequest(download.getFilename()), CommonUtils.token(cancellationSignal));
+                    new QueueDownloadRequest(download.getFilename()), CancellationSignals.orNone(cancellationSignal));
             domain.diagnostic.debug("Asked " + download.getUsername() + " to queue "
                     + filenameOnly(download.getFilename()) + " (id: " + peerConnection.getId()
                     + ", state: " + peerConnection.getState() + ")");
@@ -274,7 +274,7 @@ final class DownloadRun {
         });
         refreshed.write(
                 new TransferResponse(download.getRemoteToken(), download.getSize() == null ? 0 : download.getSize()),
-                CommonUtils.token(cancellationSignal));
+                CancellationSignals.orNone(cancellationSignal));
 
         Settlement.Outcome<TransportConnection> establishment = established.await();
         Throwable failure = establishment.failure();

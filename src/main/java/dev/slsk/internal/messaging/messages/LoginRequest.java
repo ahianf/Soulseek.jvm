@@ -4,8 +4,8 @@
 
 package dev.slsk.internal.messaging.messages;
 
-import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.common.Constants;
+import dev.slsk.internal.common.Hashes;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
 
@@ -20,7 +20,7 @@ public final class LoginRequest implements OutgoingMessage {
         this.minorVersion = minorVersion;
         this.username = username;
         this.password = password;
-        hash = CommonUtils.toMd5Hash(nullToEmpty(username) + nullToEmpty(password));
+        hash = Hashes.md5Hex(nullToEmpty(username) + nullToEmpty(password));
     }
 
     public String getHash() {

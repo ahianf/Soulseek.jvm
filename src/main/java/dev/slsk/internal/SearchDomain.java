@@ -6,9 +6,10 @@ package dev.slsk.internal;
 import dev.slsk.exceptions.DuplicateTokenException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.internal.EngineEvents.Kind;
-import dev.slsk.internal.common.CommonUtils;
+import dev.slsk.internal.common.CancellationSignals;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.Permits;
+import dev.slsk.internal.common.Text;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.events.SearchResponseReceivedEvent;
 import dev.slsk.internal.events.SearchStateChangedEvent;
@@ -152,7 +153,7 @@ final class SearchDomain {
         SearchInvocation invocation = validateSearch(query, scope, token, searchOptions);
         List<SearchResponseMessage> responses = Collections.synchronizedList(new ArrayList<>());
         SearchStateSnapshot search =
-                searchToCallback(invocation, responses::add, CommonUtils.token(cancellationSignal));
+                searchToCallback(invocation, responses::add, CancellationSignals.orNone(cancellationSignal));
         synchronized (responses) {
             return new SearchExecutionResult(search, responses);
         }
@@ -174,7 +175,7 @@ final class SearchDomain {
         ParsedSearchQuery validatedQuery = validateSearchQuery(query);
         Objects.requireNonNull(responseHandler, "responseHandler");
         SearchInvocation invocation = validateSearch(validatedQuery, scope, token, searchOptions);
-        return searchToCallback(invocation, responseHandler, CommonUtils.token(cancellationSignal));
+        return searchToCallback(invocation, responseHandler, CancellationSignals.orNone(cancellationSignal));
     }
 
     SearchInvocation validateSearch(
@@ -205,7 +206,7 @@ final class SearchDomain {
 
     static ParsedSearchQuery validateSearchQuery(ParsedSearchQuery initialQuery) {
         ParsedSearchQuery query = Objects.requireNonNull(initialQuery, "query");
-        if (dev.slsk.internal.common.CommonUtils.isNullOrUnicodeWhitespace(query.searchText())) {
+        if (Text.isNullOrUnicodeWhitespace(query.searchText())) {
             throw new IllegalArgumentException("query must contain non-whitespace text");
         }
         if (query.terms().isEmpty()) {

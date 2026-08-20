@@ -11,13 +11,14 @@ import dev.slsk.exceptions.LoginRejectedException;
 import dev.slsk.exceptions.NoResponseException;
 import dev.slsk.exceptions.SoulseekClientException;
 import dev.slsk.internal.EngineEvents.Kind;
-import dev.slsk.internal.common.CommonUtils;
+import dev.slsk.internal.common.CancellationSignals;
 import dev.slsk.internal.common.DefaultWaiter;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.FileSystemAccess;
 import dev.slsk.internal.common.Locks;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Scheduler;
+import dev.slsk.internal.common.Text;
 import dev.slsk.internal.common.TokenBucket;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.Wait;
@@ -564,12 +565,12 @@ final class SoulseekEngine implements AutoCloseable {
             String requestedUsername,
             String password,
             CancellationSignal cancellationSignal) {
-        CommonUtils.requireText(requestedAddress, "address");
+        Text.requireText(requestedAddress, "address");
         if (requestedPort < 0 || requestedPort > 65_535) {
             throw new IllegalArgumentException("port must be between 0 and 65535: " + requestedPort);
         }
-        CommonUtils.requireNonEmpty(requestedUsername, "username");
-        CommonUtils.requireNonEmpty(password, "password");
+        Text.requireNonEmpty(requestedUsername, "username");
+        Text.requireNonEmpty(password, "password");
         if (state == SoulseekClientState.CONNECTING || state == SoulseekClientState.LOGGING_IN) {
             throw new IllegalStateException("A connection is already in the process of " + "being established");
         }
@@ -609,7 +610,7 @@ final class SoulseekEngine implements AutoCloseable {
                 new InetSocketAddress(serverAddress, requestedPort),
                 requestedUsername,
                 password,
-                CommonUtils.token(cancellationSignal));
+                CancellationSignals.orNone(cancellationSignal));
     }
 
     /**
@@ -656,7 +657,7 @@ final class SoulseekEngine implements AutoCloseable {
                 }
             }
         }
-        CancellationSignal token = CommonUtils.token(cancellationSignal);
+        CancellationSignal token = CancellationSignals.orNone(cancellationSignal);
         try {
             // Never held on the failing path, so nothing to unlock.
             Locks.acquire(stateLock, token);

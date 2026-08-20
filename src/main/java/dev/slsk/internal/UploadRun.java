@@ -14,7 +14,7 @@ import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.exceptions.TransferException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferStreamException;
-import dev.slsk.internal.common.CommonUtils;
+import dev.slsk.internal.common.CancellationSignals;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.common.Settlement;
@@ -153,7 +153,7 @@ final class UploadRun {
             messageConnection.write(
                     new TransferRequest(
                             TransferDirection.UPLOAD, upload.getToken(), upload.getFilename(), upload.getSize()),
-                    CommonUtils.token(cancellationSignal));
+                    CancellationSignals.orNone(cancellationSignal));
             domain.diagnostic.debug("Wrote transfer request for upload of "
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + " (id: " + messageConnection.getId()

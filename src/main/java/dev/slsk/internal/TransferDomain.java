@@ -7,11 +7,12 @@ import dev.slsk.exceptions.DuplicateTokenException;
 import dev.slsk.exceptions.DuplicateTransferException;
 import dev.slsk.exceptions.TransferNotFoundException;
 import dev.slsk.exceptions.UserOfflineException;
-import dev.slsk.internal.common.CommonUtils;
+import dev.slsk.internal.common.CancellationSignals;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.FileSystemAccess;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.Scheduler;
+import dev.slsk.internal.common.Text;
 import dev.slsk.internal.common.TokenBucket;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.Wait;
@@ -844,9 +845,9 @@ final class TransferDomain implements PeerServices {
         String remoteFilename = request.remoteFilename();
         String localFilename = request.localFilename();
         long startOffset = request.startOffset();
-        CommonUtils.requireText(requestedUsername, "username");
-        CommonUtils.requireText(remoteFilename, "remoteFilename");
-        CommonUtils.requireText(localFilename, "localFilename");
+        Text.requireText(requestedUsername, "username");
+        Text.requireText(remoteFilename, "remoteFilename");
+        Text.requireText(localFilename, "localFilename");
         validateDownloadRange(request.size(), startOffset);
         server.requireLoggedIn("download files");
         int transferToken = request.token() == null ? tokens.nextToken() : request.token();
@@ -885,15 +886,15 @@ final class TransferDomain implements PeerServices {
                 transferToken,
                 options,
                 request.offer(),
-                CommonUtils.token(request.cancellationSignal()));
+                CancellationSignals.orNone(request.cancellationSignal()));
     }
 
     /** Downloads to a caller-supplied stream. */
     private Transfer downloadToStream(DownloadSpecification request) {
         String requestedUsername = request.username();
         String remoteFilename = request.remoteFilename();
-        CommonUtils.requireText(requestedUsername, "username");
-        CommonUtils.requireText(remoteFilename, "remoteFilename");
+        Text.requireText(requestedUsername, "username");
+        Text.requireText(remoteFilename, "remoteFilename");
         validateDownloadRange(request.size(), request.startOffset());
         Objects.requireNonNull(request.outputStreamFactory(), "outputStreamFactory");
         server.requireLoggedIn("download files");
@@ -908,7 +909,7 @@ final class TransferDomain implements PeerServices {
                 transferToken,
                 request.options() == null ? new TransferOptions() : request.options(),
                 request.offer(),
-                CommonUtils.token(request.cancellationSignal()));
+                CancellationSignals.orNone(request.cancellationSignal()));
     }
 
     /** Uploads a local path, opening it as the source stream. */
@@ -916,9 +917,9 @@ final class TransferDomain implements PeerServices {
         String requestedUsername = request.username();
         String remoteFilename = request.remoteFilename();
         String localFilename = request.localFilename();
-        CommonUtils.requireText(requestedUsername, "username");
-        CommonUtils.requireText(remoteFilename, "remoteFilename");
-        CommonUtils.requireText(localFilename, "localFilename");
+        Text.requireText(requestedUsername, "username");
+        Text.requireText(remoteFilename, "remoteFilename");
+        Text.requireText(localFilename, "localFilename");
         if (!files.exists(localFilename)) {
             throw new UncheckedIOException(
                     new FileNotFoundException("The local file does not exist: " + localFilename));
@@ -956,15 +957,15 @@ final class TransferDomain implements PeerServices {
                 },
                 transferToken,
                 fileOptions,
-                CommonUtils.token(request.cancellationSignal()));
+                CancellationSignals.orNone(request.cancellationSignal()));
     }
 
     /** Uploads from a caller-supplied stream. */
     private Transfer uploadFromStream(UploadSpecification request) {
         String requestedUsername = request.username();
         String remoteFilename = request.remoteFilename();
-        CommonUtils.requireText(requestedUsername, "username");
-        CommonUtils.requireText(remoteFilename, "remoteFilename");
+        Text.requireText(requestedUsername, "username");
+        Text.requireText(remoteFilename, "remoteFilename");
         if (request.size() < 0) {
             throw new IllegalArgumentException("size must be greater than or equal to zero");
         }
@@ -979,7 +980,7 @@ final class TransferDomain implements PeerServices {
                 request.inputStreamFactory(),
                 transferToken,
                 request.options() == null ? new TransferOptions() : request.options(),
-                CommonUtils.token(request.cancellationSignal()));
+                CancellationSignals.orNone(request.cancellationSignal()));
     }
 
     /**
@@ -1004,14 +1005,14 @@ final class TransferDomain implements PeerServices {
      */
     Integer getDownloadPlaceInQueue(String requestedUsername, String filename, CancellationSignal cancellationSignal)
             throws InterruptedException {
-        CommonUtils.requireText(requestedUsername, "username");
-        CommonUtils.requireText(filename, "filename");
+        Text.requireText(requestedUsername, "username");
+        Text.requireText(filename, "filename");
         server.requireLoggedIn("check download queue position");
         if (matching(downloads, requestedUsername, filename).isEmpty()) {
             throw new TransferNotFoundException(
                     "A download of " + filename + " from user " + requestedUsername + " is not active");
         }
-        CancellationSignal token = CommonUtils.token(cancellationSignal);
+        CancellationSignal token = CancellationSignals.orNone(cancellationSignal);
         try {
             Wait<PlaceInQueueResponse> responseWait = waiter.register(
                     new WaitKey(MessageCode.Peer.PLACE_IN_QUEUE_RESPONSE, requestedUsername, filename),
@@ -1020,7 +1021,7 @@ final class TransferDomain implements PeerServices {
                     token);
             InetSocketAddress endpoint = endpoints.resolve(requestedUsername, token);
             MessageConnection connection = peers.get().getOrAddMessageConnection(requestedUsername, endpoint, token);
-            connection.write(new PlaceInQueueRequest(filename), CommonUtils.token(token));
+            connection.write(new PlaceInQueueRequest(filename), token);
             return responseWait.await().getPlaceInQueue();
         } catch (Throwable failure) {
             throw Failures.raise(
