@@ -6,14 +6,10 @@ package dev.slsk.internal.events;
 
 import dev.slsk.internal.messaging.messages.RoomTickerListNotification;
 import dev.slsk.internal.room.RoomTicker;
-import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Event arguments raised when a chat-room ticker list is received.
- */
-public class RoomTickerListReceivedEvent extends RoomTickerEvent {
-    private final List<RoomTicker> tickers;
+/** Event payload emitted when a chat-room ticker list is received. */
+public record RoomTickerListReceivedEvent(String roomName, List<RoomTicker> tickers) implements SoulseekClientEvent {
 
     /**
      * Creates ticker-list event payload.
@@ -21,17 +17,8 @@ public class RoomTickerListReceivedEvent extends RoomTickerEvent {
      * @param roomName the room to which the list applies
      * @param tickers the tickers, or {@code null} for an empty list
      */
-    public RoomTickerListReceivedEvent(String roomName, Iterable<? extends RoomTicker> tickers) {
-        super(roomName);
-
-        if (tickers == null) {
-            this.tickers = List.of();
-            return;
-        }
-
-        ArrayList<RoomTicker> copy = new ArrayList<>();
-        tickers.forEach(copy::add);
-        this.tickers = java.util.Collections.unmodifiableList(copy);
+    public RoomTickerListReceivedEvent {
+        tickers = tickers == null ? List.of() : List.copyOf(tickers);
     }
 
     /**
@@ -48,16 +35,7 @@ public class RoomTickerListReceivedEvent extends RoomTickerEvent {
      *
      * @return the ticker count
      */
-    public final int getTickerCount() {
+    public int tickerCount() {
         return tickers.size();
-    }
-
-    /**
-     * Returns an immutable snapshot of the tickers.
-     *
-     * @return the tickers
-     */
-    public final List<RoomTicker> getTickers() {
-        return tickers;
     }
 }

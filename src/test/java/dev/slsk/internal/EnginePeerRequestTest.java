@@ -426,8 +426,8 @@ class EnginePeerRequestTest {
                 fixture.waiter.keys);
         assertEquals(Duration.ofMillis(1234), fixture.waiter.lastTimeout);
         assertEquals(2, events.size());
-        assertEquals(0.0, events.get(0).getPercentComplete());
-        assertEquals(100.0, events.get(1).getPercentComplete());
+        assertEquals(0.0, events.get(0).percentComplete());
+        assertEquals(100.0, events.get(1).percentComplete());
         assertEquals(2, callbacks.size());
         assertEquals(0.0, callbacks.get(0).percentComplete());
         assertEquals(100.0, callbacks.get(1).percentComplete());

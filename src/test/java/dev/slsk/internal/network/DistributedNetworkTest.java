@@ -158,7 +158,7 @@ class DistributedNetworkTest {
         AtomicInteger added = new AtomicInteger();
         AtomicInteger states = new AtomicInteger();
         fixture.manager.addChildAddedListener((sender, args) -> {
-            assertEquals(USERNAME, args.getUsername());
+            assertEquals(USERNAME, args.username());
             added.incrementAndGet();
         });
         fixture.manager.addStateChangedListener((sender, args) -> states.incrementAndGet());
@@ -269,7 +269,7 @@ class DistributedNetworkTest {
                 USERNAME, ConnectionProbe.connection(ENDPOINT).connection());
         AtomicInteger disconnected = new AtomicInteger();
         fixture.manager.addChildDisconnectedListener((sender, args) -> {
-            assertEquals(USERNAME, args.getUsername());
+            assertEquals(USERNAME, args.username());
             disconnected.incrementAndGet();
         });
 
@@ -431,9 +431,9 @@ class DistributedNetworkTest {
         AtomicInteger adopted = new AtomicInteger();
         AtomicInteger states = new AtomicInteger();
         fixture.manager.addParentAdoptedListener((sender, args) -> {
-            assertEquals(USERNAME, args.getUsername());
-            assertEquals(2, args.getBranchLevel());
-            assertEquals("root", args.getBranchRoot());
+            assertEquals(USERNAME, args.username());
+            assertEquals(2, args.branchLevel());
+            assertEquals("root", args.branchRoot());
             adopted.incrementAndGet();
         });
         fixture.manager.addStateChangedListener((sender, args) -> states.incrementAndGet());
@@ -525,7 +525,7 @@ class DistributedNetworkTest {
         fixture.manager.addParentConnection(List.of(new PeerEndpoint(USERNAME, ENDPOINT)));
         AtomicInteger disconnected = new AtomicInteger();
         fixture.manager.addParentDisconnectedListener((sender, args) -> {
-            assertEquals(USERNAME, args.getUsername());
+            assertEquals(USERNAME, args.username());
             disconnected.incrementAndGet();
         });
         // Avoid reconnecting to the same test candidate.

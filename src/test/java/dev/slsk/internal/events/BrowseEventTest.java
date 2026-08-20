@@ -17,7 +17,7 @@ class BrowseEventTest {
     void browseInstantiatesWithGivenData() {
         BrowseEvent args = new BrowseEvent("alice");
 
-        assertEquals("alice", args.getUsername());
+        assertEquals("alice", args.username());
     }
 
     @Test
@@ -25,18 +25,18 @@ class BrowseEventTest {
     void progressInstantiatesWithGivenData() {
         BrowseProgressUpdatedEvent args = new BrowseProgressUpdatedEvent("alice", 25, 100);
 
-        assertEquals("alice", args.getUsername());
-        assertEquals(25, args.getBytesTransferred());
-        assertEquals(100, args.getSize());
-        assertEquals(75, args.getBytesRemaining());
-        assertEquals(25.0d, args.getPercentComplete());
+        assertEquals("alice", args.username());
+        assertEquals(25, args.bytesTransferred());
+        assertEquals(100, args.size());
+        assertEquals(75, args.bytesRemaining());
+        assertEquals(25.0d, args.percentComplete());
     }
 
     @Test
     @DisplayName("Browse event arguments preserve a nullable username")
     void preservesNullableUsername() {
-        assertNull(new BrowseEvent(null).getUsername());
-        assertNull(new BrowseProgressUpdatedEvent(null, 1, 2).getUsername());
+        assertNull(new BrowseEvent(null).username());
+        assertNull(new BrowseProgressUpdatedEvent(null, 1, 2).username());
     }
 
     @Test
@@ -45,8 +45,8 @@ class BrowseEventTest {
         BrowseProgressUpdatedEvent zero = new BrowseProgressUpdatedEvent("alice", 0, 0);
         BrowseProgressUpdatedEvent positive = new BrowseProgressUpdatedEvent("alice", 1, 0);
 
-        assertTrue(Double.isNaN(zero.getPercentComplete()));
-        assertEquals(Double.POSITIVE_INFINITY, positive.getPercentComplete());
-        assertEquals(-1, positive.getBytesRemaining());
+        assertTrue(Double.isNaN(zero.percentComplete()));
+        assertEquals(Double.POSITIVE_INFINITY, positive.percentComplete());
+        assertEquals(-1, positive.bytesRemaining());
     }
 }

@@ -25,9 +25,9 @@ class SearchEventTest {
                 new Search(new SearchQuery("foo"), SearchScope.getNetwork(), 42, SearchState.COMPLETED, 0, 0, 0);
         SearchStateChangedEvent args = new SearchStateChangedEvent(SearchState.NONE, search);
 
-        assertSame(search, args.getSearch());
-        assertEquals(SearchState.NONE, args.getPreviousState());
-        assertEquals(SearchState.COMPLETED, args.getSearch().state());
+        assertSame(search, args.search());
+        assertEquals(SearchState.NONE, args.previousState());
+        assertEquals(SearchState.COMPLETED, args.search().state());
     }
 
     @Test
@@ -35,9 +35,9 @@ class SearchEventTest {
     void requestInstantiatesWithContext() {
         SearchRequestEvent args = new SearchRequestEvent("alice", -1, "foo");
 
-        assertEquals("alice", args.getUsername());
-        assertEquals(-1, args.getToken());
-        assertEquals("foo", args.getQuery());
+        assertEquals("alice", args.username());
+        assertEquals(-1, args.token());
+        assertEquals("foo", args.query());
     }
 
     @Test
@@ -45,8 +45,8 @@ class SearchEventTest {
     void requestPreservesNullableReferences() {
         SearchRequestEvent args = new SearchRequestEvent(null, 0, null);
 
-        assertNull(args.getUsername());
-        assertNull(args.getQuery());
+        assertNull(args.username());
+        assertNull(args.query());
     }
 
     @Test
@@ -54,7 +54,7 @@ class SearchEventTest {
     void searchEventBasePreservesNullSearch() {
         SearchStateChangedEvent args = new SearchStateChangedEvent(SearchState.NONE, null);
 
-        assertNull(args.getSearch());
+        assertNull(args.search());
     }
 
     @Test
@@ -70,17 +70,17 @@ class SearchEventTest {
 
         SearchResponseReceivedEvent args = new SearchResponseReceivedEvent(response, search);
 
-        assertSame(search, args.getSearch());
-        assertSame(response, args.getResponse());
+        assertSame(search, args.search());
+        assertSame(response, args.response());
     }
 
     @Test
     void requestResponseInstantiatesWithContextAndNullableResponse() {
         SearchRequestResponseEvent args = new SearchRequestResponseEvent("alice", -1, "query", null);
 
-        assertEquals("alice", args.getUsername());
-        assertEquals(-1, args.getToken());
-        assertEquals("query", args.getQuery());
-        assertNull(args.getSearchResponse());
+        assertEquals("alice", args.username());
+        assertEquals(-1, args.token());
+        assertEquals("query", args.query());
+        assertNull(args.searchResponse());
     }
 }

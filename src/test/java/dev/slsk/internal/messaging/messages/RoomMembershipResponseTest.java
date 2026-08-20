@@ -115,9 +115,9 @@ class RoomMembershipResponseTest {
         assertEquals("", data.countryCode());
 
         RoomJoinedEvent eventData = new RoomJoinedEvent(notification);
-        assertEquals("room", eventData.getRoomName());
-        assertEquals("alice", eventData.getUsername());
-        assertSame(data, eventData.getUserData());
+        assertEquals("room", eventData.roomName());
+        assertEquals("alice", eventData.username());
+        assertSame(data, eventData.userData());
     }
 
     @Test
@@ -135,8 +135,8 @@ class RoomMembershipResponseTest {
         assertEquals("alice", parsed.getUsername());
 
         RoomLeftEvent eventData = new RoomLeftEvent(parsed);
-        assertEquals("room", eventData.getRoomName());
-        assertEquals("alice", eventData.getUsername());
+        assertEquals("room", eventData.roomName());
+        assertEquals("alice", eventData.username());
     }
 
     @Test

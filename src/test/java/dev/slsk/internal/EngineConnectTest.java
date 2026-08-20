@@ -116,7 +116,7 @@ class EngineConnectTest {
                 .on(
                         Kind.STATE_CHANGED,
                         (dev.slsk.internal.events.SoulseekClientStateChangedEvent eventData) ->
-                                states.add(eventData.getState()));
+                                states.add(eventData.state()));
         fixture.connection.fireConnected = true;
 
         fixture.client.connect("127.0.0.1", 2271, "alice", "secret", token);
@@ -205,7 +205,7 @@ class EngineConnectTest {
         fixture.client
                 .events()
                 .on(Kind.STATE_CHANGED, (dev.slsk.internal.events.SoulseekClientStateChangedEvent eventData) -> {
-                    if (eventData.getState().equals(loggedIn())) {
+                    if (eventData.state().equals(loggedIn())) {
                         sequence.add("logged-in");
                     }
                 });

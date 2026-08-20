@@ -4,13 +4,8 @@
 
 package dev.slsk.internal.events;
 
-/**
- * Event arguments raised when new privileges are announced.
- */
-public class PrivilegeNotificationReceivedEvent extends SoulseekClientEvent {
-    private final Integer id;
-    private final boolean requiresAcknowlegement;
-    private final String username;
+/** Event payload emitted when new privileges are announced. */
+public record PrivilegeNotificationReceivedEvent(String username, Integer id) implements SoulseekClientEvent {
 
     /**
      * Creates a privilege notification without an acknowledgement identifier.
@@ -21,42 +16,8 @@ public class PrivilegeNotificationReceivedEvent extends SoulseekClientEvent {
         this(username, null);
     }
 
-    /**
-     * Creates a privilege notification.
-     *
-     * @param username the new privileged user
-     * @param id the notification identifier, or {@code null} when absent
-     */
-    public PrivilegeNotificationReceivedEvent(String username, Integer id) {
-        this.username = username;
-        this.id = id;
-        this.requiresAcknowlegement = id != null;
-    }
-
-    /**
-     * Returns the notification identifier, if applicable.
-     *
-     * @return the identifier, or {@code null}
-     */
-    public final Integer getId() {
-        return id;
-    }
-
-    /**
-     * Returns whether the notification must be acknowledged.
-     *
-     * @return {@code true} when acknowledgement is required
-     */
-    public final boolean isRequiresAcknowlegement() {
-        return requiresAcknowlegement;
-    }
-
-    /**
-     * Returns the new privileged user.
-     *
-     * @return the username
-     */
-    public final String getUsername() {
-        return username;
+    /** Returns whether the notification must be acknowledged. */
+    public boolean requiresAcknowledgement() {
+        return id != null;
     }
 }

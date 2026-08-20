@@ -4,12 +4,8 @@
 
 package dev.slsk.internal.events;
 
-/**
- * Event arguments raised when the client disconnects.
- */
-public class SoulseekClientDisconnectedEvent extends SoulseekClientEvent {
-    private final Throwable exception;
-    private final String message;
+/** Event payload emitted when the client disconnects. */
+public record SoulseekClientDisconnectedEvent(String message, Throwable exception) implements SoulseekClientEvent {
 
     /**
      * Creates disconnect event payload without an exception.
@@ -26,26 +22,4 @@ public class SoulseekClientDisconnectedEvent extends SoulseekClientEvent {
      * @param message the disconnect message
      * @param exception the associated exception
      */
-    public SoulseekClientDisconnectedEvent(String message, Throwable exception) {
-        this.message = message;
-        this.exception = exception;
-    }
-
-    /**
-     * Returns the associated exception.
-     *
-     * @return the exception, or {@code null}
-     */
-    public final Throwable getException() {
-        return exception;
-    }
-
-    /**
-     * Returns the disconnect message.
-     *
-     * @return the message
-     */
-    public final String getMessage() {
-        return message;
-    }
 }

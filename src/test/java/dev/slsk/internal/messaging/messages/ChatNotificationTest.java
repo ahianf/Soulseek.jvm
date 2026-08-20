@@ -155,23 +155,23 @@ class ChatNotificationTest {
     void notificationsMapToEventArguments() {
         PrivateMessageReceivedEvent privateArgs =
                 new PrivateMessageReceivedEvent(PrivateMessageNotification.fromByteArray(privateMessage(0)));
-        assertEquals(42, privateArgs.getId());
-        assertEquals("alice", privateArgs.getUsername());
-        assertEquals(true, privateArgs.isReplayed());
+        assertEquals(42, privateArgs.id());
+        assertEquals("alice", privateArgs.username());
+        assertEquals(true, privateArgs.replayed());
 
         RoomMessageReceivedEvent roomArgs = new RoomMessageReceivedEvent(
                 RoomMessageNotification.fromByteArray(threeStrings(MessageCode.Server.SAY_IN_CHAT_ROOM)));
-        assertChat(roomArgs.getRoomName(), roomArgs.getUsername(), roomArgs.getMessage());
+        assertChat(roomArgs.roomName(), roomArgs.username(), roomArgs.message());
 
         PublicChatMessageReceivedEvent publicArgs = new PublicChatMessageReceivedEvent(
                 PublicChatMessageNotification.fromByteArray(threeStrings(MessageCode.Server.PUBLIC_CHAT)));
-        assertChat(publicArgs.getRoomName(), publicArgs.getUsername(), publicArgs.getMessage());
+        assertChat(publicArgs.roomName(), publicArgs.username(), publicArgs.message());
 
         RoomTickerListNotification list =
                 new RoomTickerListNotification("room", 99, List.of(new RoomTicker("alice", "hello")));
         RoomTickerListReceivedEvent tickerArgs = new RoomTickerListReceivedEvent(list);
-        assertEquals("room", tickerArgs.getRoomName());
-        assertEquals(1, tickerArgs.getTickerCount());
+        assertEquals("room", tickerArgs.roomName());
+        assertEquals(1, tickerArgs.tickerCount());
     }
 
     private static byte[] privateMessage(int replayByte) {

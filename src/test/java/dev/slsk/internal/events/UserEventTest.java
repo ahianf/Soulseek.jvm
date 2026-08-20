@@ -17,8 +17,8 @@ class UserEventTest {
     void userCannotConnectInstantiatesWithTheGivenData() {
         UserCannotConnectEvent args = new UserCannotConnectEvent(42, "alice");
 
-        assertEquals("alice", args.getUsername());
-        assertEquals(42, args.getToken());
+        assertEquals("alice", args.username());
+        assertEquals(42, args.token());
         assertTrue(args instanceof SoulseekClientEvent);
     }
 
@@ -27,9 +27,9 @@ class UserEventTest {
     void downloadDeniedInstantiatesWithTheGivenData() {
         DownloadDeniedEvent args = new DownloadDeniedEvent("alice", "file.mp3", "denied");
 
-        assertEquals("alice", args.getUsername());
-        assertEquals("file.mp3", args.getFilename());
-        assertEquals("denied", args.getMessage());
+        assertEquals("alice", args.username());
+        assertEquals("file.mp3", args.filename());
+        assertEquals("denied", args.message());
     }
 
     @Test
@@ -37,8 +37,8 @@ class UserEventTest {
     void downloadFailedInstantiatesWithTheGivenData() {
         DownloadFailedEvent args = new DownloadFailedEvent("alice", "file.mp3");
 
-        assertEquals("alice", args.getUsername());
-        assertEquals("file.mp3", args.getFilename());
+        assertEquals("alice", args.username());
+        assertEquals("file.mp3", args.filename());
     }
 
     @Test
@@ -47,10 +47,10 @@ class UserEventTest {
         DownloadDeniedEvent denied = new DownloadDeniedEvent(null, null, null);
         DownloadFailedEvent failed = new DownloadFailedEvent(null, null);
 
-        assertNull(denied.getUsername());
-        assertNull(denied.getFilename());
-        assertNull(denied.getMessage());
-        assertNull(failed.getUsername());
-        assertNull(failed.getFilename());
+        assertNull(denied.username());
+        assertNull(denied.filename());
+        assertNull(denied.message());
+        assertNull(failed.username());
+        assertNull(failed.filename());
     }
 }

@@ -54,12 +54,12 @@ final class DefaultChat implements Chat {
         if (event == null) {
             return;
         }
-        Username sender = Usernames.fromWire(event.getUsername());
+        Username sender = Usernames.fromWire(event.username());
         if (sender == null) {
             // Unrepresentable sender. Throwing here used to leave the message
             // both undelivered and unacknowledged, so the server redelivered it
             // at every login forever; skipping keeps the redelivery but names it.
-            diagnostics.warning("Private message " + event.getId()
+            diagnostics.warning("Private message " + event.id()
                     + " carries a sender no username can represent and was not delivered");
             return;
         }
@@ -69,7 +69,7 @@ final class DefaultChat implements Chat {
         // trip no longer sit between the read loop and the next message.
         events.publish(
                 new ChatEvent.MessageReceived(
-                        sender, event.getMessage(), event.isReplayed(), event.getTimestamp(), Instant.now()),
+                        sender, event.message(), event.replayed(), event.timestamp(), Instant.now()),
                 delivered -> acknowledge(event, delivered));
     }
 
@@ -82,20 +82,20 @@ final class DefaultChat implements Chat {
      */
     private void acknowledge(PrivateMessageReceivedEvent event, int delivered) {
         if (delivered == 0) {
-            diagnostics.warning("Private message " + event.getId() + " from " + event.getUsername()
+            diagnostics.warning("Private message " + event.id() + " from " + event.username()
                     + " reached no listener cleanly and was not acknowledged; "
                     + "the server will deliver it again at the next login");
             return;
         }
         try {
-            server.acknowledgePrivateMessage(event.getId());
+            server.acknowledgePrivateMessage(event.id());
         } catch (InterruptedException interrupted) {
             // The bus's delivery thread was asked to stop; the message stays
             // unacknowledged and the server redelivers it at the next login.
             Thread.currentThread().interrupt();
-            diagnostics.warning("Interrupted acknowledging private message " + event.getId(), interrupted);
+            diagnostics.warning("Interrupted acknowledging private message " + event.id(), interrupted);
         } catch (RuntimeException exception) {
-            diagnostics.warning("Failed to acknowledge private message " + event.getId(), exception);
+            diagnostics.warning("Failed to acknowledge private message " + event.id(), exception);
         }
     }
 

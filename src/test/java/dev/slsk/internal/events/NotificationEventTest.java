@@ -21,11 +21,11 @@ class NotificationEventTest {
         Instant timestamp = Instant.parse("2026-07-23T12:34:56Z");
         PrivateMessageReceivedEvent args = new PrivateMessageReceivedEvent(42, timestamp, "alice", "hello", true);
 
-        assertEquals(42, args.getId());
-        assertSame(timestamp, args.getTimestamp());
-        assertEquals("alice", args.getUsername());
-        assertEquals("hello", args.getMessage());
-        assertTrue(args.isReplayed());
+        assertEquals(42, args.id());
+        assertSame(timestamp, args.timestamp());
+        assertEquals("alice", args.username());
+        assertEquals("hello", args.message());
+        assertTrue(args.replayed());
     }
 
     @Test
@@ -33,10 +33,10 @@ class NotificationEventTest {
     void privateMessagePreservesNullableReferences() {
         PrivateMessageReceivedEvent args = new PrivateMessageReceivedEvent(0, null, null, null, false);
 
-        assertNull(args.getTimestamp());
-        assertNull(args.getUsername());
-        assertNull(args.getMessage());
-        assertFalse(args.isReplayed());
+        assertNull(args.timestamp());
+        assertNull(args.username());
+        assertNull(args.message());
+        assertFalse(args.replayed());
     }
 
     @Test
@@ -44,9 +44,9 @@ class NotificationEventTest {
     void privilegeNotificationDefaultsToNoAcknowledgement() {
         PrivilegeNotificationReceivedEvent args = new PrivilegeNotificationReceivedEvent("alice");
 
-        assertEquals("alice", args.getUsername());
-        assertNull(args.getId());
-        assertFalse(args.isRequiresAcknowlegement());
+        assertEquals("alice", args.username());
+        assertNull(args.id());
+        assertFalse(args.requiresAcknowledgement());
     }
 
     @Test
@@ -54,8 +54,8 @@ class NotificationEventTest {
     void privilegeNotificationRequiresAcknowledgementWhenIdPresent() {
         PrivilegeNotificationReceivedEvent args = new PrivilegeNotificationReceivedEvent("alice", 42);
 
-        assertEquals(42, args.getId());
-        assertTrue(args.isRequiresAcknowlegement());
+        assertEquals(42, args.id());
+        assertTrue(args.requiresAcknowledgement());
     }
 
     @Test
@@ -63,7 +63,7 @@ class NotificationEventTest {
     void privilegeNotificationPreservesNullableUsername() {
         PrivilegeNotificationReceivedEvent args = new PrivilegeNotificationReceivedEvent(null);
 
-        assertNull(args.getUsername());
+        assertNull(args.username());
     }
 
     @Test
@@ -71,9 +71,9 @@ class NotificationEventTest {
     void publicChatInstantiatesWithExpectedValues() {
         PublicChatMessageReceivedEvent args = new PublicChatMessageReceivedEvent("lobby", "alice", "hello");
 
-        assertEquals("lobby", args.getRoomName());
-        assertEquals("alice", args.getUsername());
-        assertEquals("hello", args.getMessage());
+        assertEquals("lobby", args.roomName());
+        assertEquals("alice", args.username());
+        assertEquals("hello", args.message());
     }
 
     @Test
@@ -81,8 +81,8 @@ class NotificationEventTest {
     void publicChatPreservesNullableReferences() {
         PublicChatMessageReceivedEvent args = new PublicChatMessageReceivedEvent(null, null, null);
 
-        assertNull(args.getRoomName());
-        assertNull(args.getUsername());
-        assertNull(args.getMessage());
+        assertNull(args.roomName());
+        assertNull(args.username());
+        assertNull(args.message());
     }
 }

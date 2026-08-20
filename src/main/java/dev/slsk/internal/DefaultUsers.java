@@ -109,7 +109,7 @@ final class DefaultUsers implements Users {
     }
 
     private void onCannotConnect(dev.slsk.internal.events.UserCannotConnectEvent source) {
-        Username user = source == null ? null : Usernames.fromWire(source.getUsername());
+        Username user = source == null ? null : Usernames.fromWire(source.username());
         if (user == null) {
             return;
         }

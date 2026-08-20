@@ -4,63 +4,17 @@
 
 package dev.slsk.internal.events;
 
-/**
- * Event arguments raised as browse response data is received.
- */
-public class BrowseProgressUpdatedEvent extends BrowseEvent {
-    private final long bytesTransferred;
-    private final long bytesRemaining;
-    private final double percentComplete;
-    private final long size;
+/** Event payload emitted as browse response data is received. */
+public record BrowseProgressUpdatedEvent(String username, long bytesTransferred, long size)
+        implements SoulseekClientEvent {
 
-    /**
-     * Creates browse-progress event payload.
-     *
-     * @param username the user associated with the event
-     * @param bytesTransferred the total number of transferred bytes
-     * @param size the total expected data length
-     */
-    public BrowseProgressUpdatedEvent(String username, long bytesTransferred, long size) {
-        super(username);
-        this.bytesTransferred = bytesTransferred;
-        this.size = size;
-        this.bytesRemaining = size - bytesTransferred;
-        this.percentComplete = (bytesTransferred / (double) size) * 100.0d;
+    /** Returns the number of bytes remaining. */
+    public long bytesRemaining() {
+        return size - bytesTransferred;
     }
 
-    /**
-     * Returns the total number of transferred bytes.
-     *
-     * @return the transferred bytes
-     */
-    public final long getBytesTransferred() {
-        return bytesTransferred;
-    }
-
-    /**
-     * Returns the number of bytes remaining.
-     *
-     * @return the remaining bytes
-     */
-    public final long getBytesRemaining() {
-        return bytesRemaining;
-    }
-
-    /**
-     * Returns the completion percentage.
-     *
-     * @return the completion percentage
-     */
-    public final double getPercentComplete() {
-        return percentComplete;
-    }
-
-    /**
-     * Returns the total expected data length.
-     *
-     * @return the total size
-     */
-    public final long getSize() {
-        return size;
+    /** Returns the completion percentage. */
+    public double percentComplete() {
+        return (bytesTransferred / (double) size) * 100.0d;
     }
 }

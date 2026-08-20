@@ -200,7 +200,7 @@ class EngineSearchTest {
         fixture.client
                 .events()
                 .on(Kind.SEARCH_RESPONSE_RECEIVED, (dev.slsk.internal.events.SearchResponseReceivedEvent eventData) -> {
-                    assertEquals("alice", eventData.getResponse().username());
+                    assertEquals("alice", eventData.response().username());
                     clientResponses.incrementAndGet();
                 });
         fixture.client

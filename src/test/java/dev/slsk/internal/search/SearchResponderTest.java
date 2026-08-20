@@ -101,8 +101,8 @@ class SearchResponderTest {
         fixture.responder.addResponseDeliveryFailedListener((sender, args) -> failed.set(args));
         assertTrue(fixture.responder.tryDiscard(9));
         assertEquals(9, cache.lastRemovedToken);
-        assertEquals("alice", failed.get().getUsername());
-        assertSame(RESPONSE, failed.get().getSearchResponse());
+        assertEquals("alice", failed.get().username());
+        assertSame(RESPONSE, failed.get().searchResponse());
         assertTrue(fixture.diagnostic.debug.stream().anyMatch(text -> text.contains("Discarded cached")));
 
         cache.throwOnRemove = new RuntimeException("cache");
@@ -117,9 +117,9 @@ class SearchResponderTest {
         fixture.responder.addRequestReceivedListener((sender, args) -> request.set(args));
 
         assertFalse(fixture.responder.tryRespond("alice", 4, "query"));
-        assertEquals("alice", request.get().getUsername());
-        assertEquals(4, request.get().getToken());
-        assertEquals("query", request.get().getQuery());
+        assertEquals("alice", request.get().username());
+        assertEquals(4, request.get().token());
+        assertEquals("query", request.get().query());
     }
 
     @Test
@@ -147,7 +147,7 @@ class SearchResponderTest {
         assertArrayEquals(expectedResponse(3).toByteArray(), written.get());
         assertArrayEquals(
                 expectedResponse(3).toByteArray(),
-                delivered.get().getSearchResponse().toByteArray());
+                delivered.get().searchResponse().toByteArray());
         assertTrue(fixture.diagnostic.debug.stream().anyMatch(text -> text.startsWith("Resolved")));
         assertTrue(fixture.diagnostic.debug.stream().anyMatch(text -> text.startsWith("Sent response containing")));
     }
@@ -187,8 +187,8 @@ class SearchResponderTest {
         cache.evictionListener.accept(cache.added);
 
         assertNotNull(failed.get(), "an evicted response raised no failure event");
-        assertEquals("alice", failed.get().getUsername());
-        assertEquals(3, failed.get().getToken());
+        assertEquals("alice", failed.get().username());
+        assertEquals(3, failed.get().token());
         assertTrue(fixture.diagnostic.debug.stream()
                 .anyMatch(text -> text.startsWith("Expired undelivered search response to alice")));
     }
@@ -249,7 +249,7 @@ class SearchResponderTest {
         fixture.responder.addResponseDeliveryFailedListener((sender, args) -> failed.set(args));
 
         assertFalse(fixture.responder.tryRespond(44));
-        assertSame(RESPONSE, failed.get().getSearchResponse());
+        assertSame(RESPONSE, failed.get().searchResponse());
         assertSame(failure, fixture.diagnostic.lastThrowable);
     }
 

@@ -20,10 +20,10 @@ class SoulseekClientEventTest {
         SoulseekClientStateChangedEvent args = new SoulseekClientStateChangedEvent(
                 SoulseekClientState.CONNECTED, SoulseekClientState.LOGGED_IN, "message");
 
-        assertEquals(SoulseekClientState.CONNECTED, args.getPreviousState());
-        assertEquals(SoulseekClientState.LOGGED_IN, args.getState());
-        assertEquals("message", args.getMessage());
-        assertNull(args.getException());
+        assertEquals(SoulseekClientState.CONNECTED, args.previousState());
+        assertEquals(SoulseekClientState.LOGGED_IN, args.state());
+        assertEquals("message", args.message());
+        assertNull(args.exception());
     }
 
     @Test
@@ -33,8 +33,8 @@ class SoulseekClientEventTest {
         SoulseekClientStateChangedEvent args = new SoulseekClientStateChangedEvent(
                 SoulseekClientState.CONNECTED, SoulseekClientState.DISCONNECTED, null, exception);
 
-        assertSame(exception, args.getException());
-        assertNull(args.getMessage());
+        assertSame(exception, args.exception());
+        assertNull(args.message());
     }
 
     @Test
@@ -43,8 +43,8 @@ class SoulseekClientEventTest {
         RuntimeException exception = new RuntimeException("failure");
         SoulseekClientDisconnectedEvent args = new SoulseekClientDisconnectedEvent("message", exception);
 
-        assertEquals("message", args.getMessage());
-        assertSame(exception, args.getException());
+        assertEquals("message", args.message());
+        assertSame(exception, args.exception());
     }
 
     @Test
@@ -54,10 +54,10 @@ class SoulseekClientEventTest {
                 new SoulseekClientStateChangedEvent(SoulseekClientState.NONE, SoulseekClientState.NONE);
         SoulseekClientDisconnectedEvent disconnectedArgs = new SoulseekClientDisconnectedEvent(null);
 
-        assertNull(stateArgs.getMessage());
-        assertNull(stateArgs.getException());
-        assertNull(disconnectedArgs.getMessage());
-        assertNull(disconnectedArgs.getException());
+        assertNull(stateArgs.message());
+        assertNull(stateArgs.exception());
+        assertNull(disconnectedArgs.message());
+        assertNull(disconnectedArgs.exception());
     }
 
     @Test

@@ -8,33 +8,16 @@ import dev.slsk.internal.search.Search;
 import dev.slsk.internal.search.SearchState;
 import java.util.Objects;
 
-/**
- * Event arguments raised by a search-state change.
- */
-public class SearchStateChangedEvent extends SearchEvent {
-    private final SearchState previousState;
+/** Event payload emitted by a search-state change. */
+public record SearchStateChangedEvent(SearchState previousState, Search search) implements SoulseekClientEvent {
 
     /**
      * Creates search-state event payload.
      *
-     * <p>The C# constructor is assembly-internal. Java has no equivalent
-     * visibility spanning the client and event-argument packages, so the
-     * direct port exposes this constructor.</p>
-     *
      * @param previousState the state before the change
      * @param search the search after the change
      */
-    public SearchStateChangedEvent(SearchState previousState, Search search) {
-        super(search);
-        this.previousState = Objects.requireNonNull(previousState, "previousState");
-    }
-
-    /**
-     * Returns the previous search state.
-     *
-     * @return the previous state
-     */
-    public final SearchState getPreviousState() {
-        return previousState;
+    public SearchStateChangedEvent {
+        Objects.requireNonNull(previousState, "previousState");
     }
 }

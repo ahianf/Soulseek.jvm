@@ -6,19 +6,8 @@ package dev.slsk.internal.events;
 
 import dev.slsk.internal.messaging.messages.UserLeftRoomNotification;
 
-/**
- * Event arguments raised when a user leaves a chat room.
- */
-public class RoomLeftEvent extends RoomEvent {
-    /**
-     * Creates room-left event payload.
-     *
-     * @param roomName the room in which the event took place
-     * @param username the user who left
-     */
-    public RoomLeftEvent(String roomName, String username) {
-        super(roomName, username);
-    }
+/** Event payload emitted when a user leaves a chat room. */
+public record RoomLeftEvent(String roomName, String username) implements SoulseekClientEvent {
 
     /**
      * Creates event payload from an internal protocol notification.

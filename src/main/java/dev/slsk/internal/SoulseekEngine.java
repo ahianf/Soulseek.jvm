@@ -913,7 +913,7 @@ final class SoulseekEngine implements AutoCloseable {
 
     private void downloadDenied(DownloadDeniedEvent eventData) {
         try {
-            transfers.deniedByPeer(eventData.getUsername(), eventData.getFilename(), eventData.getMessage());
+            transfers.deniedByPeer(eventData.username(), eventData.filename(), eventData.message());
         } catch (Throwable failure) {
             diagnostic.warning("Failed to mark download(s) rejected: " + Failures.message(failure), failure);
         } finally {
@@ -923,7 +923,7 @@ final class SoulseekEngine implements AutoCloseable {
 
     private void downloadFailed(DownloadFailedEvent eventData) {
         try {
-            transfers.failedByPeer(eventData.getUsername(), eventData.getFilename());
+            transfers.failedByPeer(eventData.username(), eventData.filename());
         } catch (Throwable failure) {
             diagnostic.warning("Failed to mark download(s) failed: " + Failures.message(failure), failure);
         } finally {
@@ -1208,18 +1208,18 @@ final class SoulseekEngine implements AutoCloseable {
             AtomicBoolean completionEventFired) {
         BrowseProgressUpdatedEvent eventData =
                 new BrowseProgressUpdatedEvent(requestedUsername, bytesTransferred, size);
-        if (Double.compare(eventData.getPercentComplete(), 100.0) == 0) {
+        if (Double.compare(eventData.percentComplete(), 100.0) == 0) {
             completionEventFired.set(true);
         }
         if (operationOptions.progressUpdated() != null) {
             operationOptions
                     .progressUpdated()
                     .onProgressUpdated(new BrowseProgress(
-                            eventData.getUsername(),
-                            eventData.getBytesTransferred(),
-                            eventData.getBytesRemaining(),
-                            eventData.getPercentComplete(),
-                            eventData.getSize()));
+                            eventData.username(),
+                            eventData.bytesTransferred(),
+                            eventData.bytesRemaining(),
+                            eventData.percentComplete(),
+                            eventData.size()));
         }
         events.raise(Kind.BROWSE_PROGRESS_UPDATED, eventData);
     }

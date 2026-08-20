@@ -251,8 +251,8 @@ class ServerMessageHandlerTest {
                 RoomData.class, fixture.waiter.completed.get(new WaitKey(MessageCode.Server.JOIN_ROOM, ROOM)));
         assertEquals(ROOM, joined.name());
         assertTrue(fixture.waiter.completed.containsKey(new WaitKey(MessageCode.Server.LEAVE_ROOM, ROOM)));
-        assertEquals(LOCAL_USER, left.get().getUsername());
-        assertEquals(ROOM, left.get().getRoomName());
+        assertEquals(LOCAL_USER, left.get().username());
+        assertEquals(ROOM, left.get().roomName());
         assertInstanceOf(
                 RoomJoinForbiddenException.class,
                 fixture.waiter.failures.get(new WaitKey(MessageCode.Server.JOIN_ROOM, "forbidden")));
@@ -316,13 +316,13 @@ class ServerMessageHandlerTest {
                 .writeString(USERNAME)
                 .build());
 
-        assertEquals("hello", roomMessage.get().getMessage());
-        assertEquals("public", publicMessage.get().getMessage());
-        assertEquals(USERNAME, joined.get().getUsername());
-        assertEquals(USERNAME, left.get().getUsername());
-        assertEquals(1, tickers.get().getTickerCount());
-        assertEquals("added", tickerAdded.get().getTicker().message());
-        assertEquals(USERNAME, tickerRemoved.get().getUsername());
+        assertEquals("hello", roomMessage.get().message());
+        assertEquals("public", publicMessage.get().message());
+        assertEquals(USERNAME, joined.get().username());
+        assertEquals(USERNAME, left.get().username());
+        assertEquals(1, tickers.get().tickerCount());
+        assertEquals("added", tickerAdded.get().ticker().message());
+        assertEquals(USERNAME, tickerRemoved.get().username());
     }
 
     @Test
@@ -349,14 +349,14 @@ class ServerMessageHandlerTest {
                 .writeString("supporter")
                 .build());
 
-        assertEquals(12, privateMessage.get().getId());
+        assertEquals(12, privateMessage.get().id());
         // Both acknowledgements write back to the server, so both go to a
         // thread of their own rather than answering on the server's read loop.
         assertTrue(Eventually.holds(() -> fixture.client
                 .acknowledged(AcknowledgePrivateMessageCommand.class)
                 .equals(List.of(12))));
-        assertNull(privileges.get(0).getId());
-        assertEquals(13, privileges.get(1).getId());
+        assertNull(privileges.get(0).id());
+        assertEquals(13, privileges.get(1).id());
         assertTrue(Eventually.holds(() -> fixture.client
                 .acknowledged(AcknowledgePrivilegeNotificationCommand.class)
                 .equals(List.of(13))));
@@ -483,7 +483,7 @@ class ServerMessageHandlerTest {
 
         assertEquals(List.of(TOKEN, TOKEN + 1), fixture.responder.discards);
         assertEquals(1, events.size());
-        assertEquals(USERNAME, events.getFirst().getUsername());
+        assertEquals(USERNAME, events.getFirst().username());
     }
 
     @Test

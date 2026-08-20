@@ -204,12 +204,11 @@ final class DefaultConnection implements Connection {
 
     /** The failure behind a disconnect, synthesised when the event carries none. */
     private static Throwable causeOf(SoulseekClientDisconnectedEvent event) {
-        Throwable reported = event == null ? null : event.getException();
+        Throwable reported = event == null ? null : event.exception();
         if (reported != null) {
             return reported;
         }
-        String message =
-                event == null || event.getMessage() == null ? "The server connection was lost" : event.getMessage();
+        String message = event == null || event.message() == null ? "The server connection was lost" : event.message();
         return new ConnectionException(message);
     }
 

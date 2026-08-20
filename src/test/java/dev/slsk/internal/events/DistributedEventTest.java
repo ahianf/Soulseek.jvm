@@ -21,11 +21,11 @@ class DistributedEventTest {
         InetSocketAddress endpoint = InetSocketAddress.createUnresolved("example.test", 2242);
         DistributedParentEvent args = new DistributedParentEvent("alice", endpoint, 2, "root");
 
-        assertEquals("alice", args.getUsername());
-        assertSame(endpoint, args.getIpEndpoint());
-        assertEquals(2, args.getBranchLevel());
-        assertEquals("root", args.getBranchRoot());
-        assertFalse(args.isBranchRoot());
+        assertEquals("alice", args.username());
+        assertSame(endpoint, args.ipEndpoint());
+        assertEquals(2, args.branchLevel());
+        assertEquals("root", args.branchRoot());
+        assertFalse(args.branchRootNode());
     }
 
     @Test
@@ -35,7 +35,7 @@ class DistributedEventTest {
         String branchRoot = new String("alice");
         DistributedParentEvent args = new DistributedParentEvent(username, null, 0, branchRoot);
 
-        assertTrue(args.isBranchRoot());
+        assertTrue(args.branchRootNode());
     }
 
     @Test
@@ -44,11 +44,11 @@ class DistributedEventTest {
         DistributedParentEvent root = new DistributedParentEvent(null, null, 0, null);
         DistributedParentEvent child = new DistributedParentEvent(null, null, 1, null);
 
-        assertTrue(root.isBranchRoot());
-        assertFalse(child.isBranchRoot());
-        assertNull(root.getUsername());
-        assertNull(root.getBranchRoot());
-        assertNull(root.getIpEndpoint());
+        assertTrue(root.branchRootNode());
+        assertFalse(child.branchRootNode());
+        assertNull(root.username());
+        assertNull(root.branchRoot());
+        assertNull(root.ipEndpoint());
     }
 
     @Test
@@ -57,7 +57,7 @@ class DistributedEventTest {
         InetSocketAddress endpoint = InetSocketAddress.createUnresolved("example.test", 2242);
         DistributedChildEvent args = new DistributedChildEvent("alice", endpoint);
 
-        assertEquals("alice", args.getUsername());
-        assertSame(endpoint, args.getIpEndpoint());
+        assertEquals("alice", args.username());
+        assertSame(endpoint, args.ipEndpoint());
     }
 }

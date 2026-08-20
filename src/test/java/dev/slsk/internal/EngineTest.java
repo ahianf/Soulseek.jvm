@@ -135,7 +135,7 @@ class EngineTest {
                 .on(
                         Kind.STATE_CHANGED,
                         (dev.slsk.internal.events.SoulseekClientStateChangedEvent eventData) ->
-                                order.add("state:" + eventData.getState()));
+                                order.add("state:" + eventData.state()));
         fixture.client.events().on(Kind.CONNECTED, (Void eventData) -> order.add("connected"));
         fixture.client.events().on(Kind.LOGGED_IN, (Void eventData) -> order.add("logged"));
         AtomicReference<SoulseekClientDisconnectedEvent> disconnected = new AtomicReference<>();
@@ -154,8 +154,8 @@ class EngineTest {
         assertEquals(
                 List.of("state:CONNECTED", "connected", "state:CONNECTED | LOGGED_IN", "logged", "state:DISCONNECTED"),
                 order);
-        assertEquals("bye", disconnected.get().getMessage());
-        assertSame(cause, disconnected.get().getException());
+        assertEquals("bye", disconnected.get().message());
+        assertSame(cause, disconnected.get().exception());
         fixture.close();
     }
 
@@ -209,7 +209,7 @@ class EngineTest {
         fixture.peer.raiseDenied(new DownloadDeniedEvent("user", "file", "rejected"));
         assertInstanceOf(TransferRejectedException.class, first.settlement().failure());
         assertInstanceOf(TransferRejectedException.class, second.settlement().failure());
-        assertEquals("rejected", denied.get().getMessage());
+        assertEquals("rejected", denied.get().message());
 
         first = new TransferInternal(TransferDirection.DOWNLOAD, "user", "file", 3);
         second = new TransferInternal(TransferDirection.DOWNLOAD, "user", "file", 4);
@@ -221,7 +221,7 @@ class EngineTest {
                 TransferReportedFailedException.class, first.settlement().failure());
         assertInstanceOf(
                 TransferReportedFailedException.class, second.settlement().failure());
-        assertEquals("file", failed.get().getFilename());
+        assertEquals("file", failed.get().filename());
         fixture.close();
     }
 
@@ -257,7 +257,7 @@ class EngineTest {
                         (dev.slsk.internal.events.SoulseekClientDisconnectedEvent value) -> disconnect.set(value));
         fixture.client.setStateForTest(SoulseekClientState.CONNECTED);
         fixture.server.raise(ServerMessageEvent.KICKED_FROM_SERVER, null);
-        assertInstanceOf(KickedFromServerException.class, disconnect.get().getException());
+        assertInstanceOf(KickedFromServerException.class, disconnect.get().exception());
         fixture.close();
     }
 

@@ -94,16 +94,15 @@ final class DefaultMe implements Me {
         if (event == null) {
             return;
         }
-        events.publish(
-                new MeEvent.PrivilegeNotificationReceived(Usernames.fromWire(event.getUsername()), Instant.now()));
-        if (event.isRequiresAcknowlegement() && event.getId() != null) {
+        events.publish(new MeEvent.PrivilegeNotificationReceived(Usernames.fromWire(event.username()), Instant.now()));
+        if (event.requiresAcknowledgement() && event.id() != null) {
             try {
-                server.acknowledgePrivilegeNotification(event.getId());
+                server.acknowledgePrivilegeNotification(event.id());
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
-                diagnostics.warning("Interrupted acknowledging privilege notification " + event.getId(), interrupted);
+                diagnostics.warning("Interrupted acknowledging privilege notification " + event.id(), interrupted);
             } catch (RuntimeException exception) {
-                diagnostics.warning("Failed to acknowledge privilege notification " + event.getId(), exception);
+                diagnostics.warning("Failed to acknowledge privilege notification " + event.id(), exception);
             }
         }
     }

@@ -4,7 +4,27 @@
 
 package dev.slsk.internal.events;
 
-/**
- * Base event payload for Soulseek client events.
- */
-public abstract class SoulseekClientEvent {}
+/** Identifies an event payload emitted by the internal client machinery. */
+public sealed interface SoulseekClientEvent
+        permits BrowseEvent,
+                BrowseProgressUpdatedEvent,
+                DistributedChildEvent,
+                DistributedParentEvent,
+                DownloadDeniedEvent,
+                DownloadFailedEvent,
+                PrivateMessageReceivedEvent,
+                PrivilegeNotificationReceivedEvent,
+                PublicChatMessageReceivedEvent,
+                RoomJoinedEvent,
+                RoomLeftEvent,
+                RoomMessageReceivedEvent,
+                RoomTickerAddedEvent,
+                RoomTickerListReceivedEvent,
+                RoomTickerRemovedEvent,
+                SearchRequestEvent,
+                SearchRequestResponseEvent,
+                SearchResponseReceivedEvent,
+                SearchStateChangedEvent,
+                SoulseekClientDisconnectedEvent,
+                SoulseekClientStateChangedEvent,
+                UserCannotConnectEvent {}

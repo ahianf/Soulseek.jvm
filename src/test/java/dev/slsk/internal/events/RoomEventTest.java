@@ -24,9 +24,9 @@ class RoomEventTest {
         UserData userData = new UserData("alice", UserPresence.ONLINE, 1, 2, 3, 4, "CL");
         RoomJoinedEvent args = new RoomJoinedEvent("lobby", "alice", userData);
 
-        assertEquals("lobby", args.getRoomName());
-        assertEquals("alice", args.getUsername());
-        assertSame(userData, args.getUserData());
+        assertEquals("lobby", args.roomName());
+        assertEquals("alice", args.username());
+        assertSame(userData, args.userData());
     }
 
     @Test
@@ -34,8 +34,8 @@ class RoomEventTest {
     void leftInstantiatesWithExpectedValues() {
         RoomLeftEvent args = new RoomLeftEvent("lobby", "alice");
 
-        assertEquals("lobby", args.getRoomName());
-        assertEquals("alice", args.getUsername());
+        assertEquals("lobby", args.roomName());
+        assertEquals("alice", args.username());
     }
 
     @Test
@@ -43,9 +43,9 @@ class RoomEventTest {
     void messageInstantiatesWithExpectedValues() {
         RoomMessageReceivedEvent args = new RoomMessageReceivedEvent("lobby", "alice", "hello");
 
-        assertEquals("lobby", args.getRoomName());
-        assertEquals("alice", args.getUsername());
-        assertEquals("hello", args.getMessage());
+        assertEquals("lobby", args.roomName());
+        assertEquals("alice", args.username());
+        assertEquals("hello", args.message());
     }
 
     @Test
@@ -54,10 +54,10 @@ class RoomEventTest {
         RoomJoinedEvent joined = new RoomJoinedEvent(null, null, null);
         RoomMessageReceivedEvent message = new RoomMessageReceivedEvent(null, null, null);
 
-        assertNull(joined.getRoomName());
-        assertNull(joined.getUsername());
-        assertNull(joined.getUserData());
-        assertNull(message.getMessage());
+        assertNull(joined.roomName());
+        assertNull(joined.username());
+        assertNull(joined.userData());
+        assertNull(message.message());
     }
 
     @Test
@@ -66,8 +66,8 @@ class RoomEventTest {
         RoomTicker ticker = new RoomTicker("alice", "hello");
         RoomTickerAddedEvent args = new RoomTickerAddedEvent("lobby", ticker);
 
-        assertEquals("lobby", args.getRoomName());
-        assertSame(ticker, args.getTicker());
+        assertEquals("lobby", args.roomName());
+        assertSame(ticker, args.ticker());
     }
 
     @Test
@@ -75,8 +75,8 @@ class RoomEventTest {
     void tickerRemovedInstantiatesWithExpectedValues() {
         RoomTickerRemovedEvent args = new RoomTickerRemovedEvent("lobby", "alice");
 
-        assertEquals("lobby", args.getRoomName());
-        assertEquals("alice", args.getUsername());
+        assertEquals("lobby", args.roomName());
+        assertEquals("alice", args.username());
     }
 
     @Test
@@ -89,11 +89,10 @@ class RoomEventTest {
 
         tickers.clear();
 
-        assertEquals("lobby", args.getRoomName());
-        assertEquals(2, args.getTickerCount());
-        assertEquals(List.of(first, second), args.getTickers());
-        assertThrows(
-                UnsupportedOperationException.class, () -> args.getTickers().add(new RoomTicker("carol", "three")));
+        assertEquals("lobby", args.roomName());
+        assertEquals(2, args.tickerCount());
+        assertEquals(List.of(first, second), args.tickers());
+        assertThrows(UnsupportedOperationException.class, () -> args.tickers().add(new RoomTicker("carol", "three")));
     }
 
     @Test
@@ -101,8 +100,8 @@ class RoomEventTest {
     void tickerListTreatsNullAsEmpty() {
         RoomTickerListReceivedEvent args = new RoomTickerListReceivedEvent("lobby", null);
 
-        assertEquals(0, args.getTickerCount());
-        assertEquals(List.of(), args.getTickers());
+        assertEquals(0, args.tickerCount());
+        assertEquals(List.of(), args.tickers());
     }
 
     @Test
@@ -111,8 +110,8 @@ class RoomEventTest {
         RoomTickerAddedEvent added = new RoomTickerAddedEvent(null, null);
         RoomTickerRemovedEvent removed = new RoomTickerRemovedEvent(null, null);
 
-        assertNull(added.getRoomName());
-        assertNull(added.getTicker());
-        assertNull(removed.getUsername());
+        assertNull(added.roomName());
+        assertNull(added.ticker());
+        assertNull(removed.username());
     }
 }

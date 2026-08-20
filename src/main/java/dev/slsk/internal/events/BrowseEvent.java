@@ -4,27 +4,5 @@
 
 package dev.slsk.internal.events;
 
-/**
- * Event payload for browse events.
- */
-public class BrowseEvent extends SoulseekClientEvent {
-    private final String username;
-
-    /**
-     * Creates browse event payload.
-     *
-     * @param username the user associated with the event
-     */
-    public BrowseEvent(String username) {
-        this.username = username;
-    }
-
-    /**
-     * Returns the user associated with the event.
-     *
-     * @return the username
-     */
-    public final String getUsername() {
-        return username;
-    }
-}
+/** Event payload for a browse request. */
+public record BrowseEvent(String username) implements SoulseekClientEvent {}

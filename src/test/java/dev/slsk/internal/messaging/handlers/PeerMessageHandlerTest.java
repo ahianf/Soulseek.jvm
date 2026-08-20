@@ -513,10 +513,10 @@ class PeerMessageHandlerTest {
 
         WaitKey key = new WaitKey(MessageCode.Peer.TRANSFER_REQUEST, USERNAME, FILENAME);
         assertInstanceOf(TransferReportedFailedException.class, fixture.waiter.failures.get(key));
-        assertEquals("No slot", deniedEvents.getFirst().getMessage());
-        assertEquals(FILENAME, deniedEvents.getFirst().getFilename());
-        assertEquals(USERNAME, deniedEvents.getFirst().getUsername());
-        assertEquals(FILENAME, failedEvents.getFirst().getFilename());
+        assertEquals("No slot", deniedEvents.getFirst().message());
+        assertEquals(FILENAME, deniedEvents.getFirst().filename());
+        assertEquals(USERNAME, deniedEvents.getFirst().username());
+        assertEquals(FILENAME, failedEvents.getFirst().filename());
 
         Fixture deniedOnly = new Fixture(new SoulseekClientOptions());
         deniedOnly.handler.handleMessageRead(

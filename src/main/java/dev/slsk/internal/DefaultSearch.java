@@ -146,22 +146,21 @@ final class DefaultSearch implements Search {
 
     private void wire() {
         client.events().on(Kind.SEARCH_REQUEST_RECEIVED, (SearchRequestEvent event) -> {
-            Username requester = event == null ? null : Usernames.fromWire(event.getUsername());
+            Username requester = event == null ? null : Usernames.fromWire(event.username());
             if (requester != null) {
-                events.publish(
-                        new SearchEvent.RequestReceived(requester, event.getQuery(), event.getToken(), Instant.now()));
+                events.publish(new SearchEvent.RequestReceived(requester, event.query(), event.token(), Instant.now()));
             }
         });
         client.events().on(Kind.SEARCH_RESPONSE_DELIVERED, (SearchRequestResponseEvent event) -> {
-            Username requester = event == null ? null : Usernames.fromWire(event.getUsername());
-            if (requester != null && event.getSearchResponse() != null) {
-                dev.slsk.internal.search.SearchResponse delivered = event.getSearchResponse();
+            Username requester = event == null ? null : Usernames.fromWire(event.username());
+            if (requester != null && event.searchResponse() != null) {
+                dev.slsk.internal.search.SearchResponse delivered = event.searchResponse();
                 events.publish(new SearchEvent.ResponseDelivered(
-                        requester, event.getToken(), delivered.fileCount(), Instant.now()));
+                        requester, event.token(), delivered.fileCount(), Instant.now()));
             }
         });
         client.events().on(Kind.SEARCH_RESPONSE_DELIVERY_FAILED, (SearchRequestResponseEvent event) -> {
-            Username requester = event == null ? null : Usernames.fromWire(event.getUsername());
+            Username requester = event == null ? null : Usernames.fromWire(event.username());
             if (requester != null) {
                 // Stackless: the internal event carries no cause, so this
                 // exception is a message in the shape the public event wants.
@@ -169,8 +168,8 @@ final class DefaultSearch implements Search {
                 // here would point at this wiring, not at the failure.
                 events.publish(new SearchEvent.ResponseDeliveryFailed(
                         requester,
-                        event.getToken(),
-                        Failures.stacklessIllegalState("could not deliver a search response to " + event.getUsername()),
+                        event.token(),
+                        Failures.stacklessIllegalState("could not deliver a search response to " + event.username()),
                         Instant.now()));
             }
         });
