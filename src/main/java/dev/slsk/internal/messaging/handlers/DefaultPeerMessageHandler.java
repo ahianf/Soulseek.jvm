@@ -8,7 +8,6 @@ import dev.slsk.Subscription;
 import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
-import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
@@ -203,7 +202,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 case FOLDER_CONTENTS_RESPONSE -> {
                     FolderContentsResponse response = FolderContentsResponse.fromByteArray(message);
                     waiter.complete(
-                            new WaitKey(
+                            new WaitKey.PeerToken(
                                     MessageCode.Peer.FOLDER_CONTENTS_RESPONSE,
                                     connection.getUsername(),
                                     response.token()),
@@ -211,12 +210,13 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 }
                 case INFO_RESPONSE -> {
                     UserInfoMessage info = UserInfoResponseCodec.fromByteArray(message);
-                    waiter.complete(new WaitKey(MessageCode.Peer.INFO_RESPONSE, connection.getUsername()), info);
+                    waiter.complete(
+                            new WaitKey.PeerUser(MessageCode.Peer.INFO_RESPONSE, connection.getUsername()), info);
                 }
                 case TRANSFER_RESPONSE -> {
                     TransferResponse response = TransferResponse.fromByteArray(message);
                     waiter.complete(
-                            new WaitKey(
+                            new WaitKey.PeerToken(
                                     MessageCode.Peer.TRANSFER_RESPONSE, connection.getUsername(), response.getToken()),
                             response);
                 }
@@ -226,7 +226,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 case PLACE_IN_QUEUE_RESPONSE -> {
                     PlaceInQueueResponse response = PlaceInQueueResponse.fromByteArray(message);
                     waiter.complete(
-                            new WaitKey(
+                            new WaitKey.PeerFile(
                                     MessageCode.Peer.PLACE_IN_QUEUE_RESPONSE,
                                     connection.getUsername(),
                                     response.getFilename()),
@@ -305,7 +305,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         try {
             if (code == MessageCode.Peer.BROWSE_RESPONSE) {
                 waiter.complete(
-                        new WaitKey(Constants.WaitKey.BROWSE_RESPONSE_CONNECTION, connection.getUsername()),
+                        new WaitKey.BrowseResponseConnection(connection.getUsername()),
                         new BrowseResponseConnection(eventData, connection));
             }
         } catch (Throwable failure) {
@@ -336,7 +336,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     private void handleBrowseResponse(MessageConnection connection, byte[] message) {
-        WaitKey key = new WaitKey(MessageCode.Peer.BROWSE_RESPONSE, connection.getUsername());
+        WaitKey key = new WaitKey.PeerUser(MessageCode.Peer.BROWSE_RESPONSE, connection.getUsername());
         try {
             waiter.complete(key, BrowseResponseCodec.fromByteArray(message));
         } catch (Throwable failure) {
@@ -457,7 +457,8 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                                     && Objects.equals(download.getFilename(), request.getFilename()));
             if (tracked) {
                 waiter.complete(
-                        new WaitKey(MessageCode.Peer.TRANSFER_REQUEST, connection.getUsername(), request.getFilename()),
+                        new WaitKey.PeerFile(
+                                MessageCode.Peer.TRANSFER_REQUEST, connection.getUsername(), request.getFilename()),
                         request);
                 return;
             }
@@ -507,7 +508,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
                 + connection.getUsername() + " was denied: "
                 + denied.getMessage());
         waiter.fail(
-                new WaitKey(MessageCode.Peer.TRANSFER_REQUEST, connection.getUsername(), denied.getFilename()),
+                new WaitKey.PeerFile(MessageCode.Peer.TRANSFER_REQUEST, connection.getUsername(), denied.getFilename()),
                 new TransferRejectedException(denied.getMessage()));
         DownloadDeniedEvent eventData =
                 new DownloadDeniedEvent(connection.getUsername(), denied.getFilename(), denied.getMessage());
@@ -518,7 +519,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         UploadFailed failed = UploadFailed.fromByteArray(message);
         diagnostic.debug("Download of " + failed.getFilename() + " reported as failed by " + connection.getUsername());
         waiter.fail(
-                new WaitKey(MessageCode.Peer.TRANSFER_REQUEST, connection.getUsername(), failed.getFilename()),
+                new WaitKey.PeerFile(MessageCode.Peer.TRANSFER_REQUEST, connection.getUsername(), failed.getFilename()),
                 new TransferReportedFailedException("Download reported as failed by remote client"));
         DownloadFailedEvent eventData = new DownloadFailedEvent(connection.getUsername(), failed.getFilename());
         downloadFailedListeners.forEach(listener -> listener.accept(eventData));

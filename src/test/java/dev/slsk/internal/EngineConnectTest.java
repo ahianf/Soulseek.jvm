@@ -487,7 +487,7 @@ class EngineConnectTest {
 
         private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("register") && arguments.length == 4) {
-                assertEquals(new WaitKey(MessageCode.Server.LOGIN), arguments[0]);
+                assertEquals(new WaitKey.ServerMessage(MessageCode.Server.LOGIN), arguments[0]);
                 assertSame(LoginResponse.class, arguments[1]);
                 assertEquals(Duration.ofSeconds(5), arguments[2]);
                 token = (CancellationSignal) arguments[3];

@@ -151,8 +151,7 @@ public final class ListenerHandler implements DiagnosticSource {
         if (Constants.ConnectionType.TRANSFER.equals(peerInit.getConnectionType())) {
             TransferConnectionResult result =
                     peers.get().getTransferConnection(peerInit.getUsername(), peerInit.getToken(), connection);
-            WaitKey waitKey =
-                    new WaitKey(Constants.WaitKey.DIRECT_TRANSFER, peerInit.getUsername(), result.remoteToken());
+            WaitKey waitKey = new WaitKey.DirectTransfer(peerInit.getUsername(), result.remoteToken());
             if (waiter.hasWait(waitKey)) {
                 waiter.complete(waitKey, result.connection());
             } else {
@@ -180,7 +179,7 @@ public final class ListenerHandler implements DiagnosticSource {
                     + connection.getIpEndpoint().getAddress().getHostAddress()
                     + ":" + listener.get().getPort()
                     + ") (id: " + connection.getId() + ")");
-            WaitKey waitKey = new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, token);
+            WaitKey waitKey = new WaitKey.SolicitedPeer(username, token);
             if (waiter.hasWait(waitKey)) {
                 waiter.complete(waitKey, connection);
             } else {
@@ -206,8 +205,7 @@ public final class ListenerHandler implements DiagnosticSource {
                     + connection.getIpEndpoint().getAddress().getHostAddress()
                     + ":" + listener.get().getPort()
                     + ") (id: " + connection.getId() + ")");
-            waiter.complete(
-                    new WaitKey(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION, username, token), connection);
+            waiter.complete(new WaitKey.SolicitedDistributed(username, token), connection);
             return;
         }
 

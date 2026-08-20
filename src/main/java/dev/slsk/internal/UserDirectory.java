@@ -10,7 +10,6 @@ import dev.slsk.exceptions.UserEndpointException;
 import dev.slsk.exceptions.UserNotFoundException;
 import dev.slsk.exceptions.UserOfflineException;
 import dev.slsk.internal.common.CancellationSignals;
-import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.Permits;
 import dev.slsk.internal.common.Text;
@@ -101,7 +100,7 @@ final class UserDirectory {
         try {
             Waiter waiter = context.getWaiter();
             Wait<UserInfoMessage> infoWait = waiter.register(
-                    new WaitKey(MessageCode.Peer.INFO_RESPONSE, requestedUsername),
+                    new WaitKey.PeerUser(MessageCode.Peer.INFO_RESPONSE, requestedUsername),
                     UserInfoMessage.class,
                     waiter.getDefaultTimeout(),
                     token);
@@ -128,7 +127,7 @@ final class UserDirectory {
         server.requireLoggedIn("check user privileges");
         return server.request(
                 new UserPrivilegesRequest(requestedUsername),
-                new WaitKey(MessageCode.Server.USER_PRIVILEGES, requestedUsername),
+                new WaitKey.ServerUser(MessageCode.Server.USER_PRIVILEGES, requestedUsername),
                 Boolean.class,
                 cancellationSignal,
                 "Failed to get privileges for " + requestedUsername + ": ",
@@ -145,7 +144,7 @@ final class UserDirectory {
         server.requireLoggedIn("fetch user statistics");
         return server.request(
                 new UserStatisticsRequest(requestedUsername),
-                new WaitKey(MessageCode.Server.GET_USER_STATS, requestedUsername),
+                new WaitKey.ServerUser(MessageCode.Server.GET_USER_STATS, requestedUsername),
                 UserStatisticsSnapshot.class,
                 cancellationSignal,
                 "Failed to retrieve statistics for user " + requestedUsername + ": ");
@@ -161,7 +160,7 @@ final class UserDirectory {
         server.requireLoggedIn("fetch user status");
         return server.request(
                 new UserStatusRequest(requestedUsername),
-                new WaitKey(MessageCode.Server.GET_STATUS, requestedUsername),
+                new WaitKey.ServerUser(MessageCode.Server.GET_STATUS, requestedUsername),
                 UserStatusSnapshot.class,
                 cancellationSignal,
                 "Failed to retrieve status for user " + requestedUsername + ": ",
@@ -177,7 +176,7 @@ final class UserDirectory {
         server.requireLoggedIn("add users");
         WatchUserResponse response = server.request(
                 new WatchUserRequest(requestedUsername),
-                new WaitKey(MessageCode.Server.WATCH_USER, requestedUsername),
+                new WaitKey.ServerUser(MessageCode.Server.WATCH_USER, requestedUsername),
                 WatchUserResponse.class,
                 cancellationSignal,
                 "Failed to watch user " + requestedUsername + ": ",
@@ -242,13 +241,13 @@ final class UserDirectory {
         server.requireLoggedIn("browse");
         BrowseOptions operationOptions = browseOptions == null ? new BrowseOptions() : browseOptions;
         CancellationSignal token = CancellationSignals.orNone(cancellationSignal);
-        WaitKey browseWaitKey = new WaitKey(MessageCode.Peer.BROWSE_RESPONSE, requestedUsername);
+        WaitKey browseWaitKey = new WaitKey.PeerUser(MessageCode.Peer.BROWSE_RESPONSE, requestedUsername);
         try {
             Wait<BrowseResponseMessage> browseWait =
                     context.getWaiter().registerIndefinitely(browseWaitKey, BrowseResponseMessage.class, token);
             Wait<BrowseResponseConnection> connectionWait = context.getWaiter()
                     .register(
-                            new WaitKey(Constants.WaitKey.BROWSE_RESPONSE_CONNECTION, requestedUsername),
+                            new WaitKey.BrowseResponseConnection(requestedUsername),
                             BrowseResponseConnection.class,
                             operationOptions.responseTimeout(),
                             token);
@@ -395,7 +394,8 @@ final class UserDirectory {
         try {
             Waiter waiter = context.getWaiter();
             Wait<UserAddressResponse> wait = waiter.register(
-                    new dev.slsk.internal.common.WaitKey(MessageCode.Server.GET_PEER_ADDRESS, requestedUsername),
+                    new dev.slsk.internal.common.WaitKey.ServerUser(
+                            MessageCode.Server.GET_PEER_ADDRESS, requestedUsername),
                     UserAddressResponse.class,
                     waiter.getDefaultTimeout(),
                     cancellationSignal);
@@ -452,7 +452,7 @@ final class UserDirectory {
             @SuppressWarnings("unchecked")
             Waiter waiter = context.getWaiter();
             Wait<List<SharedDirectory>> contentsWait = (Wait<List<SharedDirectory>>) (Wait<?>) waiter.register(
-                    new WaitKey(MessageCode.Peer.FOLDER_CONTENTS_RESPONSE, requestedUsername, tokenValue),
+                    new WaitKey.PeerToken(MessageCode.Peer.FOLDER_CONTENTS_RESPONSE, requestedUsername, tokenValue),
                     List.class,
                     waiter.getDefaultTimeout(),
                     token);

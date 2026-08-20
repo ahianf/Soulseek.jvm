@@ -66,7 +66,7 @@ class EngineEndpointTest {
         InetSocketAddress actual = fixture.client.users().getUserEndpoint("alice", token);
 
         assertEquals(ENDPOINT, actual);
-        assertEquals(new WaitKey(MessageCode.Server.GET_PEER_ADDRESS, "alice"), fixture.waiter.key);
+        assertEquals(new WaitKey.ServerUser(MessageCode.Server.GET_PEER_ADDRESS, "alice"), fixture.waiter.key);
         assertSame(UserAddressResponse.class, fixture.waiter.resultType);
         assertSame(token, fixture.waiter.token);
         assertSame(token, fixture.connection.token);

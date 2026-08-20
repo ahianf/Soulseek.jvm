@@ -167,11 +167,15 @@ class ServerMessageHandlerTest {
         assertEquals(11, info.get(0).parentMinSpeed());
         assertEquals(22, info.get(1).parentSpeedRatio());
         assertEquals(33, info.get(2).wishlistInterval());
-        assertEquals(44, fixture.waiter.completed.get(new WaitKey(MessageCode.Server.CHECK_PRIVILEGES)));
-        assertTrue(fixture.waiter.completed.containsKey(new WaitKey(MessageCode.Server.PING)));
-        assertEquals("secret", fixture.waiter.completed.get(new WaitKey(MessageCode.Server.NEW_PASSWORD)));
-        assertEquals(true, fixture.waiter.completed.get(new WaitKey(MessageCode.Server.PRIVATE_ROOM_TOGGLE)));
-        assertEquals(true, fixture.waiter.completed.get(new WaitKey(MessageCode.Server.USER_PRIVILEGES, USERNAME)));
+        assertEquals(44, fixture.waiter.completed.get(new WaitKey.ServerMessage(MessageCode.Server.CHECK_PRIVILEGES)));
+        assertTrue(fixture.waiter.completed.containsKey(new WaitKey.ServerMessage(MessageCode.Server.PING)));
+        assertEquals(
+                "secret", fixture.waiter.completed.get(new WaitKey.ServerMessage(MessageCode.Server.NEW_PASSWORD)));
+        assertEquals(
+                true, fixture.waiter.completed.get(new WaitKey.ServerMessage(MessageCode.Server.PRIVATE_ROOM_TOGGLE)));
+        assertEquals(
+                true,
+                fixture.waiter.completed.get(new WaitKey.ServerUser(MessageCode.Server.USER_PRIVILEGES, USERNAME)));
     }
 
     @Test
@@ -213,19 +217,21 @@ class ServerMessageHandlerTest {
         fixture.handle(status(USERNAME, WireUserPresence.AWAY, true));
         fixture.handle(statistics(USERNAME, 100, 200L, 300, 400));
 
-        assertInstanceOf(LoginResponse.class, fixture.waiter.completed.get(new WaitKey(MessageCode.Server.LOGIN)));
+        assertInstanceOf(
+                LoginResponse.class, fixture.waiter.completed.get(new WaitKey.ServerMessage(MessageCode.Server.LOGIN)));
         UserAddressResponse address = assertInstanceOf(
                 UserAddressResponse.class,
-                fixture.waiter.completed.get(new WaitKey(MessageCode.Server.GET_PEER_ADDRESS, USERNAME)));
+                fixture.waiter.completed.get(new WaitKey.ServerUser(MessageCode.Server.GET_PEER_ADDRESS, USERNAME)));
         assertEquals(2234, address.getPort());
         assertInstanceOf(
                 WatchUserResponse.class,
-                fixture.waiter.completed.get(new WaitKey(MessageCode.Server.WATCH_USER, USERNAME)));
+                fixture.waiter.completed.get(new WaitKey.ServerUser(MessageCode.Server.WATCH_USER, USERNAME)));
         assertSame(
-                statusEvent.get(), fixture.waiter.completed.get(new WaitKey(MessageCode.Server.GET_STATUS, USERNAME)));
+                statusEvent.get(),
+                fixture.waiter.completed.get(new WaitKey.ServerUser(MessageCode.Server.GET_STATUS, USERNAME)));
         assertSame(
                 statisticsEvent.get(),
-                fixture.waiter.completed.get(new WaitKey(MessageCode.Server.GET_USER_STATS, USERNAME)));
+                fixture.waiter.completed.get(new WaitKey.ServerUser(MessageCode.Server.GET_USER_STATS, USERNAME)));
     }
 
     @Test
@@ -247,14 +253,15 @@ class ServerMessageHandlerTest {
         fixture.handle(string(MessageCode.Server.CANNOT_JOIN_ROOM, "forbidden"));
 
         RoomData joined = assertInstanceOf(
-                RoomData.class, fixture.waiter.completed.get(new WaitKey(MessageCode.Server.JOIN_ROOM, ROOM)));
+                RoomData.class,
+                fixture.waiter.completed.get(new WaitKey.ServerRoom(MessageCode.Server.JOIN_ROOM, ROOM)));
         assertEquals(ROOM, joined.name());
-        assertTrue(fixture.waiter.completed.containsKey(new WaitKey(MessageCode.Server.LEAVE_ROOM, ROOM)));
+        assertTrue(fixture.waiter.completed.containsKey(new WaitKey.ServerRoom(MessageCode.Server.LEAVE_ROOM, ROOM)));
         assertEquals(LOCAL_USER, left.get().username());
         assertEquals(ROOM, left.get().roomName());
         assertInstanceOf(
                 RoomJoinForbiddenException.class,
-                fixture.waiter.failures.get(new WaitKey(MessageCode.Server.JOIN_ROOM, "forbidden")));
+                fixture.waiter.failures.get(new WaitKey.ServerRoom(MessageCode.Server.JOIN_ROOM, "forbidden")));
     }
 
     @Test
@@ -265,7 +272,7 @@ class ServerMessageHandlerTest {
 
         fixture.handle(roomList());
 
-        Object waited = fixture.waiter.completed.get(new WaitKey(MessageCode.Server.ROOM_LIST));
+        Object waited = fixture.waiter.completed.get(new WaitKey.ServerMessage(MessageCode.Server.ROOM_LIST));
         assertSame(event.get(), waited);
         assertEquals("public", event.get().publicRooms().getFirst().name());
         assertEquals("private", event.get().privateRooms().getFirst().name());
@@ -426,15 +433,16 @@ class ServerMessageHandlerTest {
         assertEquals(ROOM, moderationRemoved.get());
         assertEquals(List.of(USERNAME), users.get().users());
         assertEquals(List.of(USERNAME), moderated.get().users());
-        assertTrue(fixture.waiter.completed.containsKey(new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVED, ROOM)));
         assertTrue(fixture.waiter.completed.containsKey(
-                new WaitKey(MessageCode.Server.PRIVATE_ROOM_OPERATOR_REMOVED, ROOM)));
+                new WaitKey.ServerRoom(MessageCode.Server.PRIVATE_ROOM_REMOVED, ROOM)));
+        assertTrue(fixture.waiter.completed.containsKey(
+                new WaitKey.ServerRoom(MessageCode.Server.PRIVATE_ROOM_OPERATOR_REMOVED, ROOM)));
         for (MessageCode.Server code : List.of(
                 MessageCode.Server.PRIVATE_ROOM_ADD_USER,
                 MessageCode.Server.PRIVATE_ROOM_REMOVE_USER,
                 MessageCode.Server.PRIVATE_ROOM_ADD_OPERATOR,
                 MessageCode.Server.PRIVATE_ROOM_REMOVE_OPERATOR)) {
-            assertTrue(fixture.waiter.completed.containsKey(new WaitKey(code, ROOM, USERNAME)));
+            assertTrue(fixture.waiter.completed.containsKey(new WaitKey.ServerRoomUser(code, ROOM, USERNAME)));
         }
     }
 
@@ -507,7 +515,7 @@ class ServerMessageHandlerTest {
 
         fixture.handle(connectToPeer(USERNAME, Constants.ConnectionType.TRANSFER, TOKEN));
 
-        WaitKey correlated = new WaitKey(Constants.WaitKey.INDIRECT_TRANSFER, USERNAME, "file", 91);
+        WaitKey correlated = new WaitKey.IndirectTransfer(USERNAME, "file", 91);
         assertTrue(Eventually.holds(() -> fixture.waiter.completed.containsKey(correlated)));
         assertSame(connection.proxy, fixture.waiter.completed.get(correlated));
 
@@ -749,7 +757,7 @@ class ServerMessageHandlerTest {
         // The connection is still being served: a known message right behind
         // the unknown one is handled normally.
         fixture.handle(new MessageBuilder().writeCode(MessageCode.Server.PING).build());
-        assertTrue(fixture.waiter.completed.containsKey(new WaitKey(MessageCode.Server.PING)));
+        assertTrue(fixture.waiter.completed.containsKey(new WaitKey.ServerMessage(MessageCode.Server.PING)));
     }
 
     private static final class Fixture {

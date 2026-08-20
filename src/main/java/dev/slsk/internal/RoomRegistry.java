@@ -71,7 +71,7 @@ final class RoomRegistry {
             // Registered before the write, because the server can answer
             // before the write call returns.
             Wait<RoomData> wait = waiter.register(
-                    new WaitKey(MessageCode.Server.JOIN_ROOM, roomName),
+                    new WaitKey.ServerRoom(MessageCode.Server.JOIN_ROOM, roomName),
                     RoomData.class,
                     waiter.getDefaultTimeout(),
                     token);
@@ -101,7 +101,7 @@ final class RoomRegistry {
         server.requireLoggedIn("fetch the list of chat rooms");
         return server.request(
                 new RoomListRequest(),
-                new WaitKey(MessageCode.Server.ROOM_LIST),
+                new WaitKey.ServerMessage(MessageCode.Server.ROOM_LIST),
                 RoomListMessage.class,
                 cancellationSignal,
                 "Failed to fetch the list of chat rooms from the server: ");
@@ -118,7 +118,7 @@ final class RoomRegistry {
         server.requireLoggedIn("add members to private rooms");
         server.command(
                 new PrivateRoomAddUser(roomName, requestedUsername),
-                new WaitKey(MessageCode.Server.PRIVATE_ROOM_ADD_USER, roomName, requestedUsername),
+                new WaitKey.ServerRoomUser(MessageCode.Server.PRIVATE_ROOM_ADD_USER, roomName, requestedUsername),
                 cancellationSignal,
                 "Failed to add user " + requestedUsername + " as member of private room " + roomName + ": ");
     }
@@ -134,7 +134,7 @@ final class RoomRegistry {
         server.requireLoggedIn("add moderators to private rooms");
         server.command(
                 new PrivateRoomAddOperator(roomName, requestedUsername),
-                new WaitKey(MessageCode.Server.PRIVATE_ROOM_ADD_OPERATOR, roomName, requestedUsername),
+                new WaitKey.ServerRoomUser(MessageCode.Server.PRIVATE_ROOM_ADD_OPERATOR, roomName, requestedUsername),
                 cancellationSignal,
                 "Failed to add user " + requestedUsername + " as moderator of private room " + roomName + ": ");
     }
@@ -148,7 +148,7 @@ final class RoomRegistry {
         server.requireLoggedIn("drop private room membership");
         server.command(
                 new PrivateRoomDropMembershipCommand(roomName),
-                new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVED, roomName),
+                new WaitKey.ServerRoom(MessageCode.Server.PRIVATE_ROOM_REMOVED, roomName),
                 cancellationSignal,
                 "Failed to drop membership of private room " + roomName + ": ");
     }
@@ -162,7 +162,7 @@ final class RoomRegistry {
         server.requireLoggedIn("drop private room ownership");
         server.command(
                 new PrivateRoomDropOwnershipCommand(roomName),
-                new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVED, roomName),
+                new WaitKey.ServerRoom(MessageCode.Server.PRIVATE_ROOM_REMOVED, roomName),
                 cancellationSignal,
                 "Failed to drop ownership of private room " + roomName + ": ");
     }
@@ -177,7 +177,7 @@ final class RoomRegistry {
         CancellationSignal token = CancellationSignals.orNone(cancellationSignal);
         try {
             Wait<Void> wait = waiter.register(
-                    new WaitKey(MessageCode.Server.LEAVE_ROOM, roomName), waiter.getDefaultTimeout(), token);
+                    new WaitKey.ServerRoom(MessageCode.Server.LEAVE_ROOM, roomName), waiter.getDefaultTimeout(), token);
             server.write(new LeaveRoomRequest(roomName), token);
             try {
                 wait.await();
@@ -203,7 +203,7 @@ final class RoomRegistry {
         server.requireLoggedIn("remove users from private rooms");
         server.command(
                 new PrivateRoomRemoveUser(roomName, requestedUsername),
-                new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVE_USER, roomName, requestedUsername),
+                new WaitKey.ServerRoomUser(MessageCode.Server.PRIVATE_ROOM_REMOVE_USER, roomName, requestedUsername),
                 cancellationSignal,
                 "Failed to remove user " + requestedUsername + " as member of private room " + roomName + ": ");
     }
@@ -219,7 +219,8 @@ final class RoomRegistry {
         server.requireLoggedIn("remove moderators from private rooms");
         server.command(
                 new PrivateRoomRemoveOperator(roomName, requestedUsername),
-                new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVE_OPERATOR, roomName, requestedUsername),
+                new WaitKey.ServerRoomUser(
+                        MessageCode.Server.PRIVATE_ROOM_REMOVE_OPERATOR, roomName, requestedUsername),
                 cancellationSignal,
                 "Failed to remove user " + requestedUsername + " as moderator of private room " + roomName + ": ");
     }

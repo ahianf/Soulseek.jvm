@@ -4,7 +4,6 @@
 
 package dev.slsk.internal.transfer;
 
-import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Settlement;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.network.tcp.TransportConnection;
@@ -70,7 +69,7 @@ public final class TransferInternal {
         this.options = options == null ? new TransferOptions() : options;
         this.clock = Objects.requireNonNull(clock, "clock");
         this.progressUpdateLimit = progressUpdateLimit;
-        waitKey = new WaitKey(Constants.WaitKey.TRANSFER, direction, username, filename, token);
+        waitKey = new WaitKey.Transfer(direction, username, filename, token);
     }
 
     /** Returns the average transfer speed in bytes per second. */

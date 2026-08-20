@@ -6,7 +6,6 @@ package dev.slsk.internal.messaging.handlers;
 
 import dev.slsk.Subscription;
 import dev.slsk.internal.ServerLink;
-import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.TokenFactory;
@@ -203,7 +202,8 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                 case SEARCH_REQUEST -> handleSearchRequest(message);
                 case PING -> {
                     DistributedPingResponse ping = DistributedPingResponse.fromByteArray(message);
-                    waiter.complete(new WaitKey(MessageCode.Distributed.PING, connection.getUsername()), ping);
+                    waiter.complete(
+                            new WaitKey.DistributedUser(MessageCode.Distributed.PING, connection.getUsername()), ping);
                 }
                 case BRANCH_LEVEL -> {
                     DistributedBranchLevel branchLevel = DistributedBranchLevel.fromByteArray(message);
@@ -219,8 +219,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                 }
                 case CHILD_DEPTH -> {
                     DistributedChildDepth depth = DistributedChildDepth.fromByteArray(message);
-                    waiter.complete(
-                            new WaitKey(Constants.WaitKey.CHILD_DEPTH_MESSAGE, connection.getKey()), depth.getDepth());
+                    waiter.complete(new WaitKey.ChildDepth(connection.getKey()), depth.getDepth());
                 }
                 default ->
                     diagnostic.debug(() -> "Unhandled distributed message: " + code + " from "

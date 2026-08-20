@@ -229,12 +229,12 @@ public final class PeerNetwork implements PeerConnectionManager {
         // Both waits are registered before either is awaited, so a peer that
         // arrives on one path while the other is still being set up is caught.
         Wait<TransportConnection> indirectWait = waiter.register(
-                new WaitKey(Constants.WaitKey.INDIRECT_TRANSFER, username, filename, remoteToken),
+                new WaitKey.IndirectTransfer(username, filename, remoteToken),
                 TransportConnection.class,
                 options.get().transferConnectionOptions().connectTimeout(),
                 indirectCancellation.token());
         Wait<TransportConnection> directWait = waiter.register(
-                new WaitKey(Constants.WaitKey.DIRECT_TRANSFER, username, remoteToken),
+                new WaitKey.DirectTransfer(username, remoteToken),
                 TransportConnection.class,
                 options.get().transferConnectionOptions().connectTimeout(),
                 directCancellation.token());
@@ -764,7 +764,7 @@ public final class PeerNetwork implements PeerConnectionManager {
             // Registered before the request that provokes it: the peer can be
             // knocking on the listener before this write returns.
             Wait<TransportConnection> wait = waiter.register(
-                    new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),
+                    new WaitKey.SolicitedPeer(username, solicitationToken),
                     TransportConnection.class,
                     options.get().peerConnectionOptions().indirectSolicitationTimeout(),
                     cancellationSignal);
@@ -879,7 +879,7 @@ public final class PeerNetwork implements PeerConnectionManager {
         pendingSolicitations.putIfAbsent(solicitationToken, username);
         try {
             Wait<TransportConnection> wait = waiter.register(
-                    new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),
+                    new WaitKey.SolicitedPeer(username, solicitationToken),
                     TransportConnection.class,
                     options.get().transferConnectionOptions().indirectSolicitationTimeout(),
                     cancellationSignal);

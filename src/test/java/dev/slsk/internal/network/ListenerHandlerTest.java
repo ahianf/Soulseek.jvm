@@ -96,7 +96,7 @@ class ListenerHandlerTest {
         try (Fixture fixture = fixture(null)) {
             TransportConnection transferConnection = ConnectionProbe.message(new byte[] {1}).proxy;
             fixture.peer.transferResult = new TransferConnectionResult(transferConnection, 24);
-            WaitKey key = new WaitKey(Constants.WaitKey.DIRECT_TRANSFER, "alice", 24);
+            WaitKey key = new WaitKey.DirectTransfer("alice", 24);
             Wait<TransportConnection> wait = fixture.waiter.registerIndefinitely(key, TransportConnection.class, null);
             ConnectionProbe incoming =
                     ConnectionProbe.message(new PeerInit("alice", Constants.ConnectionType.TRANSFER, 7).toByteArray());
@@ -127,7 +127,7 @@ class ListenerHandlerTest {
     void peerAndDistributedPierceFirewallCompleteSolicitedWaits() throws Exception {
         try (Fixture fixture = fixture(null)) {
             fixture.peer.pending = Map.of(8, "alice");
-            WaitKey peerKey = new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, "alice", 8);
+            WaitKey peerKey = new WaitKey.SolicitedPeer("alice", 8);
             Wait<TransportConnection> peerWait =
                     fixture.waiter.registerIndefinitely(peerKey, TransportConnection.class, null);
             ConnectionProbe peer = ConnectionProbe.message(new PierceFirewall(8).toByteArray());
@@ -136,7 +136,7 @@ class ListenerHandlerTest {
 
             fixture.peer.pending = Map.of();
             fixture.distributed.pending = Map.of(9, "bob");
-            WaitKey distributedKey = new WaitKey(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION, "bob", 9);
+            WaitKey distributedKey = new WaitKey.SolicitedDistributed("bob", 9);
             Wait<TransportConnection> distributedWait =
                     fixture.waiter.registerIndefinitely(distributedKey, TransportConnection.class, null);
             ConnectionProbe distributed = ConnectionProbe.message(new PierceFirewall(9).toByteArray());

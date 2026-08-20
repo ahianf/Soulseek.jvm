@@ -73,7 +73,7 @@ class EngineServerRequestTest {
             waitForWrite(connection);
 
             assertFalse(operation.isDone());
-            assertEquals(new WaitKey(MessageCode.Server.NEW_PASSWORD), waiter.key);
+            assertEquals(new WaitKey.ServerMessage(MessageCode.Server.NEW_PASSWORD), waiter.key);
             assertSame(String.class, waiter.resultType);
             assertSame(token, waiter.token);
             assertSame(token, connection.token);
@@ -103,7 +103,7 @@ class EngineServerRequestTest {
             int result = client.server().getPrivileges(token);
 
             assertEquals(42, result);
-            assertEquals(new WaitKey(MessageCode.Server.CHECK_PRIVILEGES), waiter.key);
+            assertEquals(new WaitKey.ServerMessage(MessageCode.Server.CHECK_PRIVILEGES), waiter.key);
             assertSame(Integer.class, waiter.resultType);
             assertSame(token, waiter.token);
             assertSame(token, connection.token);
@@ -131,7 +131,7 @@ class EngineServerRequestTest {
             waitForWrite(connection);
 
             assertFalse(operation.isDone());
-            assertEquals(new WaitKey(MessageCode.Server.PING), waiter.key);
+            assertEquals(new WaitKey.ServerMessage(MessageCode.Server.PING), waiter.key);
             assertEquals(3, waiter.argumentCount);
             assertSame(token, waiter.token);
             assertSame(token, connection.token);
@@ -169,7 +169,7 @@ class EngineServerRequestTest {
 
             waiter.result = CompletableFuture.completedFuture(true);
             assertTrue(client.users().getUserPrivileged("alice", token));
-            assertEquals(new WaitKey(MessageCode.Server.USER_PRIVILEGES, "alice"), waiter.key);
+            assertEquals(new WaitKey.ServerUser(MessageCode.Server.USER_PRIVILEGES, "alice"), waiter.key);
             assertSame(Boolean.class, waiter.resultType);
             assertEquals(
                     "alice",
@@ -179,7 +179,7 @@ class EngineServerRequestTest {
             UserStatisticsSnapshot statistics = new UserStatisticsSnapshot("alice", 10, 20, 30, 40);
             waiter.result = CompletableFuture.completedFuture(statistics);
             assertSame(statistics, client.users().getUserStatistics("alice", token));
-            assertEquals(new WaitKey(MessageCode.Server.GET_USER_STATS, "alice"), waiter.key);
+            assertEquals(new WaitKey.ServerUser(MessageCode.Server.GET_USER_STATS, "alice"), waiter.key);
             assertSame(UserStatisticsSnapshot.class, waiter.resultType);
             assertEquals(
                     "alice",
@@ -189,7 +189,7 @@ class EngineServerRequestTest {
             UserStatusSnapshot status = new UserStatusSnapshot("alice", WireUserPresence.AWAY, true);
             waiter.result = CompletableFuture.completedFuture(status);
             assertSame(status, client.users().getUserStatus("alice", token));
-            assertEquals(new WaitKey(MessageCode.Server.GET_STATUS, "alice"), waiter.key);
+            assertEquals(new WaitKey.ServerUser(MessageCode.Server.GET_STATUS, "alice"), waiter.key);
             assertSame(UserStatusSnapshot.class, waiter.resultType);
             assertEquals(
                     "alice",
@@ -209,7 +209,7 @@ class EngineServerRequestTest {
             waiter.result = CompletableFuture.completedFuture(new WatchUserResponse("alice", true, data));
 
             assertSame(data, client.users().watchUser("alice"));
-            assertEquals(new WaitKey(MessageCode.Server.WATCH_USER, "alice"), waiter.key);
+            assertEquals(new WaitKey.ServerUser(MessageCode.Server.WATCH_USER, "alice"), waiter.key);
             assertSame(WatchUserResponse.class, waiter.resultType);
             assertEquals(
                     "alice",
@@ -232,14 +232,14 @@ class EngineServerRequestTest {
             RoomListMessage roomList = new RoomListMessage(List.of(), List.of(), List.of(), List.of());
             waiter.result = CompletableFuture.completedFuture(roomList);
             assertSame(roomList, client.rooms().getRoomList(token));
-            assertEquals(new WaitKey(MessageCode.Server.ROOM_LIST), waiter.key);
+            assertEquals(new WaitKey.ServerMessage(MessageCode.Server.ROOM_LIST), waiter.key);
             assertSame(RoomListMessage.class, waiter.resultType);
             assertInstanceOf(RoomListRequest.class, connection.message);
 
             RoomData roomData = new RoomData("room", List.of(), true);
             waiter.result = CompletableFuture.completedFuture(roomData);
             assertSame(roomData, client.rooms().joinRoom("room", true, token));
-            assertEquals(new WaitKey(MessageCode.Server.JOIN_ROOM, "room"), waiter.key);
+            assertEquals(new WaitKey.ServerRoom(MessageCode.Server.JOIN_ROOM, "room"), waiter.key);
             assertSame(RoomData.class, waiter.resultType);
             JoinRoomRequest join = assertInstanceOf(JoinRoomRequest.class, connection.message);
             assertEquals("room", join.getRoomName());
@@ -247,7 +247,7 @@ class EngineServerRequestTest {
 
             waiter.result = CompletableFuture.completedFuture(null);
             client.rooms().leaveRoom("room", token);
-            assertEquals(new WaitKey(MessageCode.Server.LEAVE_ROOM, "room"), waiter.key);
+            assertEquals(new WaitKey.ServerRoom(MessageCode.Server.LEAVE_ROOM, "room"), waiter.key);
             assertEquals(3, waiter.argumentCount);
             assertEquals(
                     "room",

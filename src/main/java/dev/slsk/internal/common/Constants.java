@@ -37,30 +37,4 @@ public final class Constants {
 
         private ConnectionType() {}
     }
-
-    /** Correlation wait-key prefixes. */
-    public static final class WaitKey {
-        /** Branch-level message. */
-        public static final String BRANCH_LEVEL_MESSAGE = "BranchLevelMessage";
-        /** Branch-root message. */
-        public static final String BRANCH_ROOT_MESSAGE = "BranchRootMessage";
-        /** Browse-response connection. */
-        public static final String BROWSE_RESPONSE_CONNECTION = "BrowseResponseConnection";
-        /** Child-depth message. */
-        public static final String CHILD_DEPTH_MESSAGE = "ChildDepthMessage";
-        /** Direct transfer. */
-        public static final String DIRECT_TRANSFER = "DirectTransfer";
-        /** Indirect transfer. */
-        public static final String INDIRECT_TRANSFER = "IndirectTransfer";
-        /** Search-request message. */
-        public static final String SEARCH_REQUEST_MESSAGE = "SearchRequestMessage";
-        /** Solicited distributed connection. */
-        public static final String SOLICITED_DISTRIBUTED_CONNECTION = "SolicitedDistributedConnection";
-        /** Solicited peer connection. */
-        public static final String SOLICITED_PEER_CONNECTION = "SolicitedPeerConnection";
-        /** Transfer state wait. */
-        public static final String TRANSFER = "Transfer";
-
-        private WaitKey() {}
-    }
 }

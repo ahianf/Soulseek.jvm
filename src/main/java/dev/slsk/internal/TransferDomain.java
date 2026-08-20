@@ -1022,7 +1022,7 @@ final class TransferDomain implements PeerServices {
         CancellationSignal token = CancellationSignals.orNone(cancellationSignal);
         try {
             Wait<PlaceInQueueResponse> responseWait = waiter.register(
-                    new WaitKey(MessageCode.Peer.PLACE_IN_QUEUE_RESPONSE, requestedUsername, filename),
+                    new WaitKey.PeerFile(MessageCode.Peer.PLACE_IN_QUEUE_RESPONSE, requestedUsername, filename),
                     PlaceInQueueResponse.class,
                     waiter.getDefaultTimeout(),
                     token);

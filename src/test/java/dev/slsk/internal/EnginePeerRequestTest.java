@@ -131,8 +131,8 @@ class EnginePeerRequestTest {
         assertSame(expected, actual);
         assertEquals(
                 List.of(
-                        new WaitKey(MessageCode.Peer.INFO_RESPONSE, "alice"),
-                        new WaitKey(MessageCode.Server.GET_PEER_ADDRESS, "alice")),
+                        new WaitKey.PeerUser(MessageCode.Peer.INFO_RESPONSE, "alice"),
+                        new WaitKey.ServerUser(MessageCode.Server.GET_PEER_ADDRESS, "alice")),
                 fixture.waiter.keys);
         assertEquals("alice", fixture.peerManager.username);
         assertEquals(ENDPOINT, fixture.peerManager.endpoint);
@@ -261,7 +261,9 @@ class EnginePeerRequestTest {
         source.clear();
         assertEquals(1, result.size());
         assertThrows(UnsupportedOperationException.class, () -> result.add(new SharedDirectory("other")));
-        assertEquals(new WaitKey(MessageCode.Peer.FOLDER_CONTENTS_RESPONSE, "alice", 123), fixture.waiter.keys.get(0));
+        assertEquals(
+                new WaitKey.PeerToken(MessageCode.Peer.FOLDER_CONTENTS_RESPONSE, "alice", 123),
+                fixture.waiter.keys.get(0));
         FolderContentsRequest request = assertInstanceOf(FolderContentsRequest.class, fixture.peer.message);
         assertEquals(123, request.getToken());
         assertEquals("shared", request.getDirectoryName());
@@ -287,7 +289,8 @@ class EnginePeerRequestTest {
 
         assertEquals(17, result);
         assertEquals(
-                new WaitKey(MessageCode.Peer.PLACE_IN_QUEUE_RESPONSE, "alice", "file"), fixture.waiter.keys.get(0));
+                new WaitKey.PeerFile(MessageCode.Peer.PLACE_IN_QUEUE_RESPONSE, "alice", "file"),
+                fixture.waiter.keys.get(0));
         assertEquals(
                 "file",
                 assertInstanceOf(PlaceInQueueRequest.class, fixture.peer.message)
@@ -419,9 +422,9 @@ class EnginePeerRequestTest {
         assertInstanceOf(BrowseRequestMessage.class, fixture.peer.message);
         assertEquals(
                 List.of(
-                        new WaitKey(MessageCode.Peer.BROWSE_RESPONSE, "alice"),
-                        new WaitKey(dev.slsk.internal.common.Constants.WaitKey.BROWSE_RESPONSE_CONNECTION, "alice"),
-                        new WaitKey(MessageCode.Server.GET_PEER_ADDRESS, "alice")),
+                        new WaitKey.PeerUser(MessageCode.Peer.BROWSE_RESPONSE, "alice"),
+                        new WaitKey.BrowseResponseConnection("alice"),
+                        new WaitKey.ServerUser(MessageCode.Server.GET_PEER_ADDRESS, "alice")),
                 fixture.waiter.keys);
         assertEquals(Duration.ofMillis(1234), fixture.waiter.lastTimeout);
         assertEquals(2, events.size());
@@ -492,7 +495,7 @@ class EnginePeerRequestTest {
                 SoulseekClientException.class,
                 failureOf(() -> setupFixture.client.users().browse("alice")));
         assertSame(expected, mapped.getCause());
-        assertEquals(new WaitKey(MessageCode.Peer.BROWSE_RESPONSE, "alice"), setupFixture.waiter.failedKey);
+        assertEquals(new WaitKey.PeerUser(MessageCode.Peer.BROWSE_RESPONSE, "alice"), setupFixture.waiter.failedKey);
         setupFixture.close();
 
         Fixture disconnectFixture = new Fixture();

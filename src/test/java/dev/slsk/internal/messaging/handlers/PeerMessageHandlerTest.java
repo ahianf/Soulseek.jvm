@@ -14,7 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
-import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
@@ -116,17 +115,19 @@ class PeerMessageHandlerTest {
 
         assertInstanceOf(
                 List.class,
-                fixture.waiter.completed.get(new WaitKey(MessageCode.Peer.FOLDER_CONTENTS_RESPONSE, USERNAME, TOKEN)));
+                fixture.waiter.completed.get(
+                        new WaitKey.PeerToken(MessageCode.Peer.FOLDER_CONTENTS_RESPONSE, USERNAME, TOKEN)));
         assertInstanceOf(
                 UserInfoMessage.class,
-                fixture.waiter.completed.get(new WaitKey(MessageCode.Peer.INFO_RESPONSE, USERNAME)));
+                fixture.waiter.completed.get(new WaitKey.PeerUser(MessageCode.Peer.INFO_RESPONSE, USERNAME)));
         assertInstanceOf(
                 TransferResponse.class,
-                fixture.waiter.completed.get(new WaitKey(MessageCode.Peer.TRANSFER_RESPONSE, USERNAME, TOKEN)));
+                fixture.waiter.completed.get(
+                        new WaitKey.PeerToken(MessageCode.Peer.TRANSFER_RESPONSE, USERNAME, TOKEN)));
         assertInstanceOf(
                 PlaceInQueueResponse.class,
                 fixture.waiter.completed.get(
-                        new WaitKey(MessageCode.Peer.PLACE_IN_QUEUE_RESPONSE, USERNAME, FILENAME)));
+                        new WaitKey.PeerFile(MessageCode.Peer.PLACE_IN_QUEUE_RESPONSE, USERNAME, FILENAME)));
     }
 
     @Test
@@ -136,7 +137,7 @@ class PeerMessageHandlerTest {
 
         fixture.handler.handleMessageRead(fixture.connection.proxy, response.toByteArray());
 
-        WaitKey key = new WaitKey(MessageCode.Peer.BROWSE_RESPONSE, USERNAME);
+        WaitKey key = new WaitKey.PeerUser(MessageCode.Peer.BROWSE_RESPONSE, USERNAME);
         assertInstanceOf(BrowseResponseMessage.class, fixture.waiter.completed.get(key));
 
         fixture.handler.handleMessageRead(
@@ -429,7 +430,8 @@ class PeerMessageHandlerTest {
                 tracked.connection.proxy, new TransferRequest(TransferDirection.UPLOAD, TOKEN, FILENAME).toByteArray());
         assertInstanceOf(
                 TransferRequest.class,
-                tracked.waiter.completed.get(new WaitKey(MessageCode.Peer.TRANSFER_REQUEST, USERNAME, FILENAME)));
+                tracked.waiter.completed.get(
+                        new WaitKey.PeerFile(MessageCode.Peer.TRANSFER_REQUEST, USERNAME, FILENAME)));
         assertTrue(tracked.connection.outgoing.isEmpty());
 
         Fixture unknown = new Fixture(new SoulseekClientOptions());
@@ -513,7 +515,7 @@ class PeerMessageHandlerTest {
                 fixture.connection.proxy, new UploadDenied(FILENAME, "No slot").toByteArray());
         fixture.handler.handleMessageRead(fixture.connection.proxy, new UploadFailed(FILENAME).toByteArray());
 
-        WaitKey key = new WaitKey(MessageCode.Peer.TRANSFER_REQUEST, USERNAME, FILENAME);
+        WaitKey key = new WaitKey.PeerFile(MessageCode.Peer.TRANSFER_REQUEST, USERNAME, FILENAME);
         assertInstanceOf(TransferReportedFailedException.class, fixture.waiter.failures.get(key));
         assertEquals("No slot", deniedEvents.getFirst().message());
         assertEquals(FILENAME, deniedEvents.getFirst().filename());
@@ -534,8 +536,7 @@ class PeerMessageHandlerTest {
                 new MessageReceivedEvent(fixture.connection.proxy, response.length, Arrays.copyOfRange(response, 4, 8));
 
         fixture.handler.handleMessageReceived(received);
-        Object result =
-                fixture.waiter.completed.get(new WaitKey(Constants.WaitKey.BROWSE_RESPONSE_CONNECTION, USERNAME));
+        Object result = fixture.waiter.completed.get(new WaitKey.BrowseResponseConnection(USERNAME));
         BrowseResponseConnection browse = assertInstanceOf(BrowseResponseConnection.class, result);
         assertSame(received, browse.eventData());
         assertSame(fixture.connection.proxy, browse.connection());

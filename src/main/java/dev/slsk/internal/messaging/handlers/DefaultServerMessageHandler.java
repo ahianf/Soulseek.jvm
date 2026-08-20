@@ -244,14 +244,14 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                             new ServerSessionInfo(null, null, integer(message)));
                 }
                 case CHECK_PRIVILEGES -> {
-                    waiter.complete(new WaitKey(code), integer(message));
+                    waiter.complete(new WaitKey.ServerMessage(code), integer(message));
                 }
                 case PRIVATE_ROOM_ADDED -> {
                     publish(ServerMessageEvent.PRIVATE_ROOM_MEMBERSHIP_ADDED, string(message));
                 }
                 case PRIVATE_ROOM_REMOVED -> {
                     String room = string(message);
-                    waiter.complete(new WaitKey(code, room));
+                    waiter.complete(new WaitKey.ServerRoom(code, room));
                     publish(ServerMessageEvent.PRIVATE_ROOM_MEMBERSHIP_REMOVED, room);
                 }
                 case PRIVATE_ROOM_OPERATOR_ADDED -> {
@@ -259,17 +259,17 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 }
                 case PRIVATE_ROOM_OPERATOR_REMOVED -> {
                     String room = string(message);
-                    waiter.complete(new WaitKey(code, room));
+                    waiter.complete(new WaitKey.ServerRoom(code, room));
                     publish(ServerMessageEvent.PRIVATE_ROOM_MODERATION_REMOVED, room);
                 }
                 case NEW_PASSWORD -> {
                     waiter.complete(
-                            new WaitKey(code),
+                            new WaitKey.ServerMessage(code),
                             NewPassword.fromByteArray(message).getPassword());
                 }
                 case PRIVATE_ROOM_TOGGLE -> {
                     waiter.complete(
-                            new WaitKey(code),
+                            new WaitKey.ServerMessage(code),
                             PrivateRoomToggle.fromByteArray(message).isAcceptInvitations());
                 }
                 case EXCLUDED_SEARCH_PHRASES -> {
@@ -283,14 +283,14 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                             GlobalMessageNotification.fromByteArray(message));
                 }
                 case PING -> {
-                    waiter.complete(new WaitKey(code));
+                    waiter.complete(new WaitKey.ServerMessage(code));
                 }
                 case LOGIN -> {
-                    waiter.complete(new WaitKey(code), LoginResponse.fromByteArray(message));
+                    waiter.complete(new WaitKey.ServerMessage(code), LoginResponse.fromByteArray(message));
                 }
                 case ROOM_LIST -> {
                     RoomListMessage rooms = RoomListResponseCodec.fromByteArray(message);
-                    waiter.complete(new WaitKey(code), rooms);
+                    waiter.complete(new WaitKey.ServerMessage(code), rooms);
                     publish(ServerMessageEvent.ROOM_LIST_RECEIVED, rooms);
                 }
                 case PRIVATE_ROOM_OWNED -> {
@@ -314,7 +314,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 case NOTIFY_PRIVILEGES -> handlePrivilegeNotification(message);
                 case USER_PRIVILEGES -> {
                     UserPrivilegeResponse response = UserPrivilegeResponse.fromByteArray(message);
-                    waiter.complete(new WaitKey(code, response.getUsername()), response.isPrivileged());
+                    waiter.complete(new WaitKey.ServerUser(code, response.getUsername()), response.isPrivileged());
                 }
                 case NET_INFO -> handleNetInfo(message);
                 case DISTRIBUTED_RESET -> {
@@ -329,37 +329,37 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 case CANNOT_JOIN_ROOM -> {
                     CannotJoinRoomNotification rejected = CannotJoinRoomNotification.fromByteArray(message);
                     waiter.fail(
-                            new WaitKey(MessageCode.Server.JOIN_ROOM, rejected.getRoomName()),
+                            new WaitKey.ServerRoom(MessageCode.Server.JOIN_ROOM, rejected.getRoomName()),
                             new RoomJoinForbiddenException(
                                     "The server rejected the request to join room " + rejected.getRoomName()));
                 }
                 case CONNECT_TO_PEER -> handleConnectToPeer(message);
                 case WATCH_USER -> {
                     WatchUserResponse response = WatchUserResponse.fromByteArray(message);
-                    waiter.complete(new WaitKey(code, response.getUsername()), response);
+                    waiter.complete(new WaitKey.ServerUser(code, response.getUsername()), response);
                 }
                 case GET_STATUS -> {
                     UserStatusSnapshot status = UserStatusResponseCodec.fromByteArray(message);
-                    waiter.complete(new WaitKey(code, status.username()), status);
+                    waiter.complete(new WaitKey.ServerUser(code, status.username()), status);
                     publish(ServerMessageEvent.USER_STATUS_CHANGED, status);
                 }
                 case GET_USER_STATS -> {
                     UserStatisticsSnapshot statistics = UserStatisticsResponseCodec.fromByteArray(message);
-                    waiter.complete(new WaitKey(code, statistics.username()), statistics);
+                    waiter.complete(new WaitKey.ServerUser(code, statistics.username()), statistics);
                     publish(ServerMessageEvent.USER_STATISTICS_CHANGED, statistics);
                 }
                 case PRIVATE_MESSAGE -> handlePrivateMessage(message);
                 case GET_PEER_ADDRESS -> {
                     UserAddressResponse response = UserAddressResponse.fromByteArray(message);
-                    waiter.complete(new WaitKey(code, response.getUsername()), response);
+                    waiter.complete(new WaitKey.ServerUser(code, response.getUsername()), response);
                 }
                 case JOIN_ROOM -> {
                     RoomData response = JoinRoomResponse.fromByteArray(message);
-                    waiter.complete(new WaitKey(code, response.name()), response);
+                    waiter.complete(new WaitKey.ServerRoom(code, response.name()), response);
                 }
                 case LEAVE_ROOM -> {
                     LeaveRoomResponse response = LeaveRoomResponse.fromByteArray(message);
-                    waiter.complete(new WaitKey(code, response.getRoomName()));
+                    waiter.complete(new WaitKey.ServerRoom(code, response.getRoomName()));
                     publish(ServerMessageEvent.ROOM_LEFT, new RoomLeftEvent(response.getRoomName(), server.username()));
                 }
                 case SAY_IN_CHAT_ROOM -> {
@@ -401,19 +401,19 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 }
                 case PRIVATE_ROOM_ADD_USER -> {
                     PrivateRoomAddUser response = PrivateRoomAddUser.fromByteArray(message);
-                    waiter.complete(new WaitKey(code, response.getRoomName(), response.getUsername()));
+                    waiter.complete(new WaitKey.ServerRoomUser(code, response.getRoomName(), response.getUsername()));
                 }
                 case PRIVATE_ROOM_REMOVE_USER -> {
                     PrivateRoomRemoveUser response = PrivateRoomRemoveUser.fromByteArray(message);
-                    waiter.complete(new WaitKey(code, response.getRoomName(), response.getUsername()));
+                    waiter.complete(new WaitKey.ServerRoomUser(code, response.getRoomName(), response.getUsername()));
                 }
                 case PRIVATE_ROOM_ADD_OPERATOR -> {
                     PrivateRoomAddOperator response = PrivateRoomAddOperator.fromByteArray(message);
-                    waiter.complete(new WaitKey(code, response.getRoomName(), response.getUsername()));
+                    waiter.complete(new WaitKey.ServerRoomUser(code, response.getRoomName(), response.getUsername()));
                 }
                 case PRIVATE_ROOM_REMOVE_OPERATOR -> {
                     PrivateRoomRemoveOperator response = PrivateRoomRemoveOperator.fromByteArray(message);
-                    waiter.complete(new WaitKey(code, response.getRoomName(), response.getUsername()));
+                    waiter.complete(new WaitKey.ServerRoomUser(code, response.getRoomName(), response.getUsername()));
                 }
                 case KICKED_FROM_SERVER -> {
                     publish(ServerMessageEvent.KICKED_FROM_SERVER, null);
@@ -566,11 +566,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 + download.getRemoteToken() + ") established. (id: "
                 + connection.getId() + ")");
         waiter.complete(
-                new WaitKey(
-                        Constants.WaitKey.INDIRECT_TRANSFER,
-                        download.getUsername(),
-                        download.getFilename(),
-                        download.getRemoteToken()),
+                new WaitKey.IndirectTransfer(download.getUsername(), download.getFilename(), download.getRemoteToken()),
                 connection);
     }
 

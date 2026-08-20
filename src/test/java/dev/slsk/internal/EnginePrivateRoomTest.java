@@ -51,27 +51,29 @@ class EnginePrivateRoomTest {
                     new Case(
                             () -> client.rooms().addPrivateRoomMember("room", "member", token),
                             new PrivateRoomAddUser("room", "member"),
-                            new WaitKey(MessageCode.Server.PRIVATE_ROOM_ADD_USER, "room", "member")),
+                            new WaitKey.ServerRoomUser(MessageCode.Server.PRIVATE_ROOM_ADD_USER, "room", "member")),
                     new Case(
                             () -> client.rooms().addPrivateRoomModerator("room", "moderator", token),
                             new PrivateRoomAddOperator("room", "moderator"),
-                            new WaitKey(MessageCode.Server.PRIVATE_ROOM_ADD_OPERATOR, "room", "moderator")),
+                            new WaitKey.ServerRoomUser(
+                                    MessageCode.Server.PRIVATE_ROOM_ADD_OPERATOR, "room", "moderator")),
                     new Case(
                             () -> client.rooms().removePrivateRoomMember("room", "member", token),
                             new PrivateRoomRemoveUser("room", "member"),
-                            new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVE_USER, "room", "member")),
+                            new WaitKey.ServerRoomUser(MessageCode.Server.PRIVATE_ROOM_REMOVE_USER, "room", "member")),
                     new Case(
                             () -> client.rooms().removePrivateRoomModerator("room", "moderator", token),
                             new PrivateRoomRemoveOperator("room", "moderator"),
-                            new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVE_OPERATOR, "room", "moderator")),
+                            new WaitKey.ServerRoomUser(
+                                    MessageCode.Server.PRIVATE_ROOM_REMOVE_OPERATOR, "room", "moderator")),
                     new Case(
                             () -> client.rooms().dropPrivateRoomMembership("room", token),
                             new PrivateRoomDropMembershipCommand("room"),
-                            new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVED, "room")),
+                            new WaitKey.ServerRoom(MessageCode.Server.PRIVATE_ROOM_REMOVED, "room")),
                     new Case(
                             () -> client.rooms().dropPrivateRoomOwnership("room", token),
                             new PrivateRoomDropOwnershipCommand("room"),
-                            new WaitKey(MessageCode.Server.PRIVATE_ROOM_REMOVED, "room")));
+                            new WaitKey.ServerRoom(MessageCode.Server.PRIVATE_ROOM_REMOVED, "room")));
 
             for (Case testCase : cases) {
                 waiter.result = new CompletableFuture<>();

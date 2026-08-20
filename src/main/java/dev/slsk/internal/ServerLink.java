@@ -266,7 +266,7 @@ public final class ServerLink {
         requireLoggedIn("change a password");
         String response = request(
                 new NewPassword(password),
-                new WaitKey(MessageCode.Server.NEW_PASSWORD),
+                new WaitKey.ServerMessage(MessageCode.Server.NEW_PASSWORD),
                 String.class,
                 cancellationSignal,
                 "Failed to change password: ");
@@ -285,7 +285,7 @@ public final class ServerLink {
         requireLoggedIn("check privileges");
         return request(
                 new CheckPrivilegesRequest(),
-                new WaitKey(MessageCode.Server.CHECK_PRIVILEGES),
+                new WaitKey.ServerMessage(MessageCode.Server.CHECK_PRIVILEGES),
                 Integer.class,
                 cancellationSignal,
                 "Failed to get privileges: ");
@@ -299,7 +299,8 @@ public final class ServerLink {
         requireLoggedIn("send a ping");
         CancellationSignal token = CancellationSignals.orNone(cancellationSignal);
         try {
-            Wait<Void> wait = waiter.register(new WaitKey(MessageCode.Server.PING), waiter.getDefaultTimeout(), token);
+            Wait<Void> wait = waiter.register(
+                    new WaitKey.ServerMessage(MessageCode.Server.PING), waiter.getDefaultTimeout(), token);
             long started = System.nanoTime();
             write(new ServerPing(), token);
             wait.await();

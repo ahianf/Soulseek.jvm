@@ -117,7 +117,7 @@ final class DownloadRun {
         this.cancellationSignal = cancellationSignal;
         this.uniqueKey = uniqueKey;
         transferStartRequestedWaitKey =
-                new WaitKey(MessageCode.Peer.TRANSFER_REQUEST, download.getUsername(), download.getFilename());
+                new WaitKey.PeerFile(MessageCode.Peer.TRANSFER_REQUEST, download.getUsername(), download.getFilename());
     }
 
     /**

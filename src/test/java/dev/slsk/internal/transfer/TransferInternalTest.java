@@ -10,7 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
-import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Monitors;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.network.tcp.SocketConnection;
@@ -74,9 +73,7 @@ class TransferInternalTest {
     void waitKeyContainsExactSourceParts() {
         TransferInternal transfer = new TransferInternal(TransferDirection.UPLOAD, "alice", "file", -1);
 
-        assertEquals(
-                new WaitKey(Constants.WaitKey.TRANSFER, TransferDirection.UPLOAD, "alice", "file", -1),
-                transfer.getWaitKey());
+        assertEquals(new WaitKey.Transfer(TransferDirection.UPLOAD, "alice", "file", -1), transfer.getWaitKey());
     }
 
     @Test

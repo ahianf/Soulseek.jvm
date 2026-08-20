@@ -390,19 +390,11 @@ class DistributedNetworkTest {
         Fixture fixture = fixture();
         ConnectionProbe parent = ConnectionProbe.message(USERNAME, ENDPOINT);
         Wait<Integer> level = fixture.waiter.register(
-                new WaitKey(Constants.WaitKey.BRANCH_LEVEL_MESSAGE, parent.id),
-                Integer.class,
-                fixture.waiter.getDefaultTimeout(),
-                null);
+                new WaitKey.BranchLevel(parent.id), Integer.class, fixture.waiter.getDefaultTimeout(), null);
         Wait<String> root = fixture.waiter.register(
-                new WaitKey(Constants.WaitKey.BRANCH_ROOT_MESSAGE, parent.id),
-                String.class,
-                fixture.waiter.getDefaultTimeout(),
-                null);
-        Wait<Void> search = fixture.waiter.register(
-                new WaitKey(Constants.WaitKey.SEARCH_REQUEST_MESSAGE, parent.id),
-                fixture.waiter.getDefaultTimeout(),
-                null);
+                new WaitKey.BranchRoot(parent.id), String.class, fixture.waiter.getDefaultTimeout(), null);
+        Wait<Void> search =
+                fixture.waiter.register(new WaitKey.SearchRequest(parent.id), fixture.waiter.getDefaultTimeout(), null);
 
         fixture.manager.handleParentCandidateMessage(
                 new MessageEvent(parent.messageConnection(), new DistributedBranchLevel(3).toByteArray()));
@@ -482,9 +474,7 @@ class DistributedNetworkTest {
         ConnectionProbe parent = ConnectionProbe.message(USERNAME, ENDPOINT);
         parent.onByteWrite = () -> {
             parent.fireMessageRead(new DistributedBranchLevel(2).toByteArray());
-            fixture.waiter.fail(
-                    new WaitKey(Constants.WaitKey.SEARCH_REQUEST_MESSAGE, parent.id),
-                    new RuntimeException("missing search"));
+            fixture.waiter.fail(new WaitKey.SearchRequest(parent.id), new RuntimeException("missing search"));
         };
         fixture.factory.distributedDirect.put(ENDPOINT, parent);
 
@@ -743,10 +733,9 @@ class DistributedNetworkTest {
         @Override
         public <T> Wait<T> register(
                 WaitKey key, Class<T> resultType, Duration timeout, CancellationSignal cancellationSignal) {
-            CompletableFuture<T> configured =
-                    key.getToken().startsWith(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION)
-                            ? (CompletableFuture<T>) solicitationFuture
-                            : (CompletableFuture<T>) futures.computeIfAbsent(key, ignored -> new CompletableFuture<>());
+            CompletableFuture<T> configured = key instanceof WaitKey.SolicitedDistributed
+                    ? (CompletableFuture<T>) solicitationFuture
+                    : (CompletableFuture<T>) futures.computeIfAbsent(key, ignored -> new CompletableFuture<>());
             // The future is how a test says what the answer will be; Outcomes
             // turns it into what a real wait raises.
             return () -> Outcomes.raise(configured);

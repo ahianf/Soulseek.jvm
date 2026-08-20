@@ -784,18 +784,17 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 case EMBEDDED_MESSAGE -> {
                     EmbeddedMessage embedded = EmbeddedMessage.fromByteArray(message);
                     if (embedded.getDistributedCode() == MessageCode.Distributed.SEARCH_REQUEST) {
-                        waiter.complete(new WaitKey(Constants.WaitKey.SEARCH_REQUEST_MESSAGE, connection.getId()));
+                        waiter.complete(new WaitKey.SearchRequest(connection.getId()));
                     }
                 }
-                case SEARCH_REQUEST ->
-                    waiter.complete(new WaitKey(Constants.WaitKey.SEARCH_REQUEST_MESSAGE, connection.getId()));
+                case SEARCH_REQUEST -> waiter.complete(new WaitKey.SearchRequest(connection.getId()));
                 case BRANCH_LEVEL ->
                     waiter.complete(
-                            new WaitKey(Constants.WaitKey.BRANCH_LEVEL_MESSAGE, connection.getId()),
+                            new WaitKey.BranchLevel(connection.getId()),
                             DistributedBranchLevel.fromByteArray(message).getLevel());
                 case BRANCH_ROOT ->
                     waiter.complete(
-                            new WaitKey(Constants.WaitKey.BRANCH_ROOT_MESSAGE, connection.getId()),
+                            new WaitKey.BranchRoot(connection.getId()),
                             DistributedBranchRoot.fromByteArray(message).getUsername());
                 default -> {
                     // Source ignores all other distributed messages here.
@@ -1029,7 +1028,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         pendingSolicitations.putIfAbsent(solicitationToken, username);
         try {
             Wait<TransportConnection> wait = waiter.register(
-                    new WaitKey(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION, username, solicitationToken),
+                    new WaitKey.SolicitedDistributed(username, solicitationToken),
                     TransportConnection.class,
                     options.get().distributedConnectionOptions().connectTimeout(),
                     cancellationSignal);
@@ -1077,19 +1076,17 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         // them back to back and a wait registered after the first would miss
         // the ones behind it.
         Wait<Integer> branchLevel = waiter.register(
-                new WaitKey(Constants.WaitKey.BRANCH_LEVEL_MESSAGE, connection.getId()),
+                new WaitKey.BranchLevel(connection.getId()),
                 Integer.class,
                 waiter.getDefaultTimeout(),
                 token(cancellationSignal));
         Wait<String> branchRoot = waiter.register(
-                new WaitKey(Constants.WaitKey.BRANCH_ROOT_MESSAGE, connection.getId()),
+                new WaitKey.BranchRoot(connection.getId()),
                 String.class,
                 waiter.getDefaultTimeout(),
                 token(cancellationSignal));
         Wait<Void> search = waiter.register(
-                new WaitKey(Constants.WaitKey.SEARCH_REQUEST_MESSAGE, connection.getId()),
-                waiter.getDefaultTimeout(),
-                token(cancellationSignal));
+                new WaitKey.SearchRequest(connection.getId()), waiter.getDefaultTimeout(), token(cancellationSignal));
         // The three waits are live from here; awaiting them is the caller's,
         // after it has written whatever provokes the candidate into answering.
         return () -> {

@@ -1029,7 +1029,7 @@ final class SoulseekEngine implements AutoCloseable {
         // Registered before the login bytes go out: the server answers a login
         // as fast as anything on this protocol.
         Wait<LoginResponse> loginWait = waiter.register(
-                new WaitKey(MessageCode.Server.LOGIN),
+                new WaitKey.ServerMessage(MessageCode.Server.LOGIN),
                 LoginResponse.class,
                 waiter.getDefaultTimeout(),
                 cancellationSignal);

@@ -12,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.internal.ServerLink;
 import dev.slsk.internal.ServerLinks;
-import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Eventually;
 import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.TokenFactory;
@@ -99,12 +98,9 @@ class DistributedMessageHandlerTest {
         Fixture fixture = new Fixture(true);
         ConnectionProbe connection = new ConnectionProbe(USERNAME, ENDPOINT);
         Wait<Integer> depth = fixture.waiter.register(
-                new WaitKey(Constants.WaitKey.CHILD_DEPTH_MESSAGE, connection.key),
-                Integer.class,
-                fixture.waiter.getDefaultTimeout(),
-                null);
+                new WaitKey.ChildDepth(connection.key), Integer.class, fixture.waiter.getDefaultTimeout(), null);
         Wait<DistributedPingResponse> ping = fixture.waiter.register(
-                new WaitKey(MessageCode.Distributed.PING, USERNAME),
+                new WaitKey.DistributedUser(MessageCode.Distributed.PING, USERNAME),
                 DistributedPingResponse.class,
                 fixture.waiter.getDefaultTimeout(),
                 null);

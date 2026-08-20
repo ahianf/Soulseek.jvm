@@ -500,10 +500,9 @@ class PeerNetworkTest {
         Fixture directFixture = new Fixture();
         ConnectionProbe direct = ConnectionProbe.connection(DIRECT_ENDPOINT);
         directFixture.waiter.put(
-                new WaitKey(Constants.WaitKey.DIRECT_TRANSFER, USERNAME, TOKEN),
-                CompletableFuture.completedFuture(direct.connection()));
+                new WaitKey.DirectTransfer(USERNAME, TOKEN), CompletableFuture.completedFuture(direct.connection()));
         directFixture.waiter.put(
-                new WaitKey(Constants.WaitKey.INDIRECT_TRANSFER, USERNAME, "file", TOKEN),
+                new WaitKey.IndirectTransfer(USERNAME, "file", TOKEN),
                 CompletableFuture.failedFuture(new RuntimeException()));
         assertSame(
                 direct.connection(),
@@ -512,10 +511,9 @@ class PeerNetworkTest {
         Fixture indirectFixture = new Fixture();
         ConnectionProbe indirect = ConnectionProbe.connection(INDIRECT_ENDPOINT);
         indirectFixture.waiter.put(
-                new WaitKey(Constants.WaitKey.DIRECT_TRANSFER, USERNAME, TOKEN),
-                CompletableFuture.failedFuture(new RuntimeException()));
+                new WaitKey.DirectTransfer(USERNAME, TOKEN), CompletableFuture.failedFuture(new RuntimeException()));
         indirectFixture.waiter.put(
-                new WaitKey(Constants.WaitKey.INDIRECT_TRANSFER, USERNAME, "file", TOKEN),
+                new WaitKey.IndirectTransfer(USERNAME, "file", TOKEN),
                 CompletableFuture.completedFuture(indirect.connection()));
         assertSame(
                 indirect.connection(),
