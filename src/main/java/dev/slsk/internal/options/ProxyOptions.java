@@ -32,7 +32,7 @@ public record ProxyOptions(
     }
 
     private static Resolved resolve(String address, int port, String username, String password) {
-        if (CommonUtils.isNullOrWhiteSpace(address)) {
+        if (CommonUtils.isNullOrUnicodeWhitespace(address)) {
             throw new IllegalArgumentException("address must contain non-whitespace text");
         }
         if (port < 0 || port > 65_535) {

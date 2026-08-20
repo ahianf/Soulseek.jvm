@@ -35,15 +35,14 @@ public final class CommonUtils {
     /**
      * Reports whether a value is null, empty, or consists only of whitespace.
      *
-     * <p>This is the counterpart of the source's {@code string.IsNullOrWhiteSpace} guard. {@code String.trim()} and
-     * {@code String.isBlank()} both classify fewer code points as whitespace than {@code char.IsWhiteSpace} does, so
-     * neither alone reproduces the source's rejection set. Testing {@code Character.isWhitespace} together with
-     * {@code Character.isSpaceChar} covers the non-breaking separators the source also rejects.
+     * <p>{@code String.isBlank()} classifies fewer code points as whitespace.
+     * Testing {@code Character.isWhitespace} together with {@code
+     * Character.isSpaceChar} also covers non-breaking separators.
      *
      * @param value the value to test
      * @return {@code true} when the value is null, empty, or entirely whitespace
      */
-    public static boolean isNullOrWhiteSpace(String value) {
+    public static boolean isNullOrUnicodeWhitespace(String value) {
         return value == null
                 || value.isEmpty()
                 || value.codePoints()
@@ -58,7 +57,7 @@ public final class CommonUtils {
      * @throws IllegalArgumentException when the value is blank
      */
     public static void requireText(String value, String name) {
-        if (isNullOrWhiteSpace(value)) {
+        if (isNullOrUnicodeWhitespace(value)) {
             throw new IllegalArgumentException(name + " must not be null, empty, or whitespace");
         }
     }

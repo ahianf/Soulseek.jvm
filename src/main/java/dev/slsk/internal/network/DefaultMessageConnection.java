@@ -78,7 +78,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
             ConnectionMonitor monitor) {
         super(ipEndpoint, options, tcpClient, monitor);
         this.codeLength = codeLength;
-        if (isNullOrWhiteSpace(username)) {
+        if (CommonUtils.isNullOrUnicodeWhitespace(username)) {
             throw new IllegalArgumentException(
                     "The username must not be a null or empty string, " + "or one consisting only of whitespace");
         }
@@ -97,7 +97,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
             ExecutorService ioExecutor) {
         super(ipEndpoint, options, tcpClient, monitor, ioExecutor);
         this.codeLength = codeLength;
-        if (isNullOrWhiteSpace(username)) {
+        if (CommonUtils.isNullOrUnicodeWhitespace(username)) {
             throw new IllegalArgumentException(
                     "The username must not be a null or empty string, " + "or one consisting only of whitespace");
         }
@@ -300,9 +300,5 @@ public final class DefaultMessageConnection extends SocketConnection implements 
      */
     private void dispatch(Runnable event) {
         event.run();
-    }
-
-    private static boolean isNullOrWhiteSpace(String value) {
-        return CommonUtils.isNullOrWhiteSpace(value);
     }
 }

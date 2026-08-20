@@ -75,23 +75,23 @@ class CommonUtilsTest {
 
     @Test
     @DisplayName("IsNullOrWhiteSpace rejects the separators the source rejects")
-    void isNullOrWhiteSpaceMatchesTheSourceRejectionSet() {
-        assertTrue(CommonUtils.isNullOrWhiteSpace(null));
-        assertTrue(CommonUtils.isNullOrWhiteSpace(""));
-        assertTrue(CommonUtils.isNullOrWhiteSpace(" "));
-        assertTrue(CommonUtils.isNullOrWhiteSpace("\t\r\n"));
+    void isNullOrUnicodeWhitespaceIncludesNonBreakingSeparators() {
+        assertTrue(CommonUtils.isNullOrUnicodeWhitespace(null));
+        assertTrue(CommonUtils.isNullOrUnicodeWhitespace(""));
+        assertTrue(CommonUtils.isNullOrUnicodeWhitespace(" "));
+        assertTrue(CommonUtils.isNullOrUnicodeWhitespace("\t\r\n"));
 
         // Separators above U+0020 that String.trim() leaves in place and that the source still rejects.
-        assertTrue(CommonUtils.isNullOrWhiteSpace("\u00A0"), "no-break space");
-        assertTrue(CommonUtils.isNullOrWhiteSpace("\u2003"), "em space");
-        assertTrue(CommonUtils.isNullOrWhiteSpace("\u2007"), "figure space");
-        assertTrue(CommonUtils.isNullOrWhiteSpace("\u202F"), "narrow no-break space");
-        assertTrue(CommonUtils.isNullOrWhiteSpace("\u3000"), "ideographic space");
-        assertTrue(CommonUtils.isNullOrWhiteSpace(" \u2003\t"), "mixed separators");
+        assertTrue(CommonUtils.isNullOrUnicodeWhitespace("\u00A0"), "no-break space");
+        assertTrue(CommonUtils.isNullOrUnicodeWhitespace("\u2003"), "em space");
+        assertTrue(CommonUtils.isNullOrUnicodeWhitespace("\u2007"), "figure space");
+        assertTrue(CommonUtils.isNullOrUnicodeWhitespace("\u202F"), "narrow no-break space");
+        assertTrue(CommonUtils.isNullOrUnicodeWhitespace("\u3000"), "ideographic space");
+        assertTrue(CommonUtils.isNullOrUnicodeWhitespace(" \u2003\t"), "mixed separators");
 
-        assertFalse(CommonUtils.isNullOrWhiteSpace("a"));
-        assertFalse(CommonUtils.isNullOrWhiteSpace(" a "));
-        assertFalse(CommonUtils.isNullOrWhiteSpace("\u2003a"));
+        assertFalse(CommonUtils.isNullOrUnicodeWhitespace("a"));
+        assertFalse(CommonUtils.isNullOrUnicodeWhitespace(" a "));
+        assertFalse(CommonUtils.isNullOrUnicodeWhitespace("\u2003a"));
     }
 
     private static final class CountingCloseable implements AutoCloseable {

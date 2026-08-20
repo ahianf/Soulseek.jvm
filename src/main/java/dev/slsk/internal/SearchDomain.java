@@ -201,7 +201,7 @@ final class SearchDomain {
 
     static SearchQuery validateSearchQuery(SearchQuery initialQuery) {
         SearchQuery query = Objects.requireNonNull(initialQuery, "query");
-        if (dev.slsk.internal.common.CommonUtils.isNullOrWhiteSpace(query.searchText())) {
+        if (dev.slsk.internal.common.CommonUtils.isNullOrUnicodeWhitespace(query.searchText())) {
             throw new IllegalArgumentException("Search text must not be null, empty, or whitespace");
         }
         if (query.terms().isEmpty()) {
