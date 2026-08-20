@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.internal.transfer.Transfer;
-import dev.slsk.internal.transfer.TransferState;
+import dev.slsk.internal.transfer.TransferPhase;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -95,7 +95,7 @@ class TransferOptionsTest {
         assertFalse(copy.disposeInputStreamOnCompletion());
         assertTrue(copy.disposeOutputStreamOnCompletion());
         assertNotSame(original.stateChanged(), copy.stateChanged());
-        copy.stateChanged().accept(new TransferStateChange(TransferState.NONE, null));
+        copy.stateChanged().accept(new TransferStateChange(TransferPhase.NONE, null));
     }
 
     @Test
@@ -106,7 +106,7 @@ class TransferOptionsTest {
                 TransferOptions.builder().stateChanged(change -> order.add(2)).build();
         TransferOptions copy = original.withAdditionalStateChanged(change -> order.add(1));
 
-        copy.stateChanged().accept(new TransferStateChange(TransferState.NONE, null));
+        copy.stateChanged().accept(new TransferStateChange(TransferPhase.NONE, null));
 
         assertEquals(List.of(1, 2), order);
     }
@@ -126,7 +126,7 @@ class TransferOptionsTest {
 
         RuntimeException thrown = assertThrows(
                 RuntimeException.class,
-                () -> copy.stateChanged().accept(new TransferStateChange(TransferState.NONE, null)));
+                () -> copy.stateChanged().accept(new TransferStateChange(TransferPhase.NONE, null)));
 
         assertSame(failure, thrown);
         assertEquals(List.of(1), order);
@@ -166,10 +166,10 @@ class TransferOptionsTest {
     @Test
     @DisplayName("Tuple adaptations retain values and enforce value-state nullability")
     void tupleAdaptationsRetainValuesAndEnforceStateNullability() {
-        TransferStateChange state = new TransferStateChange(TransferState.COMPLETED, null);
+        TransferStateChange state = new TransferStateChange(TransferPhase.COMPLETED, null);
         TransferProgressUpdate progress = new TransferProgressUpdate(42, null);
 
-        assertEquals(TransferState.COMPLETED, state.previousState());
+        assertEquals(TransferPhase.COMPLETED, state.previousState());
         assertNull(state.transfer());
         assertEquals(42, progress.previousBytesTransferred());
         assertNull(progress.transfer());

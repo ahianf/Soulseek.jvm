@@ -34,8 +34,10 @@ import dev.slsk.internal.options.TransferProgressUpdate;
 import dev.slsk.internal.options.TransferStateChange;
 import dev.slsk.internal.transfer.Transfer;
 import dev.slsk.internal.transfer.TransferInternal;
-import dev.slsk.internal.transfer.TransferState;
+import dev.slsk.internal.transfer.TransferPhase;
+import dev.slsk.internal.transfer.TransferQueueLocation;
 import dev.slsk.internal.transfer.TransferStreams;
+import dev.slsk.internal.transfer.TransferTermination;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -95,7 +97,7 @@ final class DownloadRun {
 
     private java.util.concurrent.Semaphore userPermit;
     private final WaitKey transferStartRequestedWaitKey;
-    private TransferState lastState = TransferState.NONE;
+    private TransferPhase lastPhase = TransferPhase.NONE;
     private InetSocketAddress endpoint;
     private Connection connection;
     private OutputStream outputStream;
@@ -137,7 +139,7 @@ final class DownloadRun {
      */
     Transfer execute() {
         try {
-            updateState(TransferState.QUEUED.or(TransferState.LOCALLY));
+            updateQueued(TransferQueueLocation.LOCAL);
             endpoint = domain.endpoint(download.getUsername(), cancellationSignal);
             MessageConnection peerConnection =
                     domain.peers().getOrAddMessageConnection(download.getUsername(), endpoint, cancellationSignal);
@@ -155,7 +157,7 @@ final class DownloadRun {
                         + " from " + download.getUsername()
                         + " is taking up an offer already made (remote token: "
                         + offer.getToken() + ")");
-                updateState(TransferState.REQUESTED);
+                updateState(TransferPhase.REQUESTED);
                 beginQueuedDownload(() -> offer);
                 receiveFile();
                 return download.toTransfer();
@@ -179,7 +181,7 @@ final class DownloadRun {
             domain.diagnostic.debug("Asked " + download.getUsername() + " to queue "
                     + filenameOnly(download.getFilename()) + " (id: " + peerConnection.getId()
                     + ", state: " + peerConnection.getState() + ")");
-            updateState(TransferState.REQUESTED);
+            updateState(TransferPhase.REQUESTED);
 
             beginQueuedDownload(transferStartRequested);
             receiveFile();
@@ -211,7 +213,7 @@ final class DownloadRun {
         readTransfer();
 
         updateProgress(currentOutputPosition());
-        updateState(TransferState.COMPLETED.or(TransferState.SUCCEEDED));
+        complete(TransferTermination.SUCCEEDED);
         domain.diagnostic.info("Download of " + filenameOnly(download.getFilename())
                 + " from " + download.getUsername() + " complete ("
                 + currentOutputPosition() + " of " + download.getSize() + " bytes).");
@@ -220,7 +222,7 @@ final class DownloadRun {
 
     private void beginQueuedDownload(Wait<TransferRequest> transferStartRequested)
             throws InterruptedException, TimeoutException {
-        updateState(TransferState.QUEUED.or(TransferState.REMOTELY));
+        updateQueued(TransferQueueLocation.REMOTE);
         TransferRequest request = transferStartRequested.await();
 
         // Acquired here rather than at the top of the run, because what these
@@ -245,7 +247,7 @@ final class DownloadRun {
             download.setSize(request.getFileSize());
         }
         download.setRemoteToken(request.getToken());
-        updateState(TransferState.INITIALIZING);
+        updateState(TransferPhase.INITIALIZING);
 
         MessageConnection refreshed =
                 domain.peers().getOrAddMessageConnection(download.getUsername(), endpoint, cancellationSignal);
@@ -353,7 +355,7 @@ final class DownloadRun {
                     .putLong(download.getStartOffset())
                     .array();
             connection.write(offset, linkedToken);
-            updateState(TransferState.IN_PROGRESS);
+            updateState(TransferPhase.IN_PROGRESS);
             updateProgress(download.getStartOffset());
 
             // A thread of its own because the read is raced against the
@@ -407,32 +409,32 @@ final class DownloadRun {
         reportFailure(failure);
         if (failure instanceof TransferRejectedException) {
             download.setException(failure);
-            updateState(TransferState.COMPLETED.or(TransferState.REJECTED));
+            complete(TransferTermination.REJECTED);
             return;
         }
         if (failure instanceof TransferSizeMismatchException) {
             download.setException(failure);
-            updateState(TransferState.COMPLETED.or(TransferState.ABORTED));
+            complete(TransferTermination.ABORTED);
             return;
         }
         if (failure instanceof CancellationException) {
             disconnectTransfer("Transfer cancelled", failure);
             download.setException(failure);
             updateProgress(currentOutputPosition());
-            updateState(TransferState.COMPLETED.or(TransferState.CANCELLED));
+            complete(TransferTermination.CANCELLED);
             return;
         }
         if (failure instanceof TimeoutException) {
             disconnectTransfer("Transfer timed out", failure);
             download.setException(failure);
             updateProgress(currentOutputPosition());
-            updateState(TransferState.COMPLETED.or(TransferState.TIMED_OUT));
+            complete(TransferTermination.TIMED_OUT);
             return;
         }
         disconnectTransfer("Transfer error", failure);
         download.setException(failure);
         updateProgress(currentOutputPosition());
-        updateState(TransferState.COMPLETED.or(TransferState.ERRORED));
+        complete(TransferTermination.ERRORED);
     }
 
     /**
@@ -565,11 +567,25 @@ final class DownloadRun {
         }
     }
 
-    private void updateState(TransferState state) {
-        download.setState(state);
+    private void updateState(TransferPhase phase) {
+        download.setPhase(phase);
+        publishStateChange(phase);
+    }
+
+    private void updateQueued(TransferQueueLocation location) {
+        download.queue(location);
+        publishStateChange(TransferPhase.QUEUED);
+    }
+
+    private void complete(TransferTermination termination) {
+        download.complete(termination);
+        publishStateChange(TransferPhase.COMPLETED);
+    }
+
+    private void publishStateChange(TransferPhase phase) {
         Transfer transfer = download.toTransfer();
-        TransferState previous = lastState;
-        lastState = state;
+        TransferPhase previous = lastPhase;
+        lastPhase = phase;
         if (transferOptions.stateChanged() != null) {
             transferOptions.stateChanged().accept(new TransferStateChange(previous, transfer));
         }

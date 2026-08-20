@@ -33,7 +33,7 @@ import dev.slsk.internal.transfer.DownloadRequest;
 import dev.slsk.internal.transfer.Transfer;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
-import dev.slsk.internal.transfer.TransferState;
+import dev.slsk.internal.transfer.TransferPhase;
 import dev.slsk.internal.transfer.TransferStreams;
 import dev.slsk.internal.transfer.UploadRequest;
 import dev.slsk.spi.ResolvedFile;
@@ -717,8 +717,8 @@ final class TransferDomain implements PeerServices {
     /** Returns whether an upload of this file to this peer is running right now. */
     private boolean uploadActiveFor(Username user, String path) {
         for (TransferInternal upload : uploads().values()) {
-            TransferState state = upload.getState();
-            if (state == null || state.contains(TransferState.COMPLETED)) {
+            TransferPhase phase = upload.getPhase();
+            if (phase == TransferPhase.COMPLETED) {
                 continue;
             }
             if (user.value().equals(upload.getUsername()) && path.equals(upload.getFilename())) {

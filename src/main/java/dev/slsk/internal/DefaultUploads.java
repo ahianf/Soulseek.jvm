@@ -72,7 +72,7 @@ final class DefaultUploads implements Uploads {
         Transfer transfer = change.transfer();
         TransferId id = Transfers.id(transfer);
         Instant at = Instant.now();
-        if (dev.slsk.internal.transfer.TransferState.NONE.equals(change.previousState())) {
+        if (change.previousState() == dev.slsk.internal.transfer.TransferPhase.NONE) {
             // The first transition is the upload existing at all: a peer asked
             // and the policy accepted.
             events.publish(new UploadEvent.Requested(project(transfer), at));

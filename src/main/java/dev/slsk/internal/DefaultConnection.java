@@ -33,10 +33,9 @@ import java.util.function.Consumer;
 /**
  * {@link Connection}, over the engine.
  *
- * <p>Most of what this does is translate two bit-flag sets into types that name
- * themselves. {@code SoulseekClientState} is the engine's lifecycle phase;
- * {@link ConnectionState}
- * says {@code Online}. The internal {@code ServerInfo} uses boxed {@code
+ * <p>Most of what this does is translate the engine's lifecycle phase into a
+ * type that carries session data. {@code SoulseekClientState} names the phase;
+ * {@link ConnectionState} says {@code Online}. The internal {@code ServerInfo} uses boxed {@code
  * Integer} and {@code Boolean} to mean "the server has not told us yet", which
  * is a {@code NullPointerException} waiting for the caller who forgets; the
  * public one says {@code OptionalInt}.

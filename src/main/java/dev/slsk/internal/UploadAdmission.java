@@ -319,8 +319,8 @@ public final class UploadAdmission {
 
         Set<Username> busy = new HashSet<>();
         for (dev.slsk.internal.transfer.TransferInternal upload : uploads.get().values()) {
-            dev.slsk.internal.transfer.TransferState state = upload.getState();
-            if (state == null || state.contains(dev.slsk.internal.transfer.TransferState.COMPLETED)) {
+            dev.slsk.internal.transfer.TransferPhase phase = upload.getPhase();
+            if (phase == dev.slsk.internal.transfer.TransferPhase.COMPLETED) {
                 continue;
             }
             busy.add(Username.of(upload.getUsername()));
@@ -341,8 +341,8 @@ public final class UploadAdmission {
         int active = 0;
         int mine = 0;
         for (dev.slsk.internal.transfer.TransferInternal upload : uploads.get().values()) {
-            dev.slsk.internal.transfer.TransferState state = upload.getState();
-            if (state == null || state.contains(dev.slsk.internal.transfer.TransferState.COMPLETED)) {
+            dev.slsk.internal.transfer.TransferPhase phase = upload.getPhase();
+            if (phase == dev.slsk.internal.transfer.TransferPhase.COMPLETED) {
                 continue;
             }
             active++;

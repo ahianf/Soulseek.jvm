@@ -37,7 +37,9 @@ public final class TransferInternal {
     private boolean speedInitialized;
     private long startOffset;
     private Instant startTime;
-    private TransferState state = TransferState.NONE;
+    private TransferPhase phase = TransferPhase.NONE;
+    private TransferQueueLocation queueLocation;
+    private TransferTermination termination;
     private final int token;
     private final String username;
     private final WaitKey waitKey;
@@ -199,28 +201,38 @@ public final class TransferInternal {
         return startTime;
     }
 
-    /** Returns the transfer state. */
-    public synchronized TransferState getState() {
-        return state;
+    /** Returns the transfer phase. */
+    public synchronized TransferPhase getPhase() {
+        return phase;
     }
 
-    /** Sets the transfer state and records transition timestamps. */
-    public synchronized void setState(TransferState value) {
-        Objects.requireNonNull(value, "value");
-        Instant time = clock.instant();
-        if (value.contains(TransferState.IN_PROGRESS) && startTime == null) {
-            startTime = time;
-        } else if (value.contains(TransferState.COMPLETED) && endTime == null) {
-            endTime = time;
-            if (startTime == null) {
-                startTime = time;
-            }
-        }
+    /** Returns the queue location, or {@code null} outside the queued phase. */
+    public synchronized TransferQueueLocation getQueueLocation() {
+        return queueLocation;
+    }
 
-        state = value;
-        if (state.contains(TransferState.COMPLETED)) {
-            updateProgress(bytesTransferred);
+    /** Returns why the transfer ended, or {@code null} while it is active. */
+    public synchronized TransferTermination getTermination() {
+        return termination;
+    }
+
+    /** Sets a non-queued, non-terminal transfer phase. */
+    public synchronized void setPhase(TransferPhase value) {
+        Objects.requireNonNull(value, "value");
+        if (value == TransferPhase.QUEUED || value == TransferPhase.COMPLETED) {
+            throw new IllegalArgumentException("queued and completed phases require their detail value");
         }
+        transition(value, null, null);
+    }
+
+    /** Moves the transfer into the queued phase at the specified side. */
+    public synchronized void queue(TransferQueueLocation location) {
+        transition(TransferPhase.QUEUED, Objects.requireNonNull(location, "location"), null);
+    }
+
+    /** Completes the transfer with the specified reason. */
+    public synchronized void complete(TransferTermination reason) {
+        transition(TransferPhase.COMPLETED, null, Objects.requireNonNull(reason, "reason"));
     }
 
     /** Returns the local transfer token. */
@@ -246,7 +258,7 @@ public final class TransferInternal {
         }
 
         Instant now = clock.instant();
-        if (state.contains(TransferState.COMPLETED)) {
+        if (phase == TransferPhase.COMPLETED) {
             averageSpeed = (bytesTransferred - startOffset) / durationSeconds(startTime, endTime);
             return;
         }
@@ -275,7 +287,9 @@ public final class TransferInternal {
                 username,
                 filename,
                 token,
-                state,
+                phase,
+                queueLocation,
+                termination,
                 size == null ? 0 : size,
                 startOffset,
                 bytesTransferred,
@@ -285,6 +299,26 @@ public final class TransferInternal {
                 remoteToken,
                 getIpEndpoint(),
                 exception);
+    }
+
+    private void transition(
+            TransferPhase newPhase, TransferQueueLocation newQueueLocation, TransferTermination newTermination) {
+        Instant time = clock.instant();
+        if (newPhase == TransferPhase.IN_PROGRESS && startTime == null) {
+            startTime = time;
+        } else if (newPhase == TransferPhase.COMPLETED && endTime == null) {
+            endTime = time;
+            if (startTime == null) {
+                startTime = time;
+            }
+        }
+
+        phase = newPhase;
+        queueLocation = newQueueLocation;
+        termination = newTermination;
+        if (phase == TransferPhase.COMPLETED) {
+            updateProgress(bytesTransferred);
+        }
     }
 
     private static double durationSeconds(Instant start, Instant end) {

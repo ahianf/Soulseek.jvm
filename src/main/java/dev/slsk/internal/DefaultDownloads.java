@@ -133,11 +133,10 @@ final class DefaultDownloads implements Downloads {
      * Runs one attempt against a peer.
      *
      * <p>A direct call, and the whole of what this method is. It used to
-     * translate a queue entry into the pre-1.0 transfer path, hand the result
-     * back as a bit-flag state on a mutable transfer, correlate the engine's
-     * progress and state broadcasts back to this entry through a token map, and
-     * infer an outcome from all of it. The transfer path speaks the queue's
-     * language now: it takes a request, blocks, and says how it ended.
+     * translate a queue entry into the pre-1.0 transfer path, correlate the
+     * engine's progress and state broadcasts back to this entry through a token
+     * map, and infer an outcome from all of it. The transfer path speaks the
+     * queue's language now: it takes a request, blocks, and says how it ended.
      */
     private TransferOutcome fetch(DownloadQueue.Entry entry) {
         DownloadRequest request = entry.request();

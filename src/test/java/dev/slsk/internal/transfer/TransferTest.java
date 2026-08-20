@@ -35,7 +35,9 @@ class TransferTest {
                 "alice",
                 "music/file.mp3",
                 42,
-                TransferState.IN_PROGRESS,
+                TransferPhase.IN_PROGRESS,
+                null,
+                null,
                 1000,
                 10,
                 400,
@@ -50,7 +52,9 @@ class TransferTest {
         assertEquals("alice", transfer.username());
         assertEquals("music/file.mp3", transfer.filename());
         assertEquals(42, transfer.token());
-        assertEquals(TransferState.IN_PROGRESS, transfer.state());
+        assertEquals(TransferPhase.IN_PROGRESS, transfer.phase());
+        assertNull(transfer.queueLocation());
+        assertNull(transfer.termination());
         assertEquals(1000, transfer.size());
         assertEquals(10, transfer.startOffset());
         assertEquals(400, transfer.bytesTransferred());
@@ -69,7 +73,7 @@ class TransferTest {
     @Test
     @DisplayName("Optional values use source defaults")
     void optionalValuesUseSourceDefaults() {
-        Transfer transfer = transfer(TransferState.NONE, 0, 0, 0);
+        Transfer transfer = transfer(TransferPhase.NONE, 0, 0, 0);
 
         assertEquals(0, transfer.bytesTransferred());
         assertEquals(0, transfer.averageSpeed());
@@ -92,7 +96,9 @@ class TransferTest {
                 "u",
                 "f",
                 1,
-                TransferState.IN_PROGRESS,
+                TransferPhase.IN_PROGRESS,
+                null,
+                null,
                 1,
                 0,
                 0,
@@ -110,7 +116,7 @@ class TransferTest {
     @Test
     @DisplayName("PercentComplete returns zero if Size is zero")
     void percentCompleteReturnsZeroIfSizeIsZero() {
-        Transfer transfer = transfer(TransferState.NONE, 0, 10, 0);
+        Transfer transfer = transfer(TransferPhase.NONE, 0, 10, 0);
 
         assertEquals(0, transfer.percentComplete());
         assertEquals(-10, transfer.bytesRemaining());
@@ -119,8 +125,8 @@ class TransferTest {
     @Test
     @DisplayName("RemainingTime retains nanosecond precision")
     void remainingTimeRetainsNanosecondPrecision() {
-        Transfer positive = transfer(TransferState.NONE, 1, 0, 600);
-        Transfer negative = transfer(TransferState.NONE, -1, 0, 600);
+        Transfer positive = transfer(TransferPhase.NONE, 1, 0, 600);
+        Transfer negative = transfer(TransferPhase.NONE, -1, 0, 600);
 
         assertEquals(Duration.ofNanos(1_666_666), positive.remainingTime());
         assertEquals(Duration.ofNanos(-1_666_666), negative.remainingTime());
@@ -131,31 +137,81 @@ class TransferTest {
     void rejectsNullValueTypeMappings() {
         assertThrows(
                 NullPointerException.class,
-                () -> new Transfer(null, "u", "f", 1, TransferState.NONE, 1, 0, 0, 0, null, null, null, null, null));
+                () -> new Transfer(
+                        null, "u", "f", 1, TransferPhase.NONE, null, null, 1, 0, 0, 0, null, null, null, null, null));
         assertThrows(
                 NullPointerException.class,
                 () -> new Transfer(
-                        TransferDirection.DOWNLOAD, "u", "f", 1, null, 1, 0, 0, 0, null, null, null, null, null));
+                        TransferDirection.DOWNLOAD,
+                        "u",
+                        "f",
+                        1,
+                        null,
+                        null,
+                        null,
+                        1,
+                        0,
+                        0,
+                        0,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null));
     }
 
     @Test
     @DisplayName("Rejects a non-finite remaining duration")
     void rejectsNonFiniteRemainingDuration() {
-        assertThrows(IllegalArgumentException.class, () -> transfer(TransferState.NONE, 1, 0, Double.NaN));
-        assertThrows(IllegalArgumentException.class, () -> transfer(TransferState.NONE, 1, 0, Double.MIN_VALUE));
+        assertThrows(IllegalArgumentException.class, () -> transfer(TransferPhase.NONE, 1, 0, Double.NaN));
+        assertThrows(IllegalArgumentException.class, () -> transfer(TransferPhase.NONE, 1, 0, Double.MIN_VALUE));
     }
 
-    private static Transfer transfer(TransferState state, long size, long bytesTransferred, double averageSpeed) {
+    @Test
+    void rejectsInconsistentPhaseDetails() {
+        assertThrows(IllegalArgumentException.class, () -> transfer(TransferPhase.QUEUED, null, null));
+        assertThrows(
+                IllegalArgumentException.class, () -> transfer(TransferPhase.NONE, TransferQueueLocation.LOCAL, null));
+        assertThrows(IllegalArgumentException.class, () -> transfer(TransferPhase.COMPLETED, null, null));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> transfer(TransferPhase.IN_PROGRESS, null, TransferTermination.SUCCEEDED));
+    }
+
+    private static Transfer transfer(TransferPhase phase, long size, long bytesTransferred, double averageSpeed) {
         return new Transfer(
                 TransferDirection.DOWNLOAD,
                 "u",
                 "f",
                 1,
-                state,
+                phase,
+                null,
+                null,
                 size,
                 0,
                 bytesTransferred,
                 averageSpeed,
+                null,
+                null,
+                null,
+                null,
+                null);
+    }
+
+    private static Transfer transfer(
+            TransferPhase phase, TransferQueueLocation queueLocation, TransferTermination termination) {
+        return new Transfer(
+                TransferDirection.DOWNLOAD,
+                "u",
+                "f",
+                1,
+                phase,
+                queueLocation,
+                termination,
+                1,
+                0,
+                0,
+                0,
                 null,
                 null,
                 null,

@@ -45,7 +45,9 @@ import dev.slsk.internal.transfer.DownloadRequest;
 import dev.slsk.internal.transfer.Transfer;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
-import dev.slsk.internal.transfer.TransferState;
+import dev.slsk.internal.transfer.TransferPhase;
+import dev.slsk.internal.transfer.TransferQueueLocation;
+import dev.slsk.internal.transfer.TransferTermination;
 import dev.slsk.transfer.RejectionReason;
 import dev.slsk.transfer.TransferOutcome;
 import java.io.ByteArrayOutputStream;
@@ -62,6 +64,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -223,13 +226,20 @@ class EngineDownloadTest {
             assertEquals("remote\\file", queued.getFilename());
             assertEquals(
                     List.of(
-                            TransferState.QUEUED.or(TransferState.LOCALLY),
-                            TransferState.REQUESTED,
-                            TransferState.QUEUED.or(TransferState.REMOTELY),
-                            TransferState.INITIALIZING,
-                            TransferState.IN_PROGRESS,
-                            TransferState.COMPLETED.or(TransferState.SUCCEEDED)),
+                            TransferPhase.QUEUED,
+                            TransferPhase.REQUESTED,
+                            TransferPhase.QUEUED,
+                            TransferPhase.INITIALIZING,
+                            TransferPhase.IN_PROGRESS,
+                            TransferPhase.COMPLETED),
                     timeline.states());
+            assertEquals(
+                    List.of(TransferQueueLocation.LOCAL, TransferQueueLocation.REMOTE),
+                    timeline.snapshots.stream()
+                            .map(Transfer::queueLocation)
+                            .filter(Objects::nonNull)
+                            .toList());
+            assertEquals(TransferTermination.SUCCEEDED, result.termination());
             assertTrue(timeline.progress.contains(0L));
             assertTrue(timeline.progress.contains((long) bytes.length));
             assertFalse(fixture.client.getDownloadRegistry().containsKey(11));
@@ -256,7 +266,7 @@ class EngineDownloadTest {
                     assertInstanceOf(TransferSizeMismatchException.class, causeOf(outcome));
             assertEquals(4, mismatch.getLocalSize());
             assertEquals(5, mismatch.getRemoteSize());
-            assertTrue(timeline.terminal().state().contains(TransferState.ABORTED));
+            assertEquals(TransferTermination.ABORTED, timeline.terminal().termination());
             assertSame(mismatch, timeline.terminal().exception());
         }
     }
@@ -280,7 +290,7 @@ class EngineDownloadTest {
                     assertInstanceOf(TransferSizeMismatchException.class, causeOf(outcome));
             assertEquals(5, mismatch.getLocalSize());
             assertEquals(6, mismatch.getRemoteSize());
-            assertTrue(timeline.terminal().state().contains(TransferState.ABORTED));
+            assertEquals(TransferTermination.ABORTED, timeline.terminal().termination());
             assertSame(mismatch, timeline.terminal().exception());
         }
     }
@@ -589,7 +599,7 @@ class EngineDownloadTest {
             Throwable cause = causeOf(outcome);
             assertInstanceOf(TransferReportedFailedException.class, cause);
             assertSame(cause, timeline.terminal().exception());
-            assertTrue(timeline.terminal().state().contains(TransferState.ERRORED));
+            assertEquals(TransferTermination.ERRORED, timeline.terminal().termination());
         }
     }
 
@@ -616,7 +626,7 @@ class EngineDownloadTest {
                     "download denied",
                     assertInstanceOf(TransferOutcome.Rejected.class, outcome).rawMessage());
             assertSame(rejection, timeline.terminal().exception());
-            assertTrue(timeline.terminal().state().contains(TransferState.REJECTED));
+            assertEquals(TransferTermination.REJECTED, timeline.terminal().termination());
         }
     }
 
@@ -661,7 +671,7 @@ class EngineDownloadTest {
             // The deadline itself, rather than the NoResponseException the old
             // blocking wrapper renamed it to on the way out.
             assertSame(timeout, causeOf(lapsed));
-            assertTrue(timedOut.terminal().state().contains(TransferState.TIMED_OUT));
+            assertEquals(TransferTermination.TIMED_OUT, timedOut.terminal().termination());
 
             CancellationException cancellation = new CancellationException("cancelled");
             cancellationFixture.waiter.startRequest = CompletableFuture.failedFuture(cancellation);
@@ -677,7 +687,7 @@ class EngineDownloadTest {
                             .build());
 
             assertInstanceOf(TransferOutcome.Cancelled.class, stopped);
-            assertTrue(cancelled.terminal().state().contains(TransferState.CANCELLED));
+            assertEquals(TransferTermination.CANCELLED, cancelled.terminal().termination());
         }
     }
 
@@ -843,8 +853,8 @@ class EngineDownloadTest {
                     .build();
         }
 
-        private List<TransferState> states() {
-            return snapshots.stream().map(Transfer::state).toList();
+        private List<TransferPhase> states() {
+            return snapshots.stream().map(Transfer::phase).toList();
         }
 
         private Transfer last() {
@@ -854,7 +864,7 @@ class EngineDownloadTest {
         /** The snapshot taken as the transfer reached a terminal state. */
         private Transfer terminal() {
             return snapshots.stream()
-                    .filter(snapshot -> snapshot.state().contains(TransferState.COMPLETED))
+                    .filter(snapshot -> snapshot.phase() == TransferPhase.COMPLETED)
                     .findFirst()
                     .orElseThrow(() -> new AssertionError("the transfer never reached a terminal state"));
         }

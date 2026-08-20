@@ -5,6 +5,8 @@ package dev.slsk.internal;
 
 import dev.slsk.internal.transfer.Transfer;
 import dev.slsk.internal.transfer.TransferDirection;
+import dev.slsk.internal.transfer.TransferPhase;
+import dev.slsk.internal.transfer.TransferTermination;
 import dev.slsk.transfer.Progress;
 import dev.slsk.transfer.TransferId;
 import dev.slsk.transfer.TransferOutcome;
@@ -20,11 +22,10 @@ import java.util.Optional;
  * <p>Shared by the download and upload facets, because the state mapping is the
  * same in both directions and only the surrounding record differs.
  *
- * <p>The interesting part is the state mapping. Internally a transfer state is a
- * bit-flag set transliterated from a C# {@code [Flags]} enum, where being
- * finished is {@code COMPLETED} or-ed with one of five outcome bits. Reading it
- * means masking, and illegal combinations are representable. Here it becomes a
- * sealed hierarchy in which each state carries its own data and nothing else.
+ * <p>The interesting part is the state mapping. Internally a transfer keeps its
+ * lifecycle phase separate from queue placement and its terminal reason. Here
+ * that representation becomes a sealed hierarchy in which each state carries
+ * its own data and nothing else.
  */
 final class Transfers {
 
@@ -54,41 +55,28 @@ final class Transfers {
     }
 
     /**
-     * Maps the bit-flag state onto the sealed hierarchy.
-     *
-     * <p>Order matters: terminal states are checked first, because a finished
-     * transfer keeps the bits describing how it got there and would otherwise
-     * match an earlier, non-terminal case.
+     * Maps the internal transfer phase onto the sealed hierarchy.
      */
     static TransferState state(Transfer transfer) {
-        return state(transfer, transfer.state());
+        return state(transfer, transfer.phase());
     }
 
     /**
-     * Maps a specific bit-flag state onto the sealed hierarchy, for callers
-     * holding a transition's previous state rather than the transfer's current
-     * one.
+     * Maps a specific phase onto the sealed hierarchy, for callers holding a
+     * transition's previous phase rather than the transfer's current one.
      */
-    static TransferState state(Transfer transfer, dev.slsk.internal.transfer.TransferState source) {
+    static TransferState state(Transfer transfer, TransferPhase source) {
         if (source == null) {
             return new TransferState.Queued(0);
         }
-        if (source.contains(dev.slsk.internal.transfer.TransferState.COMPLETED)) {
-            return new TransferState.Finished(outcome(transfer, source));
-        }
-        if (source.contains(dev.slsk.internal.transfer.TransferState.IN_PROGRESS)) {
-            return new TransferState.Transferring(progress(transfer));
-        }
-        if (source.contains(dev.slsk.internal.transfer.TransferState.INITIALIZING)) {
-            return new TransferState.Connecting(false);
-        }
-        if (source.contains(dev.slsk.internal.transfer.TransferState.QUEUED)) {
-            return new TransferState.QueuedRemotely(java.util.OptionalInt.empty(), Instant.now());
-        }
-        if (source.contains(dev.slsk.internal.transfer.TransferState.REQUESTED)) {
-            return new TransferState.Requesting();
-        }
-        return new TransferState.Queued(0);
+        return switch (source) {
+            case COMPLETED -> new TransferState.Finished(outcome(transfer));
+            case IN_PROGRESS -> new TransferState.Transferring(progress(transfer));
+            case INITIALIZING -> new TransferState.Connecting(false);
+            case QUEUED -> new TransferState.QueuedRemotely(java.util.OptionalInt.empty(), Instant.now());
+            case REQUESTED -> new TransferState.Requesting();
+            case NONE -> new TransferState.Queued(0);
+        };
     }
 
     /**
@@ -108,42 +96,42 @@ final class Transfers {
                 : new TransferOutcome.Failed(new IllegalStateException("the transfer did not finish"), true);
     }
 
-    private static TransferOutcome outcome(Transfer transfer, dev.slsk.internal.transfer.TransferState source) {
-        if (source.contains(dev.slsk.internal.transfer.TransferState.SUCCEEDED)) {
-            return new TransferOutcome.Succeeded(
-                    transfer.bytesTransferred(),
-                    transfer.elapsedTime() == null ? Duration.ZERO : transfer.elapsedTime());
-        }
-        if (source.contains(dev.slsk.internal.transfer.TransferState.CANCELLED)) {
-            return new TransferOutcome.Cancelled();
-        }
-        if (source.contains(dev.slsk.internal.transfer.TransferState.REJECTED)) {
-            Throwable cause = transfer.exception();
-            String message = cause == null ? "" : String.valueOf(cause.getMessage());
-            return new TransferOutcome.Rejected(RejectionReasons.parse(message), message);
-        }
-        if (source.contains(dev.slsk.internal.transfer.TransferState.TIMED_OUT)) {
+    private static TransferOutcome outcome(Transfer transfer) {
+        TransferTermination termination = transfer.termination();
+        if (termination == null) {
             return new TransferOutcome.Failed(
-                    transfer.exception() == null
-                            ? new java.util.concurrent.TimeoutException("the transfer timed out")
-                            : transfer.exception(),
-                    true);
+                    new IllegalStateException("the completed transfer has no termination reason"), true);
         }
-        if (source.contains(dev.slsk.internal.transfer.TransferState.ABORTED)) {
-            // A size mismatch: the peer's advertised size cannot change
-            // between attempts, so retrying re-requests the same file to fail
-            // the same way, peer-visibly, up to the attempt cap. The C# source
-            // classifies the mismatch as terminal; falling through to the
-            // retryable branch below is what made it retried forever.
-            return new TransferOutcome.Failed(
-                    transfer.exception() == null
-                            ? new IllegalStateException("the transfer was aborted")
-                            : transfer.exception(),
-                    false);
-        }
-        return new TransferOutcome.Failed(
-                transfer.exception() == null ? new IllegalStateException("the transfer failed") : transfer.exception(),
-                true);
+        return switch (termination) {
+            case SUCCEEDED ->
+                new TransferOutcome.Succeeded(
+                        transfer.bytesTransferred(),
+                        transfer.elapsedTime() == null ? Duration.ZERO : transfer.elapsedTime());
+            case CANCELLED -> new TransferOutcome.Cancelled();
+            case REJECTED -> {
+                Throwable cause = transfer.exception();
+                String message = cause == null ? "" : String.valueOf(cause.getMessage());
+                yield new TransferOutcome.Rejected(RejectionReasons.parse(message), message);
+            }
+            case TIMED_OUT ->
+                new TransferOutcome.Failed(
+                        transfer.exception() == null
+                                ? new java.util.concurrent.TimeoutException("the transfer timed out")
+                                : transfer.exception(),
+                        true);
+            case ABORTED ->
+                new TransferOutcome.Failed(
+                        transfer.exception() == null
+                                ? new IllegalStateException("the transfer was aborted")
+                                : transfer.exception(),
+                        false);
+            case ERRORED ->
+                new TransferOutcome.Failed(
+                        transfer.exception() == null
+                                ? new IllegalStateException("the transfer failed")
+                                : transfer.exception(),
+                        true);
+        };
     }
 
     static Progress progress(Transfer transfer) {

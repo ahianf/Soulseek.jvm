@@ -66,7 +66,7 @@ class SearchEventTest {
     }
 
     @Test
-    @DisplayName("Rejects null previous state because C# flags are non-nullable")
+    @DisplayName("Rejects a null previous phase")
     void rejectsNullPreviousState() {
         assertThrows(NullPointerException.class, () -> new SearchStateChangedEvent(null, null));
     }

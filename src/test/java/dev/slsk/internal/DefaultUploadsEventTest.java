@@ -15,7 +15,9 @@ import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.options.TransferStateChange;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
-import dev.slsk.internal.transfer.TransferState;
+import dev.slsk.internal.transfer.TransferPhase;
+import dev.slsk.internal.transfer.TransferQueueLocation;
+import dev.slsk.internal.transfer.TransferTermination;
 import dev.slsk.transfer.TransferOutcome;
 import dev.slsk.user.Username;
 import java.lang.reflect.Proxy;
@@ -58,15 +60,15 @@ class DefaultUploadsEventTest {
             // drives it: a first transition from NONE, a move to REQUESTED,
             // and a terminal SUCCEEDED.
             TransferInternal upload = new TransferInternal(TransferDirection.UPLOAD, "alice", "file", 42);
-            upload.setState(TransferState.QUEUED.or(TransferState.LOCALLY));
-            observer.stateChanged(new TransferStateChange(TransferState.NONE, upload.toTransfer()));
+            upload.queue(TransferQueueLocation.LOCAL);
+            observer.stateChanged(new TransferStateChange(TransferPhase.NONE, upload.toTransfer()));
 
-            TransferState previous = upload.getState();
-            upload.setState(TransferState.REQUESTED);
+            TransferPhase previous = upload.getPhase();
+            upload.setPhase(TransferPhase.REQUESTED);
             observer.stateChanged(new TransferStateChange(previous, upload.toTransfer()));
 
-            previous = upload.getState();
-            upload.setState(TransferState.COMPLETED.or(TransferState.SUCCEEDED));
+            previous = upload.getPhase();
+            upload.complete(TransferTermination.SUCCEEDED);
             observer.stateChanged(new TransferStateChange(previous, upload.toTransfer()));
 
             assertTrue(finished.await(5, TimeUnit.SECONDS), "the terminal event never arrived");

@@ -37,8 +37,10 @@ import dev.slsk.internal.options.TransferStateChange;
 import dev.slsk.internal.transfer.Transfer;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
-import dev.slsk.internal.transfer.TransferState;
+import dev.slsk.internal.transfer.TransferPhase;
+import dev.slsk.internal.transfer.TransferQueueLocation;
 import dev.slsk.internal.transfer.TransferStreams;
+import dev.slsk.internal.transfer.TransferTermination;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
@@ -70,7 +72,7 @@ final class UploadRun {
     private boolean perUserPermit;
     private boolean slot;
     private boolean globalPermit;
-    private TransferState lastState = TransferState.NONE;
+    private TransferPhase lastPhase = TransferPhase.NONE;
     private Semaphore perUserSemaphore;
     private InetSocketAddress endpoint;
     private Connection connection;
@@ -111,7 +113,7 @@ final class UploadRun {
             // be started inside the sync root and awaited after, which is the
             // same two events in the same order; it just needed a future to
             // carry the not-yet-finished acquisition across the announcement.
-            updateState(TransferState.QUEUED.or(TransferState.LOCALLY));
+            updateQueued(TransferQueueLocation.LOCAL);
 
             Permits.acquire(perUserSemaphore, cancellationSignal);
             perUserPermit = true;
@@ -156,7 +158,7 @@ final class UploadRun {
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + " (id: " + messageConnection.getId()
                     + ", state: " + messageConnection.getState() + ")");
-            updateState(TransferState.REQUESTED);
+            updateState(TransferPhase.REQUESTED);
 
             TransferResponse acknowledgement = transferRequestAcknowledged.await();
             domain.diagnostic.debug("Received transfer request ACK for upload of "
@@ -168,7 +170,7 @@ final class UploadRun {
                 throw new TransferRejectedException("Transfer rejected: " + acknowledgement.getMessage());
             }
 
-            updateState(TransferState.INITIALIZING);
+            updateState(TransferPhase.INITIALIZING);
             connection = domain.peers()
                     .getTransferConnection(upload.getUsername(), endpoint, upload.getToken(), cancellationSignal);
             domain.diagnostic.debug("Fetched transfer connection for upload of "
@@ -194,13 +196,13 @@ final class UploadRun {
             trackingStream = new TransferStreams.PositionTrackingInputStream(
                     inputStream, determinePosition(inputStream, upload.getStartOffset()));
 
-            updateState(TransferState.IN_PROGRESS);
+            updateState(TransferPhase.IN_PROGRESS);
             updateProgress(upload.getStartOffset());
             writeAndAwaitDisconnectRace();
             linger();
 
             updateProgress(currentStreamPosition());
-            updateState(TransferState.COMPLETED.or(TransferState.SUCCEEDED));
+            complete(TransferTermination.SUCCEEDED);
         } catch (Throwable failure) {
             handleFailure(failure);
         } finally {
@@ -355,7 +357,7 @@ final class UploadRun {
         reportFailure(failure);
         if (failure instanceof TransferRejectedException) {
             upload.setException(failure);
-            updateState(TransferState.COMPLETED.or(TransferState.REJECTED));
+            complete(TransferTermination.REJECTED);
             return;
         }
         if (failure instanceof TransferException) {
@@ -370,27 +372,27 @@ final class UploadRun {
             disconnectTransfer("Transfer aborted", failure);
             upload.setException(failure);
             updateProgress(currentStreamPosition());
-            updateState(TransferState.COMPLETED.or(TransferState.ABORTED));
+            complete(TransferTermination.ABORTED);
             return;
         }
         if (failure instanceof CancellationException) {
             disconnectTransfer("Transfer cancelled", failure);
             upload.setException(failure);
             updateProgress(currentStreamPosition());
-            updateState(TransferState.COMPLETED.or(TransferState.CANCELLED));
+            complete(TransferTermination.CANCELLED);
             return;
         }
         if (failure instanceof TimeoutException) {
             disconnectTransfer("Transfer timed out", failure);
             upload.setException(failure);
             updateProgress(currentStreamPosition());
-            updateState(TransferState.COMPLETED.or(TransferState.TIMED_OUT));
+            complete(TransferTermination.TIMED_OUT);
             return;
         }
         disconnectTransfer("Transfer error", failure);
         upload.setException(failure);
         updateProgress(currentStreamPosition());
-        updateState(TransferState.COMPLETED.or(TransferState.ERRORED));
+        complete(TransferTermination.ERRORED);
     }
 
     /**
@@ -459,7 +461,7 @@ final class UploadRun {
         // After the permits, never before them. This used to sit inside the try
         // above, so the courtesy notification was sent while the run still held
         // the per-user semaphore, the upload slot and a global upload permit.
-        if (!upload.getState().contains(TransferState.SUCCEEDED)) {
+        if (upload.getTermination() != TransferTermination.SUCCEEDED) {
             notifyUploadFailure();
         }
     }
@@ -500,7 +502,7 @@ final class UploadRun {
             if (messageConnection == null) {
                 return;
             }
-            OutgoingMessage message = upload.getState().contains(TransferState.CANCELLED)
+            OutgoingMessage message = upload.getTermination() == TransferTermination.CANCELLED
                     ? new UploadDenied(upload.getFilename(), "Cancelled")
                     : new UploadFailed(upload.getFilename());
             messageConnection.write(message, CancellationSignal.none());
@@ -539,11 +541,25 @@ final class UploadRun {
         }
     }
 
-    private void updateState(TransferState state) {
-        upload.setState(state);
+    private void updateState(TransferPhase phase) {
+        upload.setPhase(phase);
+        publishStateChange(phase);
+    }
+
+    private void updateQueued(TransferQueueLocation location) {
+        upload.queue(location);
+        publishStateChange(TransferPhase.QUEUED);
+    }
+
+    private void complete(TransferTermination termination) {
+        upload.complete(termination);
+        publishStateChange(TransferPhase.COMPLETED);
+    }
+
+    private void publishStateChange(TransferPhase phase) {
         Transfer transfer = upload.toTransfer();
-        TransferState previous = lastState;
-        lastState = state;
+        TransferPhase previous = lastPhase;
+        lastPhase = phase;
         if (transferOptions.stateChanged() != null) {
             transferOptions.stateChanged().accept(new TransferStateChange(previous, transfer));
         }

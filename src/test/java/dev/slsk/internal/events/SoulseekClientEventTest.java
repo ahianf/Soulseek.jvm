@@ -61,7 +61,7 @@ class SoulseekClientEventTest {
     }
 
     @Test
-    @DisplayName("Rejects null state values that C# flags cannot represent")
+    @DisplayName("Rejects null lifecycle phases")
     void rejectsNullStateValues() {
         assertThrows(
                 NullPointerException.class, () -> new SoulseekClientStateChangedEvent(null, SoulseekClientState.NONE));

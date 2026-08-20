@@ -40,7 +40,9 @@ class TransferInternalTest {
         assertNull(transfer.getIpEndpoint());
         assertNull(transfer.getRemoteToken());
         assertNull(transfer.getSize());
-        assertEquals(TransferState.NONE, transfer.getState());
+        assertEquals(TransferPhase.NONE, transfer.getPhase());
+        assertNull(transfer.getQueueLocation());
+        assertNull(transfer.getTermination());
         assertEquals(0, transfer.getAverageSpeed());
         assertEquals(0, transfer.getBytesTransferred());
         assertEquals(0, transfer.getBytesRemaining());
@@ -82,20 +84,20 @@ class TransferInternalTest {
         MutableClock clock = new MutableClock(EPOCH);
         TransferInternal transfer = transfer(clock, 1000);
 
-        transfer.setState(TransferState.IN_PROGRESS);
+        transfer.setPhase(TransferPhase.IN_PROGRESS);
         assertEquals(EPOCH, transfer.getStartTime());
         assertNull(transfer.getEndTime());
 
         clock.advance(Duration.ofSeconds(1));
-        transfer.setState(TransferState.IN_PROGRESS);
+        transfer.setPhase(TransferPhase.IN_PROGRESS);
         assertEquals(EPOCH, transfer.getStartTime());
 
-        transfer.setState(TransferState.COMPLETED.or(TransferState.SUCCEEDED));
+        transfer.complete(TransferTermination.SUCCEEDED);
         assertEquals(EPOCH.plusSeconds(1), transfer.getEndTime());
         assertEquals(Duration.ofSeconds(1), transfer.getElapsedTime());
 
         clock.advance(Duration.ofSeconds(1));
-        transfer.setState(TransferState.COMPLETED);
+        transfer.complete(TransferTermination.SUCCEEDED);
         assertEquals(EPOCH.plusSeconds(1), transfer.getEndTime());
     }
 
@@ -103,7 +105,7 @@ class TransferInternalTest {
     void completedWithoutInProgressSetsEqualStartAndEnd() {
         TransferInternal transfer = transfer(fixed(EPOCH), 1000);
 
-        transfer.setState(TransferState.COMPLETED);
+        transfer.complete(TransferTermination.SUCCEEDED);
 
         assertEquals(EPOCH, transfer.getStartTime());
         assertEquals(EPOCH, transfer.getEndTime());
@@ -115,7 +117,7 @@ class TransferInternalTest {
         MutableClock clock = new MutableClock(EPOCH);
         TransferInternal transfer = transfer(clock, 1000);
         assertNull(transfer.getElapsedTime());
-        transfer.setState(TransferState.IN_PROGRESS);
+        transfer.setPhase(TransferPhase.IN_PROGRESS);
         clock.advance(Duration.ofHours(24));
         assertEquals(Duration.ofHours(24), transfer.getElapsedTime());
     }
@@ -155,7 +157,7 @@ class TransferInternalTest {
     void movingAverageInitializesAndSmoothsSubsequentUpdates() {
         MutableClock clock = new MutableClock(EPOCH);
         TransferInternal transfer = transfer(clock, 1000);
-        transfer.setState(TransferState.IN_PROGRESS);
+        transfer.setPhase(TransferPhase.IN_PROGRESS);
         clock.advance(Duration.ofSeconds(1));
         transfer.updateProgress(100);
         assertEquals(100, transfer.getAverageSpeed());
@@ -170,7 +172,7 @@ class TransferInternalTest {
         MutableClock clock = new MutableClock(EPOCH);
         TransferInternal transfer = transfer(clock, 1000);
         transfer.setSize(100L);
-        transfer.setState(TransferState.IN_PROGRESS);
+        transfer.setPhase(TransferPhase.IN_PROGRESS);
         clock.advance(Duration.ofMillis(500));
 
         transfer.updateProgress(100);
@@ -184,10 +186,10 @@ class TransferInternalTest {
         MutableClock clock = new MutableClock(EPOCH);
         TransferInternal transfer = transfer(clock, 1000);
         transfer.setStartOffset(10);
-        transfer.setState(TransferState.IN_PROGRESS);
+        transfer.setPhase(TransferPhase.IN_PROGRESS);
         transfer.updateProgress(20);
 
-        transfer.setState(TransferState.COMPLETED.or(TransferState.SUCCEEDED));
+        transfer.complete(TransferTermination.SUCCEEDED);
 
         assertEquals(10_000, transfer.getAverageSpeed());
     }
@@ -197,7 +199,7 @@ class TransferInternalTest {
         MutableClock clock = new MutableClock(EPOCH);
         TransferInternal transfer = transfer(clock, 1000);
         transfer.setSize(3L);
-        transfer.setState(TransferState.IN_PROGRESS);
+        transfer.setPhase(TransferPhase.IN_PROGRESS);
         clock.advance(Duration.ofSeconds(1));
         transfer.updateProgress(1);
 
@@ -228,7 +230,7 @@ class TransferInternalTest {
         internal.setSize(100L);
         internal.setStartOffset(10);
         internal.setRemoteToken(24);
-        internal.setState(TransferState.IN_PROGRESS);
+        internal.setPhase(TransferPhase.IN_PROGRESS);
         clock.advance(Duration.ofSeconds(1));
         internal.updateProgress(60);
         RuntimeException failure = new RuntimeException("x");
@@ -240,7 +242,9 @@ class TransferInternalTest {
         assertEquals("alice", transfer.username());
         assertEquals("file", transfer.filename());
         assertEquals(42, transfer.token());
-        assertEquals(TransferState.IN_PROGRESS, transfer.state());
+        assertEquals(TransferPhase.IN_PROGRESS, transfer.phase());
+        assertNull(transfer.queueLocation());
+        assertNull(transfer.termination());
         assertEquals(100, transfer.size());
         assertEquals(10, transfer.startOffset());
         assertEquals(60, transfer.bytesTransferred());

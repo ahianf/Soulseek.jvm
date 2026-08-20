@@ -46,7 +46,9 @@ import dev.slsk.internal.options.TransferStateChange;
 import dev.slsk.internal.transfer.Transfer;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
-import dev.slsk.internal.transfer.TransferState;
+import dev.slsk.internal.transfer.TransferPhase;
+import dev.slsk.internal.transfer.TransferQueueLocation;
+import dev.slsk.internal.transfer.TransferTermination;
 import dev.slsk.internal.transfer.UploadRequest;
 import dev.slsk.transfer.TransferOutcome;
 import java.io.ByteArrayInputStream;
@@ -347,7 +349,7 @@ class EngineUploadTest {
                     20,
                     null,
                     change -> {
-                        if (change.transfer().state().contains(TransferState.REQUESTED)) {
+                        if (change.transfer().phase() == TransferPhase.REQUESTED) {
                             requested.countDown();
                         }
                     },
@@ -374,10 +376,10 @@ class EngineUploadTest {
     void successfulUploadUsesProtocolOrderAndRaisesExpectedStates() {
         try (Fixture fixture = new Fixture()) {
             byte[] bytes = new byte[] {1, 2, 3, 4};
-            List<TransferState> optionStates = new ArrayList<>();
+            List<TransferPhase> optionStates = new ArrayList<>();
             Timeline timeline = new Timeline();
             TransferOptions options = timeline.on(options(
-                    20, null, change -> optionStates.add(change.transfer().state()), null));
+                    20, null, change -> optionStates.add(change.transfer().phase()), null));
 
             fixture.client
                     .transfers()
@@ -387,14 +389,17 @@ class EngineUploadTest {
                             .options(options)
                             .build());
 
-            List<TransferState> expected = List.of(
-                    TransferState.QUEUED.or(TransferState.LOCALLY),
-                    TransferState.REQUESTED,
-                    TransferState.INITIALIZING,
-                    TransferState.IN_PROGRESS,
-                    TransferState.COMPLETED.or(TransferState.SUCCEEDED));
+            List<TransferPhase> expected = List.of(
+                    TransferPhase.QUEUED,
+                    TransferPhase.REQUESTED,
+                    TransferPhase.INITIALIZING,
+                    TransferPhase.IN_PROGRESS,
+                    TransferPhase.COMPLETED);
             assertEquals(expected, optionStates, "a caller's own callback still sees every transition");
             assertEquals(expected, timeline.states());
+            assertEquals(
+                    TransferQueueLocation.LOCAL, timeline.snapshots.getFirst().queueLocation());
+            assertEquals(TransferTermination.SUCCEEDED, timeline.last().termination());
             assertEquals(bytes.length, timeline.last().bytesTransferred());
             assertArrayEquals(bytes, fixture.transfer.written.toByteArray());
             assertEquals(bytes.length, fixture.transfer.writeLength);
@@ -551,7 +556,7 @@ class EngineUploadTest {
             assertEquals(
                     "Transfer rejected: not shared",
                     assertInstanceOf(TransferOutcome.Rejected.class, outcome).rawMessage());
-            assertTrue(timeline.terminal().state().contains(TransferState.REJECTED));
+            assertEquals(TransferTermination.REJECTED, timeline.terminal().termination());
             assertInstanceOf(
                     TransferRejectedException.class, timeline.terminal().exception());
             assertInstanceOf(UploadFailed.class, fixture.message.messages.get(fixture.message.messages.size() - 1));
@@ -575,7 +580,7 @@ class EngineUploadTest {
                     20,
                     null,
                     change -> {
-                        if (change.transfer().state().contains(TransferState.COMPLETED)) {
+                        if (change.transfer().phase() == TransferPhase.COMPLETED) {
                             terminal.add(change.transfer());
                         }
                     },
@@ -590,7 +595,7 @@ class EngineUploadTest {
                             .build());
 
             assertInstanceOf(TransferOutcome.Cancelled.class, outcome);
-            assertTrue(terminal.get(0).state().contains(TransferState.CANCELLED));
+            assertEquals(TransferTermination.CANCELLED, terminal.get(0).termination());
             assertEquals(0, released.get(), "a slot that was not acquired is not released");
             assertInstanceOf(UploadDenied.class, fixture.message.messages.get(fixture.message.messages.size() - 1));
         }
@@ -681,7 +686,7 @@ class EngineUploadTest {
                     20,
                     null,
                     change -> {
-                        if (change.transfer().state().contains(TransferState.COMPLETED)) {
+                        if (change.transfer().phase() == TransferPhase.COMPLETED) {
                             terminal.add(change.transfer());
                         }
                     },
@@ -697,7 +702,7 @@ class EngineUploadTest {
             // The deadline itself, rather than the NoResponseException the old
             // blocking wrapper renamed it to on the way out.
             assertSame(timeout, causeOf(outcome));
-            assertTrue(terminal.get(0).state().contains(TransferState.TIMED_OUT));
+            assertEquals(TransferTermination.TIMED_OUT, terminal.get(0).termination());
         }
     }
 
@@ -803,7 +808,7 @@ class EngineUploadTest {
             ConnectionException connection = assertInstanceOf(ConnectionException.class, causeOf(outcome));
             assertSame(socketFailure, connection.getCause());
             assertSame(connection, timeline.terminal().exception());
-            assertTrue(timeline.terminal().state().contains(TransferState.ERRORED));
+            assertEquals(TransferTermination.ERRORED, timeline.terminal().termination());
         }
     }
 
@@ -832,8 +837,8 @@ class EngineUploadTest {
                     .build();
         }
 
-        private List<TransferState> states() {
-            return snapshots.stream().map(Transfer::state).toList();
+        private List<TransferPhase> states() {
+            return snapshots.stream().map(Transfer::phase).toList();
         }
 
         private Transfer last() {
@@ -843,7 +848,7 @@ class EngineUploadTest {
         /** The snapshot taken as the transfer reached a terminal state. */
         private Transfer terminal() {
             return snapshots.stream()
-                    .filter(snapshot -> snapshot.state().contains(TransferState.COMPLETED))
+                    .filter(snapshot -> snapshot.phase() == TransferPhase.COMPLETED)
                     .findFirst()
                     .orElseThrow(() -> new AssertionError("the transfer never reached a terminal state"));
         }

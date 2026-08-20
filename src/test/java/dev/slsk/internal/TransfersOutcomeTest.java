@@ -10,11 +10,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
+import dev.slsk.internal.transfer.TransferTermination;
 import dev.slsk.transfer.TransferOutcome;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/** How a finished transfer's bit-flag state maps onto its public outcome. */
+/** How a finished transfer's termination reason maps onto its public outcome. */
 class TransfersOutcomeTest {
 
     /**
@@ -27,8 +28,7 @@ class TransfersOutcomeTest {
     @Test
     @DisplayName("an aborted transfer maps to a failure that is not retried")
     void abortedIsNotRetryable() {
-        TransferOutcome outcome = outcomeOf(dev.slsk.internal.transfer.TransferState.COMPLETED.or(
-                dev.slsk.internal.transfer.TransferState.ABORTED));
+        TransferOutcome outcome = outcomeOf(TransferTermination.ABORTED);
 
         TransferOutcome.Failed failed = assertInstanceOf(TransferOutcome.Failed.class, outcome);
         assertFalse(failed.retryable(), "the peer's advertised size cannot change between attempts");
@@ -37,8 +37,7 @@ class TransfersOutcomeTest {
     @Test
     @DisplayName("a plain error stays retryable")
     void erroredStaysRetryable() {
-        TransferOutcome outcome = outcomeOf(dev.slsk.internal.transfer.TransferState.COMPLETED.or(
-                dev.slsk.internal.transfer.TransferState.ERRORED));
+        TransferOutcome outcome = outcomeOf(TransferTermination.ERRORED);
 
         TransferOutcome.Failed failed = assertInstanceOf(TransferOutcome.Failed.class, outcome);
         assertTrue(failed.retryable());
@@ -46,15 +45,12 @@ class TransfersOutcomeTest {
 
     @Test
     void cancelledMapsToCancelled() {
-        assertEquals(
-                new TransferOutcome.Cancelled(),
-                outcomeOf(dev.slsk.internal.transfer.TransferState.COMPLETED.or(
-                        dev.slsk.internal.transfer.TransferState.CANCELLED)));
+        assertEquals(new TransferOutcome.Cancelled(), outcomeOf(TransferTermination.CANCELLED));
     }
 
-    private static TransferOutcome outcomeOf(dev.slsk.internal.transfer.TransferState state) {
+    private static TransferOutcome outcomeOf(TransferTermination termination) {
         TransferInternal transfer = new TransferInternal(TransferDirection.DOWNLOAD, "alice", "file", 42);
-        transfer.setState(state);
+        transfer.complete(termination);
         return Transfers.outcomeOf(transfer.toTransfer());
     }
 }

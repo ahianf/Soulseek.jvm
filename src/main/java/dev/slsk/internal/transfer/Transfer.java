@@ -15,7 +15,9 @@ public record Transfer(
         String username,
         String filename,
         int token,
-        TransferState state,
+        TransferPhase phase,
+        TransferQueueLocation queueLocation,
+        TransferTermination termination,
         long size,
         long startOffset,
         long bytesTransferred,
@@ -32,7 +34,13 @@ public record Transfer(
 
     public Transfer {
         direction = Objects.requireNonNull(direction, "direction");
-        state = Objects.requireNonNull(state, "state");
+        phase = Objects.requireNonNull(phase, "phase");
+        if ((phase == TransferPhase.QUEUED) != (queueLocation != null)) {
+            throw new IllegalArgumentException("only queued transfers have a queue location");
+        }
+        if ((phase == TransferPhase.COMPLETED) != (termination != null)) {
+            throw new IllegalArgumentException("only completed transfers have a termination reason");
+        }
     }
 
     public Transfer(
@@ -40,7 +48,9 @@ public record Transfer(
             String username,
             String filename,
             int token,
-            TransferState state,
+            TransferPhase phase,
+            TransferQueueLocation queueLocation,
+            TransferTermination termination,
             long size,
             long startOffset,
             long bytesTransferred,
@@ -55,7 +65,9 @@ public record Transfer(
                 username,
                 filename,
                 token,
-                state,
+                phase,
+                queueLocation,
+                termination,
                 size,
                 startOffset,
                 bytesTransferred,
