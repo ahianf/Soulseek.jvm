@@ -16,21 +16,22 @@ public record SearchScope(SearchScopeType type, List<String> subjects) {
         List<String> suppliedSubjects = subjects == null ? List.of() : subjects;
         if ((type == SearchScopeType.NETWORK || type == SearchScopeType.WISHLIST) && !suppliedSubjects.isEmpty()) {
             throw new IllegalArgumentException(
-                    "The " + displayName(type) + " search scope can not be used with subjects");
+                    "subjects must be empty for " + displayName(type) + " scope: " + suppliedSubjects);
         }
         if (type == SearchScopeType.ROOM
                 && (suppliedSubjects.size() != 1
                         || suppliedSubjects.getFirst() == null
                         || suppliedSubjects.getFirst().isEmpty())) {
             throw new IllegalArgumentException(
-                    "The Room search scope requires a single, non null and non empty subject");
+                    "subjects must contain one non-empty room for Room scope: " + suppliedSubjects);
         }
         if (type == SearchScopeType.USER) {
             if (suppliedSubjects.isEmpty()) {
-                throw new IllegalArgumentException("The User search scope requires at least one subject");
+                throw new IllegalArgumentException("subjects must not be empty for User scope");
             }
             if (suppliedSubjects.stream().anyMatch(value -> value == null || value.isEmpty())) {
-                throw new IllegalArgumentException("One or more of the supplied User scope subjects is null or empty");
+                throw new IllegalArgumentException(
+                        "subjects must contain only non-empty usernames: " + suppliedSubjects);
             }
         }
         subjects = List.copyOf(suppliedSubjects);

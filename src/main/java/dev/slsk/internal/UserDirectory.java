@@ -208,7 +208,7 @@ final class UserDirectory {
             throws InterruptedException {
         CommonUtils.requireText(requestedUsername, "username");
         if (days <= 0) {
-            throw new IllegalArgumentException("The number of days granted must be greater than zero");
+            throw new IllegalArgumentException("days must be greater than zero: " + days);
         }
         server.requireLoggedIn("grant user privileges");
         try {

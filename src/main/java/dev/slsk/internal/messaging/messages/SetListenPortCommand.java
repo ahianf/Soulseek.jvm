@@ -18,7 +18,7 @@ public final class SetListenPortCommand extends IntegerServerMessage {
 
     private static int validate(int port) {
         if (port < 1024 || port > 65535) {
-            throw new IllegalArgumentException("The port must be between 1024 and 65535");
+            throw new IllegalArgumentException("port must be between 1024 and 65535: " + port);
         }
         return port;
     }

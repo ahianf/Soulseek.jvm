@@ -70,7 +70,7 @@ final class NetworkStreamAdapter implements NetworkStream {
 
     private static void validateTimeout(int timeout) {
         if (timeout <= 0 && timeout != -1) {
-            throw new IllegalArgumentException("Timeout must be positive or -1");
+            throw new IllegalArgumentException("timeout must be positive or -1: " + timeout);
         }
     }
 }

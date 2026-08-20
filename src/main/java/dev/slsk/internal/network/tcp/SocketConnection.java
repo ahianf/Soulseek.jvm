@@ -490,7 +490,7 @@ public class SocketConnection implements Connection {
     public PendingWrite beginWrite(byte[] bytes, CancellationSignal cancellationSignal)
             throws InterruptedException, TimeoutException {
         if (bytes == null || bytes.length == 0) {
-            throw new IllegalArgumentException("Invalid attempt to send empty data");
+            throw new IllegalArgumentException("data must not be empty");
         }
         validateConnected();
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
@@ -969,7 +969,7 @@ public class SocketConnection implements Connection {
 
     private void validateRead(long length) {
         if (length < 0) {
-            throw new IllegalArgumentException("The requested length must be greater than or equal " + "to zero");
+            throw new IllegalArgumentException("length must not be negative: " + length);
         }
         validateConnected();
     }

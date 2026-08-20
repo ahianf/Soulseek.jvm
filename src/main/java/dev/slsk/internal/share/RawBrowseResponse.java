@@ -11,8 +11,8 @@ import java.util.Objects;
 public record RawBrowseResponse(long length, InputStream stream) {
     public RawBrowseResponse {
         if (length <= 0) {
-            throw new IllegalArgumentException("The response length must be greater than zero");
+            throw new IllegalArgumentException("length must be greater than zero: " + length);
         }
-        stream = Objects.requireNonNull(stream, "The specified input stream is null");
+        stream = Objects.requireNonNull(stream, "stream");
     }
 }

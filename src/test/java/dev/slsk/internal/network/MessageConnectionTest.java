@@ -241,7 +241,7 @@ class MessageConnectionTest {
     void validatesWrite() {
         DefaultMessageConnection disconnected =
                 new DefaultMessageConnection("alice", ENDPOINT, null, 4, null, Monitors.shared());
-        assertThrows(IllegalArgumentException.class, () -> disconnected.write((OutgoingMessage) null));
+        assertThrows(NullPointerException.class, () -> disconnected.write((OutgoingMessage) null));
         RuntimeException cause = new RuntimeException("broken");
         MessageException serialization = assertThrows(
                 MessageException.class,

@@ -567,7 +567,7 @@ final class SoulseekEngine implements AutoCloseable {
             CancellationSignal cancellationSignal) {
         CommonUtils.requireText(requestedAddress, "address");
         if (requestedPort < 0 || requestedPort > 65_535) {
-            throw new IllegalArgumentException("port must be between 0 and 65535 (specified: " + requestedPort + ")");
+            throw new IllegalArgumentException("port must be between 0 and 65535: " + requestedPort);
         }
         CommonUtils.requireNonEmpty(requestedUsername, "username");
         CommonUtils.requireNonEmpty(password, "password");

@@ -229,7 +229,7 @@ public final class ServerLink {
     public void acknowledgePrivateMessage(int privateMessageId, CancellationSignal cancellationSignal)
             throws InterruptedException {
         if (privateMessageId < 0) {
-            throw new IllegalArgumentException("The private message ID must not be negative");
+            throw new IllegalArgumentException("privateMessageId must not be negative: " + privateMessageId);
         }
         requireLoggedIn("acknowledge private messages");
         send(
@@ -246,7 +246,8 @@ public final class ServerLink {
     public void acknowledgePrivilegeNotification(int privilegeNotificationId, CancellationSignal cancellationSignal)
             throws InterruptedException {
         if (privilegeNotificationId < 0) {
-            throw new IllegalArgumentException("The privilege notification ID must not be negative");
+            throw new IllegalArgumentException(
+                    "privilegeNotificationId must not be negative: " + privilegeNotificationId);
         }
         requireLoggedIn("acknowledge privilege notifications");
         send(
@@ -329,7 +330,7 @@ public final class ServerLink {
     void sendUploadSpeed(int speed, CancellationSignal cancellationSignal) throws InterruptedException {
         requireLoggedIn("set upload speed");
         if (speed <= 0) {
-            throw new IllegalArgumentException("The upload speed must be greater than zero");
+            throw new IllegalArgumentException("speed must be greater than zero: " + speed);
         }
         send(new SendUploadSpeedCommand(speed), cancellationSignal, "Failed to set upload speed: ");
     }
@@ -341,10 +342,10 @@ public final class ServerLink {
     void setSharedCounts(int directories, int files, CancellationSignal cancellationSignal)
             throws InterruptedException {
         if (directories < 0) {
-            throw new IllegalArgumentException("The directory count must be equal to or greater than zero");
+            throw new IllegalArgumentException("directories must not be negative: " + directories);
         }
         if (files < 0) {
-            throw new IllegalArgumentException("The file count must be equal to or greater than zero");
+            throw new IllegalArgumentException("files must not be negative: " + files);
         }
         requireLoggedIn("set shared counts");
         send(

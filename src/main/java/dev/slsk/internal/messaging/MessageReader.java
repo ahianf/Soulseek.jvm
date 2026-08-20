@@ -217,10 +217,11 @@ public final class MessageReader<T extends Enum<T> & ProtocolCode> {
     public DecodedString readStringAndEncoding(CharacterEncoding encoding) {
         int length = readInteger();
         if (length < 0) {
-            throw new IllegalArgumentException("Specified string length must not be negative");
+            throw new IllegalArgumentException("length must not be negative: " + length);
         }
         if (length > payload.length - position) {
-            throw new MessageReadException("Specified string length extends beyond the message payload");
+            throw new MessageReadException(
+                    "string length exceeds remaining payload " + (payload.length - position) + ": " + length);
         }
 
         CharacterEncoding selected = encoding == null ? CharacterEncoding.getUtf8() : encoding;
@@ -245,10 +246,11 @@ public final class MessageReader<T extends Enum<T> & ProtocolCode> {
      */
     public void seek(int newPosition) {
         if (newPosition < 0) {
-            throw new IllegalArgumentException("Cannot seek to a negative position");
+            throw new IllegalArgumentException("position must not be negative: " + newPosition);
         }
         if (newPosition > payload.length) {
-            throw new IllegalArgumentException("Seek would extend beyond the message payload");
+            throw new IllegalArgumentException(
+                    "position must not exceed payload length " + payload.length + ": " + newPosition);
         }
         position = newPosition;
     }

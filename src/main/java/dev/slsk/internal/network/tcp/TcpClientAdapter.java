@@ -84,13 +84,13 @@ final class TcpClientAdapter implements TcpClient {
         Objects.requireNonNull(destinationAddress, "destinationAddress");
         validatePort(destinationPort, "destinationPort");
         if ((username == null) != (password == null)) {
-            throw new IllegalArgumentException("Username and password must both be supplied");
+            throw new IllegalArgumentException("username and password must both be supplied");
         }
         if (username != null && username.length() > 255) {
-            throw new IllegalArgumentException("The username length must be less than or equal to " + "255 characters");
+            throw new IllegalArgumentException("username length must not exceed 255: " + username.length());
         }
         if (password != null && password.length() > 255) {
-            throw new IllegalArgumentException("The password length must be less than or equal to " + "255 characters");
+            throw new IllegalArgumentException("password length must not exceed 255: " + password.length());
         }
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         return connectThroughProxyInternal(

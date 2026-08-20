@@ -78,10 +78,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
             ConnectionMonitor monitor) {
         super(ipEndpoint, options, tcpClient, monitor);
         this.codeLength = codeLength;
-        if (CommonUtils.isNullOrUnicodeWhitespace(username)) {
-            throw new IllegalArgumentException(
-                    "The username must not be a null or empty string, " + "or one consisting only of whitespace");
-        }
+        CommonUtils.requireText(username, "username");
         this.username = username;
         bindConnectedReadLoop();
     }
@@ -97,10 +94,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
             ExecutorService ioExecutor) {
         super(ipEndpoint, options, tcpClient, monitor, ioExecutor);
         this.codeLength = codeLength;
-        if (CommonUtils.isNullOrUnicodeWhitespace(username)) {
-            throw new IllegalArgumentException(
-                    "The username must not be a null or empty string, " + "or one consisting only of whitespace");
-        }
+        CommonUtils.requireText(username, "username");
         this.username = username;
         bindConnectedReadLoop();
     }
@@ -191,9 +185,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
     @Override
     public void write(OutgoingMessage message, CancellationSignal cancellationSignal)
             throws InterruptedException, java.util.concurrent.TimeoutException {
-        if (message == null) {
-            throw new IllegalArgumentException("The specified message is null");
-        }
+        Objects.requireNonNull(message, "message");
         byte[] bytes;
         try {
             bytes = message.toByteArray();

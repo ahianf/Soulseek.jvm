@@ -89,7 +89,7 @@ class SearchScopeTest {
         IllegalArgumentException exception =
                 assertThrows(IllegalArgumentException.class, () -> new SearchScope(SearchScopeType.USER));
 
-        assertTrue(exception.getMessage().contains("requires at least one subject"));
+        assertTrue(exception.getMessage().contains("subjects must not be empty for User scope"));
     }
 
     @Test
@@ -167,12 +167,12 @@ class SearchScopeTest {
 
     private static void assertRoomSubjectError(Runnable action) {
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, action::run);
-        assertTrue(exception.getMessage().contains("requires a single, non null and non empty"));
+        assertTrue(exception.getMessage().contains("subjects must contain one non-empty room"));
     }
 
     private static void assertUserElementError(Runnable action) {
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, action::run);
-        assertTrue(exception.getMessage().contains("One or more of the supplied User scope subjects is null or empty"));
+        assertTrue(exception.getMessage().contains("subjects must contain only non-empty usernames"));
     }
 
     private static List<String> subjects(SearchScope scope) {

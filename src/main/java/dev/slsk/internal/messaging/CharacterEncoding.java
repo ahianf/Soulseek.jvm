@@ -20,10 +20,10 @@ public class CharacterEncoding {
             throw new NullPointerException("name");
         }
         if (name.isEmpty()) {
-            throw new IllegalArgumentException("Character encoding must not be empty");
+            throw new IllegalArgumentException("name must not be empty");
         }
         if (!UTF_8_NAME.equals(name) && !ISO_8859_1_NAME.equals(name)) {
-            throw new IllegalArgumentException("Invalid character encoding; must be one of UTF-8, ISO-8859-1");
+            throw new IllegalArgumentException("name must be UTF-8 or ISO-8859-1: " + name);
         }
 
         this.name = name;

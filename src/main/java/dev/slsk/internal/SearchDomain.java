@@ -194,7 +194,7 @@ final class SearchDomain {
         }
         if (query.terms().isEmpty()) {
             throw new IllegalArgumentException(
-                    "Search query must contain at least one non-exclusion " + "term with length greater than 1");
+                    "query must contain a non-exclusion term longer than one character: " + query);
         }
         return new SearchInvocation(query, scope, token, searchOptions);
     }
@@ -202,10 +202,10 @@ final class SearchDomain {
     static SearchQuery validateSearchQuery(SearchQuery initialQuery) {
         SearchQuery query = Objects.requireNonNull(initialQuery, "query");
         if (dev.slsk.internal.common.CommonUtils.isNullOrUnicodeWhitespace(query.searchText())) {
-            throw new IllegalArgumentException("Search text must not be null, empty, or whitespace");
+            throw new IllegalArgumentException("query must contain non-whitespace text");
         }
         if (query.terms().isEmpty()) {
-            throw new IllegalArgumentException("Search query must contain at least one " + "non-exclusion term");
+            throw new IllegalArgumentException("query must contain a non-exclusion term: " + query);
         }
         return query;
     }
