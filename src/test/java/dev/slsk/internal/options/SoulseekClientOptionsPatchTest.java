@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.internal.common.CacheLookupResult;
 import dev.slsk.internal.search.SearchResponseCache;
@@ -15,6 +16,7 @@ import dev.slsk.internal.search.SearchResponseCacheRecord;
 import dev.slsk.internal.user.UserEndpointCache;
 import java.net.InetAddress;
 import java.time.Duration;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class SoulseekClientOptionsPatchTest {
@@ -35,66 +37,68 @@ class SoulseekClientOptionsPatchTest {
         SearchResponseCache searchCache = new TestSearchCache();
         InetAddress address = InetAddress.getByName("127.0.0.2");
 
-        SoulseekClientOptionsPatch patch = new SoulseekClientOptionsPatch(
-                false,
-                address,
-                1234,
-                false,
-                false,
-                6,
-                7,
-                8,
-                false,
-                false,
-                false,
-                true,
-                server,
-                peer,
-                transfer,
-                incoming,
-                distributed,
-                userCache,
-                searchCache);
+        SoulseekClientOptionsPatch patch = SoulseekClientOptionsPatch.builder()
+                .enableListener(false)
+                .listenIpAddress(address)
+                .listenPort(1234)
+                .enableDistributedNetwork(false)
+                .acceptDistributedChildren(false)
+                .distributedChildLimit(6)
+                .maximumUploadSpeed(7)
+                .maximumDownloadSpeed(8)
+                .deduplicateSearchRequests(false)
+                .autoAcknowledgePrivateMessages(false)
+                .autoAcknowledgePrivilegeNotifications(false)
+                .acceptPrivateRoomInvitations(true)
+                .serverConnectionOptions(server)
+                .peerConnectionOptions(peer)
+                .transferConnectionOptions(transfer)
+                .incomingConnectionOptions(incoming)
+                .distributedConnectionOptions(distributed)
+                .userEndpointCache(userCache)
+                .searchResponseCache(searchCache)
+                .build();
 
-        assertEquals(false, patch.getEnableListener());
-        assertSame(address, patch.getListenIpAddress());
-        assertEquals(1234, patch.getListenPort());
-        assertEquals(false, patch.getEnableDistributedNetwork());
-        assertEquals(false, patch.getAcceptDistributedChildren());
-        assertEquals(6, patch.getDistributedChildLimit());
-        assertEquals(7, patch.getMaximumUploadSpeed());
-        assertEquals(8, patch.getMaximumDownloadSpeed());
-        assertEquals(false, patch.getDeduplicateSearchRequests());
-        assertEquals(false, patch.getAutoAcknowledgePrivateMessages());
-        assertEquals(false, patch.getAutoAcknowledgePrivilegeNotifications());
-        assertEquals(true, patch.getAcceptPrivateRoomInvitations());
-        assertNull(patch.getServerConnectionOptions().inactivityTimeout());
-        assertSame(peer, patch.getPeerConnectionOptions());
-        assertSame(transfer, patch.getTransferConnectionOptions());
-        assertSame(incoming, patch.getIncomingConnectionOptions());
-        assertSame(distributed, patch.getDistributedConnectionOptions());
-        assertSame(userCache, patch.getUserEndpointCache());
-        assertSame(searchCache, patch.getSearchResponseCache());
+        assertEquals(Optional.of(false), patch.enableListener());
+        assertEquals(Optional.of(address), patch.listenIpAddress());
+        assertEquals(Optional.of(1234), patch.listenPort());
+        assertEquals(Optional.of(false), patch.enableDistributedNetwork());
+        assertEquals(Optional.of(false), patch.acceptDistributedChildren());
+        assertEquals(Optional.of(6), patch.distributedChildLimit());
+        assertEquals(Optional.of(7), patch.maximumUploadSpeed());
+        assertEquals(Optional.of(8), patch.maximumDownloadSpeed());
+        assertEquals(Optional.of(false), patch.deduplicateSearchRequests());
+        assertEquals(Optional.of(false), patch.autoAcknowledgePrivateMessages());
+        assertEquals(Optional.of(false), patch.autoAcknowledgePrivilegeNotifications());
+        assertEquals(Optional.of(true), patch.acceptPrivateRoomInvitations());
+        assertNull(patch.serverConnectionOptions().orElseThrow().inactivityTimeout());
+        assertSame(peer, patch.peerConnectionOptions().orElseThrow());
+        assertSame(transfer, patch.transferConnectionOptions().orElseThrow());
+        assertSame(incoming, patch.incomingConnectionOptions().orElseThrow());
+        assertSame(distributed, patch.distributedConnectionOptions().orElseThrow());
+        assertSame(userCache, patch.userEndpointCache().orElseThrow());
+        assertSame(searchCache, patch.searchResponseCache().orElseThrow());
     }
 
     @Test
-    void emptyPatchContainsOnlyNulls() {
+    void emptyPatchContainsOnlyEmptyOptionals() {
         SoulseekClientOptionsPatch patch = new SoulseekClientOptionsPatch();
 
-        assertNull(patch.getEnableListener());
-        assertNull(patch.getListenIpAddress());
-        assertNull(patch.getListenPort());
-        assertNull(patch.getServerConnectionOptions());
-        assertNull(patch.getTransferConnectionOptions());
+        assertTrue(patch.enableListener().isEmpty());
+        assertTrue(patch.listenIpAddress().isEmpty());
+        assertTrue(patch.listenPort().isEmpty());
+        assertTrue(patch.serverConnectionOptions().isEmpty());
+        assertTrue(patch.transferConnectionOptions().isEmpty());
     }
 
     @Test
     void validatesPortBeforeDistributedChildLimit() {
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> new SoulseekClientOptionsPatch(
-                        null, null, 1023, null, null, -1, null, null, null, null, null, null, null, null, null, null,
-                        null, null, null));
+                () -> SoulseekClientOptionsPatch.builder()
+                        .listenPort(1023)
+                        .distributedChildLimit(-1)
+                        .build());
 
         assertEquals("listenPort must be between 1024 and 65535", exception.getMessage());
     }
@@ -103,23 +107,36 @@ class SoulseekClientOptionsPatchTest {
     void validatesHighPortAndNegativeChildLimit() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new SoulseekClientOptionsPatch(
-                        null, null, 65_536, null, null, null, null, null, null, null, null, null, null, null, null,
-                        null, null, null, null));
+                () -> SoulseekClientOptionsPatch.builder().listenPort(65_536).build());
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new SoulseekClientOptionsPatch(
-                        null, null, null, null, null, -1, null, null, null, null, null, null, null, null, null, null,
-                        null, null, null));
+                () -> SoulseekClientOptionsPatch.builder()
+                        .distributedChildLimit(-1)
+                        .build());
     }
 
     @Test
-    void prefixOverloadsPreserveTrailingNulls() throws Exception {
+    void builderLeavesUnspecifiedFieldsEmpty() throws Exception {
         InetAddress address = InetAddress.getLoopbackAddress();
 
-        assertNull(new SoulseekClientOptionsPatch(false).getListenIpAddress());
-        assertNull(new SoulseekClientOptionsPatch(false, address).getListenPort());
-        assertNull(new SoulseekClientOptionsPatch(false, address, 1234).getEnableDistributedNetwork());
+        assertTrue(SoulseekClientOptionsPatch.builder()
+                .enableListener(false)
+                .build()
+                .listenIpAddress()
+                .isEmpty());
+        assertTrue(SoulseekClientOptionsPatch.builder()
+                .enableListener(false)
+                .listenIpAddress(address)
+                .build()
+                .listenPort()
+                .isEmpty());
+        assertTrue(SoulseekClientOptionsPatch.builder()
+                .enableListener(false)
+                .listenIpAddress(address)
+                .listenPort(1234)
+                .build()
+                .enableDistributedNetwork()
+                .isEmpty());
     }
 
     private static final class TestUserCache implements UserEndpointCache {

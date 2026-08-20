@@ -35,10 +35,10 @@ class BuiltClientListenerTest {
             SoulseekClientOptions options = ((DefaultSoulseek) slsk).client().getOptions();
 
             assertTrue(
-                    options.getListenIpAddress().isAnyLocalAddress(),
-                    "expected the wildcard address, got " + options.getListenIpAddress());
-            assertEquals(2235, options.getListenPort());
-            assertTrue(options.isEnableListener());
+                    options.listenIpAddress().isAnyLocalAddress(),
+                    "expected the wildcard address, got " + options.listenIpAddress());
+            assertEquals(2235, options.listenPort());
+            assertTrue(options.enableListener());
         }
     }
 }

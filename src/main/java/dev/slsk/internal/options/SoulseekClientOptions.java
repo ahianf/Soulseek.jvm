@@ -5,14 +5,42 @@
 package dev.slsk.internal.options;
 
 import dev.slsk.internal.diagnostics.DiagnosticLevel;
+import dev.slsk.internal.search.BoundedSearchResponseCache;
 import dev.slsk.internal.search.SearchResponseCache;
+import dev.slsk.internal.user.BoundedUserEndpointCache;
 import dev.slsk.internal.user.UserEndpointCache;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.time.Duration;
 import java.util.Objects;
 
 /** Options for a Soulseek client. */
-public class SoulseekClientOptions {
+public record SoulseekClientOptions(
+        boolean enableListener,
+        InetAddress listenIpAddress,
+        int listenPort,
+        boolean enableDistributedNetwork,
+        boolean acceptDistributedChildren,
+        int distributedChildLimit,
+        int maximumConcurrentSearches,
+        int maximumConcurrentUploads,
+        int maximumUploadSpeed,
+        int maximumConcurrentDownloads,
+        int maximumDownloadSpeed,
+        boolean deduplicateSearchRequests,
+        Duration messageTimeout,
+        boolean autoAcknowledgePrivateMessages,
+        boolean autoAcknowledgePrivilegeNotifications,
+        boolean acceptPrivateRoomInvitations,
+        DiagnosticLevel minimumDiagnosticLevel,
+        int startingToken,
+        ConnectionOptions serverConnectionOptions,
+        ConnectionOptions peerConnectionOptions,
+        ConnectionOptions transferConnectionOptions,
+        ConnectionOptions incomingConnectionOptions,
+        ConnectionOptions distributedConnectionOptions,
+        UserEndpointCache userEndpointCache,
+        SearchResponseCache searchResponseCache) {
     /** Default listener port. */
     public static final int DEFAULT_LISTEN_PORT = 30_000;
     /** Default distributed-child limit. */
@@ -21,37 +49,54 @@ public class SoulseekClientOptions {
     public static final int DEFAULT_MAXIMUM_CONCURRENT_SEARCHES = 2;
     /** Default maximum concurrent uploads. */
     public static final int DEFAULT_MAXIMUM_CONCURRENT_UPLOADS = 10;
-    /** Default server/peer message timeout in milliseconds. */
-    public static final int DEFAULT_MESSAGE_TIMEOUT = 5_000;
+    /** Default server/peer message timeout. */
+    public static final Duration DEFAULT_MESSAGE_TIMEOUT = Duration.ofSeconds(5);
 
-    private final boolean acceptDistributedChildren;
-    private final boolean acceptPrivateRoomInvitations;
-    private final boolean autoAcknowledgePrivateMessages;
-    private final boolean autoAcknowledgePrivilegeNotifications;
-    private final boolean deduplicateSearchRequests;
-    private final int distributedChildLimit;
-    private final ConnectionOptions distributedConnectionOptions;
-    private final boolean enableDistributedNetwork;
-    private final boolean enableListener;
-    private final ConnectionOptions incomingConnectionOptions;
-    private final InetAddress listenIpAddress;
-    private final int listenPort;
-    private final int maximumConcurrentDownloads;
-    private final int maximumConcurrentSearches;
-    private final int maximumConcurrentUploads;
-    private final int maximumConcurrentUploadsPerUser = 1;
-    private final int maximumDownloadSpeed;
-    private final int maximumUploadSpeed;
-    private final int messageTimeout;
-    private final DiagnosticLevel minimumDiagnosticLevel;
-    private final ConnectionOptions peerConnectionOptions;
-    private final SearchResponseCache searchResponseCache;
-    private final ConnectionOptions serverConnectionOptions;
-    private final int startingToken;
-    private final ConnectionOptions transferConnectionOptions;
-    private final UserEndpointCache userEndpointCache;
+    /** Normalizes optional collaborators and validates scalar limits. */
+    public SoulseekClientOptions {
+        listenIpAddress = listenIpAddress == null ? wildcardAddress() : listenIpAddress;
+        if (listenPort < 1024 || listenPort > 65_535) {
+            throw new IllegalArgumentException("listenPort must be between 1024 and 65535");
+        }
+        if (distributedChildLimit < 0) {
+            throw new IllegalArgumentException("distributedChildLimit must be greater than or equal to zero");
+        }
+        if (maximumConcurrentSearches < 1) {
+            throw new IllegalArgumentException("maximumConcurrentSearches must be greater than or equal to one");
+        }
+        if (maximumConcurrentUploads < 1) {
+            throw new IllegalArgumentException("maximumConcurrentUploads must be greater than or equal to one");
+        }
+        if (maximumConcurrentDownloads < 1) {
+            throw new IllegalArgumentException("maximumConcurrentDownloads must be greater than or equal to one");
+        }
+        messageTimeout = Objects.requireNonNull(messageTimeout, "messageTimeout");
+        if (!messageTimeout.isPositive()) {
+            throw new IllegalArgumentException("messageTimeout must be greater than zero");
+        }
+        minimumDiagnosticLevel = Objects.requireNonNull(minimumDiagnosticLevel, "minimumDiagnosticLevel");
 
-    /** Creates options with source defaults. */
+        serverConnectionOptions = (serverConnectionOptions == null ? new ConnectionOptions() : serverConnectionOptions)
+                .withoutInactivityTimeout();
+        peerConnectionOptions = peerConnectionOptions == null ? new ConnectionOptions() : peerConnectionOptions;
+        transferConnectionOptions =
+                transferConnectionOptions == null ? new ConnectionOptions() : transferConnectionOptions;
+        incomingConnectionOptions =
+                incomingConnectionOptions == null ? new ConnectionOptions() : incomingConnectionOptions;
+        distributedConnectionOptions =
+                distributedConnectionOptions == null ? new ConnectionOptions() : distributedConnectionOptions;
+
+        // Defaulted rather than left null: a peer's address is something only
+        // the server can tell us, peers search us repeatedly, and without a
+        // cache every answer costs a lookup the server has already answered.
+        userEndpointCache = userEndpointCache == null ? new BoundedUserEndpointCache() : userEndpointCache;
+        // Defaulted rather than left null: without a cache we silently answer
+        // fewer searches than we think we do, and which searches is decided by
+        // whether the peer is behind NAT.
+        searchResponseCache = searchResponseCache == null ? new BoundedSearchResponseCache() : searchResponseCache;
+    }
+
+    /** Creates options with defaults. */
     public SoulseekClientOptions() {
         this(
                 true,
@@ -81,403 +126,259 @@ public class SoulseekClientOptions {
                 null);
     }
 
-    /** Creates options through the listener switch. */
-    public SoulseekClientOptions(boolean enableListener) {
-        this(
-                enableListener,
-                null,
-                DEFAULT_LISTEN_PORT,
-                true,
-                true,
-                DEFAULT_DISTRIBUTED_CHILD_LIMIT,
-                DEFAULT_MAXIMUM_CONCURRENT_SEARCHES,
-                DEFAULT_MAXIMUM_CONCURRENT_UPLOADS,
-                Integer.MAX_VALUE,
-                Integer.MAX_VALUE,
-                Integer.MAX_VALUE,
-                true,
-                DEFAULT_MESSAGE_TIMEOUT,
-                true,
-                true,
-                false,
-                DiagnosticLevel.INFO,
-                0,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
+    /** Starts a field-named client-options builder. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Creates options through the listener address. */
-    public SoulseekClientOptions(boolean enableListener, InetAddress listenIpAddress) {
-        this(
-                enableListener,
-                listenIpAddress,
-                DEFAULT_LISTEN_PORT,
-                true,
-                true,
-                DEFAULT_DISTRIBUTED_CHILD_LIMIT,
-                DEFAULT_MAXIMUM_CONCURRENT_SEARCHES,
-                DEFAULT_MAXIMUM_CONCURRENT_UPLOADS,
-                Integer.MAX_VALUE,
-                Integer.MAX_VALUE,
-                Integer.MAX_VALUE,
-                true,
-                DEFAULT_MESSAGE_TIMEOUT,
-                true,
-                true,
-                false,
-                DiagnosticLevel.INFO,
-                0,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
+    /** Starts a builder initialized from existing options. */
+    public static Builder builder(SoulseekClientOptions source) {
+        return new Builder(source);
     }
 
-    /** Creates options through the listener port. */
-    public SoulseekClientOptions(boolean enableListener, InetAddress listenIpAddress, int listenPort) {
-        this(enableListener, listenIpAddress, listenPort, DEFAULT_MESSAGE_TIMEOUT);
-    }
-
-    /**
-     * Creates options through the listener port and message timeout.
-     *
-     * @param enableListener whether to accept inbound peer connections
-     * @param listenIpAddress the local listener address, or {@code null} for all addresses
-     * @param listenPort the local listener port advertised to the network
-     * @param messageTimeout the timeout in milliseconds for correlated server messages
-     */
-    public SoulseekClientOptions(
-            boolean enableListener, InetAddress listenIpAddress, int listenPort, int messageTimeout) {
-        this(enableListener, listenIpAddress, listenPort, messageTimeout, DiagnosticLevel.INFO);
-    }
-
-    /**
-     * Creates options through listener, message-timeout, and diagnostic settings.
-     *
-     * @param enableListener whether to accept inbound peer connections
-     * @param listenIpAddress the local listener address, or {@code null} for all addresses
-     * @param listenPort the local listener port advertised to the network
-     * @param messageTimeout the timeout in milliseconds for correlated server messages
-     * @param minimumDiagnosticLevel the minimum diagnostic event level to emit
-     */
-    public SoulseekClientOptions(
-            boolean enableListener,
-            InetAddress listenIpAddress,
-            int listenPort,
-            int messageTimeout,
-            DiagnosticLevel minimumDiagnosticLevel) {
-        this(
-                enableListener,
-                listenIpAddress,
-                listenPort,
-                true,
-                true,
-                DEFAULT_DISTRIBUTED_CHILD_LIMIT,
-                DEFAULT_MAXIMUM_CONCURRENT_SEARCHES,
-                DEFAULT_MAXIMUM_CONCURRENT_UPLOADS,
-                Integer.MAX_VALUE,
-                Integer.MAX_VALUE,
-                Integer.MAX_VALUE,
-                true,
-                messageTimeout,
-                true,
-                true,
-                false,
-                minimumDiagnosticLevel,
-                0,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
-    }
-
-    /** Creates complete client options. */
-    public SoulseekClientOptions(
-            boolean enableListener,
-            InetAddress listenIpAddress,
-            int listenPort,
-            boolean enableDistributedNetwork,
-            boolean acceptDistributedChildren,
-            int distributedChildLimit,
-            int maximumConcurrentSearches,
-            int maximumConcurrentUploads,
-            int maximumUploadSpeed,
-            int maximumConcurrentDownloads,
-            int maximumDownloadSpeed,
-            boolean deduplicateSearchRequests,
-            int messageTimeout,
-            boolean autoAcknowledgePrivateMessages,
-            boolean autoAcknowledgePrivilegeNotifications,
-            boolean acceptPrivateRoomInvitations,
-            DiagnosticLevel minimumDiagnosticLevel,
-            int startingToken,
-            ConnectionOptions serverConnectionOptions,
-            ConnectionOptions peerConnectionOptions,
-            ConnectionOptions transferConnectionOptions,
-            ConnectionOptions incomingConnectionOptions,
-            ConnectionOptions distributedConnectionOptions,
-            UserEndpointCache userEndpointCache,
-            SearchResponseCache searchResponseCache) {
-        this.enableListener = enableListener;
-        this.listenIpAddress = listenIpAddress == null ? wildcardAddress() : listenIpAddress;
-        this.listenPort = listenPort;
-
-        if (listenPort < 1024 || listenPort > 65_535) {
-            throw new IllegalArgumentException("listenPort must be between 1024 and 65535");
-        }
-
-        this.enableDistributedNetwork = enableDistributedNetwork;
-        this.acceptDistributedChildren = acceptDistributedChildren;
-        this.distributedChildLimit = distributedChildLimit;
-
-        if (distributedChildLimit < 0) {
-            throw new IllegalArgumentException("distributedChildLimit must be greater than or equal to zero");
-        }
-
-        this.maximumConcurrentSearches = maximumConcurrentSearches;
-        if (maximumConcurrentSearches < 1) {
-            throw new IllegalArgumentException("maximumConcurrentSearches must be greater than or equal to one");
-        }
-
-        this.maximumConcurrentUploads = maximumConcurrentUploads;
-        if (maximumConcurrentUploads < 1) {
-            throw new IllegalArgumentException("maximumConcurrentUploads must be greater than or equal to one");
-        }
-
-        this.maximumUploadSpeed = maximumUploadSpeed;
-        this.maximumConcurrentDownloads = maximumConcurrentDownloads;
-        if (maximumConcurrentDownloads < 1) {
-            throw new IllegalArgumentException("maximumConcurrentDownloads must be greater than or equal to one");
-        }
-
-        this.maximumDownloadSpeed = maximumDownloadSpeed;
-        this.deduplicateSearchRequests = deduplicateSearchRequests;
-        if (messageTimeout <= 0) {
-            throw new IllegalArgumentException("messageTimeout must be greater than zero");
-        }
-        this.messageTimeout = messageTimeout;
-        this.autoAcknowledgePrivateMessages = autoAcknowledgePrivateMessages;
-        this.autoAcknowledgePrivilegeNotifications = autoAcknowledgePrivilegeNotifications;
-        this.acceptPrivateRoomInvitations = acceptPrivateRoomInvitations;
-        this.minimumDiagnosticLevel = Objects.requireNonNull(minimumDiagnosticLevel, "minimumDiagnosticLevel");
-        this.startingToken = startingToken;
-
-        this.serverConnectionOptions = (serverConnectionOptions == null
-                        ? new ConnectionOptions()
-                        : serverConnectionOptions)
-                .withoutInactivityTimeout();
-        this.peerConnectionOptions = peerConnectionOptions == null ? new ConnectionOptions() : peerConnectionOptions;
-        this.transferConnectionOptions =
-                transferConnectionOptions == null ? new ConnectionOptions() : transferConnectionOptions;
-        this.incomingConnectionOptions =
-                incomingConnectionOptions == null ? new ConnectionOptions() : incomingConnectionOptions;
-        this.distributedConnectionOptions =
-                distributedConnectionOptions == null ? new ConnectionOptions() : distributedConnectionOptions;
-
-        // Defaulted rather than left null: a peer's address is something only
-        // the server can tell us, peers search us repeatedly, and without a
-        // cache every answer costs a lookup the server has already answered.
-        this.userEndpointCache =
-                userEndpointCache == null ? new dev.slsk.internal.user.BoundedUserEndpointCache() : userEndpointCache;
-        // Defaulted rather than left null: without a cache we silently answer
-        // fewer searches than we think we do, and which searches is decided by
-        // whether the peer is behind NAT.
-        this.searchResponseCache = searchResponseCache == null
-                ? new dev.slsk.internal.search.BoundedSearchResponseCache()
-                : searchResponseCache;
-    }
-
-    /** Returns a clone with the supplied patch applied. */
-    public final SoulseekClientOptions with(SoulseekClientOptionsPatch patch) {
+    /** Returns a copy with the supplied patch applied. */
+    public SoulseekClientOptions with(SoulseekClientOptionsPatch patch) {
         Objects.requireNonNull(patch, "patch");
-
-        return new SoulseekClientOptions(
-                patch.getEnableListener() == null ? enableListener : patch.getEnableListener(),
-                patch.getListenIpAddress() == null ? listenIpAddress : patch.getListenIpAddress(),
-                patch.getListenPort() == null ? listenPort : patch.getListenPort(),
-                patch.getEnableDistributedNetwork() == null
-                        ? enableDistributedNetwork
-                        : patch.getEnableDistributedNetwork(),
-                patch.getAcceptDistributedChildren() == null
-                        ? acceptDistributedChildren
-                        : patch.getAcceptDistributedChildren(),
-                patch.getDistributedChildLimit() == null ? distributedChildLimit : patch.getDistributedChildLimit(),
-                maximumConcurrentSearches,
-                maximumConcurrentUploads,
-                patch.getMaximumUploadSpeed() == null ? maximumUploadSpeed : patch.getMaximumUploadSpeed(),
-                maximumConcurrentDownloads,
-                patch.getMaximumDownloadSpeed() == null ? maximumDownloadSpeed : patch.getMaximumDownloadSpeed(),
-                patch.getDeduplicateSearchRequests() == null
-                        ? deduplicateSearchRequests
-                        : patch.getDeduplicateSearchRequests(),
-                messageTimeout,
-                patch.getAutoAcknowledgePrivateMessages() == null
-                        ? autoAcknowledgePrivateMessages
-                        : patch.getAutoAcknowledgePrivateMessages(),
-                patch.getAutoAcknowledgePrivilegeNotifications() == null
-                        ? autoAcknowledgePrivilegeNotifications
-                        : patch.getAutoAcknowledgePrivilegeNotifications(),
-                patch.getAcceptPrivateRoomInvitations() == null
-                        ? acceptPrivateRoomInvitations
-                        : patch.getAcceptPrivateRoomInvitations(),
-                minimumDiagnosticLevel,
-                startingToken,
-                patch.getServerConnectionOptions() == null
-                        ? serverConnectionOptions
-                        : patch.getServerConnectionOptions(),
-                patch.getPeerConnectionOptions() == null ? peerConnectionOptions : patch.getPeerConnectionOptions(),
-                patch.getTransferConnectionOptions() == null
-                        ? transferConnectionOptions
-                        : patch.getTransferConnectionOptions(),
-                patch.getIncomingConnectionOptions() == null
-                        ? incomingConnectionOptions
-                        : patch.getIncomingConnectionOptions(),
-                patch.getDistributedConnectionOptions() == null
-                        ? distributedConnectionOptions
-                        : patch.getDistributedConnectionOptions(),
-                patch.getUserEndpointCache() == null ? userEndpointCache : patch.getUserEndpointCache(),
-                patch.getSearchResponseCache() == null ? searchResponseCache : patch.getSearchResponseCache());
+        Builder builder = builder(this);
+        patch.enableListener().ifPresent(builder::enableListener);
+        patch.listenIpAddress().ifPresent(builder::listenIpAddress);
+        patch.listenPort().ifPresent(builder::listenPort);
+        patch.enableDistributedNetwork().ifPresent(builder::enableDistributedNetwork);
+        patch.acceptDistributedChildren().ifPresent(builder::acceptDistributedChildren);
+        patch.distributedChildLimit().ifPresent(builder::distributedChildLimit);
+        patch.maximumUploadSpeed().ifPresent(builder::maximumUploadSpeed);
+        patch.maximumDownloadSpeed().ifPresent(builder::maximumDownloadSpeed);
+        patch.deduplicateSearchRequests().ifPresent(builder::deduplicateSearchRequests);
+        patch.autoAcknowledgePrivateMessages().ifPresent(builder::autoAcknowledgePrivateMessages);
+        patch.autoAcknowledgePrivilegeNotifications().ifPresent(builder::autoAcknowledgePrivilegeNotifications);
+        patch.acceptPrivateRoomInvitations().ifPresent(builder::acceptPrivateRoomInvitations);
+        patch.serverConnectionOptions().ifPresent(builder::serverConnectionOptions);
+        patch.peerConnectionOptions().ifPresent(builder::peerConnectionOptions);
+        patch.transferConnectionOptions().ifPresent(builder::transferConnectionOptions);
+        patch.incomingConnectionOptions().ifPresent(builder::incomingConnectionOptions);
+        patch.distributedConnectionOptions().ifPresent(builder::distributedConnectionOptions);
+        patch.userEndpointCache().ifPresent(builder::userEndpointCache);
+        patch.searchResponseCache().ifPresent(builder::searchResponseCache);
+        return builder.build();
     }
 
-    /** Returns whether distributed child connections are accepted. */
-    public final boolean isAcceptDistributedChildren() {
-        return acceptDistributedChildren;
+    /** Returns the fixed per-user upload-slot limit. */
+    public int maximumConcurrentUploadsPerUser() {
+        return 1;
     }
 
-    /** Returns whether private-room invitations are accepted. */
-    public final boolean isAcceptPrivateRoomInvitations() {
-        return acceptPrivateRoomInvitations;
-    }
+    /** Builder for client options. */
+    public static final class Builder {
+        private boolean acceptDistributedChildren = true;
+        private boolean acceptPrivateRoomInvitations;
+        private boolean autoAcknowledgePrivateMessages = true;
+        private boolean autoAcknowledgePrivilegeNotifications = true;
+        private boolean deduplicateSearchRequests = true;
+        private int distributedChildLimit = DEFAULT_DISTRIBUTED_CHILD_LIMIT;
+        private ConnectionOptions distributedConnectionOptions;
+        private boolean enableDistributedNetwork = true;
+        private boolean enableListener = true;
+        private ConnectionOptions incomingConnectionOptions;
+        private InetAddress listenIpAddress;
+        private int listenPort = DEFAULT_LISTEN_PORT;
+        private int maximumConcurrentDownloads = Integer.MAX_VALUE;
+        private int maximumConcurrentSearches = DEFAULT_MAXIMUM_CONCURRENT_SEARCHES;
+        private int maximumConcurrentUploads = DEFAULT_MAXIMUM_CONCURRENT_UPLOADS;
+        private int maximumDownloadSpeed = Integer.MAX_VALUE;
+        private int maximumUploadSpeed = Integer.MAX_VALUE;
+        private Duration messageTimeout = DEFAULT_MESSAGE_TIMEOUT;
+        private DiagnosticLevel minimumDiagnosticLevel = DiagnosticLevel.INFO;
+        private ConnectionOptions peerConnectionOptions;
+        private SearchResponseCache searchResponseCache;
+        private ConnectionOptions serverConnectionOptions;
+        private int startingToken;
+        private ConnectionOptions transferConnectionOptions;
+        private UserEndpointCache userEndpointCache;
 
-    /** Returns whether private messages are acknowledged automatically. */
-    public final boolean isAutoAcknowledgePrivateMessages() {
-        return autoAcknowledgePrivateMessages;
-    }
+        private Builder() {}
 
-    /** Returns whether privilege notifications are acknowledged automatically. */
-    public final boolean isAutoAcknowledgePrivilegeNotifications() {
-        return autoAcknowledgePrivilegeNotifications;
-    }
+        private Builder(SoulseekClientOptions source) {
+            Objects.requireNonNull(source, "source");
+            enableListener = source.enableListener;
+            listenIpAddress = source.listenIpAddress;
+            listenPort = source.listenPort;
+            enableDistributedNetwork = source.enableDistributedNetwork;
+            acceptDistributedChildren = source.acceptDistributedChildren;
+            distributedChildLimit = source.distributedChildLimit;
+            maximumConcurrentSearches = source.maximumConcurrentSearches;
+            maximumConcurrentUploads = source.maximumConcurrentUploads;
+            maximumUploadSpeed = source.maximumUploadSpeed;
+            maximumConcurrentDownloads = source.maximumConcurrentDownloads;
+            maximumDownloadSpeed = source.maximumDownloadSpeed;
+            deduplicateSearchRequests = source.deduplicateSearchRequests;
+            messageTimeout = source.messageTimeout;
+            autoAcknowledgePrivateMessages = source.autoAcknowledgePrivateMessages;
+            autoAcknowledgePrivilegeNotifications = source.autoAcknowledgePrivilegeNotifications;
+            acceptPrivateRoomInvitations = source.acceptPrivateRoomInvitations;
+            minimumDiagnosticLevel = source.minimumDiagnosticLevel;
+            startingToken = source.startingToken;
+            serverConnectionOptions = source.serverConnectionOptions;
+            peerConnectionOptions = source.peerConnectionOptions;
+            transferConnectionOptions = source.transferConnectionOptions;
+            incomingConnectionOptions = source.incomingConnectionOptions;
+            distributedConnectionOptions = source.distributedConnectionOptions;
+            userEndpointCache = source.userEndpointCache;
+            searchResponseCache = source.searchResponseCache;
+        }
 
-    /** Returns whether duplicate search requests are discarded. */
-    public final boolean isDeduplicateSearchRequests() {
-        return deduplicateSearchRequests;
-    }
+        public Builder enableListener(boolean value) {
+            enableListener = value;
+            return this;
+        }
 
-    /** Returns the distributed child limit. */
-    public final int getDistributedChildLimit() {
-        return distributedChildLimit;
-    }
+        public Builder listenIpAddress(InetAddress value) {
+            listenIpAddress = value;
+            return this;
+        }
 
-    /** Returns the distributed connection options. */
-    public final ConnectionOptions getDistributedConnectionOptions() {
-        return distributedConnectionOptions;
-    }
+        public Builder listenPort(int value) {
+            listenPort = value;
+            return this;
+        }
 
-    /** Returns whether the distributed network is enabled. */
-    public final boolean isEnableDistributedNetwork() {
-        return enableDistributedNetwork;
-    }
+        public Builder enableDistributedNetwork(boolean value) {
+            enableDistributedNetwork = value;
+            return this;
+        }
 
-    /** Returns whether the listener is enabled. */
-    public final boolean isEnableListener() {
-        return enableListener;
-    }
+        public Builder acceptDistributedChildren(boolean value) {
+            acceptDistributedChildren = value;
+            return this;
+        }
 
-    /** Returns the incoming connection options. */
-    public final ConnectionOptions getIncomingConnectionOptions() {
-        return incomingConnectionOptions;
-    }
+        public Builder distributedChildLimit(int value) {
+            distributedChildLimit = value;
+            return this;
+        }
 
-    /** Returns the listener IP address. */
-    public final InetAddress getListenIpAddress() {
-        return listenIpAddress;
-    }
+        public Builder maximumConcurrentSearches(int value) {
+            maximumConcurrentSearches = value;
+            return this;
+        }
 
-    /** Returns the listener port. */
-    public final int getListenPort() {
-        return listenPort;
-    }
+        public Builder maximumConcurrentUploads(int value) {
+            maximumConcurrentUploads = value;
+            return this;
+        }
 
-    /** Returns the maximum concurrent downloads. */
-    public final int getMaximumConcurrentDownloads() {
-        return maximumConcurrentDownloads;
-    }
+        public Builder maximumUploadSpeed(int value) {
+            maximumUploadSpeed = value;
+            return this;
+        }
 
-    /** Returns the maximum concurrent searches. */
-    public final int getMaximumConcurrentSearches() {
-        return maximumConcurrentSearches;
-    }
+        public Builder maximumConcurrentDownloads(int value) {
+            maximumConcurrentDownloads = value;
+            return this;
+        }
 
-    /** Returns the maximum concurrent uploads. */
-    public final int getMaximumConcurrentUploads() {
-        return maximumConcurrentUploads;
-    }
+        public Builder maximumDownloadSpeed(int value) {
+            maximumDownloadSpeed = value;
+            return this;
+        }
 
-    /** Returns the per-user upload-slot limit. */
-    public final int getMaximumConcurrentUploadsPerUser() {
-        return maximumConcurrentUploadsPerUser;
-    }
+        public Builder deduplicateSearchRequests(boolean value) {
+            deduplicateSearchRequests = value;
+            return this;
+        }
 
-    /** Returns the maximum total download speed in KiB/s. */
-    public final int getMaximumDownloadSpeed() {
-        return maximumDownloadSpeed;
-    }
+        public Builder messageTimeout(Duration value) {
+            messageTimeout = value;
+            return this;
+        }
 
-    /** Returns the maximum total upload speed in KiB/s. */
-    public final int getMaximumUploadSpeed() {
-        return maximumUploadSpeed;
-    }
+        public Builder autoAcknowledgePrivateMessages(boolean value) {
+            autoAcknowledgePrivateMessages = value;
+            return this;
+        }
 
-    /** Returns the server/peer message timeout in milliseconds. */
-    public final int getMessageTimeout() {
-        return messageTimeout;
-    }
+        public Builder autoAcknowledgePrivilegeNotifications(boolean value) {
+            autoAcknowledgePrivilegeNotifications = value;
+            return this;
+        }
 
-    /** Returns the minimum diagnostic level. */
-    public final DiagnosticLevel getMinimumDiagnosticLevel() {
-        return minimumDiagnosticLevel;
-    }
+        public Builder acceptPrivateRoomInvitations(boolean value) {
+            acceptPrivateRoomInvitations = value;
+            return this;
+        }
 
-    /** Returns the peer connection options. */
-    public final ConnectionOptions getPeerConnectionOptions() {
-        return peerConnectionOptions;
-    }
+        public Builder minimumDiagnosticLevel(DiagnosticLevel value) {
+            minimumDiagnosticLevel = value;
+            return this;
+        }
 
-    /** Returns the search response cache, or {@code null}. */
-    public final SearchResponseCache getSearchResponseCache() {
-        return searchResponseCache;
-    }
+        public Builder startingToken(int value) {
+            startingToken = value;
+            return this;
+        }
 
-    /** Returns the server connection options. */
-    public final ConnectionOptions getServerConnectionOptions() {
-        return serverConnectionOptions;
-    }
+        public Builder serverConnectionOptions(ConnectionOptions value) {
+            serverConnectionOptions = value;
+            return this;
+        }
 
-    /** Returns the starting token. */
-    public final int getStartingToken() {
-        return startingToken;
-    }
+        public Builder peerConnectionOptions(ConnectionOptions value) {
+            peerConnectionOptions = value;
+            return this;
+        }
 
-    /** Returns the transfer connection options. */
-    public final ConnectionOptions getTransferConnectionOptions() {
-        return transferConnectionOptions;
-    }
+        public Builder transferConnectionOptions(ConnectionOptions value) {
+            transferConnectionOptions = value;
+            return this;
+        }
 
-    /** Returns the user endpoint cache, or {@code null}. */
-    public final UserEndpointCache getUserEndpointCache() {
-        return userEndpointCache;
+        public Builder incomingConnectionOptions(ConnectionOptions value) {
+            incomingConnectionOptions = value;
+            return this;
+        }
+
+        public Builder distributedConnectionOptions(ConnectionOptions value) {
+            distributedConnectionOptions = value;
+            return this;
+        }
+
+        public Builder userEndpointCache(UserEndpointCache value) {
+            userEndpointCache = value;
+            return this;
+        }
+
+        public Builder searchResponseCache(SearchResponseCache value) {
+            searchResponseCache = value;
+            return this;
+        }
+
+        public SoulseekClientOptions build() {
+            return new SoulseekClientOptions(
+                    enableListener,
+                    listenIpAddress,
+                    listenPort,
+                    enableDistributedNetwork,
+                    acceptDistributedChildren,
+                    distributedChildLimit,
+                    maximumConcurrentSearches,
+                    maximumConcurrentUploads,
+                    maximumUploadSpeed,
+                    maximumConcurrentDownloads,
+                    maximumDownloadSpeed,
+                    deduplicateSearchRequests,
+                    messageTimeout,
+                    autoAcknowledgePrivateMessages,
+                    autoAcknowledgePrivilegeNotifications,
+                    acceptPrivateRoomInvitations,
+                    minimumDiagnosticLevel,
+                    startingToken,
+                    serverConnectionOptions,
+                    peerConnectionOptions,
+                    transferConnectionOptions,
+                    incomingConnectionOptions,
+                    distributedConnectionOptions,
+                    userEndpointCache,
+                    searchResponseCache);
+        }
     }
 
     private static InetAddress wildcardAddress() {

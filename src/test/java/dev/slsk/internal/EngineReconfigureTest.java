@@ -120,7 +120,8 @@ class EngineReconfigureTest {
 
     @Test
     void disablesListenerAndHandlesNullOrStoppedListener() {
-        Fixture fixture = new Fixture(new SoulseekClientOptions(true));
+        Fixture fixture =
+                new Fixture(SoulseekClientOptions.builder().enableListener(true).build());
         fixture.initialListener.listening = true;
         SoulseekClientOptionsPatch disable =
                 patch(false, null, null, null, null, null, null, null, null, null, null, null);
@@ -129,9 +130,10 @@ class EngineReconfigureTest {
 
         assertEquals(1, fixture.initialListener.stopCount);
         assertNull(fixture.client.listener);
-        assertFalse(fixture.client.getOptions().isEnableListener());
+        assertFalse(fixture.client.getOptions().enableListener());
 
-        Fixture nullFixture = new Fixture(new SoulseekClientOptions(true));
+        Fixture nullFixture =
+                new Fixture(SoulseekClientOptions.builder().enableListener(true).build());
         nullFixture.client.setListenerForTest(null);
         nullFixture.client.reconfigureOptions(disable);
         assertNull(nullFixture.client.listener);
@@ -141,7 +143,8 @@ class EngineReconfigureTest {
 
     @Test
     void replacesListeningListenerWithPatchedSettings() {
-        Fixture fixture = new Fixture(new SoulseekClientOptions(true));
+        Fixture fixture =
+                new Fixture(SoulseekClientOptions.builder().enableListener(true).build());
         fixture.initialListener.listening = true;
         ListenerProbe preflight = new ListenerProbe();
         ListenerProbe replacement = new ListenerProbe();
@@ -161,8 +164,8 @@ class EngineReconfigureTest {
         assertEquals(50_002, replacement.port);
         assertEquals(LOOPBACK, replacement.ipAddress);
         assertSame(incoming, replacement.options);
-        assertEquals(50_002, fixture.client.getOptions().getListenPort());
-        assertSame(incoming, fixture.client.getOptions().getIncomingConnectionOptions());
+        assertEquals(50_002, fixture.client.getOptions().listenPort());
+        assertSame(incoming, fixture.client.getOptions().incomingConnectionOptions());
         fixture.close();
     }
 
@@ -178,7 +181,7 @@ class EngineReconfigureTest {
         fixture.client.reconfigureOptions(patch);
 
         assertNull(fixture.client.listener);
-        assertSame(incoming, fixture.client.getOptions().getIncomingConnectionOptions());
+        assertSame(incoming, fixture.client.getOptions().incomingConnectionOptions());
         assertEquals(0, fixture.listenerFactory.created.size());
         fixture.close();
     }
@@ -189,41 +192,36 @@ class EngineReconfigureTest {
         ConnectionOptions peer =
                 ConnectionOptions.builder().readBufferSize(7000).build();
         SoulseekClientOptionsPatch patch = patch(false, null, null, false, false, 7, 50, 70, true, null, null, null);
-        patch = new SoulseekClientOptionsPatch(
-                patch.getEnableListener(),
-                patch.getListenIpAddress(),
-                patch.getListenPort(),
-                patch.getEnableDistributedNetwork(),
-                patch.getAcceptDistributedChildren(),
-                patch.getDistributedChildLimit(),
-                patch.getMaximumUploadSpeed(),
-                patch.getMaximumDownloadSpeed(),
-                false,
-                false,
-                false,
-                patch.getAcceptPrivateRoomInvitations(),
-                null,
-                peer,
-                null,
-                null,
-                null,
-                null,
-                null);
+        SoulseekClientOptionsPatch.Builder builder = SoulseekClientOptionsPatch.builder()
+                .deduplicateSearchRequests(false)
+                .autoAcknowledgePrivateMessages(false)
+                .autoAcknowledgePrivilegeNotifications(false)
+                .peerConnectionOptions(peer);
+        patch.enableListener().ifPresent(builder::enableListener);
+        patch.listenIpAddress().ifPresent(builder::listenIpAddress);
+        patch.listenPort().ifPresent(builder::listenPort);
+        patch.enableDistributedNetwork().ifPresent(builder::enableDistributedNetwork);
+        patch.acceptDistributedChildren().ifPresent(builder::acceptDistributedChildren);
+        patch.distributedChildLimit().ifPresent(builder::distributedChildLimit);
+        patch.maximumUploadSpeed().ifPresent(builder::maximumUploadSpeed);
+        patch.maximumDownloadSpeed().ifPresent(builder::maximumDownloadSpeed);
+        patch.acceptPrivateRoomInvitations().ifPresent(builder::acceptPrivateRoomInvitations);
+        patch = builder.build();
 
         fixture.client.reconfigureOptions(patch);
 
         SoulseekClientOptions updated = fixture.client.getOptions();
-        assertFalse(updated.isEnableListener());
-        assertFalse(updated.isEnableDistributedNetwork());
-        assertFalse(updated.isAcceptDistributedChildren());
-        assertEquals(7, updated.getDistributedChildLimit());
-        assertEquals(50, updated.getMaximumUploadSpeed());
-        assertEquals(70, updated.getMaximumDownloadSpeed());
-        assertFalse(updated.isDeduplicateSearchRequests());
-        assertFalse(updated.isAutoAcknowledgePrivateMessages());
-        assertFalse(updated.isAutoAcknowledgePrivilegeNotifications());
-        assertTrue(updated.isAcceptPrivateRoomInvitations());
-        assertSame(peer, updated.getPeerConnectionOptions());
+        assertFalse(updated.enableListener());
+        assertFalse(updated.enableDistributedNetwork());
+        assertFalse(updated.acceptDistributedChildren());
+        assertEquals(7, updated.distributedChildLimit());
+        assertEquals(50, updated.maximumUploadSpeed());
+        assertEquals(70, updated.maximumDownloadSpeed());
+        assertFalse(updated.deduplicateSearchRequests());
+        assertFalse(updated.autoAcknowledgePrivateMessages());
+        assertFalse(updated.autoAcknowledgePrivilegeNotifications());
+        assertTrue(updated.acceptPrivateRoomInvitations());
+        assertSame(peer, updated.peerConnectionOptions());
         assertEquals((50 * 1024L) / 10, fixture.uploadBucket.getCapacity());
         assertEquals((70 * 1024L) / 10, fixture.downloadBucket.getCapacity());
         fixture.close();
@@ -244,8 +242,8 @@ class EngineReconfigureTest {
                 null,
                 null,
                 null,
-                fixture.options.getMaximumUploadSpeed(),
-                fixture.options.getMaximumDownloadSpeed(),
+                fixture.options.maximumUploadSpeed(),
+                fixture.options.maximumDownloadSpeed(),
                 null,
                 null,
                 null,
@@ -288,7 +286,7 @@ class EngineReconfigureTest {
         SoulseekClientException wrapped = assertInstanceOf(
                 SoulseekClientException.class, completionCause(() -> failedFixture.client.reconfigureOptions(changed)));
         assertSame(failure, wrapped.getCause());
-        assertFalse(failedFixture.client.getOptions().isEnableDistributedNetwork());
+        assertFalse(failedFixture.client.getOptions().enableDistributedNetwork());
         cancelledFixture.close();
         timeoutFixture.close();
         failedFixture.close();
@@ -315,26 +313,44 @@ class EngineReconfigureTest {
             ConnectionOptions serverOptions,
             ConnectionOptions incomingOptions,
             ConnectionOptions distributedOptions) {
-        return new SoulseekClientOptionsPatch(
-                enableListener,
-                listenAddress,
-                listenPort,
-                enableDistributed,
-                acceptChildren,
-                childLimit,
-                maximumUploadSpeed,
-                maximumDownloadSpeed,
-                null,
-                null,
-                null,
-                acceptPrivateInvitations,
-                serverOptions,
-                null,
-                null,
-                incomingOptions,
-                distributedOptions,
-                null,
-                null);
+        SoulseekClientOptionsPatch.Builder builder = SoulseekClientOptionsPatch.builder();
+        if (enableListener != null) {
+            builder.enableListener(enableListener);
+        }
+        if (listenAddress != null) {
+            builder.listenIpAddress(listenAddress);
+        }
+        if (listenPort != null) {
+            builder.listenPort(listenPort);
+        }
+        if (enableDistributed != null) {
+            builder.enableDistributedNetwork(enableDistributed);
+        }
+        if (acceptChildren != null) {
+            builder.acceptDistributedChildren(acceptChildren);
+        }
+        if (childLimit != null) {
+            builder.distributedChildLimit(childLimit);
+        }
+        if (maximumUploadSpeed != null) {
+            builder.maximumUploadSpeed(maximumUploadSpeed);
+        }
+        if (maximumDownloadSpeed != null) {
+            builder.maximumDownloadSpeed(maximumDownloadSpeed);
+        }
+        if (acceptPrivateInvitations != null) {
+            builder.acceptPrivateRoomInvitations(acceptPrivateInvitations);
+        }
+        if (serverOptions != null) {
+            builder.serverConnectionOptions(serverOptions);
+        }
+        if (incomingOptions != null) {
+            builder.incomingConnectionOptions(incomingOptions);
+        }
+        if (distributedOptions != null) {
+            builder.distributedConnectionOptions(distributedOptions);
+        }
+        return builder.build();
     }
 
     private static SoulseekClientState loggedIn() {
@@ -391,13 +407,13 @@ class EngineReconfigureTest {
         private final SoulseekEngine client;
 
         private Fixture() {
-            this(new SoulseekClientOptions(false));
+            this(SoulseekClientOptions.builder().enableListener(false).build());
         }
 
         private Fixture(SoulseekClientOptions clientOptions) {
             options = clientOptions;
-            uploadBucket = new TokenBucket((options.getMaximumUploadSpeed() * 1024L) / 10, 100);
-            downloadBucket = new TokenBucket((options.getMaximumDownloadSpeed() * 1024L) / 10, 100);
+            uploadBucket = new TokenBucket((options.maximumUploadSpeed() * 1024L) / 10, 100);
+            downloadBucket = new TokenBucket((options.maximumDownloadSpeed() * 1024L) / 10, 100);
             client = new SoulseekEngine(
                     9999,
                     options,

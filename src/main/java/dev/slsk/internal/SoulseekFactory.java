@@ -62,8 +62,8 @@ public final class SoulseekFactory {
             java.time.Duration peerTimeout,
             java.time.Duration transferTimeout,
             java.time.Duration messageTimeout) {
-        SoulseekClientOptions base = new SoulseekClientOptions(
-                true,
+        SoulseekClientOptions base = SoulseekClientOptions.builder()
+                .enableListener(true)
                 // Every address, which is what a listener peers are told to
                 // connect to has to be. This bound the loopback address from
                 // the day the builder was written, so the port every client
@@ -74,32 +74,16 @@ public final class SoulseekFactory {
                 // Nothing chose that; there is no option for the address, and
                 // the one javadoc claim about the port — "the port peers
                 // connect to us on" — is only true now.
-                null,
-                listenPort,
-                (int) messageTimeout.toMillis(),
-                level(diagnostics));
+                .listenPort(listenPort)
+                .messageTimeout(messageTimeout)
+                .minimumDiagnosticLevel(level(diagnostics))
+                .build();
         // The peer and transfer budgets are per-connection rather than global,
         // so they arrive as connection options rather than as top-level ones.
-        SoulseekClientOptions options = base.with(new SoulseekClientOptionsPatch(
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                connection(peerTimeout),
-                connection(transferTimeout),
-                null,
-                null,
-                null,
-                null));
+        SoulseekClientOptions options = base.with(SoulseekClientOptionsPatch.builder()
+                .peerConnectionOptions(connection(peerTimeout))
+                .transferConnectionOptions(connection(transferTimeout))
+                .build());
         Soulseek client = DefaultSoulseek.create(username, password, minorVersion, options, store);
 
         client.me().profile(profile);

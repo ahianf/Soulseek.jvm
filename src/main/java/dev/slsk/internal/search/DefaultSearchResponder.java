@@ -98,7 +98,7 @@ public final class DefaultSearchResponder implements SearchResponder {
         this.loggedInUsername = Objects.requireNonNull(loggedInUsername, "loggedInUsername");
         this.advertisedUploadSpeed = Objects.requireNonNull(advertisedUploadSpeed, "advertisedUploadSpeed");
         diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(options.get().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
     }
 
@@ -145,7 +145,7 @@ public final class DefaultSearchResponder implements SearchResponder {
 
     @Override
     public boolean tryDiscard(int responseToken) {
-        SearchResponseCache cache = options.get().getSearchResponseCache();
+        SearchResponseCache cache = options.get().searchResponseCache();
         if (cache == null) {
             return false;
         }
@@ -196,7 +196,7 @@ public final class DefaultSearchResponder implements SearchResponder {
 
     @Override
     public boolean tryRespond(int responseToken) {
-        SearchResponseCache cache = options.get().getSearchResponseCache();
+        SearchResponseCache cache = options.get().searchResponseCache();
         if (cache == null) {
             return false;
         }
@@ -328,7 +328,7 @@ public final class DefaultSearchResponder implements SearchResponder {
 
     private void cacheUndelivered(
             int responseToken, String username, int token, String query, SearchResponse response) {
-        SearchResponseCache cache = options.get().getSearchResponseCache();
+        SearchResponseCache cache = options.get().searchResponseCache();
         if (cache == null) {
             return;
         }

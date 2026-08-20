@@ -97,7 +97,8 @@ class EngineConnectTest {
     @Test
     void listenerPreflightFailureIsReportedBeforeConnecting() throws Exception {
         InetAddress nonLocalAddress = InetAddress.getByAddress(new byte[] {(byte) 192, 0, 2, 1});
-        SoulseekClientOptions options = new SoulseekClientOptions(true, nonLocalAddress, 30_000);
+        SoulseekClientOptions options =
+                SoulseekClientOptions.builder().listenIpAddress(nonLocalAddress).build();
         Fixture fixture = new Fixture(options);
         assertThrows(ListenException.class, () -> fixture.client.connect("127.0.0.1", 2271, "user", "password"));
         assertEquals(0, fixture.connection.connectCount);
@@ -123,7 +124,7 @@ class EngineConnectTest {
         assertEquals(1, fixture.connection.connectCount);
         assertSame(token, fixture.connection.connectToken);
         assertEquals(new InetSocketAddress(LOOPBACK, 2271), fixture.factory.endpoint);
-        assertSame(fixture.options.getServerConnectionOptions(), fixture.factory.options);
+        assertSame(fixture.options.serverConnectionOptions(), fixture.factory.options);
         assertEquals("127.0.0.1", fixture.client.getAddress());
         assertEquals(new InetSocketAddress(LOOPBACK, 2271), fixture.client.getIpEndpoint());
         assertEquals("alice", fixture.client.getUsername());
@@ -131,12 +132,12 @@ class EngineConnectTest {
 
         ByteArrayOutputStream expectedLogin = new ByteArrayOutputStream();
         expectedLogin.writeBytes(new LoginRequest(9999, "alice", "secret").toByteArray());
-        expectedLogin.writeBytes(new SetListenPortCommand(fixture.options.getListenPort()).toByteArray());
+        expectedLogin.writeBytes(new SetListenPortCommand(fixture.options.listenPort()).toByteArray());
         assertArrayEquals(expectedLogin.toByteArray(), fixture.connection.rawMessages.get(0));
         assertInstanceOf(SetListenPortCommand.class, fixture.connection.outgoingMessages.get(0));
         PrivateRoomToggle toggle =
                 assertInstanceOf(PrivateRoomToggle.class, fixture.connection.outgoingMessages.get(1));
-        assertEquals(fixture.options.isAcceptPrivateRoomInvitations(), toggle.isAcceptInvitations());
+        assertEquals(fixture.options.acceptPrivateRoomInvitations(), toggle.isAcceptInvitations());
         assertEquals(
                 "alice",
                 assertInstanceOf(
@@ -350,7 +351,7 @@ class EngineConnectTest {
         private final SoulseekEngine client;
 
         private Fixture() {
-            this(new SoulseekClientOptions(false));
+            this(SoulseekClientOptions.builder().enableListener(false).build());
         }
 
         private Fixture(SoulseekClientOptions clientOptions) {

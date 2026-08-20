@@ -143,7 +143,7 @@ final class UploadRun {
             Wait<TransferResponse> transferRequestAcknowledged = domain.waiter.register(
                     new WaitKey(MessageCode.Peer.TRANSFER_RESPONSE, upload.getUsername(), upload.getToken()),
                     TransferResponse.class,
-                    domain.clientOptions().getPeerConnectionOptions().inactivityTimeout(),
+                    domain.clientOptions().peerConnectionOptions().inactivityTimeout(),
                     cancellationSignal);
             messageConnection.write(
                     new TransferRequest(

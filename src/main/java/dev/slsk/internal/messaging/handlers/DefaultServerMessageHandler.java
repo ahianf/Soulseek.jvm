@@ -184,7 +184,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         this.searchResponses = Objects.requireNonNull(searchResponses, "searchResponses");
         this.networkExecutor = Objects.requireNonNull(networkExecutor, "networkExecutor");
         diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(options.get().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
         for (ServerMessageEvent event : ServerMessageEvent.values()) {
             listeners.put(event, new CopyOnWriteArrayList<>());
@@ -443,7 +443,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         raise(
                 ServerMessageEvent.PRIVILEGE_NOTIFICATION_RECEIVED,
                 new PrivilegeNotificationReceivedEvent(notification.getUsername(), notification.getId()));
-        if (!options.get().isAutoAcknowledgePrivilegeNotifications()) {
+        if (!options.get().autoAcknowledgePrivilegeNotifications()) {
             return;
         }
         // Off the server read loop: acknowledging writes back to the server.
@@ -455,7 +455,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     private void handlePrivateMessage(byte[] message) {
         PrivateMessageNotification notification = PrivateMessageNotification.fromByteArray(message);
         raise(ServerMessageEvent.PRIVATE_MESSAGE_RECEIVED, new PrivateMessageReceivedEvent(notification));
-        if (!options.get().isAutoAcknowledgePrivateMessages()) {
+        if (!options.get().autoAcknowledgePrivateMessages()) {
             return;
         }
         // Off the server read loop: acknowledging writes back to the server.

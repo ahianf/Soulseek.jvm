@@ -39,101 +39,114 @@ class SoulseekClientOptionsTest {
         SearchResponseCache searchCache = new TestSearchCache();
         InetAddress address = InetAddress.getByName("127.0.0.2");
 
-        SoulseekClientOptions options = new SoulseekClientOptions(
-                false,
-                address,
-                1234,
-                false,
-                false,
-                6,
-                7,
-                8,
-                9,
-                10,
-                11,
-                false,
-                12,
-                false,
-                false,
-                true,
-                DiagnosticLevel.TRACE,
-                13,
-                server,
-                peer,
-                transfer,
-                incoming,
-                distributed,
-                userCache,
-                searchCache);
+        SoulseekClientOptions options = SoulseekClientOptions.builder()
+                .enableListener(false)
+                .listenIpAddress(address)
+                .listenPort(1234)
+                .enableDistributedNetwork(false)
+                .acceptDistributedChildren(false)
+                .distributedChildLimit(6)
+                .maximumConcurrentSearches(7)
+                .maximumConcurrentUploads(8)
+                .maximumUploadSpeed(9)
+                .maximumConcurrentDownloads(10)
+                .maximumDownloadSpeed(11)
+                .deduplicateSearchRequests(false)
+                .messageTimeout(Duration.ofMillis(12))
+                .autoAcknowledgePrivateMessages(false)
+                .autoAcknowledgePrivilegeNotifications(false)
+                .acceptPrivateRoomInvitations(true)
+                .minimumDiagnosticLevel(DiagnosticLevel.TRACE)
+                .startingToken(13)
+                .serverConnectionOptions(server)
+                .peerConnectionOptions(peer)
+                .transferConnectionOptions(transfer)
+                .incomingConnectionOptions(incoming)
+                .distributedConnectionOptions(distributed)
+                .userEndpointCache(userCache)
+                .searchResponseCache(searchCache)
+                .build();
 
-        assertFalse(options.isEnableListener());
-        assertSame(address, options.getListenIpAddress());
-        assertEquals(1234, options.getListenPort());
-        assertFalse(options.isEnableDistributedNetwork());
-        assertFalse(options.isAcceptDistributedChildren());
-        assertEquals(6, options.getDistributedChildLimit());
-        assertEquals(7, options.getMaximumConcurrentSearches());
-        assertEquals(8, options.getMaximumConcurrentUploads());
-        assertEquals(9, options.getMaximumUploadSpeed());
-        assertEquals(10, options.getMaximumConcurrentDownloads());
-        assertEquals(11, options.getMaximumDownloadSpeed());
-        assertFalse(options.isDeduplicateSearchRequests());
-        assertEquals(12, options.getMessageTimeout());
-        assertFalse(options.isAutoAcknowledgePrivateMessages());
-        assertFalse(options.isAutoAcknowledgePrivilegeNotifications());
-        assertTrue(options.isAcceptPrivateRoomInvitations());
-        assertEquals(DiagnosticLevel.TRACE, options.getMinimumDiagnosticLevel());
-        assertEquals(13, options.getStartingToken());
-        assertNull(options.getServerConnectionOptions().inactivityTimeout());
-        assertSame(peer, options.getPeerConnectionOptions());
-        assertSame(transfer, options.getTransferConnectionOptions());
-        assertSame(incoming, options.getIncomingConnectionOptions());
-        assertSame(distributed, options.getDistributedConnectionOptions());
-        assertSame(userCache, options.getUserEndpointCache());
-        assertSame(searchCache, options.getSearchResponseCache());
-        assertEquals(1, options.getMaximumConcurrentUploadsPerUser());
+        assertFalse(options.enableListener());
+        assertSame(address, options.listenIpAddress());
+        assertEquals(1234, options.listenPort());
+        assertFalse(options.enableDistributedNetwork());
+        assertFalse(options.acceptDistributedChildren());
+        assertEquals(6, options.distributedChildLimit());
+        assertEquals(7, options.maximumConcurrentSearches());
+        assertEquals(8, options.maximumConcurrentUploads());
+        assertEquals(9, options.maximumUploadSpeed());
+        assertEquals(10, options.maximumConcurrentDownloads());
+        assertEquals(11, options.maximumDownloadSpeed());
+        assertFalse(options.deduplicateSearchRequests());
+        assertEquals(Duration.ofMillis(12), options.messageTimeout());
+        assertFalse(options.autoAcknowledgePrivateMessages());
+        assertFalse(options.autoAcknowledgePrivilegeNotifications());
+        assertTrue(options.acceptPrivateRoomInvitations());
+        assertEquals(DiagnosticLevel.TRACE, options.minimumDiagnosticLevel());
+        assertEquals(13, options.startingToken());
+        assertNull(options.serverConnectionOptions().inactivityTimeout());
+        assertSame(peer, options.peerConnectionOptions());
+        assertSame(transfer, options.transferConnectionOptions());
+        assertSame(incoming, options.incomingConnectionOptions());
+        assertSame(distributed, options.distributedConnectionOptions());
+        assertSame(userCache, options.userEndpointCache());
+        assertSame(searchCache, options.searchResponseCache());
+        assertEquals(1, options.maximumConcurrentUploadsPerUser());
     }
 
     @Test
     void sourceDefaultsAndDefaultResolvers() {
         SoulseekClientOptions options = new SoulseekClientOptions();
 
-        assertTrue(options.isEnableListener());
-        assertEquals("0.0.0.0", options.getListenIpAddress().getHostAddress());
-        assertEquals(30_000, options.getListenPort());
-        assertTrue(options.isEnableDistributedNetwork());
-        assertTrue(options.isAcceptDistributedChildren());
-        assertEquals(25, options.getDistributedChildLimit());
-        assertEquals(2, options.getMaximumConcurrentSearches());
-        assertEquals(10, options.getMaximumConcurrentUploads());
-        assertEquals(Integer.MAX_VALUE, options.getMaximumUploadSpeed());
-        assertEquals(Integer.MAX_VALUE, options.getMaximumConcurrentDownloads());
-        assertEquals(Integer.MAX_VALUE, options.getMaximumDownloadSpeed());
-        assertTrue(options.isDeduplicateSearchRequests());
-        assertEquals(5_000, options.getMessageTimeout());
-        assertTrue(options.isAutoAcknowledgePrivateMessages());
-        assertTrue(options.isAutoAcknowledgePrivilegeNotifications());
-        assertFalse(options.isAcceptPrivateRoomInvitations());
-        assertEquals(DiagnosticLevel.INFO, options.getMinimumDiagnosticLevel());
-        assertNotNull(options.getServerConnectionOptions());
-        assertNull(options.getServerConnectionOptions().inactivityTimeout());
-        assertNotNull(options.getPeerConnectionOptions());
-        assertNotNull(options.getTransferConnectionOptions());
-        assertNotNull(options.getIncomingConnectionOptions());
-        assertNotNull(options.getDistributedConnectionOptions());
+        assertTrue(options.enableListener());
+        assertEquals("0.0.0.0", options.listenIpAddress().getHostAddress());
+        assertEquals(30_000, options.listenPort());
+        assertTrue(options.enableDistributedNetwork());
+        assertTrue(options.acceptDistributedChildren());
+        assertEquals(25, options.distributedChildLimit());
+        assertEquals(2, options.maximumConcurrentSearches());
+        assertEquals(10, options.maximumConcurrentUploads());
+        assertEquals(Integer.MAX_VALUE, options.maximumUploadSpeed());
+        assertEquals(Integer.MAX_VALUE, options.maximumConcurrentDownloads());
+        assertEquals(Integer.MAX_VALUE, options.maximumDownloadSpeed());
+        assertTrue(options.deduplicateSearchRequests());
+        assertEquals(Duration.ofSeconds(5), options.messageTimeout());
+        assertTrue(options.autoAcknowledgePrivateMessages());
+        assertTrue(options.autoAcknowledgePrivilegeNotifications());
+        assertFalse(options.acceptPrivateRoomInvitations());
+        assertEquals(DiagnosticLevel.INFO, options.minimumDiagnosticLevel());
+        assertNotNull(options.serverConnectionOptions());
+        assertNull(options.serverConnectionOptions().inactivityTimeout());
+        assertNotNull(options.peerConnectionOptions());
+        assertNotNull(options.transferConnectionOptions());
+        assertNotNull(options.incomingConnectionOptions());
+        assertNotNull(options.distributedConnectionOptions());
     }
 
     @Test
     void configuresListenerPortAndMessageTimeout() {
-        SoulseekClientOptions options = new SoulseekClientOptions(true, null, 50_001, 15_000);
+        SoulseekClientOptions options = SoulseekClientOptions.builder()
+                .listenPort(50_001)
+                .messageTimeout(Duration.ofSeconds(15))
+                .build();
 
-        assertTrue(options.isEnableListener());
-        assertEquals(50_001, options.getListenPort());
-        assertEquals(15_000, options.getMessageTimeout());
-        assertThrows(IllegalArgumentException.class, () -> new SoulseekClientOptions(true, null, 50_001, 0));
+        assertTrue(options.enableListener());
+        assertEquals(50_001, options.listenPort());
+        assertEquals(Duration.ofSeconds(15), options.messageTimeout());
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> SoulseekClientOptions.builder()
+                        .listenPort(50_001)
+                        .messageTimeout(Duration.ZERO)
+                        .build());
 
-        SoulseekClientOptions traced = new SoulseekClientOptions(true, null, 50_001, 15_000, DiagnosticLevel.DEBUG);
-        assertEquals(DiagnosticLevel.DEBUG, traced.getMinimumDiagnosticLevel());
+        SoulseekClientOptions traced = SoulseekClientOptions.builder()
+                .listenPort(50_001)
+                .messageTimeout(Duration.ofSeconds(15))
+                .minimumDiagnosticLevel(DiagnosticLevel.DEBUG)
+                .build();
+        assertEquals(DiagnosticLevel.DEBUG, traced.minimumDiagnosticLevel());
     }
 
     @Test
@@ -162,47 +175,42 @@ class SoulseekClientOptionsTest {
     void withAppliesPatchAndPreservesSourceCloneBehavior() {
         ConnectionOptions peer = ConnectionOptions.builder().readBufferSize(7).build();
         SoulseekClientOptions original = complete(1234, 2, 44, 42, 24);
-        SoulseekClientOptionsPatch patch = new SoulseekClientOptionsPatch(
-                false,
-                InetAddress.getLoopbackAddress(),
-                2345,
-                false,
-                false,
-                3,
-                4,
-                5,
-                false,
-                false,
-                false,
-                true,
-                null,
-                peer,
-                null,
-                null,
-                null,
-                null,
-                null);
+        SoulseekClientOptionsPatch patch = SoulseekClientOptionsPatch.builder()
+                .enableListener(false)
+                .listenIpAddress(InetAddress.getLoopbackAddress())
+                .listenPort(2345)
+                .enableDistributedNetwork(false)
+                .acceptDistributedChildren(false)
+                .distributedChildLimit(3)
+                .maximumUploadSpeed(4)
+                .maximumDownloadSpeed(5)
+                .deduplicateSearchRequests(false)
+                .autoAcknowledgePrivateMessages(false)
+                .autoAcknowledgePrivilegeNotifications(false)
+                .acceptPrivateRoomInvitations(true)
+                .peerConnectionOptions(peer)
+                .build();
 
         SoulseekClientOptions copy = original.with(patch);
 
-        assertFalse(copy.isEnableListener());
-        assertEquals(2345, copy.getListenPort());
-        assertFalse(copy.isEnableDistributedNetwork());
-        assertFalse(copy.isAcceptDistributedChildren());
-        assertEquals(3, copy.getDistributedChildLimit());
-        assertEquals(4, copy.getMaximumUploadSpeed());
-        assertEquals(5, copy.getMaximumDownloadSpeed());
-        assertFalse(copy.isDeduplicateSearchRequests());
-        assertFalse(copy.isAutoAcknowledgePrivateMessages());
-        assertFalse(copy.isAutoAcknowledgePrivilegeNotifications());
-        assertTrue(copy.isAcceptPrivateRoomInvitations());
-        assertSame(peer, copy.getPeerConnectionOptions());
-        assertEquals(42, copy.getMaximumConcurrentUploads());
-        assertEquals(24, copy.getMaximumConcurrentDownloads());
-        assertEquals(DiagnosticLevel.NONE, copy.getMinimumDiagnosticLevel());
+        assertFalse(copy.enableListener());
+        assertEquals(2345, copy.listenPort());
+        assertFalse(copy.enableDistributedNetwork());
+        assertFalse(copy.acceptDistributedChildren());
+        assertEquals(3, copy.distributedChildLimit());
+        assertEquals(4, copy.maximumUploadSpeed());
+        assertEquals(5, copy.maximumDownloadSpeed());
+        assertFalse(copy.deduplicateSearchRequests());
+        assertFalse(copy.autoAcknowledgePrivateMessages());
+        assertFalse(copy.autoAcknowledgePrivilegeNotifications());
+        assertTrue(copy.acceptPrivateRoomInvitations());
+        assertSame(peer, copy.peerConnectionOptions());
+        assertEquals(42, copy.maximumConcurrentUploads());
+        assertEquals(24, copy.maximumConcurrentDownloads());
+        assertEquals(DiagnosticLevel.NONE, copy.minimumDiagnosticLevel());
 
         // Not patchable, so a customized limit must survive an unrelated patch.
-        assertEquals(44, copy.getMaximumConcurrentSearches());
+        assertEquals(44, copy.maximumConcurrentSearches());
     }
 
     @Test
@@ -211,49 +219,46 @@ class SoulseekClientOptionsTest {
 
         assertThrows(NullPointerException.class, () -> original.with(null));
         SoulseekClientOptions copy = original.with(new SoulseekClientOptionsPatch());
-        assertEquals(1234, copy.getListenPort());
-        assertEquals(8, copy.getMaximumConcurrentSearches());
-        assertEquals(9, copy.getMaximumConcurrentUploads());
-        assertEquals(10, copy.getMaximumConcurrentDownloads());
+        assertEquals(1234, copy.listenPort());
+        assertEquals(8, copy.maximumConcurrentSearches());
+        assertEquals(9, copy.maximumConcurrentUploads());
+        assertEquals(10, copy.maximumConcurrentDownloads());
     }
 
     @Test
-    void prefixOverloadsPreserveTrailingDefaults() {
+    void builderPreservesUnspecifiedDefaults() {
         assertEquals(
-                "0.0.0.0", new SoulseekClientOptions(false).getListenIpAddress().getHostAddress());
-        assertEquals(30_000, new SoulseekClientOptions(false, InetAddress.getLoopbackAddress()).getListenPort());
-        assertTrue(
-                new SoulseekClientOptions(false, InetAddress.getLoopbackAddress(), 1234).isEnableDistributedNetwork());
+                "0.0.0.0",
+                SoulseekClientOptions.builder()
+                        .enableListener(false)
+                        .build()
+                        .listenIpAddress()
+                        .getHostAddress());
+        assertEquals(
+                30_000,
+                SoulseekClientOptions.builder()
+                        .enableListener(false)
+                        .listenIpAddress(InetAddress.getLoopbackAddress())
+                        .build()
+                        .listenPort());
+        assertTrue(SoulseekClientOptions.builder()
+                .enableListener(false)
+                .listenIpAddress(InetAddress.getLoopbackAddress())
+                .listenPort(1234)
+                .build()
+                .enableDistributedNetwork());
     }
 
     private static SoulseekClientOptions complete(
             int listenPort, int childLimit, int searches, int uploads, int downloads) {
-        return new SoulseekClientOptions(
-                true,
-                null,
-                listenPort,
-                true,
-                true,
-                childLimit,
-                searches,
-                uploads,
-                Integer.MAX_VALUE,
-                downloads,
-                Integer.MAX_VALUE,
-                true,
-                5_000,
-                true,
-                true,
-                false,
-                DiagnosticLevel.NONE,
-                0,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
+        return SoulseekClientOptions.builder()
+                .listenPort(listenPort)
+                .distributedChildLimit(childLimit)
+                .maximumConcurrentSearches(searches)
+                .maximumConcurrentUploads(uploads)
+                .maximumConcurrentDownloads(downloads)
+                .minimumDiagnosticLevel(DiagnosticLevel.NONE)
+                .build();
     }
 
     private static final class TestUserCache implements UserEndpointCache {

@@ -274,32 +274,14 @@ class EngineEndpointTest {
     }
 
     private static SoulseekClientOptions options(UserEndpointCache cache) {
-        return new SoulseekClientOptions(
-                false,
-                InetAddress.getLoopbackAddress(),
-                30_000,
-                true,
-                true,
-                25,
-                50,
-                1,
-                Integer.MAX_VALUE,
-                Integer.MAX_VALUE,
-                Integer.MAX_VALUE,
-                true,
-                5_000,
-                true,
-                true,
-                false,
-                DiagnosticLevel.NONE,
-                0,
-                null,
-                null,
-                null,
-                null,
-                null,
-                cache,
-                null);
+        return SoulseekClientOptions.builder()
+                .enableListener(false)
+                .listenIpAddress(InetAddress.getLoopbackAddress())
+                .maximumConcurrentSearches(50)
+                .maximumConcurrentUploads(1)
+                .minimumDiagnosticLevel(DiagnosticLevel.NONE)
+                .userEndpointCache(cache)
+                .build();
     }
 
     private static Object defaultValue(Class<?> type) {

@@ -447,7 +447,7 @@ class PublicBlockingMatrixTest {
             }
             engine = new SoulseekEngine(
                     9999,
-                    new SoulseekClientOptions(false),
+                    SoulseekClientOptions.builder().enableListener(false).build(),
                     server,
                     null,
                     null,
@@ -629,7 +629,7 @@ class PublicBlockingMatrixTest {
             ConnectionFactory factory = new FixedConnectionFactory(server);
             engine = new SoulseekEngine(
                     9999,
-                    new SoulseekClientOptions(false),
+                    SoulseekClientOptions.builder().enableListener(false).build(),
                     null,
                     factory,
                     null,

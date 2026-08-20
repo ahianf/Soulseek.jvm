@@ -191,7 +191,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         this.distributedMessages = Objects.requireNonNull(distributedMessages, "distributedMessages");
         this.connectionFactory = Objects.requireNonNull(connectionFactory, "connectionFactory");
         diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(options.get().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
         this.ownsScheduler = scheduler == null;
         this.scheduler = scheduler == null ? new Scheduler("soulseek-distributed-status") : scheduler;
@@ -305,7 +305,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
 
     @Override
     public int getChildLimit() {
-        return options.get().getDistributedChildLimit();
+        return options.get().distributedChildLimit();
     }
 
     @Override
@@ -869,7 +869,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         MessageConnection connection = connectionFactory.getDistributedConnection(
                 username,
                 incomingConnection.getIpEndpoint(),
-                options.get().getDistributedConnectionOptions(),
+                options.get().distributedConnectionOptions(),
                 incomingConnection.handoffTcpClient());
         diagnostic.debug("Inbound child connection to " + username + " ("
                 + connection.getIpEndpoint() + ") handed off. (old: "
@@ -936,7 +936,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 + response.getUsername() + " (" + response.getIpEndpoint()
                 + ") for token " + response.getToken());
         MessageConnection connection = connectionFactory.getDistributedConnection(
-                response.getUsername(), response.getIpEndpoint(), options.get().getDistributedConnectionOptions());
+                response.getUsername(), response.getIpEndpoint(), options.get().distributedConnectionOptions());
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.INDIRECT));
         attachChildMessageListeners(connection);
         connection.addDisconnectedListener((sender, args) -> sender.close());
@@ -1045,7 +1045,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             throws InterruptedException, TimeoutException {
         diagnostic.debug("Attempting direct parent candidate connection to " + username + " (" + ipEndpoint + ")");
         MessageConnection connection = connectionFactory.getDistributedConnection(
-                username, ipEndpoint, options.get().getDistributedConnectionOptions());
+                username, ipEndpoint, options.get().distributedConnectionOptions());
         connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT));
         connection.addDisconnectedListener(parentCandidateDisconnectedListener);
         try {
@@ -1075,7 +1075,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             Wait<Connection> wait = waiter.register(
                     new WaitKey(Constants.WaitKey.SOLICITED_DISTRIBUTED_CONNECTION, username, solicitationToken),
                     Connection.class,
-                    options.get().getDistributedConnectionOptions().connectTimeout(),
+                    options.get().distributedConnectionOptions().connectTimeout(),
                     cancellationSignal);
             server.write(
                     new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.DISTRIBUTED),
@@ -1085,7 +1085,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 MessageConnection connection = connectionFactory.getDistributedConnection(
                         username,
                         accepted.getIpEndpoint(),
-                        options.get().getDistributedConnectionOptions(),
+                        options.get().distributedConnectionOptions(),
                         accepted.handoffTcpClient());
                 diagnostic.debug("Indirect parent candidate connection to " + username
                         + " (" + accepted.getIpEndpoint()
@@ -1249,11 +1249,11 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     }
 
     private boolean isEnabled() {
-        return options.get().isEnableDistributedNetwork();
+        return options.get().enableDistributedNetwork();
     }
 
     private boolean isAcceptingChildren() {
-        return options.get().isAcceptDistributedChildren();
+        return options.get().acceptDistributedChildren();
     }
 
     private String rejectionMessage(String username, InetSocketAddress endpoint) {

@@ -65,7 +65,7 @@ final class SearchDomain {
         this.context = java.util.Objects.requireNonNull(context, "context");
         this.server = java.util.Objects.requireNonNull(server, "server");
         this.searchSemaphore =
-                new java.util.concurrent.Semaphore(context.getClientOptions().getMaximumConcurrentSearches());
+                new java.util.concurrent.Semaphore(context.getClientOptions().maximumConcurrentSearches());
     }
 
     /**

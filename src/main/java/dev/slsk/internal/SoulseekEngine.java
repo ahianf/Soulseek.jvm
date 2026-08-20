@@ -73,7 +73,6 @@ import java.io.ByteArrayOutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
-import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -244,14 +243,12 @@ final class SoulseekEngine implements AutoCloseable {
         // share it.
         this.networkExecutor = new NetworkExecutor();
         this.scheduler = new Scheduler("soulseek-client-timer", networkExecutor.executor());
-        this.waiter = waiter == null
-                ? new DefaultWaiter(Duration.ofMillis(this.options.getMessageTimeout()), scheduler)
-                : waiter;
+        this.waiter = waiter == null ? new DefaultWaiter(this.options.messageTimeout(), scheduler) : waiter;
         // Before every component that writes to the server, because they are
         // built with it rather than reaching back through the engine for it.
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(
-                        this.options.getMinimumDiagnosticLevel(),
+                        this.options.minimumDiagnosticLevel(),
                         eventData -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData))
                 : diagnosticFactory;
         this.server = new ServerLink(this.waiter, diagnostic, () -> state);
@@ -259,13 +256,13 @@ final class SoulseekEngine implements AutoCloseable {
         this.rooms = new RoomRegistry(this.waiter, server);
         this.users = new UserDirectory(this, server);
         this.searchDomain = new SearchDomain(this, server);
-        this.tokenFactory = tokenFactory == null ? new TokenFactory(this.options.getStartingToken()) : tokenFactory;
+        this.tokenFactory = tokenFactory == null ? new TokenFactory(this.options.startingToken()) : tokenFactory;
         this.ioAdapter = ioAdapter == null ? new IOAdapter() : ioAdapter;
         this.uploadTokenBucket = uploadTokenBucket == null
-                ? new TokenBucket((this.options.getMaximumUploadSpeed() * 1024L) / 10, 100, scheduler)
+                ? new TokenBucket((this.options.maximumUploadSpeed() * 1024L) / 10, 100, scheduler)
                 : uploadTokenBucket;
         this.downloadTokenBucket = downloadTokenBucket == null
-                ? new TokenBucket((this.options.getMaximumDownloadSpeed() * 1024L) / 10, 100, scheduler)
+                ? new TokenBucket((this.options.maximumDownloadSpeed() * 1024L) / 10, 100, scheduler)
                 : downloadTokenBucket;
         // After the buckets and the token factory it takes, and before the peer
         // message handler, which answers a peer through it. The connection
@@ -588,16 +585,16 @@ final class SoulseekEngine implements AutoCloseable {
                     "Failed to resolve address '" + requestedAddress + "': " + Failures.message(failure), failure);
         }
 
-        if (options.isEnableListener()) {
+        if (options.enableListener()) {
             Listener probe = null;
             try {
                 probe = clientListenerFactory.create(
-                        options.getListenIpAddress(), options.getListenPort(), options.getIncomingConnectionOptions());
+                        options.listenIpAddress(), options.listenPort(), options.incomingConnectionOptions());
                 probe.start();
             } catch (Throwable failure) {
                 throw new ListenException("Failed to start listening on "
-                        + options.getListenIpAddress() + ":"
-                        + options.getListenPort()
+                        + options.listenIpAddress() + ":"
+                        + options.listenPort()
                         + "; the IP and/or port may be in use or "
                         + "are otherwise unavailable");
             } finally {
@@ -635,16 +632,18 @@ final class SoulseekEngine implements AutoCloseable {
     private boolean reconfigureOptionsOperation(
             SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
         Objects.requireNonNull(patch, "patch");
-        boolean addressChanged = patch.getListenIpAddress() != null
-                && !patch.getListenIpAddress().equals(options.getListenIpAddress());
-        boolean portChanged = patch.getListenPort() != null && patch.getListenPort() != options.getListenPort();
+        boolean addressChanged = patch.listenIpAddress()
+                .filter(value -> !value.equals(options.listenIpAddress()))
+                .isPresent();
+        boolean portChanged = patch.listenPort()
+                .filter(value -> value != options.listenPort())
+                .isPresent();
         if (addressChanged || portChanged) {
-            InetAddress newAddress =
-                    patch.getListenIpAddress() == null ? options.getListenIpAddress() : patch.getListenIpAddress();
-            int newPort = patch.getListenPort() == null ? options.getListenPort() : patch.getListenPort();
+            InetAddress newAddress = patch.listenIpAddress().orElse(options.listenIpAddress());
+            int newPort = patch.listenPort().orElse(options.listenPort());
             Listener probe = null;
             try {
-                probe = clientListenerFactory.create(newAddress, newPort, options.getIncomingConnectionOptions());
+                probe = clientListenerFactory.create(newAddress, newPort, options.incomingConnectionOptions());
                 probe.start();
             } catch (Throwable failure) {
                 throw new ListenException("Failed to start listening on "
@@ -983,9 +982,9 @@ final class SoulseekEngine implements AutoCloseable {
             throws InterruptedException, TimeoutException {
         changeState(SoulseekClientState.CONNECTING, "Connecting", null);
 
-        if (options.isEnableListener()) {
+        if (options.enableListener()) {
             listener = clientListenerFactory.create(
-                    options.getListenIpAddress(), options.getListenPort(), options.getIncomingConnectionOptions());
+                    options.listenIpAddress(), options.listenPort(), options.incomingConnectionOptions());
             listener.addAcceptedListener(listenerHandler::handleConnection);
             listener.start();
         }
@@ -996,7 +995,7 @@ final class SoulseekEngine implements AutoCloseable {
                 (sender, eventData) -> disconnect(eventData.getMessage(), eventData.getException()),
                 serverMessageHandler::handleMessageRead,
                 serverMessageHandler::handleMessageWritten,
-                options.getServerConnectionOptions());
+                options.serverConnectionOptions());
 
         server.connection(connection);
         connection.connect(cancellationSignal);
@@ -1018,7 +1017,7 @@ final class SoulseekEngine implements AutoCloseable {
 
         ByteArrayOutputStream loginMessages = new ByteArrayOutputStream();
         loginMessages.writeBytes(new LoginRequest(minorVersion, requestedUsername, password).toByteArray());
-        loginMessages.writeBytes(new SetListenPortCommand(options.getListenPort()).toByteArray());
+        loginMessages.writeBytes(new SetListenPortCommand(options.listenPort()).toByteArray());
 
         server.writeBytes(loginMessages.toByteArray(), cancellationSignal);
         LoginResponse response = loginWait.await();
@@ -1034,8 +1033,8 @@ final class SoulseekEngine implements AutoCloseable {
 
     void sendConfigurationMessages(CancellationSignal cancellationSignal)
             throws InterruptedException, TimeoutException {
-        server.write(new SetListenPortCommand(options.getListenPort()), cancellationSignal);
-        server.write(new PrivateRoomToggle(options.isAcceptPrivateRoomInvitations()), cancellationSignal);
+        server.write(new SetListenPortCommand(options.listenPort()), cancellationSignal);
+        server.write(new PrivateRoomToggle(options.acceptPrivateRoomInvitations()), cancellationSignal);
         // Our own statistics, for the upload average the server keeps for this
         // account: search responses advertise it, and the server only says it
         // when asked. The response arrives as a statistics event naming us,
@@ -1060,32 +1059,42 @@ final class SoulseekEngine implements AutoCloseable {
     private boolean performReconfigureOptions(SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal)
             throws InterruptedException, TimeoutException {
         boolean connected = isConnectedAndLoggedIn();
-        boolean enableDistributedNetworkChanged = patch.getEnableDistributedNetwork() != null
-                && patch.getEnableDistributedNetwork() != options.isEnableDistributedNetwork();
-        boolean acceptDistributedChildrenChanged = patch.getAcceptDistributedChildren() != null
-                && patch.getAcceptDistributedChildren() != options.isAcceptDistributedChildren();
-        boolean distributedConnectionOptionsChanged = patch.getDistributedConnectionOptions() != null
-                && patch.getDistributedConnectionOptions() != options.getDistributedConnectionOptions();
-        boolean distributedNetworkWasDisabled = enableDistributedNetworkChanged && !patch.getEnableDistributedNetwork();
-        boolean distributedChildrenWereDisabled =
-                acceptDistributedChildrenChanged && !patch.getAcceptDistributedChildren();
+        boolean enableDistributedNetworkChanged = patch.enableDistributedNetwork()
+                .filter(value -> value != options.enableDistributedNetwork())
+                .isPresent();
+        boolean acceptDistributedChildrenChanged = patch.acceptDistributedChildren()
+                .filter(value -> value != options.acceptDistributedChildren())
+                .isPresent();
+        boolean distributedConnectionOptionsChanged = patch.distributedConnectionOptions()
+                .filter(value -> value != options.distributedConnectionOptions())
+                .isPresent();
+        boolean distributedNetworkWasDisabled = enableDistributedNetworkChanged
+                && !patch.enableDistributedNetwork().orElseThrow();
+        boolean distributedChildrenWereDisabled = acceptDistributedChildrenChanged
+                && !patch.acceptDistributedChildren().orElseThrow();
         boolean reconnectRequired = connected
                 && (distributedNetworkWasDisabled
                         || distributedChildrenWereDisabled
                         || distributedConnectionOptionsChanged);
-        boolean serverConnectionOptionsChanged = patch.getServerConnectionOptions() != null
-                && patch.getServerConnectionOptions() != options.getServerConnectionOptions();
+        boolean serverConnectionOptionsChanged = patch.serverConnectionOptions()
+                .filter(value -> value != options.serverConnectionOptions())
+                .isPresent();
         if (connected && serverConnectionOptionsChanged) {
             reconnectRequired = true;
         }
 
-        boolean enableListenerChanged =
-                patch.getEnableListener() != null && patch.getEnableListener() != options.isEnableListener();
-        boolean listenAddressChanged = patch.getListenIpAddress() != null
-                && !patch.getListenIpAddress().equals(options.getListenIpAddress());
-        boolean listenPortChanged = patch.getListenPort() != null && patch.getListenPort() != options.getListenPort();
-        boolean incomingConnectionOptionsChanged = patch.getIncomingConnectionOptions() != null
-                && patch.getIncomingConnectionOptions() != options.getIncomingConnectionOptions();
+        boolean enableListenerChanged = patch.enableListener()
+                .filter(value -> value != options.enableListener())
+                .isPresent();
+        boolean listenAddressChanged = patch.listenIpAddress()
+                .filter(value -> !value.equals(options.listenIpAddress()))
+                .isPresent();
+        boolean listenPortChanged = patch.listenPort()
+                .filter(value -> value != options.listenPort())
+                .isPresent();
+        boolean incomingConnectionOptionsChanged = patch.incomingConnectionOptions()
+                .filter(value -> value != options.incomingConnectionOptions())
+                .isPresent();
 
         if (enableListenerChanged || listenAddressChanged || listenPortChanged || incomingConnectionOptionsChanged) {
             boolean wasListening = listener != null && listener.isListening();
@@ -1094,25 +1103,27 @@ final class SoulseekEngine implements AutoCloseable {
             }
             listener = null;
             options = options.with(listenerPatch(patch));
-            if (wasListening && options.isEnableListener()) {
+            if (wasListening && options.enableListener()) {
                 listener = clientListenerFactory.create(
-                        options.getListenIpAddress(), options.getListenPort(), options.getIncomingConnectionOptions());
+                        options.listenIpAddress(), options.listenPort(), options.incomingConnectionOptions());
                 listener.addAcceptedListener(listenerHandler::handleConnection);
                 listener.start();
             }
         }
 
-        boolean maximumUploadSpeedChanged = patch.getMaximumUploadSpeed() != null
-                && patch.getMaximumUploadSpeed() != options.getMaximumUploadSpeed();
-        boolean maximumDownloadSpeedChanged = patch.getMaximumDownloadSpeed() != null
-                && patch.getMaximumDownloadSpeed() != options.getMaximumDownloadSpeed();
+        boolean maximumUploadSpeedChanged = patch.maximumUploadSpeed()
+                .filter(value -> value != options.maximumUploadSpeed())
+                .isPresent();
+        boolean maximumDownloadSpeedChanged = patch.maximumDownloadSpeed()
+                .filter(value -> value != options.maximumDownloadSpeed())
+                .isPresent();
         options = options.with(patch);
 
         if (maximumUploadSpeedChanged) {
-            uploadTokenBucket.setCapacity((options.getMaximumUploadSpeed() * 1024L) / 10);
+            uploadTokenBucket.setCapacity((options.maximumUploadSpeed() * 1024L) / 10);
         }
         if (maximumDownloadSpeedChanged) {
-            downloadTokenBucket.setCapacity((options.getMaximumDownloadSpeed() * 1024L) / 10);
+            downloadTokenBucket.setCapacity((options.maximumDownloadSpeed() * 1024L) / 10);
         }
 
         diagnostic.info("Options reconfigured successfully");
@@ -1162,26 +1173,12 @@ final class SoulseekEngine implements AutoCloseable {
     }
 
     private static SoulseekClientOptionsPatch listenerPatch(SoulseekClientOptionsPatch patch) {
-        return new SoulseekClientOptionsPatch(
-                patch.getEnableListener(),
-                patch.getListenIpAddress(),
-                patch.getListenPort(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                patch.getIncomingConnectionOptions(),
-                null,
-                null,
-                null);
+        SoulseekClientOptionsPatch.Builder builder = SoulseekClientOptionsPatch.builder();
+        patch.enableListener().ifPresent(builder::enableListener);
+        patch.listenIpAddress().ifPresent(builder::listenIpAddress);
+        patch.listenPort().ifPresent(builder::listenPort);
+        patch.incomingConnectionOptions().ifPresent(builder::incomingConnectionOptions);
+        return builder.build();
     }
 
     boolean isConnectedAndLoggedIn() {

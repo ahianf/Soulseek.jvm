@@ -74,7 +74,7 @@ public final class DefaultListenerHandler implements ListenerHandler {
         this.waiter = Objects.requireNonNull(waiter, "waiter");
         this.searchResponses = Objects.requireNonNull(searchResponses, "searchResponses");
         diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(options.get().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
     }
 
@@ -214,9 +214,9 @@ public final class DefaultListenerHandler implements ListenerHandler {
             return;
         }
 
-        if (options.get().getSearchResponseCache() != null) {
+        if (options.get().searchResponseCache() != null) {
             CacheLookupResult<SearchResponseCacheRecord> lookup =
-                    options.get().getSearchResponseCache().lookup(token);
+                    options.get().searchResponseCache().lookup(token);
             if (lookup.found()) {
                 SearchResponseCacheRecord record = lookup.value();
                 diagnostic.debug("PierceFirewall matching pending search response "

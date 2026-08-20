@@ -241,9 +241,9 @@ final class TransferDomain implements PeerServices {
         this.catalog = Objects.requireNonNull(catalog, "catalog");
         this.profile = Objects.requireNonNull(profile, "profile");
         this.globalDownloadSemaphore = new java.util.concurrent.atomic.AtomicReference<>(
-                new Semaphore(options.get().getMaximumConcurrentDownloads()));
+                new Semaphore(options.get().maximumConcurrentDownloads()));
         this.maximumDownloadsPerUser = Integer.MAX_VALUE;
-        this.globalUploadSemaphore = new Semaphore(options.get().getMaximumConcurrentUploads());
+        this.globalUploadSemaphore = new Semaphore(options.get().maximumConcurrentUploads());
         this.admission = new UploadAdmission(
                 this::uploadPolicy,
                 this::uploads,
@@ -332,7 +332,7 @@ final class TransferDomain implements PeerServices {
             uploadSemaphoreLeases
                     .computeIfAbsent(username, ignored -> new java.util.concurrent.atomic.AtomicInteger())
                     .incrementAndGet();
-            return current == null ? new Semaphore(clientOptions().getMaximumConcurrentUploadsPerUser()) : current;
+            return current == null ? new Semaphore(clientOptions().maximumConcurrentUploadsPerUser()) : current;
         });
     }
 
@@ -349,7 +349,7 @@ final class TransferDomain implements PeerServices {
         for (String username : uploadSemaphores.keySet()) {
             boolean[] removed = {false};
             uploadSemaphores.computeIfPresent(username, (key, semaphore) -> {
-                if (semaphore.availablePermits() != clientOptions().getMaximumConcurrentUploadsPerUser()) {
+                if (semaphore.availablePermits() != clientOptions().maximumConcurrentUploadsPerUser()) {
                     return semaphore;
                 }
                 java.util.concurrent.atomic.AtomicInteger leases = uploadSemaphoreLeases.get(key);

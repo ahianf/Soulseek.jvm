@@ -238,9 +238,9 @@ class DistributedMessageHandlerTest {
         if (deduplicate) {
             return new SoulseekClientOptions();
         }
-        SoulseekClientOptionsPatch patch = new SoulseekClientOptionsPatch(
-                null, null, null, null, null, null, null, null, false, null, null, null, null, null, null, null, null,
-                null, null);
+        SoulseekClientOptionsPatch patch = SoulseekClientOptionsPatch.builder()
+                .deduplicateSearchRequests(false)
+                .build();
         return new SoulseekClientOptions().with(patch);
     }
 

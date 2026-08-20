@@ -93,7 +93,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
         this.searchResponses = Objects.requireNonNull(searchResponses, "searchResponses");
         this.networkExecutor = Objects.requireNonNull(networkExecutor, "networkExecutor");
         diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(options.get().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
     }
 
@@ -190,7 +190,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                     + connection.getUsername() + " ("
                     + connection.getIpEndpoint() + ") (id: "
                     + connection.getId() + ")");
-        } else if (options.get().isDeduplicateSearchRequests()) {
+        } else if (options.get().deduplicateSearchRequests()) {
             String current = Base64.getEncoder().encodeToString(message);
             if (Objects.equals(deduplicationHash, current)) {
                 return;

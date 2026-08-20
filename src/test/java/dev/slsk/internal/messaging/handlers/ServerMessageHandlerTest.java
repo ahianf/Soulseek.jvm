@@ -709,26 +709,10 @@ class ServerMessageHandlerTest {
     }
 
     private static SoulseekClientOptions options(boolean autoPrivate, boolean autoPrivilege) {
-        SoulseekClientOptionsPatch patch = new SoulseekClientOptionsPatch(
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                autoPrivate,
-                autoPrivilege,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
+        SoulseekClientOptionsPatch patch = SoulseekClientOptionsPatch.builder()
+                .autoAcknowledgePrivateMessages(autoPrivate)
+                .autoAcknowledgePrivilegeNotifications(autoPrivilege)
+                .build();
         return new SoulseekClientOptions().with(patch);
     }
 

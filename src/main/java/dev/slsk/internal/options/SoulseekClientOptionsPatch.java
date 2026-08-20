@@ -7,259 +7,239 @@ package dev.slsk.internal.options;
 import dev.slsk.internal.search.SearchResponseCache;
 import dev.slsk.internal.user.UserEndpointCache;
 import java.net.InetAddress;
+import java.util.Objects;
+import java.util.Optional;
 
-/** A patch for {@link SoulseekClientOptions}. */
-public class SoulseekClientOptionsPatch {
-    private final Boolean acceptDistributedChildren;
-    private final Boolean acceptPrivateRoomInvitations;
-    private final Boolean autoAcknowledgePrivateMessages;
-    private final Boolean autoAcknowledgePrivilegeNotifications;
-    private final Boolean deduplicateSearchRequests;
-    private final Integer distributedChildLimit;
-    private final ConnectionOptions distributedConnectionOptions;
-    private final Boolean enableDistributedNetwork;
-    private final Boolean enableListener;
-    private final ConnectionOptions incomingConnectionOptions;
-    private final InetAddress listenIpAddress;
-    private final Integer listenPort;
-    private final Integer maximumDownloadSpeed;
-    private final Integer maximumUploadSpeed;
-    private final ConnectionOptions peerConnectionOptions;
-    private final SearchResponseCache searchResponseCache;
-    private final ConnectionOptions serverConnectionOptions;
-    private final ConnectionOptions transferConnectionOptions;
-    private final UserEndpointCache userEndpointCache;
+/** A field-named patch for {@link SoulseekClientOptions}. */
+public record SoulseekClientOptionsPatch(
+        Optional<Boolean> enableListener,
+        Optional<InetAddress> listenIpAddress,
+        Optional<Integer> listenPort,
+        Optional<Boolean> enableDistributedNetwork,
+        Optional<Boolean> acceptDistributedChildren,
+        Optional<Integer> distributedChildLimit,
+        Optional<Integer> maximumUploadSpeed,
+        Optional<Integer> maximumDownloadSpeed,
+        Optional<Boolean> deduplicateSearchRequests,
+        Optional<Boolean> autoAcknowledgePrivateMessages,
+        Optional<Boolean> autoAcknowledgePrivilegeNotifications,
+        Optional<Boolean> acceptPrivateRoomInvitations,
+        Optional<ConnectionOptions> serverConnectionOptions,
+        Optional<ConnectionOptions> peerConnectionOptions,
+        Optional<ConnectionOptions> transferConnectionOptions,
+        Optional<ConnectionOptions> incomingConnectionOptions,
+        Optional<ConnectionOptions> distributedConnectionOptions,
+        Optional<UserEndpointCache> userEndpointCache,
+        Optional<SearchResponseCache> searchResponseCache) {
+    /** Validates present values and normalizes server options. */
+    public SoulseekClientOptionsPatch {
+        enableListener = required(enableListener, "enableListener");
+        listenIpAddress = required(listenIpAddress, "listenIpAddress");
+        listenPort = required(listenPort, "listenPort");
+        enableDistributedNetwork = required(enableDistributedNetwork, "enableDistributedNetwork");
+        acceptDistributedChildren = required(acceptDistributedChildren, "acceptDistributedChildren");
+        distributedChildLimit = required(distributedChildLimit, "distributedChildLimit");
+        maximumUploadSpeed = required(maximumUploadSpeed, "maximumUploadSpeed");
+        maximumDownloadSpeed = required(maximumDownloadSpeed, "maximumDownloadSpeed");
+        deduplicateSearchRequests = required(deduplicateSearchRequests, "deduplicateSearchRequests");
+        autoAcknowledgePrivateMessages = required(autoAcknowledgePrivateMessages, "autoAcknowledgePrivateMessages");
+        autoAcknowledgePrivilegeNotifications =
+                required(autoAcknowledgePrivilegeNotifications, "autoAcknowledgePrivilegeNotifications");
+        acceptPrivateRoomInvitations = required(acceptPrivateRoomInvitations, "acceptPrivateRoomInvitations");
+        serverConnectionOptions = required(serverConnectionOptions, "serverConnectionOptions")
+                .map(ConnectionOptions::withoutInactivityTimeout);
+        peerConnectionOptions = required(peerConnectionOptions, "peerConnectionOptions");
+        transferConnectionOptions = required(transferConnectionOptions, "transferConnectionOptions");
+        incomingConnectionOptions = required(incomingConnectionOptions, "incomingConnectionOptions");
+        distributedConnectionOptions = required(distributedConnectionOptions, "distributedConnectionOptions");
+        userEndpointCache = required(userEndpointCache, "userEndpointCache");
+        searchResponseCache = required(searchResponseCache, "searchResponseCache");
+
+        listenPort.ifPresent(value -> {
+            if (value < 1024 || value > 65_535) {
+                throw new IllegalArgumentException("listenPort must be between 1024 and 65535");
+            }
+        });
+        distributedChildLimit.ifPresent(value -> {
+            if (value < 0) {
+                throw new IllegalArgumentException("distributedChildLimit must be greater than or equal to zero");
+            }
+        });
+    }
 
     /** Creates an empty patch. */
     public SoulseekClientOptionsPatch() {
         this(
-                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null);
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty());
     }
 
-    /** Creates a patch through its listener switch. */
-    public SoulseekClientOptionsPatch(Boolean enableListener) {
-        this(
-                enableListener,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
+    /** Starts a field-named patch builder. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Creates a patch through its listener address. */
-    public SoulseekClientOptionsPatch(Boolean enableListener, InetAddress listenIpAddress) {
-        this(
-                enableListener,
-                listenIpAddress,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
-    }
+    /** Builder for client-option patches. */
+    public static final class Builder {
+        private Optional<Boolean> acceptDistributedChildren = Optional.empty();
+        private Optional<Boolean> acceptPrivateRoomInvitations = Optional.empty();
+        private Optional<Boolean> autoAcknowledgePrivateMessages = Optional.empty();
+        private Optional<Boolean> autoAcknowledgePrivilegeNotifications = Optional.empty();
+        private Optional<Boolean> deduplicateSearchRequests = Optional.empty();
+        private Optional<Integer> distributedChildLimit = Optional.empty();
+        private Optional<ConnectionOptions> distributedConnectionOptions = Optional.empty();
+        private Optional<Boolean> enableDistributedNetwork = Optional.empty();
+        private Optional<Boolean> enableListener = Optional.empty();
+        private Optional<ConnectionOptions> incomingConnectionOptions = Optional.empty();
+        private Optional<InetAddress> listenIpAddress = Optional.empty();
+        private Optional<Integer> listenPort = Optional.empty();
+        private Optional<Integer> maximumDownloadSpeed = Optional.empty();
+        private Optional<Integer> maximumUploadSpeed = Optional.empty();
+        private Optional<ConnectionOptions> peerConnectionOptions = Optional.empty();
+        private Optional<SearchResponseCache> searchResponseCache = Optional.empty();
+        private Optional<ConnectionOptions> serverConnectionOptions = Optional.empty();
+        private Optional<ConnectionOptions> transferConnectionOptions = Optional.empty();
+        private Optional<UserEndpointCache> userEndpointCache = Optional.empty();
 
-    /** Creates a patch through its listener port. */
-    public SoulseekClientOptionsPatch(Boolean enableListener, InetAddress listenIpAddress, Integer listenPort) {
-        this(
-                enableListener,
-                listenIpAddress,
-                listenPort,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
-    }
+        private Builder() {}
 
-    /**
-     * Creates a complete options patch.
-     *
-     * <p>Boxed primitives preserve the nullable C# option values. A
-     * {@code null} reference means that the property is not replaced.
-     */
-    public SoulseekClientOptionsPatch(
-            Boolean enableListener,
-            InetAddress listenIpAddress,
-            Integer listenPort,
-            Boolean enableDistributedNetwork,
-            Boolean acceptDistributedChildren,
-            Integer distributedChildLimit,
-            Integer maximumUploadSpeed,
-            Integer maximumDownloadSpeed,
-            Boolean deduplicateSearchRequests,
-            Boolean autoAcknowledgePrivateMessages,
-            Boolean autoAcknowledgePrivilegeNotifications,
-            Boolean acceptPrivateRoomInvitations,
-            ConnectionOptions serverConnectionOptions,
-            ConnectionOptions peerConnectionOptions,
-            ConnectionOptions transferConnectionOptions,
-            ConnectionOptions incomingConnectionOptions,
-            ConnectionOptions distributedConnectionOptions,
-            UserEndpointCache userEndpointCache,
-            SearchResponseCache searchResponseCache) {
-        this.enableListener = enableListener;
-        this.listenIpAddress = listenIpAddress;
-        this.listenPort = listenPort;
-
-        if (listenPort != null && (listenPort < 1024 || listenPort > 65_535)) {
-            throw new IllegalArgumentException("listenPort must be between 1024 and 65535");
+        public Builder enableListener(boolean value) {
+            enableListener = Optional.of(value);
+            return this;
         }
 
-        this.enableDistributedNetwork = enableDistributedNetwork;
-        this.acceptDistributedChildren = acceptDistributedChildren;
-        this.distributedChildLimit = distributedChildLimit;
-
-        if (distributedChildLimit != null && distributedChildLimit < 0) {
-            throw new IllegalArgumentException("distributedChildLimit must be greater than or equal to zero");
+        public Builder listenIpAddress(InetAddress value) {
+            listenIpAddress = Optional.of(value);
+            return this;
         }
 
-        this.maximumUploadSpeed = maximumUploadSpeed;
-        this.maximumDownloadSpeed = maximumDownloadSpeed;
-        this.deduplicateSearchRequests = deduplicateSearchRequests;
-        this.autoAcknowledgePrivateMessages = autoAcknowledgePrivateMessages;
-        this.autoAcknowledgePrivilegeNotifications = autoAcknowledgePrivilegeNotifications;
-        this.acceptPrivateRoomInvitations = acceptPrivateRoomInvitations;
+        public Builder listenPort(int value) {
+            listenPort = Optional.of(value);
+            return this;
+        }
 
-        this.serverConnectionOptions =
-                serverConnectionOptions == null ? null : serverConnectionOptions.withoutInactivityTimeout();
-        this.peerConnectionOptions = peerConnectionOptions;
-        this.transferConnectionOptions = transferConnectionOptions;
-        this.incomingConnectionOptions = incomingConnectionOptions;
-        this.distributedConnectionOptions = distributedConnectionOptions;
-        this.userEndpointCache = userEndpointCache;
-        this.searchResponseCache = searchResponseCache;
+        public Builder enableDistributedNetwork(boolean value) {
+            enableDistributedNetwork = Optional.of(value);
+            return this;
+        }
+
+        public Builder acceptDistributedChildren(boolean value) {
+            acceptDistributedChildren = Optional.of(value);
+            return this;
+        }
+
+        public Builder distributedChildLimit(int value) {
+            distributedChildLimit = Optional.of(value);
+            return this;
+        }
+
+        public Builder maximumUploadSpeed(int value) {
+            maximumUploadSpeed = Optional.of(value);
+            return this;
+        }
+
+        public Builder maximumDownloadSpeed(int value) {
+            maximumDownloadSpeed = Optional.of(value);
+            return this;
+        }
+
+        public Builder deduplicateSearchRequests(boolean value) {
+            deduplicateSearchRequests = Optional.of(value);
+            return this;
+        }
+
+        public Builder autoAcknowledgePrivateMessages(boolean value) {
+            autoAcknowledgePrivateMessages = Optional.of(value);
+            return this;
+        }
+
+        public Builder autoAcknowledgePrivilegeNotifications(boolean value) {
+            autoAcknowledgePrivilegeNotifications = Optional.of(value);
+            return this;
+        }
+
+        public Builder acceptPrivateRoomInvitations(boolean value) {
+            acceptPrivateRoomInvitations = Optional.of(value);
+            return this;
+        }
+
+        public Builder serverConnectionOptions(ConnectionOptions value) {
+            serverConnectionOptions = Optional.of(value);
+            return this;
+        }
+
+        public Builder peerConnectionOptions(ConnectionOptions value) {
+            peerConnectionOptions = Optional.of(value);
+            return this;
+        }
+
+        public Builder transferConnectionOptions(ConnectionOptions value) {
+            transferConnectionOptions = Optional.of(value);
+            return this;
+        }
+
+        public Builder incomingConnectionOptions(ConnectionOptions value) {
+            incomingConnectionOptions = Optional.of(value);
+            return this;
+        }
+
+        public Builder distributedConnectionOptions(ConnectionOptions value) {
+            distributedConnectionOptions = Optional.of(value);
+            return this;
+        }
+
+        public Builder userEndpointCache(UserEndpointCache value) {
+            userEndpointCache = Optional.of(value);
+            return this;
+        }
+
+        public Builder searchResponseCache(SearchResponseCache value) {
+            searchResponseCache = Optional.of(value);
+            return this;
+        }
+
+        public SoulseekClientOptionsPatch build() {
+            return new SoulseekClientOptionsPatch(
+                    enableListener,
+                    listenIpAddress,
+                    listenPort,
+                    enableDistributedNetwork,
+                    acceptDistributedChildren,
+                    distributedChildLimit,
+                    maximumUploadSpeed,
+                    maximumDownloadSpeed,
+                    deduplicateSearchRequests,
+                    autoAcknowledgePrivateMessages,
+                    autoAcknowledgePrivilegeNotifications,
+                    acceptPrivateRoomInvitations,
+                    serverConnectionOptions,
+                    peerConnectionOptions,
+                    transferConnectionOptions,
+                    incomingConnectionOptions,
+                    distributedConnectionOptions,
+                    userEndpointCache,
+                    searchResponseCache);
+        }
     }
 
-    /** Returns the distributed-child setting, or {@code null}. */
-    public final Boolean getAcceptDistributedChildren() {
-        return acceptDistributedChildren;
-    }
-
-    /** Returns the private-room invitation setting, or {@code null}. */
-    public final Boolean getAcceptPrivateRoomInvitations() {
-        return acceptPrivateRoomInvitations;
-    }
-
-    /** Returns the private-message acknowledgement setting. */
-    public final Boolean getAutoAcknowledgePrivateMessages() {
-        return autoAcknowledgePrivateMessages;
-    }
-
-    /** Returns the privilege-notification acknowledgement setting. */
-    public final Boolean getAutoAcknowledgePrivilegeNotifications() {
-        return autoAcknowledgePrivilegeNotifications;
-    }
-
-    /** Returns the search-request deduplication setting. */
-    public final Boolean getDeduplicateSearchRequests() {
-        return deduplicateSearchRequests;
-    }
-
-    /** Returns the distributed child limit, or {@code null}. */
-    public final Integer getDistributedChildLimit() {
-        return distributedChildLimit;
-    }
-
-    /** Returns the distributed connection options, or {@code null}. */
-    public final ConnectionOptions getDistributedConnectionOptions() {
-        return distributedConnectionOptions;
-    }
-
-    /** Returns the distributed-network setting, or {@code null}. */
-    public final Boolean getEnableDistributedNetwork() {
-        return enableDistributedNetwork;
-    }
-
-    /** Returns the listener setting, or {@code null}. */
-    public final Boolean getEnableListener() {
-        return enableListener;
-    }
-
-    /** Returns the incoming connection options, or {@code null}. */
-    public final ConnectionOptions getIncomingConnectionOptions() {
-        return incomingConnectionOptions;
-    }
-
-    /** Returns the listener address, or {@code null}. */
-    public final InetAddress getListenIpAddress() {
-        return listenIpAddress;
-    }
-
-    /** Returns the listener port, or {@code null}. */
-    public final Integer getListenPort() {
-        return listenPort;
-    }
-
-    /** Returns the maximum download speed, or {@code null}. */
-    public final Integer getMaximumDownloadSpeed() {
-        return maximumDownloadSpeed;
-    }
-
-    /** Returns the maximum upload speed, or {@code null}. */
-    public final Integer getMaximumUploadSpeed() {
-        return maximumUploadSpeed;
-    }
-
-    /** Returns the peer connection options, or {@code null}. */
-    public final ConnectionOptions getPeerConnectionOptions() {
-        return peerConnectionOptions;
-    }
-
-    /** Returns the search response cache, or {@code null}. */
-    public final SearchResponseCache getSearchResponseCache() {
-        return searchResponseCache;
-    }
-
-    /** Returns the server connection options, or {@code null}. */
-    public final ConnectionOptions getServerConnectionOptions() {
-        return serverConnectionOptions;
-    }
-
-    /** Returns the transfer connection options, or {@code null}. */
-    public final ConnectionOptions getTransferConnectionOptions() {
-        return transferConnectionOptions;
-    }
-
-    /** Returns the user endpoint cache, or {@code null}. */
-    public final UserEndpointCache getUserEndpointCache() {
-        return userEndpointCache;
+    private static <T> Optional<T> required(Optional<T> value, String name) {
+        return Objects.requireNonNull(value, name);
     }
 }

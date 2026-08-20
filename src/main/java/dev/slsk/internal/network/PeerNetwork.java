@@ -140,7 +140,7 @@ public final class PeerNetwork implements PeerConnectionManager {
         ownsScheduler = scheduler == null;
         this.scheduler = scheduler == null ? new Scheduler("soulseek-peer-network") : scheduler;
         diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(options.get().getMinimumDiagnosticLevel(), this::raiseDiagnostic)
+                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::raiseDiagnostic)
                 : diagnosticFactory;
     }
 
@@ -231,12 +231,12 @@ public final class PeerNetwork implements PeerConnectionManager {
         Wait<Connection> indirectWait = waiter.register(
                 new WaitKey(Constants.WaitKey.INDIRECT_TRANSFER, username, filename, remoteToken),
                 Connection.class,
-                options.get().getTransferConnectionOptions().connectTimeout(),
+                options.get().transferConnectionOptions().connectTimeout(),
                 indirectCancellation.token());
         Wait<Connection> directWait = waiter.register(
                 new WaitKey(Constants.WaitKey.DIRECT_TRANSFER, username, remoteToken),
                 Connection.class,
-                options.get().getTransferConnectionOptions().connectTimeout(),
+                options.get().transferConnectionOptions().connectTimeout(),
                 directCancellation.token());
 
         // Awaiting two waits at once is the whole reason this dispatches
@@ -469,7 +469,7 @@ public final class PeerNetwork implements PeerConnectionManager {
                 + ", id: " + incomingConnection.getId());
         Connection connection = connectionFactory.getTransferConnection(
                 incomingConnection.getIpEndpoint(),
-                options.get().getTransferConnectionOptions(),
+                options.get().transferConnectionOptions(),
                 incomingConnection.handoffTcpClient());
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.DIRECT));
         connection.addDisconnectedListener(
@@ -510,7 +510,7 @@ public final class PeerNetwork implements PeerConnectionManager {
                 + response.getUsername() + " (" + response.getIpEndpoint()
                 + ") for token " + response.getToken());
         Connection connection = connectionFactory.getTransferConnection(
-                response.getIpEndpoint(), options.get().getTransferConnectionOptions());
+                response.getIpEndpoint(), options.get().transferConnectionOptions());
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.INDIRECT));
         connection.addDisconnectedListener(
                 (sender, eventData) -> diagnostic.debug("Transfer connection to " + response.getUsername() + " ("
@@ -578,7 +578,7 @@ public final class PeerNetwork implements PeerConnectionManager {
         MessageConnection connection = connectionFactory.getMessageConnection(
                 username,
                 incomingConnection.getIpEndpoint(),
-                options.get().getPeerConnectionOptions(),
+                options.get().peerConnectionOptions(),
                 incomingConnection.handoffTcpClient());
         diagnostic.debug("Inbound message connection to " + username + " ("
                 + connection.getIpEndpoint() + ") handed off. (old: "
@@ -629,7 +629,7 @@ public final class PeerNetwork implements PeerConnectionManager {
                 + response.getUsername() + " (" + response.getIpEndpoint()
                 + ") for token " + response.getToken());
         MessageConnection connection = connectionFactory.getMessageConnection(
-                response.getUsername(), response.getIpEndpoint(), options.get().getPeerConnectionOptions());
+                response.getUsername(), response.getIpEndpoint(), options.get().peerConnectionOptions());
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.INDIRECT));
         attachPeerMessageListeners(connection);
         CancellationController cancellation = new CancellationController();
@@ -724,7 +724,7 @@ public final class PeerNetwork implements PeerConnectionManager {
             throws InterruptedException, TimeoutException {
         diagnostic.debug("Attempting direct message connection to " + username + " (" + ipEndpoint + ")");
         MessageConnection connection = connectionFactory.getMessageConnection(
-                username, ipEndpoint, options.get().getPeerConnectionOptions());
+                username, ipEndpoint, options.get().peerConnectionOptions());
         connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT));
         attachPeerMessageListeners(connection);
         connection.addDisconnectedListener(provisionalDisconnectedListener);
@@ -756,7 +756,7 @@ public final class PeerNetwork implements PeerConnectionManager {
             Wait<Connection> wait = waiter.register(
                     new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),
                     Connection.class,
-                    options.get().getPeerConnectionOptions().indirectSolicitationTimeout(),
+                    options.get().peerConnectionOptions().indirectSolicitationTimeout(),
                     cancellationSignal);
             server.write(
                     new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.PEER),
@@ -767,7 +767,7 @@ public final class PeerNetwork implements PeerConnectionManager {
                 MessageConnection connection = connectionFactory.getMessageConnection(
                         username,
                         accepted.getIpEndpoint(),
-                        options.get().getPeerConnectionOptions(),
+                        options.get().peerConnectionOptions(),
                         accepted.handoffTcpClient());
                 diagnostic.debug("Indirect message connection to " + username + " ("
                         + accepted.getIpEndpoint()
@@ -836,7 +836,7 @@ public final class PeerNetwork implements PeerConnectionManager {
             throws InterruptedException, TimeoutException {
         diagnostic.debug("Attempting direct transfer connection for token " + token + " to " + ipEndpoint);
         Connection connection = connectionFactory.getTransferConnection(
-                ipEndpoint, options.get().getTransferConnectionOptions());
+                ipEndpoint, options.get().transferConnectionOptions());
         connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT));
         connection.addDisconnectedListener(
                 (sender, eventData) -> diagnostic.debug("Transfer connection for token " + token + " to "
@@ -870,7 +870,7 @@ public final class PeerNetwork implements PeerConnectionManager {
             Wait<Connection> wait = waiter.register(
                     new WaitKey(Constants.WaitKey.SOLICITED_PEER_CONNECTION, username, solicitationToken),
                     Connection.class,
-                    options.get().getTransferConnectionOptions().indirectSolicitationTimeout(),
+                    options.get().transferConnectionOptions().indirectSolicitationTimeout(),
                     cancellationSignal);
             server.write(
                     new ConnectToPeerRequest(solicitationToken, username, Constants.ConnectionType.TRANSFER),
@@ -879,7 +879,7 @@ public final class PeerNetwork implements PeerConnectionManager {
             try {
                 Connection connection = connectionFactory.getTransferConnection(
                         accepted.getIpEndpoint(),
-                        options.get().getTransferConnectionOptions(),
+                        options.get().transferConnectionOptions(),
                         accepted.handoffTcpClient());
                 diagnostic.debug("Indirect transfer connection to " + username + " ("
                         + accepted.getIpEndpoint()

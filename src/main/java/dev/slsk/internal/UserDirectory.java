@@ -328,7 +328,7 @@ final class UserDirectory {
         CommonUtils.requireText(requestedUsername, "username");
         server.requireLoggedIn("fetch user endpoint");
         CancellationSignal token = CommonUtils.token(cancellationSignal);
-        UserEndpointCache cache = context.getClientOptions().getUserEndpointCache();
+        UserEndpointCache cache = context.getClientOptions().userEndpointCache();
         if (cache == null) {
             return retrieveUserEndpoint(requestedUsername, token, null);
         }

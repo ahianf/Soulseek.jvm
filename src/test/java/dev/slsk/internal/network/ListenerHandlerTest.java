@@ -244,32 +244,10 @@ class ListenerHandlerTest {
     }
 
     private static SoulseekClientOptions options(SearchResponseCache cache) {
-        return new SoulseekClientOptions(
-                true,
-                null,
-                30_000,
-                true,
-                true,
-                25,
-                2,
-                10,
-                Integer.MAX_VALUE,
-                Integer.MAX_VALUE,
-                Integer.MAX_VALUE,
-                true,
-                5_000,
-                true,
-                true,
-                false,
-                DiagnosticLevel.TRACE,
-                0,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                cache);
+        return SoulseekClientOptions.builder()
+                .minimumDiagnosticLevel(DiagnosticLevel.TRACE)
+                .searchResponseCache(cache)
+                .build();
     }
 
     private record Fixture(

@@ -28,7 +28,6 @@ import dev.slsk.internal.network.PeerConnectionManager;
 import dev.slsk.internal.network.PeerEndpoint;
 import dev.slsk.internal.network.TransferConnectionResult;
 import dev.slsk.internal.network.tcp.Connection;
-import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.share.File;
 import dev.slsk.search.SearchFile;
@@ -306,32 +305,10 @@ class SearchResponderTest {
     }
 
     private static SoulseekClientOptions options(SearchResponseCache cache) {
-        return new SoulseekClientOptions(
-                true,
-                null,
-                30_000,
-                true,
-                true,
-                25,
-                2,
-                10,
-                Integer.MAX_VALUE,
-                Integer.MAX_VALUE,
-                Integer.MAX_VALUE,
-                true,
-                5_000,
-                true,
-                true,
-                false,
-                DiagnosticLevel.TRACE,
-                0,
-                new ConnectionOptions(),
-                new ConnectionOptions(),
-                new ConnectionOptions(),
-                new ConnectionOptions(),
-                new ConnectionOptions(),
-                null,
-                cache);
+        return SoulseekClientOptions.builder()
+                .minimumDiagnosticLevel(DiagnosticLevel.TRACE)
+                .searchResponseCache(cache)
+                .build();
     }
 
     private static MessageConnection messageConnection(
