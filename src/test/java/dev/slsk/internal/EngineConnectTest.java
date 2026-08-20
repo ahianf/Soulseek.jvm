@@ -36,11 +36,9 @@ import dev.slsk.internal.messaging.messages.SetListenPortCommand;
 import dev.slsk.internal.network.ConnectionFactory;
 import dev.slsk.internal.network.DistributedConnectionManager;
 import dev.slsk.internal.network.MessageConnection;
-import dev.slsk.internal.network.MessageConnectionEventListener;
 import dev.slsk.internal.network.MessageEvent;
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
-import dev.slsk.internal.network.tcp.ConnectionEventListener;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Method;
@@ -447,10 +445,10 @@ class EngineConnectTest {
         private final MessageConnection connection;
         private InetSocketAddress endpoint;
         private dev.slsk.internal.options.ConnectionOptions options;
-        private ConnectionEventListener<Connection> connected;
-        private ConnectionEventListener<ConnectionDisconnectedEvent> disconnected;
-        private MessageConnectionEventListener<MessageEvent> messageRead;
-        private MessageConnectionEventListener<MessageEvent> messageWritten;
+        private java.util.function.Consumer<Connection> connected;
+        private java.util.function.Consumer<ConnectionDisconnectedEvent> disconnected;
+        private java.util.function.Consumer<MessageEvent> messageRead;
+        private java.util.function.Consumer<MessageEvent> messageWritten;
         private final ConnectionFactory proxy = (ConnectionFactory) Proxy.newProxyInstance(
                 ConnectionFactory.class.getClassLoader(), new Class<?>[] {ConnectionFactory.class}, this::invoke);
 
@@ -463,10 +461,10 @@ class EngineConnectTest {
         private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
             if (method.getName().equals("getServerConnection")) {
                 endpoint = (InetSocketAddress) arguments[0];
-                connected = (ConnectionEventListener<Connection>) arguments[1];
-                disconnected = (ConnectionEventListener<ConnectionDisconnectedEvent>) arguments[2];
-                messageRead = (MessageConnectionEventListener<MessageEvent>) arguments[3];
-                messageWritten = (MessageConnectionEventListener<MessageEvent>) arguments[4];
+                connected = (java.util.function.Consumer<Connection>) arguments[1];
+                disconnected = (java.util.function.Consumer<ConnectionDisconnectedEvent>) arguments[2];
+                messageRead = (java.util.function.Consumer<MessageEvent>) arguments[3];
+                messageWritten = (java.util.function.Consumer<MessageEvent>) arguments[4];
                 options = (dev.slsk.internal.options.ConnectionOptions) arguments[5];
                 return connection;
             }

@@ -134,15 +134,15 @@ class MessageConnectionTest {
         AtomicReference<MessageEvent> read = new AtomicReference<>();
         List<MessageDataEvent> progress = new ArrayList<>();
         CountDownLatch complete = new CountDownLatch(1);
-        connection.addMessageReceivedListener(args -> {
+        connection.<MessageReceivedEvent>subscribe(MessageConnection.MessageKind.RECEIVED, args -> {
             assertSame(connection, args.connection());
             received.set(args);
         });
-        connection.addMessageDataReadListener(args -> {
+        connection.<MessageDataEvent>subscribe(MessageConnection.MessageKind.DATA_READ, args -> {
             assertSame(connection, args.connection());
             progress.add(args);
         });
-        connection.addMessageReadListener(args -> {
+        connection.<MessageEvent>subscribe(MessageConnection.MessageKind.READ, args -> {
             assertSame(connection, args.connection());
             read.set(args);
             complete.countDown();
@@ -178,7 +178,7 @@ class MessageConnectionTest {
                 new DefaultMessageConnection("alice", ENDPOINT, OPTIONS, 4, client, Monitors.shared());
 
         IllegalStateException injected = new IllegalStateException("listener exploded");
-        connection.addMessageReceivedListener(args -> {
+        connection.<MessageReceivedEvent>subscribe(MessageConnection.MessageKind.RECEIVED, args -> {
             throw injected;
         });
 
@@ -199,7 +199,7 @@ class MessageConnectionTest {
                 "alice", ENDPOINT, OPTIONS, 1, new FakeTcpClient(stream, true), Monitors.shared());
         AtomicReference<byte[]> read = new AtomicReference<>();
         CountDownLatch complete = new CountDownLatch(1);
-        connection.addMessageReadListener(args -> {
+        connection.<MessageEvent>subscribe(MessageConnection.MessageKind.READ, args -> {
             read.set(args.message());
             complete.countDown();
         });
@@ -223,7 +223,7 @@ class MessageConnectionTest {
         AtomicReference<CancellationSignal> tokenSeen = new AtomicReference<>();
         stream.tokenSeen = tokenSeen;
         CancellationSignal token = CancellationSignal.none();
-        connection.addMessageWrittenListener(args -> {
+        connection.<MessageEvent>subscribe(MessageConnection.MessageKind.WRITTEN, args -> {
             assertSame(connection, args.connection());
             written.set(args);
         });

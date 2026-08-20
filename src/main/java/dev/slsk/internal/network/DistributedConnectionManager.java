@@ -4,44 +4,28 @@
 
 package dev.slsk.internal.network;
 
+import dev.slsk.Subscription;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.diagnostics.DiagnosticSource;
-import dev.slsk.internal.events.DistributedChildEvent;
-import dev.slsk.internal.events.DistributedParentEvent;
 import dev.slsk.internal.messaging.messages.ConnectToPeerResponse;
 import dev.slsk.internal.network.tcp.Connection;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /** Manages distributed-network parent and child connections. */
 public interface DistributedConnectionManager extends AutoCloseable, DiagnosticSource {
-    void addChildAddedListener(DistributedManagerEventListener<DistributedChildEvent> listener);
+    enum Kind {
+        CHILD_ADDED,
+        CHILD_DISCONNECTED,
+        DEMOTED_FROM_BRANCH_ROOT,
+        PARENT_ADOPTED,
+        PARENT_DISCONNECTED,
+        PROMOTED_TO_BRANCH_ROOT,
+        STATE_CHANGED
+    }
 
-    void removeChildAddedListener(DistributedManagerEventListener<DistributedChildEvent> listener);
-
-    void addChildDisconnectedListener(DistributedManagerEventListener<DistributedChildEvent> listener);
-
-    void removeChildDisconnectedListener(DistributedManagerEventListener<DistributedChildEvent> listener);
-
-    void addDemotedFromBranchRootListener(DistributedManagerEventListener<Void> listener);
-
-    void removeDemotedFromBranchRootListener(DistributedManagerEventListener<Void> listener);
-
-    void addParentAdoptedListener(DistributedManagerEventListener<DistributedParentEvent> listener);
-
-    void removeParentAdoptedListener(DistributedManagerEventListener<DistributedParentEvent> listener);
-
-    void addParentDisconnectedListener(DistributedManagerEventListener<DistributedParentEvent> listener);
-
-    void removeParentDisconnectedListener(DistributedManagerEventListener<DistributedParentEvent> listener);
-
-    void addPromotedToBranchRootListener(DistributedManagerEventListener<Void> listener);
-
-    void removePromotedToBranchRootListener(DistributedManagerEventListener<Void> listener);
-
-    void addStateChangedListener(DistributedManagerEventListener<DistributedNetworkInfo> listener);
-
-    void removeStateChangedListener(DistributedManagerEventListener<DistributedNetworkInfo> listener);
+    <T> Subscription subscribe(Kind kind, Consumer<? super T> listener);
 
     Double getAverageBroadcastLatency();
 

@@ -6,7 +6,6 @@ package dev.slsk.internal.network;
 
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
-import dev.slsk.internal.network.tcp.ConnectionEventListener;
 import dev.slsk.internal.network.tcp.ConnectionMonitor;
 import dev.slsk.internal.network.tcp.SocketConnection;
 import dev.slsk.internal.network.tcp.TcpClient;
@@ -14,6 +13,7 @@ import dev.slsk.internal.options.ConnectionOptions;
 import java.net.InetSocketAddress;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
+import java.util.function.Consumer;
 
 /**
  * Creates protocol and transfer connections.
@@ -57,10 +57,10 @@ public final class DefaultConnectionFactory implements ConnectionFactory {
     @Override
     public MessageConnection getServerConnection(
             InetSocketAddress ipEndpoint,
-            ConnectionEventListener<Connection> connectedEventHandler,
-            ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedEventHandler,
-            MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
-            MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler,
+            Consumer<Connection> connectedEventHandler,
+            Consumer<ConnectionDisconnectedEvent> disconnectedEventHandler,
+            Consumer<MessageEvent> messageReadEventHandler,
+            Consumer<MessageEvent> messageWrittenEventHandler,
             ConnectionOptions options,
             TcpClient tcpClient) {
         DefaultMessageConnection connection = executor == null
@@ -74,16 +74,16 @@ public final class DefaultConnectionFactory implements ConnectionFactory {
                         monitor,
                         executor);
         if (connectedEventHandler != null) {
-            connection.addConnectedListener(connectedEventHandler);
+            connection.subscribe(Connection.Kind.CONNECTED, connectedEventHandler);
         }
         if (disconnectedEventHandler != null) {
-            connection.addDisconnectedListener(disconnectedEventHandler);
+            connection.subscribe(Connection.Kind.DISCONNECTED, disconnectedEventHandler);
         }
         if (messageReadEventHandler != null) {
-            connection.addMessageReadListener(messageReadEventHandler);
+            connection.subscribe(MessageConnection.MessageKind.READ, messageReadEventHandler);
         }
         if (messageWrittenEventHandler != null) {
-            connection.addMessageWrittenListener(messageWrittenEventHandler);
+            connection.subscribe(MessageConnection.MessageKind.WRITTEN, messageWrittenEventHandler);
         }
         return connection;
     }

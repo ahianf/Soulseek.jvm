@@ -4,6 +4,7 @@
 
 package dev.slsk.internal.network;
 
+import dev.slsk.Subscription;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.internal.ServerLink;
 import dev.slsk.internal.common.Constants;
@@ -19,11 +20,11 @@ import dev.slsk.internal.concurrent.CancellationSubscription;
 import dev.slsk.internal.concurrent.InterruptedOperationException;
 import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
-import dev.slsk.internal.diagnostics.DiagnosticEventListener;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.events.DistributedChildEvent;
 import dev.slsk.internal.events.DistributedParentEvent;
+import dev.slsk.internal.events.Subscriptions;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
 import dev.slsk.internal.messaging.handlers.DistributedMessageHandler;
@@ -40,7 +41,6 @@ import dev.slsk.internal.messaging.messages.PeerInit;
 import dev.slsk.internal.messaging.messages.PierceFirewall;
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
-import dev.slsk.internal.network.tcp.ConnectionEventListener;
 import dev.slsk.internal.network.tcp.ConnectionState;
 import dev.slsk.internal.network.tcp.ConnectionTypes;
 import dev.slsk.internal.options.SoulseekClientOptions;
@@ -63,6 +63,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /** Manages distributed-network parent and child connections. */
@@ -106,29 +107,29 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     private final ConcurrentHashMap<String, CancellationController> pendingInboundIndirectConnections =
             new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Integer, String> pendingSolicitations = new ConcurrentHashMap<>();
-    private final CopyOnWriteArrayList<DistributedManagerEventListener<DistributedChildEvent>> childAddedListeners =
+    private final ConcurrentHashMap<MessageConnection, Subscription> childDisconnectSubscriptions =
+            new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<MessageConnection, Subscription> parentCandidateDisconnectSubscriptions =
+            new ConcurrentHashMap<>();
+    private final CopyOnWriteArrayList<Consumer<? super DistributedChildEvent>> childAddedListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<DistributedManagerEventListener<DistributedChildEvent>>
-            childDisconnectedListeners = new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<DistributedManagerEventListener<Void>> demotedListeners =
+    private final CopyOnWriteArrayList<Consumer<? super DistributedChildEvent>> childDisconnectedListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<DistributedManagerEventListener<DistributedParentEvent>> parentAdoptedListeners =
+    private final CopyOnWriteArrayList<Consumer<? super Void>> demotedListeners = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<Consumer<? super DistributedParentEvent>> parentAdoptedListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<DistributedManagerEventListener<DistributedParentEvent>>
-            parentDisconnectedListeners = new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<DistributedManagerEventListener<Void>> promotedListeners =
+    private final CopyOnWriteArrayList<Consumer<? super DistributedParentEvent>> parentDisconnectedListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<DistributedManagerEventListener<DistributedNetworkInfo>> stateChangedListeners =
+    private final CopyOnWriteArrayList<Consumer<? super Void>> promotedListeners = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<Consumer<? super DistributedNetworkInfo>> stateChangedListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
-    private final ConnectionEventListener<ConnectionDisconnectedEvent> parentCandidateDisconnectedListener =
+    private final CopyOnWriteArrayList<Consumer<? super DiagnosticEvent>> diagnosticListeners =
+            new CopyOnWriteArrayList<>();
+    private final Consumer<ConnectionDisconnectedEvent> parentCandidateDisconnectedListener =
             this::parentCandidateDisconnected;
-    private final ConnectionEventListener<ConnectionDisconnectedEvent> parentDisconnectedListener =
-            this::parentDisconnected;
-    private final ConnectionEventListener<ConnectionDisconnectedEvent> childDisconnectedListener =
-            this::childDisconnected;
-    private final MessageConnectionEventListener<MessageEvent> parentInitializationListener =
-            this::handleParentCandidateMessage;
+    private final Consumer<ConnectionDisconnectedEvent> parentDisconnectedListener = this::parentDisconnected;
+    private final Consumer<ConnectionDisconnectedEvent> childDisconnectedListener = this::childDisconnected;
+    private final Consumer<MessageEvent> parentInitializationListener = this::handleParentCandidateMessage;
 
     private volatile Double averageBroadcastLatency;
     private volatile boolean branchRootNode;
@@ -138,6 +139,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     private volatile String parentBranchRoot = "";
     private volatile List<PeerEndpoint> parentCandidates = List.of();
     private volatile MessageConnection parentConnection;
+    private volatile Subscription parentDisconnectSubscription;
 
     /** Creates a distributed network with default collaborators. */
     public DistributedNetwork(
@@ -200,83 +202,29 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     }
 
     @Override
-    public void addChildAddedListener(DistributedManagerEventListener<DistributedChildEvent> listener) {
-        childAddedListeners.add(Objects.requireNonNull(listener, "listener"));
+    @SuppressWarnings("unchecked")
+    public <T> Subscription subscribe(Kind kind, Consumer<? super T> listener) {
+        Objects.requireNonNull(kind, "kind");
+        Objects.requireNonNull(listener, "listener");
+        return switch (kind) {
+            case CHILD_ADDED ->
+                Subscriptions.add(childAddedListeners, (Consumer<? super DistributedChildEvent>) listener);
+            case CHILD_DISCONNECTED ->
+                Subscriptions.add(childDisconnectedListeners, (Consumer<? super DistributedChildEvent>) listener);
+            case DEMOTED_FROM_BRANCH_ROOT -> Subscriptions.add(demotedListeners, (Consumer<? super Void>) listener);
+            case PARENT_ADOPTED ->
+                Subscriptions.add(parentAdoptedListeners, (Consumer<? super DistributedParentEvent>) listener);
+            case PARENT_DISCONNECTED ->
+                Subscriptions.add(parentDisconnectedListeners, (Consumer<? super DistributedParentEvent>) listener);
+            case PROMOTED_TO_BRANCH_ROOT -> Subscriptions.add(promotedListeners, (Consumer<? super Void>) listener);
+            case STATE_CHANGED ->
+                Subscriptions.add(stateChangedListeners, (Consumer<? super DistributedNetworkInfo>) listener);
+        };
     }
 
     @Override
-    public void removeChildAddedListener(DistributedManagerEventListener<DistributedChildEvent> listener) {
-        childAddedListeners.remove(listener);
-    }
-
-    @Override
-    public void addChildDisconnectedListener(DistributedManagerEventListener<DistributedChildEvent> listener) {
-        childDisconnectedListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeChildDisconnectedListener(DistributedManagerEventListener<DistributedChildEvent> listener) {
-        childDisconnectedListeners.remove(listener);
-    }
-
-    @Override
-    public void addDemotedFromBranchRootListener(DistributedManagerEventListener<Void> listener) {
-        demotedListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeDemotedFromBranchRootListener(DistributedManagerEventListener<Void> listener) {
-        demotedListeners.remove(listener);
-    }
-
-    @Override
-    public void addDiagnosticGeneratedListener(DiagnosticEventListener listener) {
-        diagnosticListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeDiagnosticGeneratedListener(DiagnosticEventListener listener) {
-        diagnosticListeners.remove(listener);
-    }
-
-    @Override
-    public void addParentAdoptedListener(DistributedManagerEventListener<DistributedParentEvent> listener) {
-        parentAdoptedListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeParentAdoptedListener(DistributedManagerEventListener<DistributedParentEvent> listener) {
-        parentAdoptedListeners.remove(listener);
-    }
-
-    @Override
-    public void addParentDisconnectedListener(DistributedManagerEventListener<DistributedParentEvent> listener) {
-        parentDisconnectedListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeParentDisconnectedListener(DistributedManagerEventListener<DistributedParentEvent> listener) {
-        parentDisconnectedListeners.remove(listener);
-    }
-
-    @Override
-    public void addPromotedToBranchRootListener(DistributedManagerEventListener<Void> listener) {
-        promotedListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removePromotedToBranchRootListener(DistributedManagerEventListener<Void> listener) {
-        promotedListeners.remove(listener);
-    }
-
-    @Override
-    public void addStateChangedListener(DistributedManagerEventListener<DistributedNetworkInfo> listener) {
-        stateChangedListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeStateChangedListener(DistributedManagerEventListener<DistributedNetworkInfo> listener) {
-        stateChangedListeners.remove(listener);
+    public Subscription subscribe(Consumer<? super DiagnosticEvent> listener) {
+        return Subscriptions.add(diagnosticListeners, listener);
     }
 
     @Override
@@ -483,11 +431,15 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 + " as the best connection; branch root: "
                 + parentBranchRoot + ", branch level: "
                 + parentBranchLevel);
-        parentConnection.addDisconnectedListener(parentDisconnectedListener);
-        parentConnection.removeDisconnectedListener(parentCandidateDisconnectedListener);
+        parentDisconnectSubscription =
+                parentConnection.subscribe(Connection.Kind.DISCONNECTED, parentDisconnectedListener);
+        Subscription candidateSubscription = parentCandidateDisconnectSubscriptions.remove(parentConnection);
+        if (candidateSubscription != null) {
+            candidateSubscription.close();
+        }
         DistributedMessageHandler handler = distributedMessages.get();
-        parentConnection.addMessageReadListener(handler::handleMessageRead);
-        parentConnection.addMessageWrittenListener(handler::handleMessageWritten);
+        parentConnection.<MessageEvent>subscribe(MessageConnection.MessageKind.READ, handler::handleMessageRead);
+        parentConnection.<MessageEvent>subscribe(MessageConnection.MessageKind.WRITTEN, handler::handleMessageWritten);
         diagnostic.debug("Parent connection to " + parentConnection.getUsername()
                 + " (" + parentConnection.getIpEndpoint()
                 + ") established. (type: " + parentConnection.getType()
@@ -879,7 +831,9 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         incomingConnection.close();
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.DIRECT));
         attachChildMessageListeners(connection);
-        connection.addDisconnectedListener(event -> event.connection().close());
+        connection.subscribe(
+                Connection.Kind.DISCONNECTED,
+                (ConnectionDisconnectedEvent event) -> event.connection().close());
         boolean superseded = false;
 
         if (cached != null) {
@@ -894,7 +848,10 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             // promptly; every other attempt is bounded by its connect timeout.
             MessageConnection old = cached.awaitQuietly();
             if (old != null) {
-                old.removeDisconnectedListener(childDisconnectedListener);
+                Subscription oldSubscription = childDisconnectSubscriptions.remove(old);
+                if (oldSubscription != null) {
+                    oldSubscription.close();
+                }
                 diagnostic.debug("Superseding existing child connection to "
                         + username + " (" + old.getIpEndpoint()
                         + ") (old: " + incomingConnection.getId()
@@ -912,7 +869,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             connection.close();
             throw Failures.rethrow(failure);
         }
-        connection.addDisconnectedListener(childDisconnectedListener);
+        subscribeToChildDisconnect(connection);
         children.put(username, connection.getIpEndpoint());
         diagnostic.debug("Child connection to " + connection.getUsername()
                 + " (" + connection.getIpEndpoint()
@@ -940,7 +897,9 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                 response.getUsername(), response.getIpEndpoint(), options.get().distributedConnectionOptions());
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.INDIRECT));
         attachChildMessageListeners(connection);
-        connection.addDisconnectedListener(event -> event.connection().close());
+        connection.subscribe(
+                Connection.Kind.DISCONNECTED,
+                (ConnectionDisconnectedEvent event) -> event.connection().close());
         CancellationController cancellation = new CancellationController();
         pendingInboundIndirectConnections.put(response.getUsername(), cancellation);
 
@@ -955,7 +914,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
             pendingInboundIndirectConnections.remove(response.getUsername(), cancellation);
             cancellation.close();
         }
-        connection.addDisconnectedListener(childDisconnectedListener);
+        subscribeToChildDisconnect(connection);
         children.put(response.getUsername(), connection.getIpEndpoint());
         diagnostic.debug("Child connection to " + connection.getUsername() + " ("
                 + connection.getIpEndpoint()
@@ -1048,7 +1007,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         MessageConnection connection = connectionFactory.getDistributedConnection(
                 username, ipEndpoint, options.get().distributedConnectionOptions());
         connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT));
-        connection.addDisconnectedListener(parentCandidateDisconnectedListener);
+        subscribeToParentCandidateDisconnect(connection);
         try {
             connection.connect(cancellationSignal);
         } catch (Throwable failure) {
@@ -1093,7 +1052,7 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                         + ") handed off. (old: " + accepted.getId()
                         + ", new: " + connection.getId() + ")");
                 connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.INDIRECT));
-                connection.addDisconnectedListener(parentCandidateDisconnectedListener);
+                subscribeToParentCandidateDisconnect(connection);
                 diagnostic.debug("Indirect parent candidate connection to " + username
                         + " (" + connection.getIpEndpoint()
                         + ") established. (type: "
@@ -1116,7 +1075,8 @@ public final class DistributedNetwork implements DistributedConnectionManager {
 
     private Wait<BranchInformation> registerParentCandidateInitialization(
             MessageConnection connection, CancellationSignal cancellationSignal) {
-        connection.addMessageReadListener(parentInitializationListener);
+        Subscription initializationSubscription =
+                connection.subscribe(MessageConnection.MessageKind.READ, parentInitializationListener);
         // All three are registered before any is awaited: the candidate sends
         // them back to back and a wait registered after the first would miss
         // the ones behind it.
@@ -1156,19 +1116,23 @@ public final class DistributedNetwork implements DistributedConnectionManager {
                         + "); one or more required messages was not "
                         + "received. (id: " + connection.getId() + ")");
             } finally {
-                connection.removeMessageReadListener(parentInitializationListener);
+                initializationSubscription.close();
             }
         };
     }
 
     private void attachChildMessageListeners(MessageConnection connection) {
         DistributedMessageHandler handler = distributedMessages.get();
-        connection.addMessageReadListener(handler::handleChildMessageRead);
-        connection.addMessageWrittenListener(handler::handleChildMessageWritten);
+        connection.<MessageEvent>subscribe(MessageConnection.MessageKind.READ, handler::handleChildMessageRead);
+        connection.<MessageEvent>subscribe(MessageConnection.MessageKind.WRITTEN, handler::handleChildMessageWritten);
     }
 
     private void childDisconnected(ConnectionDisconnectedEvent eventData) {
         MessageConnection connection = (MessageConnection) eventData.connection();
+        Subscription subscription = childDisconnectSubscriptions.remove(connection);
+        if (subscription != null) {
+            subscription.close();
+        }
         childConnections.remove(connection.getUsername());
         children.remove(connection.getUsername());
         diagnostic.debug("Child connection to " + connection.getUsername() + " ("
@@ -1189,6 +1153,10 @@ public final class DistributedNetwork implements DistributedConnectionManager {
 
     private void parentCandidateDisconnected(ConnectionDisconnectedEvent eventData) {
         MessageConnection connection = (MessageConnection) eventData.connection();
+        Subscription subscription = parentCandidateDisconnectSubscriptions.remove(connection);
+        if (subscription != null) {
+            subscription.close();
+        }
         diagnostic.debug("Parent candidate connection to " + connection.getUsername()
                 + " (" + connection.getIpEndpoint() + ") disconnected: "
                 + eventData.message() + " (type: "
@@ -1199,6 +1167,11 @@ public final class DistributedNetwork implements DistributedConnectionManager {
 
     private void parentDisconnected(ConnectionDisconnectedEvent eventData) {
         MessageConnection connection = (MessageConnection) eventData.connection();
+        Subscription subscription = parentDisconnectSubscription;
+        parentDisconnectSubscription = null;
+        if (subscription != null) {
+            subscription.close();
+        }
         diagnostic.debug("Parent connection to " + connection.getUsername() + " ("
                 + connection.getIpEndpoint() + ") disconnected: "
                 + eventData.message() + " (type: "
@@ -1298,6 +1271,23 @@ public final class DistributedNetwork implements DistributedConnectionManager {
 
     private void raiseDiagnostic(DiagnosticEvent eventData) {
         diagnosticListeners.forEach(listener -> listener.accept(eventData));
+    }
+
+    private void subscribeToChildDisconnect(MessageConnection connection) {
+        Subscription subscription = connection.subscribe(Connection.Kind.DISCONNECTED, childDisconnectedListener);
+        Subscription previous = childDisconnectSubscriptions.put(connection, subscription);
+        if (previous != null) {
+            previous.close();
+        }
+    }
+
+    private void subscribeToParentCandidateDisconnect(MessageConnection connection) {
+        Subscription subscription =
+                connection.subscribe(Connection.Kind.DISCONNECTED, parentCandidateDisconnectedListener);
+        Subscription previous = parentCandidateDisconnectSubscriptions.put(connection, subscription);
+        if (previous != null) {
+            previous.close();
+        }
     }
 
     private static byte[] concatenate(byte[]... arrays) {

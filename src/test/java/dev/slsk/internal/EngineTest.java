@@ -26,17 +26,14 @@ import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.connection.ServerInfo;
 import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
-import dev.slsk.internal.diagnostics.DiagnosticEventListener;
 import dev.slsk.internal.events.DistributedChildEvent;
 import dev.slsk.internal.events.DownloadDeniedEvent;
 import dev.slsk.internal.events.DownloadFailedEvent;
 import dev.slsk.internal.events.SoulseekClientDisconnectedEvent;
 import dev.slsk.internal.messaging.handlers.DistributedMessageHandler;
 import dev.slsk.internal.messaging.handlers.PeerMessageHandler;
-import dev.slsk.internal.messaging.handlers.PeerMessageHandlerEventListener;
 import dev.slsk.internal.messaging.handlers.ServerMessageEvent;
 import dev.slsk.internal.messaging.handlers.ServerMessageHandler;
-import dev.slsk.internal.messaging.handlers.ServerMessageHandlerEventListener;
 import dev.slsk.internal.network.ConnectionFactory;
 import dev.slsk.internal.network.DistributedConnectionManager;
 import dev.slsk.internal.network.ListenerHandler;
@@ -285,7 +282,7 @@ class EngineTest {
                         Kind.DISTRIBUTED_CHILD_ADDED,
                         (dev.slsk.internal.events.DistributedChildEvent value) -> child.set(value));
         DistributedChildEvent childArgs = new DistributedChildEvent("child", ENDPOINT);
-        fixture.distributed.raise("addChildAddedListener", childArgs);
+        fixture.distributed.raise(DistributedConnectionManager.Kind.CHILD_ADDED, childArgs);
         assertSame(childArgs, child.get());
         fixture.close();
     }
@@ -303,7 +300,8 @@ class EngineTest {
         });
         fixture.client.events().on(Kind.DISTRIBUTED_CHILD_ADDED, value -> delivered.add("second"));
 
-        fixture.distributed.raise("addChildAddedListener", new DistributedChildEvent("child", ENDPOINT));
+        fixture.distributed.raise(
+                DistributedConnectionManager.Kind.CHILD_ADDED, new DistributedChildEvent("child", ENDPOINT));
 
         assertEquals(List.of("second"), delivered);
         fixture.close();
@@ -526,17 +524,20 @@ class EngineTest {
     }
 
     private static final class PeerHandlerProbe {
-        private PeerMessageHandlerEventListener<DownloadDeniedEvent> denied;
-        private PeerMessageHandlerEventListener<DownloadFailedEvent> failed;
+        private java.util.function.Consumer<DownloadDeniedEvent> denied;
+        private java.util.function.Consumer<DownloadFailedEvent> failed;
         private final PeerMessageHandler proxy = (PeerMessageHandler) Proxy.newProxyInstance(
                 PeerMessageHandler.class.getClassLoader(), new Class<?>[] {PeerMessageHandler.class}, this::invoke);
 
         @SuppressWarnings("unchecked")
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("addDownloadDeniedListener")) {
-                denied = (PeerMessageHandlerEventListener<DownloadDeniedEvent>) arguments[0];
-            } else if (method.getName().equals("addDownloadFailedListener")) {
-                failed = (PeerMessageHandlerEventListener<DownloadFailedEvent>) arguments[0];
+            if (method.getName().equals("subscribe") && arguments.length == 2) {
+                if (arguments[0] == PeerMessageHandler.Kind.DOWNLOAD_DENIED) {
+                    denied = (java.util.function.Consumer<DownloadDeniedEvent>) arguments[1];
+                } else if (arguments[0] == PeerMessageHandler.Kind.DOWNLOAD_FAILED) {
+                    failed = (java.util.function.Consumer<DownloadFailedEvent>) arguments[1];
+                }
+                return (dev.slsk.Subscription) () -> {};
             }
             return defaultValue(method.getReturnType());
         }
@@ -551,31 +552,33 @@ class EngineTest {
     }
 
     private static final class ServerHandlerProbe {
-        private final Map<ServerMessageEvent, ServerMessageHandlerEventListener<?>> listeners = new HashMap<>();
+        private final Map<ServerMessageEvent, java.util.function.Consumer<?>> listeners = new HashMap<>();
         private final ServerMessageHandler proxy = (ServerMessageHandler) Proxy.newProxyInstance(
                 ServerMessageHandler.class.getClassLoader(), new Class<?>[] {ServerMessageHandler.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("addListener")) {
-                listeners.put((ServerMessageEvent) arguments[0], (ServerMessageHandlerEventListener<?>) arguments[1]);
+            if (method.getName().equals("subscribe") && arguments.length == 2) {
+                listeners.put((ServerMessageEvent) arguments[0], (java.util.function.Consumer<?>) arguments[1]);
+                return (dev.slsk.Subscription) () -> {};
             }
             return defaultValue(method.getReturnType());
         }
 
         @SuppressWarnings("unchecked")
         private <T> void raise(ServerMessageEvent event, T eventData) {
-            ((ServerMessageHandlerEventListener<T>) listeners.get(event)).accept(eventData);
+            ((java.util.function.Consumer<T>) listeners.get(event)).accept(eventData);
         }
     }
 
     private static final class SearchResponderProbe {
-        private DiagnosticEventListener diagnostic;
+        private java.util.function.Consumer<dev.slsk.internal.diagnostics.DiagnosticEvent> diagnostic;
         private final SearchResponder proxy = (SearchResponder) Proxy.newProxyInstance(
                 SearchResponder.class.getClassLoader(), new Class<?>[] {SearchResponder.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("addDiagnosticGeneratedListener")) {
-                diagnostic = (DiagnosticEventListener) arguments[0];
+            if (method.getName().equals("subscribe") && arguments.length == 1) {
+                diagnostic = (java.util.function.Consumer<dev.slsk.internal.diagnostics.DiagnosticEvent>) arguments[0];
+                return (dev.slsk.Subscription) () -> diagnostic = null;
             }
             return defaultValue(method.getReturnType());
         }
@@ -586,7 +589,7 @@ class EngineTest {
     }
 
     private static final class DistributedManagerProbe {
-        private final Map<String, Object> eventListeners = new HashMap<>();
+        private final Map<DistributedConnectionManager.Kind, Object> eventListeners = new HashMap<>();
         private int branchLevel;
         private String branchRoot = "";
         private boolean branchRootNode;
@@ -603,9 +606,9 @@ class EngineTest {
                 this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().startsWith("add") && method.getName().endsWith("Listener")) {
-                eventListeners.put(method.getName(), arguments[0]);
-                return null;
+            if (method.getName().equals("subscribe") && arguments.length == 2) {
+                eventListeners.put((DistributedConnectionManager.Kind) arguments[0], arguments[1]);
+                return (dev.slsk.Subscription) () -> eventListeners.remove(arguments[0], arguments[1]);
             }
             return switch (method.getName()) {
                 case "getBranchLevel" -> branchLevel;
@@ -630,10 +633,8 @@ class EngineTest {
         }
 
         @SuppressWarnings("unchecked")
-        private <T> void raise(String registrationMethod, T eventData) {
-            dev.slsk.internal.network.DistributedManagerEventListener<T> listener =
-                    (dev.slsk.internal.network.DistributedManagerEventListener<T>)
-                            eventListeners.get(registrationMethod);
+        private <T> void raise(DistributedConnectionManager.Kind kind, T eventData) {
+            java.util.function.Consumer<T> listener = (java.util.function.Consumer<T>) eventListeners.get(kind);
             listener.accept(eventData);
         }
     }

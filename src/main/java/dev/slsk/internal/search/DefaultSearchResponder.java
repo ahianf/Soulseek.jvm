@@ -4,16 +4,17 @@
 
 package dev.slsk.internal.search;
 
+import dev.slsk.Subscription;
 import dev.slsk.internal.common.CacheLookupResult;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
-import dev.slsk.internal.diagnostics.DiagnosticEventListener;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.events.SearchRequestEvent;
 import dev.slsk.internal.events.SearchRequestResponseEvent;
+import dev.slsk.internal.events.Subscriptions;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.PeerConnectionManager;
 import dev.slsk.internal.options.SoulseekClientOptions;
@@ -21,6 +22,7 @@ import dev.slsk.internal.share.Catalogs;
 import java.net.InetSocketAddress;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /** Responds to incoming search requests. */
@@ -58,13 +60,14 @@ public final class DefaultSearchResponder implements SearchResponder {
     private final java.util.function.IntSupplier advertisedUploadSpeed;
 
     private final DiagnosticSink diagnostic;
-    private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<SearchResponderEventListener<SearchRequestEvent>> requestListeners =
+    private final CopyOnWriteArrayList<Consumer<? super DiagnosticEvent>> diagnosticListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<SearchResponderEventListener<SearchRequestResponseEvent>>
-            responseDeliveredListeners = new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<SearchResponderEventListener<SearchRequestResponseEvent>>
-            responseFailedListeners = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<Consumer<? super SearchRequestEvent>> requestListeners =
+            new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<Consumer<? super SearchRequestResponseEvent>> responseDeliveredListeners =
+            new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<Consumer<? super SearchRequestResponseEvent>> responseFailedListeners =
+            new CopyOnWriteArrayList<>();
     private final Object evictionBinding = new Object();
     private volatile SearchResponseCache evictionBoundTo;
 
@@ -103,44 +106,23 @@ public final class DefaultSearchResponder implements SearchResponder {
     }
 
     @Override
-    public void addDiagnosticGeneratedListener(DiagnosticEventListener listener) {
-        diagnosticListeners.add(Objects.requireNonNull(listener, "listener"));
+    public Subscription subscribe(Consumer<? super DiagnosticEvent> listener) {
+        return Subscriptions.add(diagnosticListeners, listener);
     }
 
     @Override
-    public void removeDiagnosticGeneratedListener(DiagnosticEventListener listener) {
-        diagnosticListeners.remove(listener);
-    }
-
-    @Override
-    public void addRequestReceivedListener(SearchResponderEventListener<SearchRequestEvent> listener) {
-        requestListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeRequestReceivedListener(SearchResponderEventListener<SearchRequestEvent> listener) {
-        requestListeners.remove(listener);
-    }
-
-    @Override
-    public void addResponseDeliveredListener(SearchResponderEventListener<SearchRequestResponseEvent> listener) {
-        responseDeliveredListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeResponseDeliveredListener(SearchResponderEventListener<SearchRequestResponseEvent> listener) {
-        responseDeliveredListeners.remove(listener);
-    }
-
-    @Override
-    public void addResponseDeliveryFailedListener(SearchResponderEventListener<SearchRequestResponseEvent> listener) {
-        responseFailedListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeResponseDeliveryFailedListener(
-            SearchResponderEventListener<SearchRequestResponseEvent> listener) {
-        responseFailedListeners.remove(listener);
+    @SuppressWarnings("unchecked")
+    public <T> Subscription subscribe(Kind kind, Consumer<? super T> listener) {
+        Objects.requireNonNull(kind, "kind");
+        Objects.requireNonNull(listener, "listener");
+        return switch (kind) {
+            case REQUEST_RECEIVED ->
+                Subscriptions.add(requestListeners, (Consumer<? super SearchRequestEvent>) listener);
+            case RESPONSE_DELIVERED ->
+                Subscriptions.add(responseDeliveredListeners, (Consumer<? super SearchRequestResponseEvent>) listener);
+            case RESPONSE_DELIVERY_FAILED ->
+                Subscriptions.add(responseFailedListeners, (Consumer<? super SearchRequestResponseEvent>) listener);
+        };
     }
 
     @Override

@@ -4,11 +4,11 @@
 
 package dev.slsk.internal.diagnostics;
 
+import dev.slsk.Subscription;
+import java.util.function.Consumer;
+
 /** Generates diagnostic message events. */
 public interface DiagnosticSource {
-    /** Adds a diagnostic event listener. */
-    void addDiagnosticGeneratedListener(DiagnosticEventListener listener);
-
-    /** Removes a diagnostic event listener. */
-    void removeDiagnosticGeneratedListener(DiagnosticEventListener listener);
+    /** Subscribes to generated diagnostics. */
+    Subscription subscribe(Consumer<? super DiagnosticEvent> listener);
 }

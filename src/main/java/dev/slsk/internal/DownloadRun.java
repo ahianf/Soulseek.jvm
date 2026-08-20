@@ -7,6 +7,7 @@ import static dev.slsk.internal.transfer.TransferStreams.determineOutputPosition
 import static dev.slsk.internal.transfer.TransferStreams.filenameOnly;
 import static dev.slsk.internal.transfer.TransferStreams.seekOutputStream;
 
+import dev.slsk.Subscription;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferSizeMismatchException;
@@ -28,7 +29,6 @@ import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDataEvent;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
-import dev.slsk.internal.network.tcp.ConnectionEventListener;
 import dev.slsk.internal.options.TransferOptions;
 import dev.slsk.internal.options.TransferProgressUpdate;
 import dev.slsk.internal.options.TransferStateChange;
@@ -44,6 +44,7 @@ import java.nio.ByteOrder;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -99,8 +100,10 @@ final class DownloadRun {
     private Connection connection;
     private OutputStream outputStream;
     private TransferStreams.PositionTrackingOutputStream trackingStream;
-    private ConnectionEventListener<ConnectionDataEvent> dataReadListener;
-    private ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedListener;
+    private Consumer<ConnectionDataEvent> dataReadListener;
+    private Consumer<ConnectionDisconnectedEvent> disconnectedListener;
+    private Subscription dataReadSubscription;
+    private Subscription disconnectedSubscription;
 
     DownloadRun(
             TransferDomain domain,
@@ -318,8 +321,8 @@ final class DownloadRun {
                 download.settlement().fail(new ConnectionException("Transfer failed: " + eventData.message(), failure));
             }
         };
-        connection.addDataReadListener(dataReadListener);
-        connection.addDisconnectedListener(disconnectedListener);
+        dataReadSubscription = connection.subscribe(Connection.Kind.DATA_READ, dataReadListener);
+        disconnectedSubscription = connection.subscribe(Connection.Kind.DISCONNECTED, disconnectedListener);
     }
 
     private void positionOutputStream() {
@@ -554,11 +557,11 @@ final class DownloadRun {
         if (connection == null) {
             return;
         }
-        if (dataReadListener != null) {
-            connection.removeDataReadListener(dataReadListener);
+        if (dataReadSubscription != null) {
+            dataReadSubscription.close();
         }
-        if (disconnectedListener != null) {
-            connection.removeDisconnectedListener(disconnectedListener);
+        if (disconnectedSubscription != null) {
+            disconnectedSubscription.close();
         }
     }
 

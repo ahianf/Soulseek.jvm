@@ -36,7 +36,6 @@ import dev.slsk.internal.network.PeerConnectionManager;
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDataEvent;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
-import dev.slsk.internal.network.tcp.ConnectionEventListener;
 import dev.slsk.internal.network.tcp.ConnectionGovernor;
 import dev.slsk.internal.network.tcp.ConnectionReporter;
 import dev.slsk.internal.network.tcp.ConnectionState;
@@ -1170,8 +1169,8 @@ class EngineDownloadTest {
         private Runnable readHook;
         private Exception disconnectOnRead;
         private RuntimeException closeFailure;
-        private ConnectionEventListener<ConnectionDataEvent> dataReadListener;
-        private ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedListener;
+        private java.util.function.Consumer<ConnectionDataEvent> dataReadListener;
+        private java.util.function.Consumer<ConnectionDisconnectedEvent> disconnectedListener;
         private final Connection proxy = (Connection) Proxy.newProxyInstance(
                 Connection.class.getClassLoader(), new Class<?>[] {Connection.class}, this::invoke);
 
@@ -1225,25 +1224,26 @@ class EngineDownloadTest {
                 }
                 return null;
             }
-            if (method.getName().equals("addDataReadListener")) {
-                dataReadListener = cast(arguments[0]);
-                return null;
-            }
-            if (method.getName().equals("removeDataReadListener")) {
-                if (dataReadListener == arguments[0]) {
-                    dataReadListener = null;
+            if (method.getName().equals("subscribe")) {
+                if (arguments[0] == Connection.Kind.DATA_READ) {
+                    java.util.function.Consumer<ConnectionDataEvent> registered = cast(arguments[1]);
+                    dataReadListener = registered;
+                    return (dev.slsk.Subscription) () -> {
+                        if (dataReadListener == registered) {
+                            dataReadListener = null;
+                        }
+                    };
                 }
-                return null;
-            }
-            if (method.getName().equals("addDisconnectedListener")) {
-                disconnectedListener = cast(arguments[0]);
-                return null;
-            }
-            if (method.getName().equals("removeDisconnectedListener")) {
-                if (disconnectedListener == arguments[0]) {
-                    disconnectedListener = null;
+                if (arguments[0] == Connection.Kind.DISCONNECTED) {
+                    java.util.function.Consumer<ConnectionDisconnectedEvent> registered = cast(arguments[1]);
+                    disconnectedListener = registered;
+                    return (dev.slsk.Subscription) () -> {
+                        if (disconnectedListener == registered) {
+                            disconnectedListener = null;
+                        }
+                    };
                 }
-                return null;
+                return (dev.slsk.Subscription) () -> {};
             }
             if (method.getName().equals("close") && closeFailure != null) {
                 throw closeFailure;

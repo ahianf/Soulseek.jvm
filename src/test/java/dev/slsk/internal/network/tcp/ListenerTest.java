@@ -72,7 +72,7 @@ class ListenerTest {
                     new SocketListener(address, server.getLocalPort(), options, Monitors.shared(), adapter);
             AtomicReference<Connection> accepted = new AtomicReference<>();
             CountDownLatch raised = new CountDownLatch(1);
-            listener.addAcceptedListener(connection -> {
+            listener.subscribe(connection -> {
                 accepted.set(connection);
                 raised.countDown();
             });
@@ -106,7 +106,7 @@ class ListenerTest {
             SocketListener listener = new SocketListener(
                     address, server.getLocalPort(), null, Monitors.shared(), new TcpListenerAdapter(server));
             CountDownLatch accepted = new CountDownLatch(1);
-            listener.addAcceptedListener(connection -> accepted.countDown());
+            listener.subscribe(connection -> accepted.countDown());
             listener.start();
             // Prove the accept loop is live — a fixed sleep can pass with the
             // loop never having started, which makes the assertion vacuous.

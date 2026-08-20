@@ -4,23 +4,19 @@
 
 package dev.slsk.internal.search;
 
+import dev.slsk.Subscription;
 import dev.slsk.internal.diagnostics.DiagnosticSource;
-import dev.slsk.internal.events.SearchRequestEvent;
-import dev.slsk.internal.events.SearchRequestResponseEvent;
+import java.util.function.Consumer;
 
 /** Responds to incoming search requests. */
 public interface SearchResponder extends DiagnosticSource {
-    void addRequestReceivedListener(SearchResponderEventListener<SearchRequestEvent> listener);
+    enum Kind {
+        REQUEST_RECEIVED,
+        RESPONSE_DELIVERED,
+        RESPONSE_DELIVERY_FAILED
+    }
 
-    void removeRequestReceivedListener(SearchResponderEventListener<SearchRequestEvent> listener);
-
-    void addResponseDeliveredListener(SearchResponderEventListener<SearchRequestResponseEvent> listener);
-
-    void removeResponseDeliveredListener(SearchResponderEventListener<SearchRequestResponseEvent> listener);
-
-    void addResponseDeliveryFailedListener(SearchResponderEventListener<SearchRequestResponseEvent> listener);
-
-    void removeResponseDeliveryFailedListener(SearchResponderEventListener<SearchRequestResponseEvent> listener);
+    <T> Subscription subscribe(Kind kind, Consumer<? super T> listener);
 
     boolean tryDiscard(int responseToken);
 

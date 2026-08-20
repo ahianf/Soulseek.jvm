@@ -12,12 +12,12 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.slsk.Subscription;
 import dev.slsk.internal.common.CacheLookupResult;
 import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
-import dev.slsk.internal.diagnostics.DiagnosticEventListener;
 import dev.slsk.internal.diagnostics.DiagnosticLevel;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.SearchRequestEvent;
@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
 class SearchResponderTest {
@@ -81,11 +82,11 @@ class SearchResponderTest {
         Fixture fixture = fixture(null);
         DefaultSearchResponder responder = responder(fixture.client, null);
         AtomicReference<DiagnosticEvent> event = new AtomicReference<>();
-        DiagnosticEventListener listener = args -> event.set(args);
-        responder.addDiagnosticGeneratedListener(listener);
+        Consumer<dev.slsk.internal.diagnostics.DiagnosticEvent> listener = args -> event.set(args);
+        Subscription subscription = responder.subscribe(listener);
         responder.getDiagnostic().info("test");
         assertEquals("test", event.get().message());
-        responder.removeDiagnosticGeneratedListener(listener);
+        subscription.close();
         responder.getDiagnostic().info("unbound");
     }
 
@@ -98,7 +99,8 @@ class SearchResponderTest {
         cache.removed = CacheLookupResult.found(record);
         Fixture fixture = fixture(cache);
         AtomicReference<SearchRequestResponseEvent> failed = new AtomicReference<>();
-        fixture.responder.addResponseDeliveryFailedListener(args -> failed.set(args));
+        fixture.responder.<SearchRequestResponseEvent>subscribe(
+                SearchResponder.Kind.RESPONSE_DELIVERY_FAILED, args -> failed.set(args));
         assertTrue(fixture.responder.tryDiscard(9));
         assertEquals(9, cache.lastRemovedToken);
         assertEquals("alice", failed.get().username());
@@ -114,7 +116,8 @@ class SearchResponderTest {
     void requestEventAlwaysPrecedesNullResolverResult() {
         Fixture fixture = fixture(null);
         AtomicReference<SearchRequestEvent> request = new AtomicReference<>();
-        fixture.responder.addRequestReceivedListener(args -> request.set(args));
+        fixture.responder.<SearchRequestEvent>subscribe(
+                SearchResponder.Kind.REQUEST_RECEIVED, args -> request.set(args));
 
         assertFalse(fixture.responder.tryRespond("alice", 4, "query"));
         assertEquals("alice", request.get().username());
@@ -138,7 +141,8 @@ class SearchResponderTest {
         AtomicReference<byte[]> written = new AtomicReference<>();
         fixture.manager.connection = messageConnection(written, CompletableFuture.completedFuture(null));
         AtomicReference<SearchRequestResponseEvent> delivered = new AtomicReference<>();
-        fixture.responder.addResponseDeliveredListener(args -> delivered.set(args));
+        fixture.responder.<SearchRequestResponseEvent>subscribe(
+                SearchResponder.Kind.RESPONSE_DELIVERED, args -> delivered.set(args));
 
         assertTrue(fixture.responder.tryRespond("alice", 3, "query"));
 
@@ -177,7 +181,8 @@ class SearchResponderTest {
         Fixture fixture = catalogFixture(MATCHES, cache);
         fixture.manager.connectionFailure = new RuntimeException("connect");
         AtomicReference<SearchRequestResponseEvent> failed = new AtomicReference<>();
-        fixture.responder.addResponseDeliveryFailedListener(args -> failed.set(args));
+        fixture.responder.<SearchRequestResponseEvent>subscribe(
+                SearchResponder.Kind.RESPONSE_DELIVERY_FAILED, args -> failed.set(args));
 
         assertFalse(fixture.responder.tryRespond("alice", 3, "query"));
 
@@ -229,7 +234,8 @@ class SearchResponderTest {
         AtomicReference<byte[]> written = new AtomicReference<>();
         fixture.manager.connection = messageConnection(written, CompletableFuture.completedFuture(null));
         AtomicInteger delivered = new AtomicInteger();
-        fixture.responder.addResponseDeliveredListener(args -> delivered.incrementAndGet());
+        fixture.responder.<SearchRequestResponseEvent>subscribe(
+                SearchResponder.Kind.RESPONSE_DELIVERED, args -> delivered.incrementAndGet());
 
         assertTrue(fixture.responder.tryRespond(44));
         assertArrayEquals(RESPONSE.toByteArray(), written.get());
@@ -246,7 +252,8 @@ class SearchResponderTest {
         fixture.manager.connection =
                 messageConnection(new AtomicReference<>(), CompletableFuture.failedFuture(failure));
         AtomicReference<SearchRequestResponseEvent> failed = new AtomicReference<>();
-        fixture.responder.addResponseDeliveryFailedListener(args -> failed.set(args));
+        fixture.responder.<SearchRequestResponseEvent>subscribe(
+                SearchResponder.Kind.RESPONSE_DELIVERY_FAILED, args -> failed.set(args));
 
         assertFalse(fixture.responder.tryRespond(44));
         assertSame(RESPONSE, failed.get().searchResponse());
@@ -400,10 +407,10 @@ class SearchResponderTest {
         private int lastAddedToken;
         private int addCount;
         private SearchResponseCacheRecord added;
-        private java.util.function.Consumer<SearchResponseCacheRecord> evictionListener;
+        private Consumer<SearchResponseCacheRecord> evictionListener;
 
         @Override
-        public void setEvictionListener(java.util.function.Consumer<SearchResponseCacheRecord> listener) {
+        public void setEvictionListener(Consumer<SearchResponseCacheRecord> listener) {
             evictionListener = listener;
         }
 
@@ -551,10 +558,9 @@ class SearchResponderTest {
         }
 
         @Override
-        public void addDiagnosticGeneratedListener(DiagnosticEventListener listener) {}
-
-        @Override
-        public void removeDiagnosticGeneratedListener(DiagnosticEventListener listener) {}
+        public Subscription subscribe(Consumer<? super DiagnosticEvent> listener) {
+            return () -> {};
+        }
 
         @Override
         public void close() {}

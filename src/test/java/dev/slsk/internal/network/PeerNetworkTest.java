@@ -25,7 +25,6 @@ import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationSignal;
-import dev.slsk.internal.diagnostics.DiagnosticEventListener;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.messaging.handlers.PeerMessageHandler;
 import dev.slsk.internal.messaging.messages.ConnectToPeerRequest;
@@ -35,7 +34,6 @@ import dev.slsk.internal.messaging.messages.PeerInit;
 import dev.slsk.internal.messaging.messages.PierceFirewall;
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
-import dev.slsk.internal.network.tcp.ConnectionEventListener;
 import dev.slsk.internal.network.tcp.ConnectionKey;
 import dev.slsk.internal.network.tcp.ConnectionState;
 import dev.slsk.internal.network.tcp.ConnectionTypes;
@@ -81,8 +79,9 @@ class PeerNetworkTest {
         Fixture fixture = new Fixture();
         PeerNetwork manager = fixture.manager();
         AtomicInteger events = new AtomicInteger();
-        DiagnosticEventListener listener = args -> events.incrementAndGet();
-        manager.addDiagnosticGeneratedListener(listener);
+        java.util.function.Consumer<dev.slsk.internal.diagnostics.DiagnosticEvent> listener =
+                args -> events.incrementAndGet();
+        manager.subscribe(listener);
 
         // The supplied diagnostic remains usable and close is idempotent.
         fixture.diagnostic.info("test");
@@ -94,7 +93,7 @@ class PeerNetworkTest {
 
         PeerNetwork defaultDiagnostic = new PeerNetwork(
                 fixture.options, fixture.server, fixture.waiter, fixture.tokens, fixture.peerMessages, fixture.factory);
-        defaultDiagnostic.addDiagnosticGeneratedListener(listener);
+        defaultDiagnostic.subscribe(listener);
         // The default factory is covered through a debug-producing failure.
         defaultDiagnostic.getCachedMessageConnection("missing");
         defaultDiagnostic.close();
@@ -699,10 +698,10 @@ class PeerNetworkTest {
         @Override
         public MessageConnection getServerConnection(
                 InetSocketAddress ipEndpoint,
-                ConnectionEventListener<Connection> connectedEventHandler,
-                ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedEventHandler,
-                MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
-                MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler,
+                java.util.function.Consumer<Connection> connectedEventHandler,
+                java.util.function.Consumer<ConnectionDisconnectedEvent> disconnectedEventHandler,
+                java.util.function.Consumer<MessageEvent> messageReadEventHandler,
+                java.util.function.Consumer<MessageEvent> messageWrittenEventHandler,
                 ConnectionOptions options,
                 TcpClient tcpClient) {
             throw new AssertionError("unexpected server connection");
@@ -848,12 +847,12 @@ class PeerNetworkTest {
                 new Class<?>[] {TcpClient.class},
                 (proxy, method, arguments) -> defaultValue(method.getReturnType()));
         private final Connection proxy;
-        private final List<ConnectionEventListener<ConnectionDisconnectedEvent>> disconnectedListeners =
+        private final List<java.util.function.Consumer<ConnectionDisconnectedEvent>> disconnectedListeners =
                 new ArrayList<>();
-        private final List<MessageConnectionEventListener<MessageEvent>> messageReadListeners = new ArrayList<>();
-        private final List<MessageConnectionEventListener<MessageReceivedEvent>> messageReceivedListeners =
+        private final List<java.util.function.Consumer<MessageEvent>> messageReadListeners = new ArrayList<>();
+        private final List<java.util.function.Consumer<MessageReceivedEvent>> messageReceivedListeners =
                 new ArrayList<>();
-        private final List<MessageConnectionEventListener<MessageEvent>> messageWrittenListeners = new ArrayList<>();
+        private final List<java.util.function.Consumer<MessageEvent>> messageWrittenListeners = new ArrayList<>();
         private final List<byte[]> byteWrites = new ArrayList<>();
         private final List<OutgoingMessage> outgoingWrites = new ArrayList<>();
         private ConnectionTypes type = ConnectionTypes.NONE;
@@ -954,37 +953,30 @@ class PeerNetworkTest {
                     yield null;
                 }
                 case "disconnect" -> null;
-                case "addDisconnectedListener" -> {
-                    disconnectedListeners.add(cast(arguments[0]));
-                    yield null;
-                }
-                case "removeDisconnectedListener" -> {
-                    disconnectedListeners.remove(arguments[0]);
-                    yield null;
-                }
-                case "addMessageReadListener" -> {
-                    messageReadListeners.add(cast(arguments[0]));
-                    yield null;
-                }
-                case "removeMessageReadListener" -> {
-                    messageReadListeners.remove(arguments[0]);
-                    yield null;
-                }
-                case "addMessageReceivedListener" -> {
-                    messageReceivedListeners.add(cast(arguments[0]));
-                    yield null;
-                }
-                case "removeMessageReceivedListener" -> {
-                    messageReceivedListeners.remove(arguments[0]);
-                    yield null;
-                }
-                case "addMessageWrittenListener" -> {
-                    messageWrittenListeners.add(cast(arguments[0]));
-                    yield null;
-                }
-                case "removeMessageWrittenListener" -> {
-                    messageWrittenListeners.remove(arguments[0]);
-                    yield null;
+                case "subscribe" -> {
+                    Object kind = arguments[0];
+                    Object listener = arguments[1];
+                    if (kind == Connection.Kind.DISCONNECTED) {
+                        java.util.function.Consumer<ConnectionDisconnectedEvent> registered = cast(listener);
+                        disconnectedListeners.add(registered);
+                        yield (dev.slsk.Subscription) () -> disconnectedListeners.remove(registered);
+                    }
+                    if (kind == MessageConnection.MessageKind.READ) {
+                        java.util.function.Consumer<MessageEvent> registered = cast(listener);
+                        messageReadListeners.add(registered);
+                        yield (dev.slsk.Subscription) () -> messageReadListeners.remove(registered);
+                    }
+                    if (kind == MessageConnection.MessageKind.RECEIVED) {
+                        java.util.function.Consumer<MessageReceivedEvent> registered = cast(listener);
+                        messageReceivedListeners.add(registered);
+                        yield (dev.slsk.Subscription) () -> messageReceivedListeners.remove(registered);
+                    }
+                    if (kind == MessageConnection.MessageKind.WRITTEN) {
+                        java.util.function.Consumer<MessageEvent> registered = cast(listener);
+                        messageWrittenListeners.add(registered);
+                        yield (dev.slsk.Subscription) () -> messageWrittenListeners.remove(registered);
+                    }
+                    yield (dev.slsk.Subscription) () -> {};
                 }
                 case "toString" -> "ConnectionProbe(" + endpoint + ")";
                 case "hashCode" -> System.identityHashCode(proxy);

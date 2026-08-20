@@ -38,12 +38,11 @@ import dev.slsk.internal.messaging.messages.UserAddressRequest;
 import dev.slsk.internal.messaging.messages.UserAddressResponse;
 import dev.slsk.internal.messaging.messages.UserInfoRequest;
 import dev.slsk.internal.network.MessageConnection;
-import dev.slsk.internal.network.MessageConnectionEventListener;
 import dev.slsk.internal.network.MessageDataEvent;
 import dev.slsk.internal.network.MessageReceivedEvent;
 import dev.slsk.internal.network.PeerConnectionManager;
+import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
-import dev.slsk.internal.network.tcp.ConnectionEventListener;
 import dev.slsk.internal.options.BrowseOptions;
 import dev.slsk.internal.share.BrowseResponse;
 import dev.slsk.internal.share.Directory;
@@ -633,13 +632,13 @@ class EnginePeerRequestTest {
         private CancellationSignal token;
         private CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
         private RuntimeException synchronousFailure;
-        private volatile ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedListener;
+        private volatile java.util.function.Consumer<ConnectionDisconnectedEvent> disconnectedListener;
 
         private boolean hasDisconnectedListener() {
             return disconnectedListener != null;
         }
 
-        private MessageConnectionEventListener<MessageDataEvent> messageDataListener;
+        private java.util.function.Consumer<MessageDataEvent> messageDataListener;
         private final MessageConnection proxy = (MessageConnection) Proxy.newProxyInstance(
                 MessageConnection.class.getClassLoader(), new Class<?>[] {MessageConnection.class}, this::invoke);
 
@@ -658,19 +657,26 @@ class EnginePeerRequestTest {
                 Outcomes.raise(result);
                 return null;
             }
-            if (method.getName().equals("addDisconnectedListener")) {
-                disconnectedListener = cast(arguments[0]);
-                return null;
-            }
-            if (method.getName().equals("addMessageDataReadListener")) {
-                messageDataListener = cast(arguments[0]);
-                return null;
-            }
-            if (method.getName().equals("removeMessageDataReadListener")) {
-                if (messageDataListener == arguments[0]) {
-                    messageDataListener = null;
+            if (method.getName().equals("subscribe")) {
+                if (arguments[0] == Connection.Kind.DISCONNECTED) {
+                    java.util.function.Consumer<ConnectionDisconnectedEvent> registered = cast(arguments[1]);
+                    disconnectedListener = registered;
+                    return (dev.slsk.Subscription) () -> {
+                        if (disconnectedListener == registered) {
+                            disconnectedListener = null;
+                        }
+                    };
                 }
-                return null;
+                if (arguments[0] == MessageConnection.MessageKind.DATA_READ) {
+                    java.util.function.Consumer<MessageDataEvent> registered = cast(arguments[1]);
+                    messageDataListener = registered;
+                    return (dev.slsk.Subscription) () -> {
+                        if (messageDataListener == registered) {
+                            messageDataListener = null;
+                        }
+                    };
+                }
+                return (dev.slsk.Subscription) () -> {};
             }
             return defaultValue(method.getReturnType());
         }

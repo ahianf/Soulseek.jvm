@@ -4,9 +4,10 @@
 
 package dev.slsk.internal.messaging.handlers;
 
+import dev.slsk.Subscription;
+import java.util.function.Consumer;
+
 /** Handles messages received from the server connection. */
 public interface ServerMessageHandler extends MessageHandler {
-    <T> void addListener(ServerMessageEvent event, ServerMessageHandlerEventListener<T> listener);
-
-    <T> void removeListener(ServerMessageEvent event, ServerMessageHandlerEventListener<T> listener);
+    <T> Subscription subscribe(ServerMessageEvent event, Consumer<? super T> listener);
 }

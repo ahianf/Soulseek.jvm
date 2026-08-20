@@ -4,6 +4,7 @@
 
 package dev.slsk.internal.network;
 
+import dev.slsk.Subscription;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.internal.ServerLink;
 import dev.slsk.internal.common.Constants;
@@ -17,9 +18,9 @@ import dev.slsk.internal.concurrent.CancellationController;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.concurrent.CancellationSubscription;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
-import dev.slsk.internal.diagnostics.DiagnosticEventListener;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
+import dev.slsk.internal.events.Subscriptions;
 import dev.slsk.internal.messaging.handlers.PeerMessageHandler;
 import dev.slsk.internal.messaging.messages.ConnectToPeerRequest;
 import dev.slsk.internal.messaging.messages.ConnectToPeerResponse;
@@ -27,7 +28,6 @@ import dev.slsk.internal.messaging.messages.PeerInit;
 import dev.slsk.internal.messaging.messages.PierceFirewall;
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
-import dev.slsk.internal.network.tcp.ConnectionEventListener;
 import dev.slsk.internal.network.tcp.ConnectionTypes;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import java.net.InetSocketAddress;
@@ -42,6 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -87,14 +88,18 @@ public final class PeerNetwork implements PeerConnectionManager {
     private final DiagnosticSink diagnostic;
     private final Scheduler scheduler;
     private final boolean ownsScheduler;
-    private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<Consumer<? super DiagnosticEvent>> diagnosticListeners =
+            new CopyOnWriteArrayList<>();
     private final ConcurrentHashMap<String, ConnectionCell> messageConnections = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, CancellationController> pendingInboundIndirectConnections =
             new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Integer, String> pendingSolicitations = new ConcurrentHashMap<>();
-    private final ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedListener =
-            this::messageConnectionDisconnected;
-    private final ConnectionEventListener<ConnectionDisconnectedEvent> provisionalDisconnectedListener =
+    private final ConcurrentHashMap<MessageConnection, Subscription> disconnectSubscriptions =
+            new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<MessageConnection, Subscription> provisionalDisconnectSubscriptions =
+            new ConcurrentHashMap<>();
+    private final Consumer<ConnectionDisconnectedEvent> disconnectedListener = this::messageConnectionDisconnected;
+    private final Consumer<ConnectionDisconnectedEvent> provisionalDisconnectedListener =
             this::messageConnectionProvisionalDisconnected;
     private final AtomicBoolean disposed = new AtomicBoolean();
 
@@ -145,13 +150,8 @@ public final class PeerNetwork implements PeerConnectionManager {
     }
 
     @Override
-    public void addDiagnosticGeneratedListener(DiagnosticEventListener listener) {
-        diagnosticListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeDiagnosticGeneratedListener(DiagnosticEventListener listener) {
-        diagnosticListeners.remove(listener);
+    public Subscription subscribe(Consumer<? super DiagnosticEvent> listener) {
+        return Subscriptions.add(diagnosticListeners, listener);
     }
 
     /**
@@ -472,11 +472,13 @@ public final class PeerNetwork implements PeerConnectionManager {
                 options.get().transferConnectionOptions(),
                 incomingConnection.handoffTcpClient());
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.DIRECT));
-        connection.addDisconnectedListener(eventData -> diagnostic.debug("Transfer connection to " + username + " ("
-                + connection.getIpEndpoint() + ") for token " + token
-                + " disconnected: " + disconnectMessage(eventData)
-                + ". (type: " + connection.getType() + ", id: "
-                + connection.getId() + ")"));
+        connection.<ConnectionDisconnectedEvent>subscribe(
+                Connection.Kind.DISCONNECTED,
+                eventData -> diagnostic.debug("Transfer connection to " + username + " ("
+                        + connection.getIpEndpoint() + ") for token " + token
+                        + " disconnected: " + disconnectMessage(eventData)
+                        + ". (type: " + connection.getType() + ", id: "
+                        + connection.getId() + ")"));
         diagnostic.debug("Inbound transfer connection to " + username + " ("
                 + connection.getIpEndpoint() + ") for token " + token
                 + " handed off. (old: " + incomingConnection.getId()
@@ -511,7 +513,8 @@ public final class PeerNetwork implements PeerConnectionManager {
         Connection connection = connectionFactory.getTransferConnection(
                 response.getIpEndpoint(), options.get().transferConnectionOptions());
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.INDIRECT));
-        connection.addDisconnectedListener(
+        connection.<ConnectionDisconnectedEvent>subscribe(
+                Connection.Kind.DISCONNECTED,
                 eventData -> diagnostic.debug("Transfer connection to " + response.getUsername() + " ("
                         + response.getIpEndpoint() + ") for token "
                         + response.getToken() + " disconnected: "
@@ -586,7 +589,7 @@ public final class PeerNetwork implements PeerConnectionManager {
         incomingConnection.close();
         connection.setType(ConnectionTypes.INBOUND.or(ConnectionTypes.DIRECT));
         attachPeerMessageListeners(connection);
-        connection.addDisconnectedListener(disconnectedListener);
+        subscribeToDisconnect(connection);
 
         if (superseded != null) {
             CancellationController pending = pendingInboundIndirectConnections.get(username);
@@ -601,7 +604,10 @@ public final class PeerNetwork implements PeerConnectionManager {
             // connect timeout.
             MessageConnection old = superseded.awaitQuietly();
             if (old != null) {
-                old.removeDisconnectedListener(disconnectedListener);
+                Subscription oldSubscription = disconnectSubscriptions.remove(old);
+                if (oldSubscription != null) {
+                    oldSubscription.close();
+                }
                 diagnostic.debug("Superseding cached message connection to "
                         + username + " (" + old.getIpEndpoint()
                         + ") (old: " + old.getId() + ", new: "
@@ -644,7 +650,7 @@ public final class PeerNetwork implements PeerConnectionManager {
             pendingInboundIndirectConnections.remove(response.getUsername(), cancellation);
             cancellation.close();
         }
-        connection.addDisconnectedListener(disconnectedListener);
+        subscribeToDisconnect(connection);
         diagnostic.debug("Message connection to " + response.getUsername() + " ("
                 + response.getIpEndpoint()
                 + ") established. (type: " + connection.getType()
@@ -683,8 +689,11 @@ public final class PeerNetwork implements PeerConnectionManager {
         }
 
         MessageConnection connection = winner.value();
-        connection.addDisconnectedListener(disconnectedListener);
-        connection.removeDisconnectedListener(provisionalDisconnectedListener);
+        subscribeToDisconnect(connection);
+        Subscription provisionalSubscription = provisionalDisconnectSubscriptions.remove(connection);
+        if (provisionalSubscription != null) {
+            provisionalSubscription.close();
+        }
         boolean directWon = winner.first();
         diagnostic.debug((directWon ? "Direct" : "Indirect")
                 + " message connection to " + username + " (" + ipEndpoint
@@ -726,7 +735,7 @@ public final class PeerNetwork implements PeerConnectionManager {
                 username, ipEndpoint, options.get().peerConnectionOptions());
         connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT));
         attachPeerMessageListeners(connection);
-        connection.addDisconnectedListener(provisionalDisconnectedListener);
+        subscribeToProvisionalDisconnect(connection);
         try {
             connection.connect(cancellationSignal);
         } catch (Throwable failure) {
@@ -774,7 +783,7 @@ public final class PeerNetwork implements PeerConnectionManager {
                         + ", new: " + connection.getId() + ")");
                 connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.INDIRECT));
                 attachPeerMessageListeners(connection);
-                connection.addDisconnectedListener(provisionalDisconnectedListener);
+                subscribeToProvisionalDisconnect(connection);
                 diagnostic.debug("Indirect message connection to " + username + " ("
                         + connection.getIpEndpoint()
                         + ") established. (type: " + connection.getType()
@@ -837,7 +846,8 @@ public final class PeerNetwork implements PeerConnectionManager {
         Connection connection = connectionFactory.getTransferConnection(
                 ipEndpoint, options.get().transferConnectionOptions());
         connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.DIRECT));
-        connection.addDisconnectedListener(
+        connection.<ConnectionDisconnectedEvent>subscribe(
+                Connection.Kind.DISCONNECTED,
                 eventData -> diagnostic.debug("Transfer connection for token " + token + " to "
                         + ipEndpoint + " disconnected: "
                         + disconnectMessage(eventData) + ". (type: "
@@ -885,7 +895,8 @@ public final class PeerNetwork implements PeerConnectionManager {
                         + ") handed off. (old: " + accepted.getId()
                         + ", new: " + connection.getId() + ")");
                 connection.setType(ConnectionTypes.OUTBOUND.or(ConnectionTypes.INDIRECT));
-                connection.addDisconnectedListener(
+                connection.<ConnectionDisconnectedEvent>subscribe(
+                        Connection.Kind.DISCONNECTED,
                         eventData -> diagnostic.debug("Transfer connection for token " + token + " ("
                                 + accepted.getIpEndpoint()
                                 + ") disconnected: "
@@ -912,9 +923,10 @@ public final class PeerNetwork implements PeerConnectionManager {
     }
 
     private void attachPeerMessageListeners(MessageConnection connection) {
-        connection.addMessageReadListener(peerMessages::handleMessageRead);
-        connection.addMessageReceivedListener(peerMessages::handleMessageReceived);
-        connection.addMessageWrittenListener(peerMessages::handleMessageWritten);
+        connection.<MessageEvent>subscribe(MessageConnection.MessageKind.READ, peerMessages::handleMessageRead);
+        connection.<MessageReceivedEvent>subscribe(
+                MessageConnection.MessageKind.RECEIVED, peerMessages::handleMessageReceived);
+        connection.<MessageEvent>subscribe(MessageConnection.MessageKind.WRITTEN, peerMessages::handleMessageWritten);
     }
 
     /**
@@ -956,6 +968,10 @@ public final class PeerNetwork implements PeerConnectionManager {
 
     private void messageConnectionDisconnected(ConnectionDisconnectedEvent eventData) {
         MessageConnection connection = (MessageConnection) eventData.connection();
+        Subscription subscription = disconnectSubscriptions.remove(connection);
+        if (subscription != null) {
+            subscription.close();
+        }
         diagnostic.debug("Message connection to " + connection.getUsername() + " ("
                 + connection.getIpEndpoint() + ") disconnected. (type: "
                 + connection.getType() + ", id: " + connection.getId()
@@ -976,11 +992,32 @@ public final class PeerNetwork implements PeerConnectionManager {
     }
 
     private void messageConnectionProvisionalDisconnected(ConnectionDisconnectedEvent eventData) {
-        eventData.connection().close();
+        MessageConnection connection = (MessageConnection) eventData.connection();
+        Subscription subscription = provisionalDisconnectSubscriptions.remove(connection);
+        if (subscription != null) {
+            subscription.close();
+        }
+        connection.close();
     }
 
     private void raiseDiagnostic(DiagnosticEvent eventData) {
         diagnosticListeners.forEach(listener -> listener.accept(eventData));
+    }
+
+    private void subscribeToDisconnect(MessageConnection connection) {
+        Subscription subscription = connection.subscribe(Connection.Kind.DISCONNECTED, disconnectedListener);
+        Subscription previous = disconnectSubscriptions.put(connection, subscription);
+        if (previous != null) {
+            previous.close();
+        }
+    }
+
+    private void subscribeToProvisionalDisconnect(MessageConnection connection) {
+        Subscription subscription = connection.subscribe(Connection.Kind.DISCONNECTED, provisionalDisconnectedListener);
+        Subscription previous = provisionalDisconnectSubscriptions.put(connection, subscription);
+        if (previous != null) {
+            previous.close();
+        }
     }
 
     private static int littleEndianInteger(byte[] bytes) {

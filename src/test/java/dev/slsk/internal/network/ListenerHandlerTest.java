@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.slsk.Subscription;
 import dev.slsk.internal.common.CacheLookupResult;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.DefaultWaiter;
@@ -25,7 +26,6 @@ import dev.slsk.internal.messaging.messages.PeerInit;
 import dev.slsk.internal.messaging.messages.PierceFirewall;
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.Listener;
-import dev.slsk.internal.network.tcp.ListenerAcceptedEventListener;
 import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.search.SearchResponder;
@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
 class ListenerHandlerTest {
@@ -52,7 +53,7 @@ class ListenerHandlerTest {
         try (Fixture fixture = fixture(null)) {
             DefaultListenerHandler handler = handler(fixture, fixture.options);
             AtomicReference<DiagnosticEvent> event = new AtomicReference<>();
-            handler.addDiagnosticGeneratedListener(args -> event.set(args));
+            handler.subscribe(args -> event.set(args));
             handler.getDiagnostic().info("test");
             assertEquals("test", event.get().message());
         }
@@ -273,10 +274,9 @@ class ListenerHandlerTest {
 
     private static final class TestListener implements Listener {
         @Override
-        public void addAcceptedListener(ListenerAcceptedEventListener listener) {}
-
-        @Override
-        public void removeAcceptedListener(ListenerAcceptedEventListener listener) {}
+        public Subscription subscribe(Consumer<? super Connection> listener) {
+            return () -> {};
+        }
 
         @Override
         public ConnectionOptions getConnectionOptions() {

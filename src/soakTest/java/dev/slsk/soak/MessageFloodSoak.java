@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.internal.common.Monitors;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.network.DefaultMessageConnection;
+import dev.slsk.internal.network.MessageConnection;
+import dev.slsk.internal.network.MessageEvent;
 import dev.slsk.internal.options.ConnectionOptions;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
@@ -38,7 +40,7 @@ class MessageFloodSoak {
 
             DefaultMessageConnection connection =
                     new DefaultMessageConnection(peer.endpoint(), options, 4, null, Monitors.shared());
-            connection.addMessageReadListener(event -> messages.incrementAndGet());
+            connection.<MessageEvent>subscribe(MessageConnection.MessageKind.READ, event -> messages.incrementAndGet());
 
             long allocStart = HeapProbe.totalAllocatedBytes();
             long cpuStart = CpuProbe.processCpuNanos();

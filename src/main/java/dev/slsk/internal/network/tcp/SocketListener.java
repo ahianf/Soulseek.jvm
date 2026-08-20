@@ -4,6 +4,8 @@
 
 package dev.slsk.internal.network.tcp;
 
+import dev.slsk.Subscription;
+import dev.slsk.internal.events.Subscriptions;
 import dev.slsk.internal.options.ConnectionOptions;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -11,10 +13,11 @@ import java.net.Socket;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
+import java.util.function.Consumer;
 
 /** Listens for client connections for TCP network services. */
 public final class SocketListener implements Listener {
-    private final CopyOnWriteArrayList<ListenerAcceptedEventListener> acceptedListeners = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<Consumer<? super Connection>> acceptedListeners = new CopyOnWriteArrayList<>();
     private final InetAddress ipAddress;
     private final int port;
     private final ConnectionOptions connectionOptions;
@@ -76,13 +79,8 @@ public final class SocketListener implements Listener {
     }
 
     @Override
-    public void addAcceptedListener(ListenerAcceptedEventListener listener) {
-        acceptedListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeAcceptedListener(ListenerAcceptedEventListener listener) {
-        acceptedListeners.remove(listener);
+    public Subscription subscribe(Consumer<? super Connection> listener) {
+        return Subscriptions.add(acceptedListeners, listener);
     }
 
     @Override
@@ -167,7 +165,7 @@ public final class SocketListener implements Listener {
         Connection connection = executor == null
                 ? new SocketConnection(endpoint, connectionOptions, new TcpClientAdapter(client), monitor)
                 : new SocketConnection(endpoint, connectionOptions, new TcpClientAdapter(client), monitor, executor);
-        for (ListenerAcceptedEventListener listener : acceptedListeners) {
+        for (Consumer<? super Connection> listener : acceptedListeners) {
             listener.accept(connection);
         }
     }

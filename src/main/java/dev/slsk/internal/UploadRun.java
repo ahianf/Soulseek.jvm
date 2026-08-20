@@ -7,6 +7,7 @@ import static dev.slsk.internal.transfer.TransferStreams.determinePosition;
 import static dev.slsk.internal.transfer.TransferStreams.filenameOnly;
 import static dev.slsk.internal.transfer.TransferStreams.seekInputStream;
 
+import dev.slsk.Subscription;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.ConnectionReadException;
 import dev.slsk.exceptions.MessageReadException;
@@ -30,7 +31,6 @@ import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDataEvent;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
-import dev.slsk.internal.network.tcp.ConnectionEventListener;
 import dev.slsk.internal.options.TransferOptions;
 import dev.slsk.internal.options.TransferProgressUpdate;
 import dev.slsk.internal.options.TransferStateChange;
@@ -49,6 +49,7 @@ import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 import java.util.function.LongFunction;
 
 /**
@@ -75,8 +76,10 @@ final class UploadRun {
     private Connection connection;
     private InputStream inputStream;
     private TransferStreams.PositionTrackingInputStream trackingStream;
-    private ConnectionEventListener<ConnectionDataEvent> dataWrittenListener;
-    private ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedListener;
+    private Consumer<ConnectionDataEvent> dataWrittenListener;
+    private Consumer<ConnectionDisconnectedEvent> disconnectedListener;
+    private Subscription dataWrittenSubscription;
+    private Subscription disconnectedSubscription;
 
     UploadRun(
             TransferDomain domain,
@@ -216,8 +219,8 @@ final class UploadRun {
                 upload.settlement().fail(new ConnectionException("Transfer failed: " + eventData.message(), failure));
             }
         };
-        connection.addDataWrittenListener(dataWrittenListener);
-        connection.addDisconnectedListener(disconnectedListener);
+        dataWrittenSubscription = connection.subscribe(Connection.Kind.DATA_WRITTEN, dataWrittenListener);
+        disconnectedSubscription = connection.subscribe(Connection.Kind.DISCONNECTED, disconnectedListener);
     }
 
     private void readStartOffset() throws InterruptedException, TimeoutException {
@@ -465,11 +468,11 @@ final class UploadRun {
         if (connection == null) {
             return;
         }
-        if (dataWrittenListener != null) {
-            connection.removeDataWrittenListener(dataWrittenListener);
+        if (dataWrittenSubscription != null) {
+            dataWrittenSubscription.close();
         }
-        if (disconnectedListener != null) {
-            connection.removeDisconnectedListener(disconnectedListener);
+        if (disconnectedSubscription != null) {
+            disconnectedSubscription.close();
         }
     }
 

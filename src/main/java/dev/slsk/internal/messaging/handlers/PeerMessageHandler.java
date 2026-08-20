@@ -4,19 +4,18 @@
 
 package dev.slsk.internal.messaging.handlers;
 
-import dev.slsk.internal.events.DownloadDeniedEvent;
-import dev.slsk.internal.events.DownloadFailedEvent;
+import dev.slsk.Subscription;
 import dev.slsk.internal.network.MessageReceivedEvent;
+import java.util.function.Consumer;
 
 /** Handles messages received from peer connections. */
 public interface PeerMessageHandler extends MessageHandler {
-    void addDownloadDeniedListener(PeerMessageHandlerEventListener<DownloadDeniedEvent> listener);
+    enum Kind {
+        DOWNLOAD_DENIED,
+        DOWNLOAD_FAILED
+    }
 
-    void removeDownloadDeniedListener(PeerMessageHandlerEventListener<DownloadDeniedEvent> listener);
-
-    void addDownloadFailedListener(PeerMessageHandlerEventListener<DownloadFailedEvent> listener);
-
-    void removeDownloadFailedListener(PeerMessageHandlerEventListener<DownloadFailedEvent> listener);
+    <T> Subscription subscribe(Kind kind, Consumer<? super T> listener);
 
     void handleMessageReceived(MessageReceivedEvent eventData);
 }

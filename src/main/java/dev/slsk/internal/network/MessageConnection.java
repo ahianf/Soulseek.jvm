@@ -4,27 +4,22 @@
 
 package dev.slsk.internal.network;
 
+import dev.slsk.Subscription;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.network.tcp.Connection;
+import java.util.function.Consumer;
 
 /** Provides framed client connections to the Soulseek network. */
 public interface MessageConnection extends Connection {
-    void addMessageDataReadListener(MessageConnectionEventListener<MessageDataEvent> listener);
+    enum MessageKind {
+        DATA_READ,
+        READ,
+        RECEIVED,
+        WRITTEN
+    }
 
-    void removeMessageDataReadListener(MessageConnectionEventListener<MessageDataEvent> listener);
-
-    void addMessageReadListener(MessageConnectionEventListener<MessageEvent> listener);
-
-    void removeMessageReadListener(MessageConnectionEventListener<MessageEvent> listener);
-
-    void addMessageReceivedListener(MessageConnectionEventListener<MessageReceivedEvent> listener);
-
-    void removeMessageReceivedListener(MessageConnectionEventListener<MessageReceivedEvent> listener);
-
-    void addMessageWrittenListener(MessageConnectionEventListener<MessageEvent> listener);
-
-    void removeMessageWrittenListener(MessageConnectionEventListener<MessageEvent> listener);
+    <T> Subscription subscribe(MessageKind kind, Consumer<? super T> listener);
 
     /** Returns the received message-code width. */
     int getCodeLength();

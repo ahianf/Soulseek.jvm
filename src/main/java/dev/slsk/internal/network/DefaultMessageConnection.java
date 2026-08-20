@@ -4,12 +4,13 @@
 
 package dev.slsk.internal.network;
 
+import dev.slsk.Subscription;
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.internal.common.CommonUtils;
 import dev.slsk.internal.concurrent.CancellationSignal;
+import dev.slsk.internal.events.Subscriptions;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.network.tcp.ConnectionDataEvent;
-import dev.slsk.internal.network.tcp.ConnectionEventListener;
 import dev.slsk.internal.network.tcp.ConnectionKey;
 import dev.slsk.internal.network.tcp.ConnectionMonitor;
 import dev.slsk.internal.network.tcp.SocketConnection;
@@ -22,17 +23,18 @@ import java.nio.ByteOrder;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
+import java.util.function.Consumer;
 
 /** Provides framed client connections to the Soulseek network. */
 public final class DefaultMessageConnection extends SocketConnection implements MessageConnection {
 
-    private final CopyOnWriteArrayList<MessageConnectionEventListener<MessageDataEvent>> messageDataReadListeners =
+    private final CopyOnWriteArrayList<Consumer<? super MessageDataEvent>> messageDataReadListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<MessageConnectionEventListener<MessageEvent>> messageReadListeners =
+    private final CopyOnWriteArrayList<Consumer<? super MessageEvent>> messageReadListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<MessageConnectionEventListener<MessageReceivedEvent>> messageReceivedListeners =
+    private final CopyOnWriteArrayList<Consumer<? super MessageReceivedEvent>> messageReceivedListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<MessageConnectionEventListener<MessageEvent>> messageWrittenListeners =
+    private final CopyOnWriteArrayList<Consumer<? super MessageEvent>> messageWrittenListeners =
             new CopyOnWriteArrayList<>();
 
     private final int codeLength;
@@ -104,43 +106,18 @@ public final class DefaultMessageConnection extends SocketConnection implements 
     }
 
     @Override
-    public void addMessageDataReadListener(MessageConnectionEventListener<MessageDataEvent> listener) {
-        messageDataReadListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeMessageDataReadListener(MessageConnectionEventListener<MessageDataEvent> listener) {
-        messageDataReadListeners.remove(listener);
-    }
-
-    @Override
-    public void addMessageReadListener(MessageConnectionEventListener<MessageEvent> listener) {
-        messageReadListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeMessageReadListener(MessageConnectionEventListener<MessageEvent> listener) {
-        messageReadListeners.remove(listener);
-    }
-
-    @Override
-    public void addMessageReceivedListener(MessageConnectionEventListener<MessageReceivedEvent> listener) {
-        messageReceivedListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeMessageReceivedListener(MessageConnectionEventListener<MessageReceivedEvent> listener) {
-        messageReceivedListeners.remove(listener);
-    }
-
-    @Override
-    public void addMessageWrittenListener(MessageConnectionEventListener<MessageEvent> listener) {
-        messageWrittenListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeMessageWrittenListener(MessageConnectionEventListener<MessageEvent> listener) {
-        messageWrittenListeners.remove(listener);
+    @SuppressWarnings("unchecked")
+    public <T> Subscription subscribe(MessageKind kind, Consumer<? super T> listener) {
+        Objects.requireNonNull(kind, "kind");
+        Objects.requireNonNull(listener, "listener");
+        return switch (kind) {
+            case DATA_READ ->
+                Subscriptions.add(messageDataReadListeners, (Consumer<? super MessageDataEvent>) listener);
+            case READ -> Subscriptions.add(messageReadListeners, (Consumer<? super MessageEvent>) listener);
+            case RECEIVED ->
+                Subscriptions.add(messageReceivedListeners, (Consumer<? super MessageReceivedEvent>) listener);
+            case WRITTEN -> Subscriptions.add(messageWrittenListeners, (Consumer<? super MessageEvent>) listener);
+        };
     }
 
     @Override
@@ -239,7 +216,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
         // progress listener can label its events. Confined to this loop's
         // single thread.
         byte[][] codeHolder = new byte[1][];
-        ConnectionEventListener<ConnectionDataEvent> payloadProgress =
+        Consumer<ConnectionDataEvent> payloadProgress =
                 event -> raiseMessageDataRead(codeHolder[0], event.currentLength(), event.totalLength());
         try {
             while (!isDisposed()) {
@@ -274,14 +251,14 @@ public final class DefaultMessageConnection extends SocketConnection implements 
     }
 
     private void bindConnectedReadLoop() {
-        addConnectedListener(connection -> startReadLoop());
+        subscribe(Kind.CONNECTED, connection -> startReadLoop());
     }
 
     private void raiseMessageDataRead(byte[] code, long currentLength, long totalLength) {
         MessageDataEvent eventData = new MessageDataEvent(this, code, currentLength, totalLength);
         dispatch(
                 () -> {
-                    for (MessageConnectionEventListener<MessageDataEvent> listener : messageDataReadListeners) {
+                    for (Consumer<? super MessageDataEvent> listener : messageDataReadListeners) {
                         listener.accept(eventData);
                     }
                 },
@@ -290,7 +267,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
 
     private void raiseMessageReceived(long length, byte[] code) {
         MessageReceivedEvent eventData = new MessageReceivedEvent(this, length, code);
-        for (MessageConnectionEventListener<MessageReceivedEvent> listener : messageReceivedListeners) {
+        for (Consumer<? super MessageReceivedEvent> listener : messageReceivedListeners) {
             listener.accept(eventData);
         }
     }
@@ -299,7 +276,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
         MessageEvent eventData = new MessageEvent(this, message);
         dispatch(
                 () -> {
-                    for (MessageConnectionEventListener<MessageEvent> listener : messageReadListeners) {
+                    for (Consumer<? super MessageEvent> listener : messageReadListeners) {
                         listener.accept(eventData);
                     }
                 },
@@ -310,7 +287,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
         MessageEvent eventData = new MessageEvent(this, message);
         dispatch(
                 () -> {
-                    for (MessageConnectionEventListener<MessageEvent> listener : messageWrittenListeners) {
+                    for (Consumer<? super MessageEvent> listener : messageWrittenListeners) {
                         listener.accept(eventData);
                     }
                 },

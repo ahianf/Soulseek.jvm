@@ -4,6 +4,7 @@
 
 package dev.slsk.internal.messaging.handlers;
 
+import dev.slsk.Subscription;
 import dev.slsk.internal.ServerLink;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Failures;
@@ -12,9 +13,9 @@ import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
-import dev.slsk.internal.diagnostics.DiagnosticEventListener;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
+import dev.slsk.internal.events.Subscriptions;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
 import dev.slsk.internal.messaging.messages.DistributedBranchLevel;
@@ -32,6 +33,7 @@ import dev.slsk.internal.search.SearchResponder;
 import java.util.Base64;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -49,7 +51,8 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     private final Supplier<SearchResponder> searchResponses;
     private final NetworkExecutor networkExecutor;
     private final DiagnosticSink diagnostic;
-    private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<Consumer<? super DiagnosticEvent>> diagnosticListeners =
+            new CopyOnWriteArrayList<>();
     private volatile String deduplicationHash;
 
     /** Creates a handler with its default diagnostic factory. */
@@ -98,13 +101,8 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     }
 
     @Override
-    public void addDiagnosticGeneratedListener(DiagnosticEventListener listener) {
-        diagnosticListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeDiagnosticGeneratedListener(DiagnosticEventListener listener) {
-        diagnosticListeners.remove(listener);
+    public Subscription subscribe(Consumer<? super DiagnosticEvent> listener) {
+        return Subscriptions.add(diagnosticListeners, listener);
     }
 
     @Override

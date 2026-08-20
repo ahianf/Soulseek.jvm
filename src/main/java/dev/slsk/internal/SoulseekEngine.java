@@ -811,48 +811,54 @@ final class SoulseekEngine implements AutoCloseable {
     }
 
     private void bindEvents() {
-        listenerHandler.addDiagnosticGeneratedListener(eventData -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
-        searchResponder.addDiagnosticGeneratedListener(eventData -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
-        searchResponder.addRequestReceivedListener(eventData -> events.raise(Kind.SEARCH_REQUEST_RECEIVED, eventData));
-        searchResponder.addResponseDeliveredListener(
+        listenerHandler.subscribe(eventData -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
+        searchResponder.subscribe(eventData -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
+        searchResponder.subscribe(
+                SearchResponder.Kind.REQUEST_RECEIVED,
+                eventData -> events.raise(Kind.SEARCH_REQUEST_RECEIVED, eventData));
+        searchResponder.subscribe(
+                SearchResponder.Kind.RESPONSE_DELIVERED,
                 eventData -> events.raise(Kind.SEARCH_RESPONSE_DELIVERED, eventData));
-        searchResponder.addResponseDeliveryFailedListener(
+        searchResponder.subscribe(
+                SearchResponder.Kind.RESPONSE_DELIVERY_FAILED,
                 eventData -> events.raise(Kind.SEARCH_RESPONSE_DELIVERY_FAILED, eventData));
 
-        peerMessageHandler.addDiagnosticGeneratedListener(
-                eventData -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
-        peerMessageHandler.addDownloadDeniedListener(eventData -> downloadDenied(eventData));
-        peerMessageHandler.addDownloadFailedListener(eventData -> downloadFailed(eventData));
-        distributedMessageHandler.addDiagnosticGeneratedListener(
-                eventData -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
-        peerConnectionManager.addDiagnosticGeneratedListener(
-                eventData -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
-        distributedConnectionManager.addDiagnosticGeneratedListener(
-                eventData -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
-        distributedConnectionManager.addPromotedToBranchRootListener(
+        peerMessageHandler.subscribe(eventData -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
+        peerMessageHandler.subscribe(PeerMessageHandler.Kind.DOWNLOAD_DENIED, this::downloadDenied);
+        peerMessageHandler.subscribe(PeerMessageHandler.Kind.DOWNLOAD_FAILED, this::downloadFailed);
+        distributedMessageHandler.subscribe(eventData -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
+        peerConnectionManager.subscribe(eventData -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
+        distributedConnectionManager.subscribe(eventData -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
+        distributedConnectionManager.subscribe(
+                DistributedConnectionManager.Kind.PROMOTED_TO_BRANCH_ROOT,
                 eventData -> events.raise(Kind.PROMOTED_TO_DISTRIBUTED_BRANCH_ROOT, null));
-        distributedConnectionManager.addDemotedFromBranchRootListener(
+        distributedConnectionManager.subscribe(
+                DistributedConnectionManager.Kind.DEMOTED_FROM_BRANCH_ROOT,
                 eventData -> events.raise(Kind.DEMOTED_FROM_DISTRIBUTED_BRANCH_ROOT, null));
-        distributedConnectionManager.addParentAdoptedListener(
+        distributedConnectionManager.subscribe(
+                DistributedConnectionManager.Kind.PARENT_ADOPTED,
                 eventData -> events.raise(Kind.DISTRIBUTED_PARENT_ADOPTED, eventData));
-        distributedConnectionManager.addParentDisconnectedListener(
+        distributedConnectionManager.subscribe(
+                DistributedConnectionManager.Kind.PARENT_DISCONNECTED,
                 eventData -> events.raise(Kind.DISTRIBUTED_PARENT_DISCONNECTED, eventData));
-        distributedConnectionManager.addChildAddedListener(
+        distributedConnectionManager.subscribe(
+                DistributedConnectionManager.Kind.CHILD_ADDED,
                 eventData -> events.raise(Kind.DISTRIBUTED_CHILD_ADDED, eventData));
-        distributedConnectionManager.addChildDisconnectedListener(
+        distributedConnectionManager.subscribe(
+                DistributedConnectionManager.Kind.CHILD_DISCONNECTED,
                 eventData -> events.raise(Kind.DISTRIBUTED_CHILD_DISCONNECTED, eventData));
-        distributedConnectionManager.addStateChangedListener(
+        distributedConnectionManager.subscribe(
+                DistributedConnectionManager.Kind.STATE_CHANGED,
                 eventData -> events.raise(Kind.DISTRIBUTED_NETWORK_STATE_CHANGED, eventData));
 
-        serverMessageHandler.addDiagnosticGeneratedListener(
-                eventData -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
+        serverMessageHandler.subscribe(eventData -> events.raise(Kind.DIAGNOSTIC_GENERATED, eventData));
         bindServerEvents();
     }
 
     private void bindServerEvents() {
         forwardServer(ServerMessageEvent.USER_CANNOT_CONNECT, Kind.USER_CANNOT_CONNECT);
         forwardServer(ServerMessageEvent.USER_STATUS_CHANGED, Kind.USER_STATUS_CHANGED);
-        serverMessageHandler.<dev.slsk.internal.user.UserStatistics>addListener(
+        serverMessageHandler.<dev.slsk.internal.user.UserStatistics>subscribe(
                 ServerMessageEvent.USER_STATISTICS_CHANGED, statistics -> {
                     // A statistics response naming us carries the upload
                     // average the server computed from our reports, which is
@@ -872,7 +878,7 @@ final class SoulseekEngine implements AutoCloseable {
         forwardServer(ServerMessageEvent.PRIVATE_ROOM_MODERATION_ADDED, Kind.PRIVATE_ROOM_MODERATION_ADDED);
         forwardServer(ServerMessageEvent.PRIVATE_ROOM_MODERATION_REMOVED, Kind.PRIVATE_ROOM_MODERATION_REMOVED);
         forwardServer(ServerMessageEvent.PRIVATE_ROOM_USER_LIST_RECEIVED, Kind.PRIVATE_ROOM_USER_LIST_RECEIVED);
-        serverMessageHandler.<java.util.List<String>>addListener(
+        serverMessageHandler.<java.util.List<String>>subscribe(
                 ServerMessageEvent.PRIVILEGED_USER_LIST_RECEIVED, eventData -> {
                     privilegedUsers = eventData == null ? java.util.Set.of() : java.util.Set.copyOf(eventData);
                     events.raise(Kind.PRIVILEGED_USER_LIST_RECEIVED, eventData);
@@ -889,7 +895,7 @@ final class SoulseekEngine implements AutoCloseable {
         forwardServer(ServerMessageEvent.GLOBAL_MESSAGE_RECEIVED, Kind.GLOBAL_MESSAGE_RECEIVED);
         forwardServer(ServerMessageEvent.DISTRIBUTED_NETWORK_RESET, Kind.DISTRIBUTED_NETWORK_RESET);
         forwardServer(ServerMessageEvent.EXCLUDED_SEARCH_PHRASES_RECEIVED, Kind.EXCLUDED_SEARCH_PHRASES_RECEIVED);
-        serverMessageHandler.<ServerInfo>addListener(ServerMessageEvent.SERVER_INFO_RECEIVED, eventData -> {
+        serverMessageHandler.<ServerInfo>subscribe(ServerMessageEvent.SERVER_INFO_RECEIVED, eventData -> {
             serverInfo = serverInfo.with(
                     eventData.parentMinSpeed(),
                     eventData.parentSpeedRatio(),
@@ -897,7 +903,7 @@ final class SoulseekEngine implements AutoCloseable {
                     eventData.supporter());
             events.raise(Kind.SERVER_INFO_RECEIVED, serverInfo);
         });
-        serverMessageHandler.<Void>addListener(ServerMessageEvent.KICKED_FROM_SERVER, eventData -> {
+        serverMessageHandler.<Void>subscribe(ServerMessageEvent.KICKED_FROM_SERVER, eventData -> {
             diagnostic.info("Kicked from server.");
             events.raise(Kind.KICKED_FROM_SERVER, null);
             disconnect("Kicked from server", new KickedFromServerException());
@@ -905,7 +911,7 @@ final class SoulseekEngine implements AutoCloseable {
     }
 
     private <T> void forwardServer(ServerMessageEvent source, EngineEvents.Kind target) {
-        serverMessageHandler.<T>addListener(source, eventData -> events.raise(target, eventData));
+        serverMessageHandler.<T>subscribe(source, eventData -> events.raise(target, eventData));
     }
 
     private void downloadDenied(DownloadDeniedEvent eventData) {
@@ -983,7 +989,7 @@ final class SoulseekEngine implements AutoCloseable {
         if (options.enableListener()) {
             listener = clientListenerFactory.create(
                     options.listenIpAddress(), options.listenPort(), options.incomingConnectionOptions());
-            listener.addAcceptedListener(listenerHandler::handleConnection);
+            listener.subscribe(listenerHandler::handleConnection);
             listener.start();
         }
 
@@ -1104,7 +1110,7 @@ final class SoulseekEngine implements AutoCloseable {
             if (wasListening && options.enableListener()) {
                 listener = clientListenerFactory.create(
                         options.listenIpAddress(), options.listenPort(), options.incomingConnectionOptions());
-                listener.addAcceptedListener(listenerHandler::handleConnection);
+                listener.subscribe(listenerHandler::handleConnection);
                 listener.start();
             }
         }

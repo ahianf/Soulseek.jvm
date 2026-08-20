@@ -4,6 +4,7 @@
 
 package dev.slsk.internal.messaging.handlers;
 
+import dev.slsk.Subscription;
 import dev.slsk.exceptions.MessageReadException;
 import dev.slsk.exceptions.TransferRejectedException;
 import dev.slsk.exceptions.TransferReportedFailedException;
@@ -12,11 +13,11 @@ import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
-import dev.slsk.internal.diagnostics.DiagnosticEventListener;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.events.DownloadDeniedEvent;
 import dev.slsk.internal.events.DownloadFailedEvent;
+import dev.slsk.internal.events.Subscriptions;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
 import dev.slsk.internal.messaging.messages.BrowseResponseFactory;
@@ -52,6 +53,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /** Handles incoming messages from peer connections. */
@@ -66,10 +68,11 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     private final PeerServices services;
 
     private final DiagnosticSink diagnostic;
-    private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<PeerMessageHandlerEventListener<DownloadDeniedEvent>> downloadDeniedListeners =
+    private final CopyOnWriteArrayList<Consumer<? super DiagnosticEvent>> diagnosticListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<PeerMessageHandlerEventListener<DownloadFailedEvent>> downloadFailedListeners =
+    private final CopyOnWriteArrayList<Consumer<? super DownloadDeniedEvent>> downloadDeniedListeners =
+            new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<Consumer<? super DownloadFailedEvent>> downloadFailedListeners =
             new CopyOnWriteArrayList<>();
 
     /**
@@ -136,33 +139,21 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
     }
 
     @Override
-    public void addDiagnosticGeneratedListener(DiagnosticEventListener listener) {
-        diagnosticListeners.add(Objects.requireNonNull(listener, "listener"));
+    public Subscription subscribe(Consumer<? super DiagnosticEvent> listener) {
+        return Subscriptions.add(diagnosticListeners, listener);
     }
 
     @Override
-    public void removeDiagnosticGeneratedListener(DiagnosticEventListener listener) {
-        diagnosticListeners.remove(listener);
-    }
-
-    @Override
-    public void addDownloadDeniedListener(PeerMessageHandlerEventListener<DownloadDeniedEvent> listener) {
-        downloadDeniedListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeDownloadDeniedListener(PeerMessageHandlerEventListener<DownloadDeniedEvent> listener) {
-        downloadDeniedListeners.remove(listener);
-    }
-
-    @Override
-    public void addDownloadFailedListener(PeerMessageHandlerEventListener<DownloadFailedEvent> listener) {
-        downloadFailedListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeDownloadFailedListener(PeerMessageHandlerEventListener<DownloadFailedEvent> listener) {
-        downloadFailedListeners.remove(listener);
+    @SuppressWarnings("unchecked")
+    public <T> Subscription subscribe(Kind kind, Consumer<? super T> listener) {
+        Objects.requireNonNull(kind, "kind");
+        Objects.requireNonNull(listener, "listener");
+        return switch (kind) {
+            case DOWNLOAD_DENIED ->
+                Subscriptions.add(downloadDeniedListeners, (Consumer<? super DownloadDeniedEvent>) listener);
+            case DOWNLOAD_FAILED ->
+                Subscriptions.add(downloadFailedListeners, (Consumer<? super DownloadFailedEvent>) listener);
+        };
     }
 
     @Override

@@ -100,11 +100,11 @@ class ConnectionTest {
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), client, Monitors.shared());
         List<ConnectionStateChangedEvent> states = new ArrayList<>();
         List<ConnectionDisconnectedEvent> disconnected = new ArrayList<>();
-        connection.addStateChangedListener(args -> {
+        connection.<ConnectionStateChangedEvent>subscribe(Connection.Kind.STATE_CHANGED, args -> {
             assertSame(connection, args.connection());
             states.add(args);
         });
-        connection.addDisconnectedListener(args -> {
+        connection.<ConnectionDisconnectedEvent>subscribe(Connection.Kind.DISCONNECTED, args -> {
             assertSame(connection, args.connection());
             disconnected.add(args);
         });
@@ -132,8 +132,9 @@ class ConnectionTest {
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), client, Monitors.shared());
         List<ConnectionState> states = new ArrayList<>();
         AtomicInteger connected = new AtomicInteger();
-        connection.addStateChangedListener(args -> states.add(args.currentState()));
-        connection.addConnectedListener(args -> connected.incrementAndGet());
+        connection.<ConnectionStateChangedEvent>subscribe(
+                Connection.Kind.STATE_CHANGED, args -> states.add(args.currentState()));
+        connection.<Connection>subscribe(Connection.Kind.CONNECTED, args -> connected.incrementAndGet());
 
         connection.connect(null);
 
@@ -263,7 +264,7 @@ class ConnectionTest {
                 new SocketConnection(ENDPOINT, options(2, 2, 3, 100, -1, null, null), client, Monitors.shared());
         List<int[]> reports = new ArrayList<>();
         List<Long> progress = new ArrayList<>();
-        connection.addDataReadListener(args -> {
+        connection.<ConnectionDataEvent>subscribe(Connection.Kind.DATA_READ, args -> {
             assertSame(connection, args.connection());
             progress.add(args.currentLength());
         });
@@ -334,7 +335,7 @@ class ConnectionTest {
                 ENDPOINT, options(2, 2, 3, 100, -1, null, null), new FakeTcpClient(stream, true), Monitors.shared());
         List<int[]> reports = new ArrayList<>();
         List<Long> progress = new ArrayList<>();
-        connection.addDataWrittenListener(args -> {
+        connection.<ConnectionDataEvent>subscribe(Connection.Kind.DATA_WRITTEN, args -> {
             assertSame(connection, args.connection());
             progress.add(args.currentLength());
         });
@@ -542,7 +543,7 @@ class ConnectionTest {
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), client, Monitors.shared());
         CountDownLatch event = new CountDownLatch(1);
         try {
-            connection.addDataReadListener(args -> event.countDown());
+            connection.<ConnectionDataEvent>subscribe(Connection.Kind.DATA_READ, args -> event.countDown());
             connection.read(1, null);
             assertTrue(event.await(1, TimeUnit.SECONDS));
 
@@ -649,12 +650,12 @@ class ConnectionTest {
         SocketConnection connection = new SocketConnection(ENDPOINT, noTimers(), client, Monitors.shared());
         List<String> heldDuring = new ArrayList<>();
 
-        connection.addStateChangedListener(args -> {
+        connection.<ConnectionStateChangedEvent>subscribe(Connection.Kind.STATE_CHANGED, args -> {
             if (Thread.holdsLock(args.connection())) {
                 heldDuring.add("stateChanged->" + args.currentState());
             }
         });
-        connection.addDisconnectedListener(args -> {
+        connection.<ConnectionDisconnectedEvent>subscribe(Connection.Kind.DISCONNECTED, args -> {
             if (Thread.holdsLock(args.connection())) {
                 heldDuring.add("disconnected");
             }

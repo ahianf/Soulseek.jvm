@@ -4,6 +4,7 @@
 
 package dev.slsk.internal.network.tcp;
 
+import dev.slsk.Subscription;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.ConnectionReadException;
 import dev.slsk.exceptions.ConnectionWriteDroppedException;
@@ -13,6 +14,7 @@ import dev.slsk.internal.concurrent.CancellationInterrupts;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.concurrent.CancellationSubscription;
 import dev.slsk.internal.concurrent.InterruptedOperationException;
+import dev.slsk.internal.events.Subscriptions;
 import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.ProxyOptions;
 import java.io.ByteArrayOutputStream;
@@ -36,6 +38,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 /** Provides client connections for TCP network services. */
 public class SocketConnection implements Connection {
@@ -65,15 +68,14 @@ public class SocketConnection implements Connection {
     private static final int NO_READ_TIMEOUT = -1;
 
     private final UUID id = UUID.randomUUID();
-    private final CopyOnWriteArrayList<ConnectionEventListener<Connection>> connectedListeners =
+    private final CopyOnWriteArrayList<Consumer<? super Connection>> connectedListeners = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<Consumer<? super ConnectionDataEvent>> dataReadListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<ConnectionEventListener<ConnectionDataEvent>> dataReadListeners =
+    private final CopyOnWriteArrayList<Consumer<? super ConnectionDataEvent>> dataWrittenListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<ConnectionEventListener<ConnectionDataEvent>> dataWrittenListeners =
+    private final CopyOnWriteArrayList<Consumer<? super ConnectionDisconnectedEvent>> disconnectedListeners =
             new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<ConnectionEventListener<ConnectionDisconnectedEvent>> disconnectedListeners =
-            new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<ConnectionEventListener<ConnectionStateChangedEvent>> stateChangedListeners =
+    private final CopyOnWriteArrayList<Consumer<? super ConnectionStateChangedEvent>> stateChangedListeners =
             new CopyOnWriteArrayList<>();
     private final CountDownLatch disconnected = new CountDownLatch(1);
     private volatile String disconnectMessage;
@@ -201,53 +203,20 @@ public class SocketConnection implements Connection {
     }
 
     @Override
-    public void addConnectedListener(ConnectionEventListener<Connection> listener) {
-        connectedListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeConnectedListener(ConnectionEventListener<Connection> listener) {
-        connectedListeners.remove(listener);
-    }
-
-    @Override
-    public void addDataReadListener(ConnectionEventListener<ConnectionDataEvent> listener) {
-        dataReadListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeDataReadListener(ConnectionEventListener<ConnectionDataEvent> listener) {
-        dataReadListeners.remove(listener);
-    }
-
-    @Override
-    public void addDataWrittenListener(ConnectionEventListener<ConnectionDataEvent> listener) {
-        dataWrittenListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeDataWrittenListener(ConnectionEventListener<ConnectionDataEvent> listener) {
-        dataWrittenListeners.remove(listener);
-    }
-
-    @Override
-    public void addDisconnectedListener(ConnectionEventListener<ConnectionDisconnectedEvent> listener) {
-        disconnectedListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeDisconnectedListener(ConnectionEventListener<ConnectionDisconnectedEvent> listener) {
-        disconnectedListeners.remove(listener);
-    }
-
-    @Override
-    public void addStateChangedListener(ConnectionEventListener<ConnectionStateChangedEvent> listener) {
-        stateChangedListeners.add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public void removeStateChangedListener(ConnectionEventListener<ConnectionStateChangedEvent> listener) {
-        stateChangedListeners.remove(listener);
+    @SuppressWarnings("unchecked")
+    public <T> Subscription subscribe(Kind kind, Consumer<? super T> listener) {
+        Objects.requireNonNull(kind, "kind");
+        Objects.requireNonNull(listener, "listener");
+        return switch (kind) {
+            case CONNECTED -> Subscriptions.add(connectedListeners, (Consumer<? super Connection>) listener);
+            case DATA_READ -> Subscriptions.add(dataReadListeners, (Consumer<? super ConnectionDataEvent>) listener);
+            case DATA_WRITTEN ->
+                Subscriptions.add(dataWrittenListeners, (Consumer<? super ConnectionDataEvent>) listener);
+            case DISCONNECTED ->
+                Subscriptions.add(disconnectedListeners, (Consumer<? super ConnectionDisconnectedEvent>) listener);
+            case STATE_CHANGED ->
+                Subscriptions.add(stateChangedListeners, (Consumer<? super ConnectionStateChangedEvent>) listener);
+        };
     }
 
     @Override
@@ -465,9 +434,7 @@ public class SocketConnection implements Connection {
      * @return the bytes read
      */
     protected final byte[] read(
-            long length,
-            ConnectionEventListener<ConnectionDataEvent> scopedProgress,
-            CancellationSignal cancellationSignal)
+            long length, Consumer<ConnectionDataEvent> scopedProgress, CancellationSignal cancellationSignal)
             throws InterruptedException, TimeoutException {
         validateRead(length);
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
@@ -586,7 +553,7 @@ public class SocketConnection implements Connection {
 
         publishStateChanged(previousState, newState, message, exception);
         if (newState == ConnectionState.CONNECTED) {
-            for (ConnectionEventListener<Connection> listener : connectedListeners) {
+            for (Consumer<? super Connection> listener : connectedListeners) {
                 listener.accept(this);
             }
         } else if (newState == ConnectionState.DISCONNECTED) {
@@ -599,7 +566,7 @@ public class SocketConnection implements Connection {
             ConnectionState previousState, ConnectionState newState, String message, Exception exception) {
         ConnectionStateChangedEvent eventData =
                 new ConnectionStateChangedEvent(this, previousState, newState, message, exception);
-        for (ConnectionEventListener<ConnectionStateChangedEvent> listener : stateChangedListeners) {
+        for (Consumer<? super ConnectionStateChangedEvent> listener : stateChangedListeners) {
             listener.accept(eventData);
         }
     }
@@ -610,7 +577,7 @@ public class SocketConnection implements Connection {
      */
     private void publishDisconnected(String message, Exception exception) {
         ConnectionDisconnectedEvent eventData = new ConnectionDisconnectedEvent(this, message, exception);
-        for (ConnectionEventListener<ConnectionDisconnectedEvent> listener : disconnectedListeners) {
+        for (Consumer<? super ConnectionDisconnectedEvent> listener : disconnectedListeners) {
             listener.accept(eventData);
         }
         // Written before the latch drops and only for the first caller through,
@@ -667,7 +634,7 @@ public class SocketConnection implements Connection {
             OutputStream outputStream,
             ConnectionGovernor governor,
             ConnectionReporter reporter,
-            ConnectionEventListener<ConnectionDataEvent> scopedProgress,
+            Consumer<ConnectionDataEvent> scopedProgress,
             CancellationSignal cancellationSignal)
             throws InterruptedException, TimeoutException {
         resetInactivityTime();
@@ -1161,8 +1128,8 @@ public class SocketConnection implements Connection {
      * listeners registered.
      */
     private void emitProgress(
-            CopyOnWriteArrayList<ConnectionEventListener<ConnectionDataEvent>> listeners,
-            ConnectionEventListener<ConnectionDataEvent> scopedListener,
+            CopyOnWriteArrayList<Consumer<? super ConnectionDataEvent>> listeners,
+            Consumer<? super ConnectionDataEvent> scopedListener,
             long currentLength,
             long totalLength,
             CancellationSignal cancellationSignal) {
@@ -1171,7 +1138,7 @@ public class SocketConnection implements Connection {
         }
         ConnectionDataEvent eventData = new ConnectionDataEvent(this, currentLength, totalLength);
         Runnable dispatch = () -> {
-            for (ConnectionEventListener<ConnectionDataEvent> listener : listeners) {
+            for (Consumer<? super ConnectionDataEvent> listener : listeners) {
                 listener.accept(eventData);
             }
             if (scopedListener != null) {

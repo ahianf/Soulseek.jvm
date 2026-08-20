@@ -23,10 +23,8 @@ import dev.slsk.internal.events.RoomJoinedEvent;
 import dev.slsk.internal.network.ConnectionFactory;
 import dev.slsk.internal.network.DefaultMessageConnection;
 import dev.slsk.internal.network.MessageConnection;
-import dev.slsk.internal.network.MessageConnectionEventListener;
 import dev.slsk.internal.network.MessageEvent;
 import dev.slsk.internal.network.tcp.Connection;
-import dev.slsk.internal.network.tcp.ConnectionEventListener;
 import dev.slsk.internal.network.tcp.ConnectionState;
 import dev.slsk.internal.network.tcp.NetworkStream;
 import dev.slsk.internal.network.tcp.TcpClient;
@@ -704,10 +702,10 @@ class PublicBlockingMatrixTest {
         @Override
         public MessageConnection getServerConnection(
                 InetSocketAddress endpoint,
-                ConnectionEventListener<Connection> connected,
-                ConnectionEventListener<dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent> disconnected,
-                MessageConnectionEventListener<MessageEvent> read,
-                MessageConnectionEventListener<MessageEvent> written,
+                java.util.function.Consumer<Connection> connected,
+                java.util.function.Consumer<dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent> disconnected,
+                java.util.function.Consumer<MessageEvent> read,
+                java.util.function.Consumer<MessageEvent> written,
                 ConnectionOptions options,
                 TcpClient client) {
             return connection;

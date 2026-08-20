@@ -4,6 +4,7 @@
 
 package dev.slsk.internal.network.tcp;
 
+import dev.slsk.Subscription;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.options.ConnectionOptions;
 import java.io.InputStream;
@@ -12,44 +13,20 @@ import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 
 /** Provides client connections for TCP network services. */
 public interface Connection extends AutoCloseable {
-    /** Adds a connected-event listener. */
-    void addConnectedListener(ConnectionEventListener<Connection> listener);
+    enum Kind {
+        CONNECTED,
+        DATA_READ,
+        DATA_WRITTEN,
+        DISCONNECTED,
+        STATE_CHANGED
+    }
 
-    /** Removes a connected-event listener. */
-    void removeConnectedListener(ConnectionEventListener<Connection> listener);
-
-    /** Adds a data-read listener. */
-    void addDataReadListener(ConnectionEventListener<ConnectionDataEvent> listener);
-
-    /** Removes a data-read listener. */
-    void removeDataReadListener(ConnectionEventListener<ConnectionDataEvent> listener);
-
-    /**
-     * Adds a data-written listener.
-     *
-     * <p>This is an internal progress hook. Implementations invoke it on their
-     * I/O worker, so a listener must be non-blocking and must never synchronously
-     * enqueue and wait for another write on the same connection.
-     */
-    void addDataWrittenListener(ConnectionEventListener<ConnectionDataEvent> listener);
-
-    /** Removes a data-written listener. */
-    void removeDataWrittenListener(ConnectionEventListener<ConnectionDataEvent> listener);
-
-    /** Adds a disconnected listener. */
-    void addDisconnectedListener(ConnectionEventListener<ConnectionDisconnectedEvent> listener);
-
-    /** Removes a disconnected listener. */
-    void removeDisconnectedListener(ConnectionEventListener<ConnectionDisconnectedEvent> listener);
-
-    /** Adds a state-change listener. */
-    void addStateChangedListener(ConnectionEventListener<ConnectionStateChangedEvent> listener);
-
-    /** Removes a state-change listener. */
-    void removeStateChangedListener(ConnectionEventListener<ConnectionStateChangedEvent> listener);
+    /** Subscribes to a connection event. Data-written callbacks run on the I/O worker. */
+    <T> Subscription subscribe(Kind kind, Consumer<? super T> listener);
 
     /** Returns the connection identifier. */
     UUID getId();

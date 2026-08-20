@@ -3,6 +3,7 @@
 
 package dev.slsk.internal;
 
+import dev.slsk.Subscription;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.UserEndpointCacheException;
 import dev.slsk.exceptions.UserEndpointException;
@@ -33,6 +34,8 @@ import dev.slsk.internal.messaging.messages.UserStatusRequest;
 import dev.slsk.internal.messaging.messages.WatchUserRequest;
 import dev.slsk.internal.messaging.messages.WatchUserResponse;
 import dev.slsk.internal.network.MessageConnection;
+import dev.slsk.internal.network.tcp.Connection;
+import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
 import dev.slsk.internal.options.BrowseOptions;
 import dev.slsk.internal.share.BrowseResponse;
 import dev.slsk.internal.share.Directory;
@@ -53,6 +56,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 /**
  * Everything the client knows about other users: info, statistics, presence,
@@ -261,23 +265,28 @@ final class UserDirectory {
             MessageConnection connection = responseConnection.connection();
             long responseLength = responseConnection.eventData().length() - 4;
             AtomicBoolean completionEventFired = new AtomicBoolean();
-            dev.slsk.internal.network.MessageConnectionEventListener<dev.slsk.internal.network.MessageDataEvent>
-                    progressListener = eventData -> context.reportBrowseProgress(
-                    requestedUsername,
-                    operationOptions,
-                    eventData.currentLength(),
-                    eventData.totalLength(),
-                    completionEventFired);
-            connection.addDisconnectedListener(eventData -> context.getWaiter()
-                    .fail(
-                            browseWaitKey,
-                            new ConnectionException(
-                                    "Peer connection disconnected " + "unexpectedly: " + eventData.message(),
-                                    eventData.exception())));
-            connection.addMessageDataReadListener(progressListener);
-            context.reportBrowseProgress(requestedUsername, operationOptions, 0, responseLength, completionEventFired);
-            BrowseResponse response = browseWait.await();
-            connection.removeMessageDataReadListener(progressListener);
+            Consumer<dev.slsk.internal.network.MessageDataEvent> progressListener =
+                    eventData -> context.reportBrowseProgress(
+                            requestedUsername,
+                            operationOptions,
+                            eventData.currentLength(),
+                            eventData.totalLength(),
+                            completionEventFired);
+            BrowseResponse response;
+            try (Subscription disconnectedSubscription = connection.subscribe(
+                            Connection.Kind.DISCONNECTED,
+                            (ConnectionDisconnectedEvent eventData) -> context.getWaiter()
+                                    .fail(
+                                            browseWaitKey,
+                                            new ConnectionException(
+                                                    "Peer connection disconnected unexpectedly: " + eventData.message(),
+                                                    eventData.exception())));
+                    Subscription progressSubscription =
+                            connection.subscribe(MessageConnection.MessageKind.DATA_READ, progressListener)) {
+                context.reportBrowseProgress(
+                        requestedUsername, operationOptions, 0, responseLength, completionEventFired);
+                response = browseWait.await();
+            }
             if (!completionEventFired.get()) {
                 context.reportBrowseProgress(
                         requestedUsername, operationOptions, responseLength, responseLength, completionEventFired);

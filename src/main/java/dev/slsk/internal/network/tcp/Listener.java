@@ -4,16 +4,15 @@
 
 package dev.slsk.internal.network.tcp;
 
+import dev.slsk.Subscription;
 import dev.slsk.internal.options.ConnectionOptions;
 import java.net.InetAddress;
+import java.util.function.Consumer;
 
 /** Listens for client connections for TCP network services. */
 public interface Listener {
-    /** Adds an accepted-connection listener. */
-    void addAcceptedListener(ListenerAcceptedEventListener listener);
-
-    /** Removes an accepted-connection listener. */
-    void removeAcceptedListener(ListenerAcceptedEventListener listener);
+    /** Subscribes to accepted connections. */
+    Subscription subscribe(Consumer<? super Connection> listener);
 
     /** Returns options used for accepted connections. */
     ConnectionOptions getConnectionOptions();

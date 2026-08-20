@@ -27,6 +27,8 @@ import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.connection.SoulseekClientState;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
+import dev.slsk.internal.events.DistributedChildEvent;
+import dev.slsk.internal.events.DistributedParentEvent;
 import dev.slsk.internal.messaging.handlers.DistributedMessageHandler;
 import dev.slsk.internal.messaging.messages.AcceptChildrenCommand;
 import dev.slsk.internal.messaging.messages.BranchLevelCommand;
@@ -42,7 +44,6 @@ import dev.slsk.internal.messaging.messages.PeerInit;
 import dev.slsk.internal.messaging.messages.PierceFirewall;
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
-import dev.slsk.internal.network.tcp.ConnectionEventListener;
 import dev.slsk.internal.network.tcp.ConnectionKey;
 import dev.slsk.internal.network.tcp.ConnectionState;
 import dev.slsk.internal.network.tcp.ConnectionTypes;
@@ -118,9 +119,12 @@ class DistributedNetworkTest {
         AtomicInteger promoted = new AtomicInteger();
         AtomicInteger demoted = new AtomicInteger();
         AtomicInteger states = new AtomicInteger();
-        fixture.manager.addPromotedToBranchRootListener(args -> promoted.incrementAndGet());
-        fixture.manager.addDemotedFromBranchRootListener(args -> demoted.incrementAndGet());
-        fixture.manager.addStateChangedListener(args -> states.incrementAndGet());
+        fixture.manager.<Void>subscribe(
+                DistributedConnectionManager.Kind.PROMOTED_TO_BRANCH_ROOT, args -> promoted.incrementAndGet());
+        fixture.manager.<Void>subscribe(
+                DistributedConnectionManager.Kind.DEMOTED_FROM_BRANCH_ROOT, args -> demoted.incrementAndGet());
+        fixture.manager.<DistributedNetworkInfo>subscribe(
+                DistributedConnectionManager.Kind.STATE_CHANGED, args -> states.incrementAndGet());
 
         fixture.manager.promoteToBranchRoot();
         fixture.manager.promoteToBranchRoot();
@@ -157,11 +161,12 @@ class DistributedNetworkTest {
         fixture.factory.distributedHandoff = child;
         AtomicInteger added = new AtomicInteger();
         AtomicInteger states = new AtomicInteger();
-        fixture.manager.addChildAddedListener(args -> {
+        fixture.manager.<DistributedChildEvent>subscribe(DistributedConnectionManager.Kind.CHILD_ADDED, args -> {
             assertEquals(USERNAME, args.username());
             added.incrementAndGet();
         });
-        fixture.manager.addStateChangedListener(args -> states.incrementAndGet());
+        fixture.manager.<DistributedNetworkInfo>subscribe(
+                DistributedConnectionManager.Kind.STATE_CHANGED, args -> states.incrementAndGet());
 
         fixture.manager.addOrUpdateChildConnection(USERNAME, incoming.connection());
 
@@ -225,7 +230,8 @@ class DistributedNetworkTest {
         ConnectToPeerResponse response =
                 new ConnectToPeerResponse(USERNAME, Constants.ConnectionType.DISTRIBUTED, ENDPOINT, TOKEN, false);
         AtomicInteger added = new AtomicInteger();
-        fixture.manager.addChildAddedListener(args -> added.incrementAndGet());
+        fixture.manager.<DistributedChildEvent>subscribe(
+                DistributedConnectionManager.Kind.CHILD_ADDED, args -> added.incrementAndGet());
 
         fixture.manager.getOrAddChildConnection(response);
         fixture.manager.getOrAddChildConnection(response);
@@ -268,7 +274,7 @@ class DistributedNetworkTest {
         fixture.manager.addOrUpdateChildConnection(
                 USERNAME, ConnectionProbe.connection(ENDPOINT).connection());
         AtomicInteger disconnected = new AtomicInteger();
-        fixture.manager.addChildDisconnectedListener(args -> {
+        fixture.manager.<DistributedChildEvent>subscribe(DistributedConnectionManager.Kind.CHILD_DISCONNECTED, args -> {
             assertEquals(USERNAME, args.username());
             disconnected.incrementAndGet();
         });
@@ -429,13 +435,14 @@ class DistributedNetworkTest {
         fixture.factory.distributedDirect.put(ENDPOINT, parent);
         AtomicInteger adopted = new AtomicInteger();
         AtomicInteger states = new AtomicInteger();
-        fixture.manager.addParentAdoptedListener(args -> {
+        fixture.manager.<DistributedParentEvent>subscribe(DistributedConnectionManager.Kind.PARENT_ADOPTED, args -> {
             assertEquals(USERNAME, args.username());
             assertEquals(2, args.branchLevel());
             assertEquals("root", args.branchRoot());
             adopted.incrementAndGet();
         });
-        fixture.manager.addStateChangedListener(args -> states.incrementAndGet());
+        fixture.manager.<DistributedNetworkInfo>subscribe(
+                DistributedConnectionManager.Kind.STATE_CHANGED, args -> states.incrementAndGet());
 
         fixture.manager.addParentConnection(List.of(new PeerEndpoint(USERNAME, ENDPOINT)));
 
@@ -523,10 +530,11 @@ class DistributedNetworkTest {
         fixture.factory.distributedDirect.put(ENDPOINT, parent);
         fixture.manager.addParentConnection(List.of(new PeerEndpoint(USERNAME, ENDPOINT)));
         AtomicInteger disconnected = new AtomicInteger();
-        fixture.manager.addParentDisconnectedListener(args -> {
-            assertEquals(USERNAME, args.username());
-            disconnected.incrementAndGet();
-        });
+        fixture.manager.<DistributedParentEvent>subscribe(
+                DistributedConnectionManager.Kind.PARENT_DISCONNECTED, args -> {
+                    assertEquals(USERNAME, args.username());
+                    disconnected.incrementAndGet();
+                });
         // Avoid reconnecting to the same test candidate.
         fixture.state = SoulseekClientState.DISCONNECTED;
 
@@ -649,10 +657,10 @@ class DistributedNetworkTest {
         @Override
         public MessageConnection getServerConnection(
                 InetSocketAddress ipEndpoint,
-                ConnectionEventListener<Connection> connectedEventHandler,
-                ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedEventHandler,
-                MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
-                MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler,
+                java.util.function.Consumer<Connection> connectedEventHandler,
+                java.util.function.Consumer<ConnectionDisconnectedEvent> disconnectedEventHandler,
+                java.util.function.Consumer<MessageEvent> messageReadEventHandler,
+                java.util.function.Consumer<MessageEvent> messageWrittenEventHandler,
                 ConnectionOptions options,
                 TcpClient tcpClient) {
             throw new AssertionError("unexpected server connection");
@@ -810,9 +818,9 @@ class DistributedNetworkTest {
                 new Class<?>[] {TcpClient.class},
                 (proxy, method, arguments) -> defaultValue(method.getReturnType()));
         private final Connection proxy;
-        private final List<ConnectionEventListener<ConnectionDisconnectedEvent>> disconnectedListeners =
+        private final List<java.util.function.Consumer<ConnectionDisconnectedEvent>> disconnectedListeners =
                 new CopyOnWriteArrayList<>();
-        private final List<MessageConnectionEventListener<MessageEvent>> messageReadListeners =
+        private final List<java.util.function.Consumer<MessageEvent>> messageReadListeners =
                 new CopyOnWriteArrayList<>();
         private final List<byte[]> byteWrites = new CopyOnWriteArrayList<>();
         private final List<OutgoingMessage> outgoingWrites = new CopyOnWriteArrayList<>();
@@ -938,21 +946,20 @@ class DistributedNetworkTest {
                     lastDisconnectMessage = arguments == null || arguments.length == 0 ? null : (String) arguments[0];
                     yield null;
                 }
-                case "addDisconnectedListener" -> {
-                    disconnectedListeners.add(cast(arguments[0]));
-                    yield null;
-                }
-                case "removeDisconnectedListener" -> {
-                    disconnectedListeners.remove(arguments[0]);
-                    yield null;
-                }
-                case "addMessageReadListener" -> {
-                    messageReadListeners.add(cast(arguments[0]));
-                    yield null;
-                }
-                case "removeMessageReadListener" -> {
-                    messageReadListeners.remove(arguments[0]);
-                    yield null;
+                case "subscribe" -> {
+                    Object kind = arguments[0];
+                    Object listener = arguments[1];
+                    if (kind == Connection.Kind.DISCONNECTED) {
+                        java.util.function.Consumer<ConnectionDisconnectedEvent> registered = cast(listener);
+                        disconnectedListeners.add(registered);
+                        yield (dev.slsk.Subscription) () -> disconnectedListeners.remove(registered);
+                    }
+                    if (kind == MessageConnection.MessageKind.READ) {
+                        java.util.function.Consumer<MessageEvent> registered = cast(listener);
+                        messageReadListeners.add(registered);
+                        yield (dev.slsk.Subscription) () -> messageReadListeners.remove(registered);
+                    }
+                    yield (dev.slsk.Subscription) () -> {};
                 }
                 case "toString" -> "ConnectionProbe(" + endpoint + ")";
                 case "hashCode" -> System.identityHashCode(proxy);

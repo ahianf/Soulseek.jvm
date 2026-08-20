@@ -504,8 +504,8 @@ class PeerMessageHandlerTest {
         Fixture fixture = new Fixture(new SoulseekClientOptions());
         List<DownloadDeniedEvent> deniedEvents = new ArrayList<>();
         List<DownloadFailedEvent> failedEvents = new ArrayList<>();
-        fixture.handler.addDownloadDeniedListener(eventData -> deniedEvents.add(eventData));
-        fixture.handler.addDownloadFailedListener(eventData -> failedEvents.add(eventData));
+        fixture.handler.<DownloadDeniedEvent>subscribe(PeerMessageHandler.Kind.DOWNLOAD_DENIED, deniedEvents::add);
+        fixture.handler.<DownloadFailedEvent>subscribe(PeerMessageHandler.Kind.DOWNLOAD_FAILED, failedEvents::add);
 
         fixture.handler.handleMessageRead(
                 fixture.connection.proxy, new UploadDenied(FILENAME, "No slot").toByteArray());

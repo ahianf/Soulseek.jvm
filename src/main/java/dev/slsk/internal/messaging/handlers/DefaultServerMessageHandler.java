@@ -4,6 +4,7 @@
 
 package dev.slsk.internal.messaging.handlers;
 
+import dev.slsk.Subscription;
 import dev.slsk.exceptions.MessageException;
 import dev.slsk.exceptions.RoomJoinForbiddenException;
 import dev.slsk.exceptions.SoulseekClientException;
@@ -15,7 +16,6 @@ import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.connection.ServerInfo;
 import dev.slsk.internal.diagnostics.DiagnosticEvent;
-import dev.slsk.internal.diagnostics.DiagnosticEventListener;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.events.PrivateMessageReceivedEvent;
@@ -27,6 +27,7 @@ import dev.slsk.internal.events.RoomMessageReceivedEvent;
 import dev.slsk.internal.events.RoomTickerAddedEvent;
 import dev.slsk.internal.events.RoomTickerListReceivedEvent;
 import dev.slsk.internal.events.RoomTickerRemovedEvent;
+import dev.slsk.internal.events.Subscriptions;
 import dev.slsk.internal.events.UserCannotConnectEvent;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
@@ -91,6 +92,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /** Handles incoming messages from the server connection. */
@@ -106,8 +108,9 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     private final Supplier<SearchResponder> searchResponses;
     private final NetworkExecutor networkExecutor;
     private final DiagnosticSink diagnostic;
-    private final CopyOnWriteArrayList<DiagnosticEventListener> diagnosticListeners = new CopyOnWriteArrayList<>();
-    private final Map<ServerMessageEvent, CopyOnWriteArrayList<ServerMessageHandlerEventListener<?>>> listeners =
+    private final CopyOnWriteArrayList<Consumer<? super DiagnosticEvent>> diagnosticListeners =
+            new CopyOnWriteArrayList<>();
+    private final Map<ServerMessageEvent, CopyOnWriteArrayList<Consumer<?>>> listeners =
             new EnumMap<>(ServerMessageEvent.class);
 
     /** Creates a handler with its default diagnostic factory. */
@@ -192,23 +195,15 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     }
 
     @Override
-    public void addDiagnosticGeneratedListener(DiagnosticEventListener listener) {
-        diagnosticListeners.add(Objects.requireNonNull(listener, "listener"));
+    public Subscription subscribe(Consumer<? super DiagnosticEvent> listener) {
+        return Subscriptions.add(diagnosticListeners, listener);
     }
 
     @Override
-    public void removeDiagnosticGeneratedListener(DiagnosticEventListener listener) {
-        diagnosticListeners.remove(listener);
-    }
-
-    @Override
-    public <T> void addListener(ServerMessageEvent event, ServerMessageHandlerEventListener<T> listener) {
-        listeners.get(Objects.requireNonNull(event, "event")).add(Objects.requireNonNull(listener, "listener"));
-    }
-
-    @Override
-    public <T> void removeListener(ServerMessageEvent event, ServerMessageHandlerEventListener<T> listener) {
-        listeners.get(Objects.requireNonNull(event, "event")).remove(listener);
+    public <T> Subscription subscribe(ServerMessageEvent event, Consumer<? super T> listener) {
+        Objects.requireNonNull(event, "event");
+        Objects.requireNonNull(listener, "listener");
+        return Subscriptions.add(listeners.get(event), (Consumer<?>) listener);
     }
 
     @Override
@@ -605,9 +600,9 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
 
     @SuppressWarnings("unchecked")
     private <T> void raise(ServerMessageEvent event, T eventData) {
-        List<ServerMessageHandlerEventListener<?>> snapshot = new ArrayList<>(listeners.get(event));
-        for (ServerMessageHandlerEventListener<?> listener : snapshot) {
-            ((ServerMessageHandlerEventListener<T>) listener).accept(eventData);
+        List<Consumer<?>> snapshot = new ArrayList<>(listeners.get(event));
+        for (Consumer<?> listener : snapshot) {
+            ((Consumer<T>) listener).accept(eventData);
         }
     }
 

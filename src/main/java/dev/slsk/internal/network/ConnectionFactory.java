@@ -6,10 +6,10 @@ package dev.slsk.internal.network;
 
 import dev.slsk.internal.network.tcp.Connection;
 import dev.slsk.internal.network.tcp.ConnectionDisconnectedEvent;
-import dev.slsk.internal.network.tcp.ConnectionEventListener;
 import dev.slsk.internal.network.tcp.TcpClient;
 import dev.slsk.internal.options.ConnectionOptions;
 import java.net.InetSocketAddress;
+import java.util.function.Consumer;
 
 /** Creates protocol and transfer connections. */
 public interface ConnectionFactory {
@@ -39,19 +39,19 @@ public interface ConnectionFactory {
 
     MessageConnection getServerConnection(
             InetSocketAddress ipEndpoint,
-            ConnectionEventListener<Connection> connectedEventHandler,
-            ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedEventHandler,
-            MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
-            MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler,
+            Consumer<Connection> connectedEventHandler,
+            Consumer<ConnectionDisconnectedEvent> disconnectedEventHandler,
+            Consumer<MessageEvent> messageReadEventHandler,
+            Consumer<MessageEvent> messageWrittenEventHandler,
             ConnectionOptions options,
             TcpClient tcpClient);
 
     default MessageConnection getServerConnection(
             InetSocketAddress ipEndpoint,
-            ConnectionEventListener<Connection> connectedEventHandler,
-            ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedEventHandler,
-            MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
-            MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler) {
+            Consumer<Connection> connectedEventHandler,
+            Consumer<ConnectionDisconnectedEvent> disconnectedEventHandler,
+            Consumer<MessageEvent> messageReadEventHandler,
+            Consumer<MessageEvent> messageWrittenEventHandler) {
         return getServerConnection(
                 ipEndpoint,
                 connectedEventHandler,
@@ -64,10 +64,10 @@ public interface ConnectionFactory {
 
     default MessageConnection getServerConnection(
             InetSocketAddress ipEndpoint,
-            ConnectionEventListener<Connection> connectedEventHandler,
-            ConnectionEventListener<ConnectionDisconnectedEvent> disconnectedEventHandler,
-            MessageConnectionEventListener<MessageEvent> messageReadEventHandler,
-            MessageConnectionEventListener<MessageEvent> messageWrittenEventHandler,
+            Consumer<Connection> connectedEventHandler,
+            Consumer<ConnectionDisconnectedEvent> disconnectedEventHandler,
+            Consumer<MessageEvent> messageReadEventHandler,
+            Consumer<MessageEvent> messageWrittenEventHandler,
             ConnectionOptions options) {
         return getServerConnection(
                 ipEndpoint,
