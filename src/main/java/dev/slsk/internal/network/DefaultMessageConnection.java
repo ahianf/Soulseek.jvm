@@ -202,7 +202,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
         }
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
         super.write(bytes, token);
-        raiseMessageWritten(bytes, token);
+        raiseMessageWritten(bytes);
     }
 
     void readContinuously() throws InterruptedException, java.util.concurrent.TimeoutException {
@@ -256,13 +256,11 @@ public final class DefaultMessageConnection extends SocketConnection implements 
 
     private void raiseMessageDataRead(byte[] code, long currentLength, long totalLength) {
         MessageDataEvent eventData = new MessageDataEvent(this, code, currentLength, totalLength);
-        dispatch(
-                () -> {
-                    for (Consumer<? super MessageDataEvent> listener : messageDataReadListeners) {
-                        listener.accept(eventData);
-                    }
-                },
-                CancellationSignal.none());
+        dispatch(() -> {
+            for (Consumer<? super MessageDataEvent> listener : messageDataReadListeners) {
+                listener.accept(eventData);
+            }
+        });
     }
 
     private void raiseMessageReceived(long length, byte[] code) {
@@ -274,24 +272,20 @@ public final class DefaultMessageConnection extends SocketConnection implements 
 
     private void raiseMessageRead(byte[] message) {
         MessageEvent eventData = new MessageEvent(this, message);
-        dispatch(
-                () -> {
-                    for (Consumer<? super MessageEvent> listener : messageReadListeners) {
-                        listener.accept(eventData);
-                    }
-                },
-                CancellationSignal.none());
+        dispatch(() -> {
+            for (Consumer<? super MessageEvent> listener : messageReadListeners) {
+                listener.accept(eventData);
+            }
+        });
     }
 
-    private void raiseMessageWritten(byte[] message, CancellationSignal cancellationSignal) {
+    private void raiseMessageWritten(byte[] message) {
         MessageEvent eventData = new MessageEvent(this, message);
-        dispatch(
-                () -> {
-                    for (Consumer<? super MessageEvent> listener : messageWrittenListeners) {
-                        listener.accept(eventData);
-                    }
-                },
-                cancellationSignal);
+        dispatch(() -> {
+            for (Consumer<? super MessageEvent> listener : messageWrittenListeners) {
+                listener.accept(eventData);
+            }
+        });
     }
 
     /**
@@ -304,7 +298,7 @@ public final class DefaultMessageConnection extends SocketConnection implements 
      * does it for every facet rather than one connection at a time, so the
      * switch had nothing left to decide.
      */
-    private void dispatch(Runnable event, CancellationSignal cancellationSignal) {
+    private void dispatch(Runnable event) {
         event.run();
     }
 

@@ -831,13 +831,13 @@ class EngineDownloadTest {
                     .stateChanged(change -> {
                         snapshots.add(change.transfer());
                         if (base.stateChanged() != null) {
-                            base.stateChanged().onStateChanged(change);
+                            base.stateChanged().accept(change);
                         }
                     })
                     .progressUpdated(update -> {
                         progress.add(update.transfer().bytesTransferred());
                         if (base.progressUpdated() != null) {
-                            base.progressUpdated().onProgressUpdated(update);
+                            base.progressUpdated().accept(update);
                         }
                     })
                     .build();

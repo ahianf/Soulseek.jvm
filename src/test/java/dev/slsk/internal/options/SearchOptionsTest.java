@@ -17,6 +17,7 @@ import dev.slsk.internal.share.File;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
 class SearchOptionsTest {
@@ -24,8 +25,8 @@ class SearchOptionsTest {
     void instantiatesWithGivenData() {
         SearchResponseFilter responseFilter = response -> false;
         SearchFileFilter fileFilter = file -> true;
-        SearchStateChangedCallback stateChanged = change -> {};
-        SearchResponseReceivedCallback responseReceived = received -> {};
+        Consumer<SearchStateChange> stateChanged = change -> {};
+        Consumer<SearchResponseReceived> responseReceived = received -> {};
 
         SearchOptions options = SearchOptions.builder()
                 .searchTimeout(Duration.ofMillis(-1))
@@ -108,8 +109,8 @@ class SearchOptionsTest {
         SearchResponse response = new SearchResponse("u", 8, true, 1, 7, List.of());
         File file = new File(1, "x", 2, "ext");
 
-        options.stateChanged().onStateChanged(new SearchStateChange(SearchState.IN_PROGRESS, search));
-        options.responseReceived().onResponseReceived(new SearchResponseReceived(search, response));
+        options.stateChanged().accept(new SearchStateChange(SearchState.IN_PROGRESS, search));
+        options.responseReceived().accept(new SearchResponseReceived(search, response));
 
         assertTrue(options.responseFilter().test(response));
         assertTrue(options.fileFilter().test(file));

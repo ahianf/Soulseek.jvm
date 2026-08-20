@@ -5,6 +5,7 @@
 package dev.slsk.internal.options;
 
 import java.time.Duration;
+import java.util.function.Consumer;
 
 /** Options for a search operation. */
 public record SearchOptions(
@@ -18,8 +19,8 @@ public record SearchOptions(
         boolean removeSingleCharacterSearchTerms,
         SearchResponseFilter responseFilter,
         SearchFileFilter fileFilter,
-        SearchStateChangedCallback stateChanged,
-        SearchResponseReceivedCallback responseReceived) {
+        Consumer<SearchStateChange> stateChanged,
+        Consumer<SearchResponseReceived> responseReceived) {
     /** Default search timeout. */
     public static final Duration DEFAULT_SEARCH_TIMEOUT = Duration.ofSeconds(15);
     /** Default response limit. */
@@ -59,10 +60,10 @@ public record SearchOptions(
         private int minimumResponseFileCount = 1;
         private boolean removeSingleCharacterSearchTerms = true;
         private SearchResponseFilter responseFilter;
-        private SearchResponseReceivedCallback responseReceived;
+        private Consumer<SearchResponseReceived> responseReceived;
         private int responseLimit = DEFAULT_RESPONSE_LIMIT;
         private Duration searchTimeout = DEFAULT_SEARCH_TIMEOUT;
-        private SearchStateChangedCallback stateChanged;
+        private Consumer<SearchStateChange> stateChanged;
 
         public Builder searchTimeout(Duration value) {
             searchTimeout = value;
@@ -114,12 +115,12 @@ public record SearchOptions(
             return this;
         }
 
-        public Builder stateChanged(SearchStateChangedCallback value) {
+        public Builder stateChanged(Consumer<SearchStateChange> value) {
             stateChanged = value;
             return this;
         }
 
-        public Builder responseReceived(SearchResponseReceivedCallback value) {
+        public Builder responseReceived(Consumer<SearchResponseReceived> value) {
             responseReceived = value;
             return this;
         }

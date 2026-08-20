@@ -42,6 +42,7 @@ import dev.slsk.internal.network.tcp.ConnectionGovernor;
 import dev.slsk.internal.network.tcp.ConnectionReporter;
 import dev.slsk.internal.network.tcp.ConnectionState;
 import dev.slsk.internal.options.TransferOptions;
+import dev.slsk.internal.options.TransferStateChange;
 import dev.slsk.internal.transfer.Transfer;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
@@ -74,6 +75,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
 class EngineUploadTest {
@@ -818,13 +820,13 @@ class EngineUploadTest {
                     .stateChanged(change -> {
                         snapshots.add(change.transfer());
                         if (base.stateChanged() != null) {
-                            base.stateChanged().onStateChanged(change);
+                            base.stateChanged().accept(change);
                         }
                     })
                     .progressUpdated(update -> {
                         progress.add(update.transfer().bytesTransferred());
                         if (base.progressUpdated() != null) {
-                            base.progressUpdated().onProgressUpdated(update);
+                            base.progressUpdated().accept(update);
                         }
                     })
                     .build();
@@ -867,8 +869,8 @@ class EngineUploadTest {
     private static TransferOptions options(
             int linger,
             dev.slsk.internal.options.TransferReporter reporter,
-            dev.slsk.internal.options.TransferStateChangedCallback stateChanged,
-            dev.slsk.internal.options.TransferSlotReleasedCallback slotReleased) {
+            Consumer<TransferStateChange> stateChanged,
+            Consumer<Transfer> slotReleased) {
         return TransferOptions.builder()
                 .stateChanged(stateChanged)
                 .slotReleased(slotReleased)

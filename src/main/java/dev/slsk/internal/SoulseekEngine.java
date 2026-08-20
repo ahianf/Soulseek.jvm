@@ -1217,7 +1217,7 @@ final class SoulseekEngine implements AutoCloseable {
         if (operationOptions.progressUpdated() != null) {
             operationOptions
                     .progressUpdated()
-                    .onProgressUpdated(new BrowseProgress(
+                    .accept(new BrowseProgress(
                             eventData.username(),
                             eventData.bytesTransferred(),
                             eventData.bytesRemaining(),

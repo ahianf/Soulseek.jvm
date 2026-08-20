@@ -24,6 +24,8 @@ import dev.slsk.internal.messaging.messages.UserSearchRequest;
 import dev.slsk.internal.messaging.messages.WishlistSearchRequest;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.options.SearchOptions;
+import dev.slsk.internal.options.SearchResponseReceived;
+import dev.slsk.internal.options.SearchStateChange;
 import dev.slsk.internal.search.Search;
 import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.search.SearchQuery;
@@ -408,8 +410,8 @@ class EngineSearchTest {
             int timeout,
             int responseLimit,
             boolean removeSingleCharacterTerms,
-            dev.slsk.internal.options.SearchStateChangedCallback stateChanged,
-            dev.slsk.internal.options.SearchResponseReceivedCallback responseReceived) {
+            Consumer<SearchStateChange> stateChanged,
+            Consumer<SearchResponseReceived> responseReceived) {
         return SearchOptions.builder()
                 .searchTimeout(java.time.Duration.ofMillis(timeout))
                 .responseLimit(responseLimit)

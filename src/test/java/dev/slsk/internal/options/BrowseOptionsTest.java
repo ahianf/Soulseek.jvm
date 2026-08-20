@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +18,7 @@ class BrowseOptionsTest {
     @Test
     @DisplayName("Instantiates properly")
     void instantiatesProperly() {
-        BrowseProgressCallback callback = progress -> {};
+        Consumer<BrowseProgress> callback = progress -> {};
 
         BrowseOptions options = BrowseOptions.builder()
                 .responseTimeout(Duration.ofMillis(-1))
@@ -57,7 +58,7 @@ class BrowseOptionsTest {
                 .build();
         BrowseProgress progress = new BrowseProgress("alice", 2, 3, 40, 5);
 
-        options.progressUpdated().onProgressUpdated(progress);
+        options.progressUpdated().accept(progress);
 
         assertSame(progress, received.get());
         assertEquals(new BrowseProgress("alice", 2, 3, 40, 5), received.get());

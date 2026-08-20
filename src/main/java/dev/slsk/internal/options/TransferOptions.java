@@ -4,13 +4,15 @@
 
 package dev.slsk.internal.options;
 
+import dev.slsk.internal.transfer.Transfer;
 import java.time.Duration;
+import java.util.function.Consumer;
 
 /** Options for transfer operations. */
 public record TransferOptions(
-        TransferStateChangedCallback stateChanged,
-        TransferProgressUpdatedCallback progressUpdated,
-        TransferSlotReleasedCallback slotReleased,
+        Consumer<TransferStateChange> stateChanged,
+        Consumer<TransferProgressUpdate> progressUpdated,
+        Consumer<Transfer> slotReleased,
         TransferReporter reporter,
         Duration maximumLingerTime,
         boolean seekInputStreamAutomatically,
@@ -36,14 +38,14 @@ public record TransferOptions(
     }
 
     /** Returns a copy whose state callback invokes {@code additionalStateChanged} first. */
-    public TransferOptions withAdditionalStateChanged(TransferStateChangedCallback additionalStateChanged) {
+    public TransferOptions withAdditionalStateChanged(Consumer<TransferStateChange> additionalStateChanged) {
         return builder(this)
                 .stateChanged(change -> {
                     if (additionalStateChanged != null) {
-                        additionalStateChanged.onStateChanged(change);
+                        additionalStateChanged.accept(change);
                     }
                     if (stateChanged != null) {
-                        stateChanged.onStateChanged(change);
+                        stateChanged.accept(change);
                     }
                 })
                 .build();
@@ -79,12 +81,12 @@ public record TransferOptions(
         private boolean disposeInputStreamOnCompletion = true;
         private boolean disposeOutputStreamOnCompletion = true;
         private Duration maximumLingerTime = DEFAULT_MAXIMUM_LINGER_TIME;
-        private TransferProgressUpdatedCallback progressUpdated;
+        private Consumer<TransferProgressUpdate> progressUpdated;
         private TransferReporter reporter;
         private boolean seekInputStreamAutomatically = true;
         private boolean seekOutputStreamAutomatically = true;
-        private TransferSlotReleasedCallback slotReleased;
-        private TransferStateChangedCallback stateChanged;
+        private Consumer<Transfer> slotReleased;
+        private Consumer<TransferStateChange> stateChanged;
 
         private Builder() {}
 
@@ -100,17 +102,17 @@ public record TransferOptions(
             disposeOutputStreamOnCompletion = source.disposeOutputStreamOnCompletion;
         }
 
-        public Builder stateChanged(TransferStateChangedCallback value) {
+        public Builder stateChanged(Consumer<TransferStateChange> value) {
             stateChanged = value;
             return this;
         }
 
-        public Builder progressUpdated(TransferProgressUpdatedCallback value) {
+        public Builder progressUpdated(Consumer<TransferProgressUpdate> value) {
             progressUpdated = value;
             return this;
         }
 
-        public Builder slotReleased(TransferSlotReleasedCallback value) {
+        public Builder slotReleased(Consumer<Transfer> value) {
             slotReleased = value;
             return this;
         }

@@ -13,7 +13,6 @@ import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.options.BrowseOptions;
-import dev.slsk.internal.options.BrowseProgressCallback;
 import dev.slsk.search.FileAttributes;
 import dev.slsk.search.SearchFile;
 import dev.slsk.share.Directory;
@@ -38,6 +37,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 /**
  * {@link Users}, over the engine.
@@ -263,8 +263,9 @@ final class DefaultUsers implements Users {
         BrowseOptions options = BrowseOptions.builder()
                 .responseTimeout(request.timeout())
                 .progressUpdated(request.onProgress()
-                        .<BrowseProgressCallback>map(listener -> progress -> listener.accept(
-                                new BrowseProgress(request.user(), progress.bytesTransferred(), progress.size())))
+                        .<Consumer<dev.slsk.internal.options.BrowseProgress>>map(
+                                listener -> progress -> listener.accept(new BrowseProgress(
+                                        request.user(), progress.bytesTransferred(), progress.size())))
                         .orElse(null))
                 .build();
         dev.slsk.internal.share.BrowseResponse response =

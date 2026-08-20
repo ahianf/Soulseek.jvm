@@ -231,7 +231,7 @@ final class SearchDomain {
                 invocation
                         .options()
                         .stateChanged()
-                        .onStateChanged(new SearchStateChange(eventData.previousState(), eventData.search()));
+                        .accept(new SearchStateChange(eventData.previousState(), eventData.search()));
             }
             context.raiseEvent(Kind.SEARCH_STATE_CHANGED, eventData);
         };
@@ -264,8 +264,7 @@ final class SearchDomain {
                         invocation
                                 .options()
                                 .responseReceived()
-                                .onResponseReceived(
-                                        new SearchResponseReceived(eventData.search(), eventData.response()));
+                                .accept(new SearchResponseReceived(eventData.search(), eventData.response()));
                     }
                     context.raiseEvent(Kind.SEARCH_RESPONSE_RECEIVED, eventData);
                 });

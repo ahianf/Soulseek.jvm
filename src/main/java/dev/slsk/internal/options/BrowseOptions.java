@@ -5,9 +5,10 @@
 package dev.slsk.internal.options;
 
 import java.time.Duration;
+import java.util.function.Consumer;
 
 /** Options for a browse operation. */
-public record BrowseOptions(Duration responseTimeout, BrowseProgressCallback progressUpdated) {
+public record BrowseOptions(Duration responseTimeout, Consumer<BrowseProgress> progressUpdated) {
     /** The default response timeout. */
     public static final Duration DEFAULT_RESPONSE_TIMEOUT = Duration.ofMinutes(1);
 
@@ -23,7 +24,7 @@ public record BrowseOptions(Duration responseTimeout, BrowseProgressCallback pro
 
     /** Builder for browse options. */
     public static final class Builder {
-        private BrowseProgressCallback progressUpdated;
+        private Consumer<BrowseProgress> progressUpdated;
         private Duration responseTimeout = DEFAULT_RESPONSE_TIMEOUT;
 
         public Builder responseTimeout(Duration value) {
@@ -31,7 +32,7 @@ public record BrowseOptions(Duration responseTimeout, BrowseProgressCallback pro
             return this;
         }
 
-        public Builder progressUpdated(BrowseProgressCallback value) {
+        public Builder progressUpdated(Consumer<BrowseProgress> value) {
             progressUpdated = value;
             return this;
         }

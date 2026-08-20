@@ -524,7 +524,7 @@ final class UploadRun {
                     + upload.getUsername() + " released");
             if (transferOptions.slotReleased() != null) {
                 try {
-                    transferOptions.slotReleased().onSlotReleased(upload.toTransfer());
+                    transferOptions.slotReleased().accept(upload.toTransfer());
                 } catch (Throwable ignored) {
                     // Slot-release callbacks cannot block cleanup.
                 }
@@ -545,7 +545,7 @@ final class UploadRun {
         TransferState previous = lastState;
         lastState = state;
         if (transferOptions.stateChanged() != null) {
-            transferOptions.stateChanged().onStateChanged(new TransferStateChange(previous, transfer));
+            transferOptions.stateChanged().accept(new TransferStateChange(previous, transfer));
         }
     }
 
@@ -554,7 +554,7 @@ final class UploadRun {
         upload.updateProgress(bytesUploaded);
         Transfer transfer = upload.toTransfer();
         if (transferOptions.progressUpdated() != null) {
-            transferOptions.progressUpdated().onProgressUpdated(new TransferProgressUpdate(previous, transfer));
+            transferOptions.progressUpdated().accept(new TransferProgressUpdate(previous, transfer));
         }
     }
 

@@ -12,10 +12,12 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.slsk.internal.transfer.Transfer;
 import dev.slsk.internal.transfer.TransferState;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -23,9 +25,9 @@ class TransferOptionsTest {
     @Test
     @DisplayName("Instantiates with given data")
     void instantiatesWithGivenData() {
-        TransferStateChangedCallback stateChanged = change -> {};
-        TransferProgressUpdatedCallback progressUpdated = update -> {};
-        TransferSlotReleasedCallback slotReleased = transfer -> {};
+        Consumer<TransferStateChange> stateChanged = change -> {};
+        Consumer<TransferProgressUpdate> progressUpdated = update -> {};
+        Consumer<Transfer> slotReleased = transfer -> {};
         TransferReporter reporter = (transfer, attempted, granted, transferred) -> {};
 
         TransferOptions options = TransferOptions.builder()
@@ -70,8 +72,8 @@ class TransferOptionsTest {
     @Test
     @DisplayName("WithAdditionalStateChanged retains other options")
     void withAdditionalStateChangedRetainsOtherOptions() {
-        TransferProgressUpdatedCallback progress = update -> {};
-        TransferSlotReleasedCallback released = transfer -> {};
+        Consumer<TransferProgressUpdate> progress = update -> {};
+        Consumer<Transfer> released = transfer -> {};
         TransferReporter reporter = (transfer, attempted, granted, transferred) -> {};
         TransferOptions original = TransferOptions.builder()
                 .progressUpdated(progress)
@@ -93,7 +95,7 @@ class TransferOptionsTest {
         assertFalse(copy.disposeInputStreamOnCompletion());
         assertTrue(copy.disposeOutputStreamOnCompletion());
         assertNotSame(original.stateChanged(), copy.stateChanged());
-        copy.stateChanged().onStateChanged(new TransferStateChange(TransferState.NONE, null));
+        copy.stateChanged().accept(new TransferStateChange(TransferState.NONE, null));
     }
 
     @Test
@@ -104,7 +106,7 @@ class TransferOptionsTest {
                 TransferOptions.builder().stateChanged(change -> order.add(2)).build();
         TransferOptions copy = original.withAdditionalStateChanged(change -> order.add(1));
 
-        copy.stateChanged().onStateChanged(new TransferStateChange(TransferState.NONE, null));
+        copy.stateChanged().accept(new TransferStateChange(TransferState.NONE, null));
 
         assertEquals(List.of(1, 2), order);
     }
@@ -124,7 +126,7 @@ class TransferOptionsTest {
 
         RuntimeException thrown = assertThrows(
                 RuntimeException.class,
-                () -> copy.stateChanged().onStateChanged(new TransferStateChange(TransferState.NONE, null)));
+                () -> copy.stateChanged().accept(new TransferStateChange(TransferState.NONE, null)));
 
         assertSame(failure, thrown);
         assertEquals(List.of(1), order);
