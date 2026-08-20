@@ -135,7 +135,7 @@ public final class DefaultPeerMessageHandler implements PeerMessageHandler {
         this.responses = Objects.requireNonNull(responses, "responses");
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
-                : diagnosticFactory.forSource(DefaultPeerMessageHandler.class);
+                : DiagnosticSink.forSource(diagnosticFactory, DefaultPeerMessageHandler.class);
     }
 
     @Override

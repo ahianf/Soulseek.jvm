@@ -189,7 +189,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         this.networkExecutor = Objects.requireNonNull(networkExecutor, "networkExecutor");
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
-                : diagnosticFactory.forSource(DefaultServerMessageHandler.class);
+                : DiagnosticSink.forSource(diagnosticFactory, DefaultServerMessageHandler.class);
         for (ServerMessageEvent event : ServerMessageEvent.values()) {
             listeners.put(event, new CopyOnWriteArrayList<>());
         }

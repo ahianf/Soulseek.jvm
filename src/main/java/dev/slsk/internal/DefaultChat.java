@@ -46,7 +46,7 @@ final class DefaultChat implements Chat {
         this.client = Objects.requireNonNull(client, "client");
         this.server = client.server();
         this.events = Objects.requireNonNull(events, "events");
-        this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics").forSource(DefaultChat.class);
+        this.diagnostics = DiagnosticSink.forSource(diagnostics, DefaultChat.class);
         client.events().on(Kind.PRIVATE_MESSAGE_RECEIVED, (PrivateMessageReceivedEvent event) -> onMessage(event));
     }
 

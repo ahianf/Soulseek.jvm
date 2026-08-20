@@ -97,7 +97,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
         this.networkExecutor = Objects.requireNonNull(networkExecutor, "networkExecutor");
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
-                : diagnosticFactory.forSource(DefaultDistributedMessageHandler.class);
+                : DiagnosticSink.forSource(diagnosticFactory, DefaultDistributedMessageHandler.class);
     }
 
     @Override

@@ -112,7 +112,7 @@ public final class EventBus<T> implements EventStream<T>, AutoCloseable {
      */
     public EventBus(String name, DiagnosticSink diagnostics) {
         this.name = Objects.requireNonNull(name, "name");
-        this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics").forSource(EventBus.class);
+        this.diagnostics = DiagnosticSink.forSource(diagnostics, EventBus.class);
         this.deliveryThread = Thread.ofVirtual().name("soulseek-events-" + name).start(this::deliverContinuously);
     }
 

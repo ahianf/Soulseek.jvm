@@ -228,7 +228,7 @@ final class TransferDomain implements PeerServices {
             Scheduler scheduler,
             NetworkExecutor networkExecutor) {
         this.options = Objects.requireNonNull(options, "options");
-        this.diagnostic = Objects.requireNonNull(diagnostic, "diagnostic").forSource(TransferDomain.class);
+        this.diagnostic = DiagnosticSink.forSource(diagnostic, TransferDomain.class);
         this.waiter = Objects.requireNonNull(waiter, "waiter");
         this.peers = Objects.requireNonNull(peers, "peers");
         this.endpoints = Objects.requireNonNull(endpoints, "endpoints");

@@ -102,7 +102,7 @@ public final class DefaultSearchResponder implements SearchResponder {
         this.advertisedUploadSpeed = Objects.requireNonNull(advertisedUploadSpeed, "advertisedUploadSpeed");
         diagnostic = diagnosticFactory == null
                 ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
-                : diagnosticFactory.forSource(DefaultSearchResponder.class);
+                : DiagnosticSink.forSource(diagnosticFactory, DefaultSearchResponder.class);
     }
 
     @Override

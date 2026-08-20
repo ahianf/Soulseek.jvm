@@ -51,9 +51,10 @@ public interface DiagnosticSink {
         warning(message.get(), exception);
     }
 
-    /** Returns a view whose events identify the component that owns it. */
-    default DiagnosticSink forSource(Class<?> source) {
+    /** Binds the built-in sink to an owner without changing injected sinks. */
+    static DiagnosticSink forSource(DiagnosticSink sink, Class<?> source) {
+        Objects.requireNonNull(sink, "sink");
         Objects.requireNonNull(source, "source");
-        return this;
+        return sink instanceof FilteringDiagnosticSink filtering ? filtering.forSource(source) : sink;
     }
 }

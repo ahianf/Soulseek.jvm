@@ -69,7 +69,7 @@ final class DefaultUsers implements Users {
         this.client = Objects.requireNonNull(client, "client");
         this.directory = client.users();
         this.events = Objects.requireNonNull(events, "events");
-        this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics").forSource(DefaultUsers.class);
+        this.diagnostics = DiagnosticSink.forSource(diagnostics, DefaultUsers.class);
         client.events().on(Kind.LOGGED_IN, (Void ignored) -> reregister());
         client.events()
                 .on(

@@ -127,7 +127,6 @@ public final class FilteringDiagnosticSink implements DiagnosticSink {
         }
     }
 
-    @Override
     public DiagnosticSink forSource(Class<?> source) {
         return new FilteringDiagnosticSink(minimumLevel, eventHandler, source.getName());
     }

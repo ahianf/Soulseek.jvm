@@ -251,7 +251,7 @@ final class SoulseekEngine implements AutoCloseable {
                 ? new FilteringDiagnosticSink(
                         this.options.minimumDiagnosticLevel(),
                         eventData -> events.publish(Kind.DIAGNOSTIC_GENERATED, eventData))
-                : diagnosticFactory.forSource(SoulseekEngine.class);
+                : DiagnosticSink.forSource(diagnosticFactory, SoulseekEngine.class);
         this.server = new ServerLink(this.waiter, diagnostic, () -> state);
         this.server.connection(serverConnection);
         this.rooms = new RoomRegistry(this.waiter, server);
