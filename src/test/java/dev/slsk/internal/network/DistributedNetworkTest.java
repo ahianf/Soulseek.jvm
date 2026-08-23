@@ -487,6 +487,42 @@ class DistributedNetworkTest {
     }
 
     @Test
+    void hungCandidateDoesNotPermanentlyBlockFutureParentAttempts() {
+        Fixture fixture = fixture();
+        long originalTimeout = DistributedNetwork.CANDIDATE_JOIN_TIMEOUT_MS;
+        DistributedNetwork.CANDIDATE_JOIN_TIMEOUT_MS = 50;
+        try {
+            // No onByteWrite configured: this candidate connects but never
+            // answers with branch info, so its wait never settles on its own —
+            // the way a real candidate would hang if its own timeout machinery
+            // were starved by a loaded host, as happened in production.
+            ConnectionProbe hung = ConnectionProbe.message(USERNAME, ENDPOINT);
+            fixture.factory.distributedDirect.put(ENDPOINT, hung);
+
+            fixture.manager.addParentConnection(List.of(new PeerEndpoint(USERNAME, ENDPOINT)));
+
+            assertFalse(fixture.manager.hasParent());
+            assertTrue(fixture.diagnostic.containsWarning("Failed to connect to any"));
+
+            // The single-flight gate must have cleared despite the hang above:
+            // a later, healthy candidate can still be adopted. Before the join
+            // in attemptCandidates was bounded, this second call silently
+            // no-op'd forever — the exact bug that left a real node parentless
+            // for hours after one candidate connection wedged under load.
+            InetSocketAddress recoveryEndpoint = endpoint(42099);
+            ConnectionProbe recovered = initializedParent("recovered", recoveryEndpoint, 0, "recovered");
+            fixture.factory.distributedDirect.put(recoveryEndpoint, recovered);
+
+            fixture.manager.addParentConnection(List.of(new PeerEndpoint("recovered", recoveryEndpoint)));
+
+            assertTrue(fixture.manager.hasParent());
+            assertEquals("recovered", fixture.manager.getParent().username());
+        } finally {
+            DistributedNetwork.CANDIDATE_JOIN_TIMEOUT_MS = originalTimeout;
+        }
+    }
+
+    @Test
     void indirectParentSolicitationHandoffsAndStartsReading() {
         Fixture fixture = fixture();
         ConnectionProbe direct = ConnectionProbe.message(USERNAME, ENDPOINT);

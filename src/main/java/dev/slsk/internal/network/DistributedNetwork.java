@@ -72,6 +72,24 @@ public final class DistributedNetwork implements DistributedConnectionManager {
     static final int STATUS_DEBOUNCE_TIME = 5_000;
     static final int WATCHDOG_TIME = 900_000;
     static final double LATENCY_ALPHA = 0.005d;
+    /**
+     * Backstop for joining one candidate's connection attempt in {@link
+     * #attemptCandidates}.
+     *
+     * <p>Every candidate is expected to settle well within this on its own —
+     * connecting and negotiating branch info are already independently
+     * timed. This bound exists for the case where that inner timeout
+     * machinery is itself starved (a loaded host can delay a scheduled
+     * timeout task same as anything else) and a candidate's future never
+     * completes: without it, the join below blocks forever, {@code
+     * parentConnecting} never clears in {@link #addParentConnection}'s
+     * {@code finally}, and the mesh stays parentless until the process is
+     * restarted.
+     *
+     * <p>Package-visible and non-final so a test can shorten it rather than
+     * waiting out the real default.
+     */
+    static long CANDIDATE_JOIN_TIMEOUT_MS = 60_000;
 
     /** The live options; a reconfigure replaces them under a running mesh. */
     private final Supplier<SoulseekClientOptions> options;
@@ -394,16 +412,21 @@ public final class DistributedNetwork implements DistributedConnectionManager {
         }
 
         List<ParentCandidate> successful = new ArrayList<>(attempts.size());
-        for (Future<ParentCandidate> attempt : attempts) {
+        for (int i = 0; i < attempts.size(); i++) {
+            Future<ParentCandidate> attempt = attempts.get(i);
             ParentCandidate candidate;
             try {
-                candidate = attempt.get();
+                candidate = attempt.get(CANDIDATE_JOIN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
             } catch (InterruptedException interrupted) {
+                attempts.subList(i, attempts.size()).forEach(remaining -> remaining.cancel(true));
                 Thread.currentThread().interrupt();
                 break;
-            } catch (ExecutionException | CancellationException failure) {
+            } catch (TimeoutException | ExecutionException | CancellationException failure) {
                 // Every attempt reports its own failure on the way out; one
-                // candidate refusing us says nothing about the rest.
+                // candidate refusing us says nothing about the rest. Cancelling
+                // here also reclaims a candidate that timed out at this join
+                // rather than on its own.
+                attempt.cancel(true);
                 continue;
             }
             if (candidate != null && candidate.connection().getState() == TransportState.CONNECTED) {
