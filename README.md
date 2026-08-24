@@ -27,8 +27,6 @@ Then add it to an application:
 </dependency>
 ```
 
-The artifact is not currently published to Maven Central.
-
 ## Connect
 
 Create one process-lifetime client. Building does not connect; the connection

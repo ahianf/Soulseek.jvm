@@ -15,13 +15,8 @@ Everything in this document is the current public surface. Public entry points
 and shared control contracts stay in `dev.slsk`; requests and snapshots are
 grouped by the capability that owns them.
 
-All source links and examples use the current `dev.slsk` namespace. The former
-`tenine` package names are not part of the API.
-
-This document describes the 2.0 surface. The one change from 1.x is the
-cancellation model: blocking methods no longer take a `CancellationSignal` —
-they respond to thread interruption and offer a `Duration` deadline overload
-instead (see [3.2](#32-blocking-calls-virtual-threads-interruption)).
+Blocking methods respond to thread interruption and offer a `Duration` deadline
+overload instead (see [3.2](#32-blocking-calls-virtual-threads-interruption)).
 
 ---
 
