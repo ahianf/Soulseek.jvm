@@ -230,6 +230,28 @@ class MessageConnectionTest {
     }
 
     @Test
+    @DisplayName("Continuous read rejects an oversized distributed frame before reading its payload")
+    void rejectsOversizedDistributedFrame() throws Exception {
+        DefaultMessageConnection connection = connectionForHeader(1, 16 * 1024 + 1, new byte[] {0});
+
+        MessageException failure = assertThrows(MessageException.class, () -> connection.awaitDisconnect(null));
+
+        assertEquals("Incoming frame length 16385 exceeds maximum 16384", failure.getMessage());
+        connection.close();
+    }
+
+    @Test
+    @DisplayName("Continuous read rejects an oversized ordinary peer frame before reading its payload")
+    void rejectsOversizedPeerFrame() throws Exception {
+        DefaultMessageConnection connection = connectionForHeader(4, 16 * 1024 * 1024 + 1, new byte[] {8, 0, 0, 0});
+
+        MessageException failure = assertThrows(MessageException.class, () -> connection.awaitDisconnect(null));
+
+        assertEquals("Incoming frame length 16777217 exceeds maximum 16777216", failure.getMessage());
+        connection.close();
+    }
+
+    @Test
     @DisplayName("Message write serializes once and raises after completion")
     void writesMessage() throws Exception {
         FakeStream stream = new FakeStream();
@@ -311,6 +333,18 @@ class MessageConnectionTest {
                 .put(code)
                 .put(payload);
         return result;
+    }
+
+    private static DefaultMessageConnection connectionForHeader(int codeLength, int length, byte[] code) {
+        byte[] header = ByteBuffer.allocate(4 + codeLength)
+                .order(ByteOrder.LITTLE_ENDIAN)
+                .putInt(length)
+                .put(code)
+                .array();
+        DefaultMessageConnection connection = new DefaultMessageConnection(
+                "alice", ENDPOINT, OPTIONS, codeLength, new FakeSocketConnector(new FakeStream(header), true), Monitors.shared());
+        connection.startReadingContinuously();
+        return connection;
     }
 
     private static void awaitCondition(CheckedBoolean condition) throws Exception {

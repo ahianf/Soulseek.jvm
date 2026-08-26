@@ -28,6 +28,15 @@ import java.util.function.Consumer;
 /** Provides framed client connections to the Soulseek network. */
 public final class DefaultMessageConnection extends SocketConnection implements MessageConnection {
 
+    // Nicotine+ applies these limits before buffering an incoming frame.
+    // Browse and user-information responses are the only peer messages that
+    // legitimately need the larger allowance.
+    private static final int MAX_INCOMING_MESSAGE_SIZE_LARGE = 448 * 1024 * 1024;
+    private static final int MAX_INCOMING_MESSAGE_SIZE_MEDIUM = 16 * 1024 * 1024;
+    private static final int MAX_INCOMING_MESSAGE_SIZE_SMALL = 16 * 1024;
+    private static final int BROWSE_RESPONSE_CODE = 5;
+    private static final int INFO_RESPONSE_CODE = 16;
+
     private final CopyOnWriteArrayList<Consumer<? super MessageDataEvent>> messageDataReadListeners =
             new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<Consumer<? super MessageEvent>> messageReadListeners =
@@ -223,6 +232,11 @@ public final class DefaultMessageConnection extends SocketConnection implements 
                             "Invalid frame length " + length + " for a " + codeLength + "-byte message code");
                 }
                 byte[] codeBytes = Arrays.copyOfRange(header, 4, header.length);
+                int maximumLength = maximumIncomingMessageSize(codeBytes);
+                if (length > maximumLength) {
+                    throw new MessageException(
+                            "Incoming frame length " + length + " exceeds maximum " + maximumLength);
+                }
                 codeHolder[0] = codeBytes;
 
                 publishMessageDataRead(codeBytes, 0, length - codeLength);
@@ -249,6 +263,19 @@ public final class DefaultMessageConnection extends SocketConnection implements 
         } finally {
             readingContinuously = false;
         }
+    }
+
+    private int maximumIncomingMessageSize(byte[] codeBytes) {
+        if (isServerConnection()) {
+            return MAX_INCOMING_MESSAGE_SIZE_LARGE;
+        }
+        if (codeLength == 1) {
+            return MAX_INCOMING_MESSAGE_SIZE_SMALL;
+        }
+        int code = ByteBuffer.wrap(codeBytes).order(ByteOrder.LITTLE_ENDIAN).getInt();
+        return code == BROWSE_RESPONSE_CODE || code == INFO_RESPONSE_CODE
+                ? MAX_INCOMING_MESSAGE_SIZE_LARGE
+                : MAX_INCOMING_MESSAGE_SIZE_MEDIUM;
     }
 
     private void bindConnectedReadLoop() {

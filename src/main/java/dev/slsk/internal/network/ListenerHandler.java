@@ -34,6 +34,10 @@ import org.slf4j.LoggerFactory;
  */
 public final class ListenerHandler {
     private static final Logger LOG = LoggerFactory.getLogger(ListenerHandler.class);
+    // Nicotine+ limits direct initialization frames to 16 KiB.  A direct
+    // connection starts with either an 8-byte PierceFirewall message or a
+    // small PeerInit message, so this is still deliberately generous.
+    private static final int MAX_INITIALIZATION_MESSAGE_BYTES = 16 * 1024;
     private final Supplier<SoulseekClientOptions> options;
     private final Supplier<Listener> listener;
     private final Supplier<PeerConnectionManager> peers;
@@ -72,6 +76,9 @@ public final class ListenerHandler {
             byte[] lengthBytes = connection.read(4);
             int length =
                     ByteBuffer.wrap(lengthBytes).order(ByteOrder.LITTLE_ENDIAN).getInt();
+            if (length < 0 || length > MAX_INITIALIZATION_MESSAGE_BYTES) {
+                throw new ConnectionException("Invalid initialization message length: " + length);
+            }
             byte[] body = connection.read(length);
             byte[] message = Arrays.copyOf(lengthBytes, lengthBytes.length + body.length);
             System.arraycopy(body, 0, message, lengthBytes.length, body.length);

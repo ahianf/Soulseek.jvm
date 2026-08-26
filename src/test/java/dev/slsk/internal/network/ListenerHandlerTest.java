@@ -64,6 +64,21 @@ class ListenerHandlerTest {
     }
 
     @Test
+    void oversizedInitializationMessageDisconnectsBeforeReadingItsBody() throws Exception {
+        try (Fixture fixture = fixture(null)) {
+            ConnectionProbe connection = ConnectionProbe.declaredLength(16 * 1024 + 1);
+
+            fixture.handler.handleConnection(connection.proxy);
+
+            assertTrue(connection.disconnectedException
+                    .getMessage()
+                    .contains("Invalid initialization message length: 16385"));
+            assertTrue(connection.closed);
+            assertEquals(0, connection.reads.size());
+        }
+    }
+
+    @Test
     void peerAndDistributedInitializationsRouteConnections() throws Exception {
         try (Fixture fixture = fixture(null)) {
             ConnectionProbe peer =
@@ -341,6 +356,15 @@ class ListenerHandlerTest {
         static ConnectionProbe failure(Throwable failure) {
             ConnectionProbe probe = new ConnectionProbe();
             probe.reads.add(CompletableFuture.failedFuture(failure));
+            return probe;
+        }
+
+        static ConnectionProbe declaredLength(int length) {
+            ConnectionProbe probe = new ConnectionProbe();
+            probe.reads.add(CompletableFuture.completedFuture(ByteBuffer.allocate(4)
+                    .order(ByteOrder.LITTLE_ENDIAN)
+                    .putInt(length)
+                    .array()));
             return probe;
         }
     }
