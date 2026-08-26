@@ -126,37 +126,6 @@ public record SoulseekClientOptions(
         return new Builder();
     }
 
-    /** Starts a builder initialized from existing options. */
-    public static Builder builder(SoulseekClientOptions source) {
-        return new Builder(source);
-    }
-
-    /** Returns a copy with the supplied patch applied. */
-    public SoulseekClientOptions with(SoulseekClientOptionsPatch patch) {
-        Objects.requireNonNull(patch, "patch");
-        Builder builder = builder(this);
-        patch.enableListener().ifPresent(builder::enableListener);
-        patch.listenIpAddress().ifPresent(builder::listenIpAddress);
-        patch.listenPort().ifPresent(builder::listenPort);
-        patch.enableDistributedNetwork().ifPresent(builder::enableDistributedNetwork);
-        patch.acceptDistributedChildren().ifPresent(builder::acceptDistributedChildren);
-        patch.distributedChildLimit().ifPresent(builder::distributedChildLimit);
-        patch.maximumUploadSpeed().ifPresent(builder::maximumUploadSpeed);
-        patch.maximumDownloadSpeed().ifPresent(builder::maximumDownloadSpeed);
-        patch.deduplicateSearchRequests().ifPresent(builder::deduplicateSearchRequests);
-        patch.autoAcknowledgePrivateMessages().ifPresent(builder::autoAcknowledgePrivateMessages);
-        patch.autoAcknowledgePrivilegeNotifications().ifPresent(builder::autoAcknowledgePrivilegeNotifications);
-        patch.acceptPrivateRoomInvitations().ifPresent(builder::acceptPrivateRoomInvitations);
-        patch.serverConnectionOptions().ifPresent(builder::serverConnectionOptions);
-        patch.peerConnectionOptions().ifPresent(builder::peerConnectionOptions);
-        patch.transferConnectionOptions().ifPresent(builder::transferConnectionOptions);
-        patch.incomingConnectionOptions().ifPresent(builder::incomingConnectionOptions);
-        patch.distributedConnectionOptions().ifPresent(builder::distributedConnectionOptions);
-        patch.userEndpointCache().ifPresent(builder::userEndpointCache);
-        patch.searchResponseCache().ifPresent(builder::searchResponseCache);
-        return builder.build();
-    }
-
     /** Returns the fixed per-user upload-slot limit. */
     public int maximumConcurrentUploadsPerUser() {
         return 1;
@@ -190,35 +159,6 @@ public record SoulseekClientOptions(
         private UserEndpointCache userEndpointCache;
 
         private Builder() {}
-
-        private Builder(SoulseekClientOptions source) {
-            Objects.requireNonNull(source, "source");
-            enableListener = source.enableListener;
-            listenIpAddress = source.listenIpAddress;
-            listenPort = source.listenPort;
-            enableDistributedNetwork = source.enableDistributedNetwork;
-            acceptDistributedChildren = source.acceptDistributedChildren;
-            distributedChildLimit = source.distributedChildLimit;
-            maximumConcurrentSearches = source.maximumConcurrentSearches;
-            maximumConcurrentUploads = source.maximumConcurrentUploads;
-            maximumUploadSpeed = source.maximumUploadSpeed;
-            maximumConcurrentDownloads = source.maximumConcurrentDownloads;
-            maximumDownloadSpeed = source.maximumDownloadSpeed;
-            deduplicateSearchRequests = source.deduplicateSearchRequests;
-            messageTimeout = source.messageTimeout;
-            autoAcknowledgePrivateMessages = source.autoAcknowledgePrivateMessages;
-            autoAcknowledgePrivilegeNotifications = source.autoAcknowledgePrivilegeNotifications;
-            acceptPrivateRoomInvitations = source.acceptPrivateRoomInvitations;
-            minimumDiagnosticLevel = source.minimumDiagnosticLevel;
-            startingToken = source.startingToken;
-            serverConnectionOptions = source.serverConnectionOptions;
-            peerConnectionOptions = source.peerConnectionOptions;
-            transferConnectionOptions = source.transferConnectionOptions;
-            incomingConnectionOptions = source.incomingConnectionOptions;
-            distributedConnectionOptions = source.distributedConnectionOptions;
-            userEndpointCache = source.userEndpointCache;
-            searchResponseCache = source.searchResponseCache;
-        }
 
         public Builder enableListener(boolean value) {
             enableListener = value;

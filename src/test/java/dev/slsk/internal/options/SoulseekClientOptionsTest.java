@@ -160,60 +160,6 @@ class SoulseekClientOptionsTest {
     }
 
     @Test
-    void withAppliesPatchAndPreservesSourceCloneBehavior() {
-        ConnectionOptions peer = ConnectionOptions.builder().readBufferSize(7).build();
-        SoulseekClientOptions original = complete(1234, 2, 44, 42, 24);
-        SoulseekClientOptionsPatch patch = SoulseekClientOptionsPatch.builder()
-                .enableListener(false)
-                .listenIpAddress(InetAddress.getLoopbackAddress())
-                .listenPort(2345)
-                .enableDistributedNetwork(false)
-                .acceptDistributedChildren(false)
-                .distributedChildLimit(3)
-                .maximumUploadSpeed(4)
-                .maximumDownloadSpeed(5)
-                .deduplicateSearchRequests(false)
-                .autoAcknowledgePrivateMessages(false)
-                .autoAcknowledgePrivilegeNotifications(false)
-                .acceptPrivateRoomInvitations(true)
-                .peerConnectionOptions(peer)
-                .build();
-
-        SoulseekClientOptions copy = original.with(patch);
-
-        assertFalse(copy.enableListener());
-        assertEquals(2345, copy.listenPort());
-        assertFalse(copy.enableDistributedNetwork());
-        assertFalse(copy.acceptDistributedChildren());
-        assertEquals(3, copy.distributedChildLimit());
-        assertEquals(4, copy.maximumUploadSpeed());
-        assertEquals(5, copy.maximumDownloadSpeed());
-        assertFalse(copy.deduplicateSearchRequests());
-        assertFalse(copy.autoAcknowledgePrivateMessages());
-        assertFalse(copy.autoAcknowledgePrivilegeNotifications());
-        assertTrue(copy.acceptPrivateRoomInvitations());
-        assertSame(peer, copy.peerConnectionOptions());
-        assertEquals(42, copy.maximumConcurrentUploads());
-        assertEquals(24, copy.maximumConcurrentDownloads());
-        assertEquals(DiagnosticSeverity.NONE, copy.minimumDiagnosticLevel());
-
-        // Not patchable, so a customized limit must survive an unrelated patch.
-        assertEquals(44, copy.maximumConcurrentSearches());
-    }
-
-    @Test
-    void withRejectsNullAndEmptyPatchRetainsPatchableValues() {
-        SoulseekClientOptions original = complete(1234, 7, 8, 9, 10);
-
-        assertThrows(NullPointerException.class, () -> original.with(null));
-        SoulseekClientOptions copy = original.with(new SoulseekClientOptionsPatch());
-        assertEquals(1234, copy.listenPort());
-        assertEquals(8, copy.maximumConcurrentSearches());
-        assertEquals(9, copy.maximumConcurrentUploads());
-        assertEquals(10, copy.maximumConcurrentDownloads());
-    }
-
-    @Test
     void builderPreservesUnspecifiedDefaults() {
         assertEquals(
                 "0.0.0.0",
