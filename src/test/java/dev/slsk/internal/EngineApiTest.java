@@ -77,8 +77,7 @@ class EngineApiTest {
             "getPort",
             "getServerInfo",
             "getState",
-            "getUsername",
-            "reconfigureOptions");
+            "getUsername");
 
     /**
      * Blocking operations with a facet waiting to take them.

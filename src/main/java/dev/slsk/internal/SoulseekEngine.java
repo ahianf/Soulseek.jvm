@@ -62,7 +62,6 @@ import dev.slsk.internal.options.BrowseOptions;
 import dev.slsk.internal.options.BrowseProgressUpdate;
 import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.SoulseekClientOptions;
-import dev.slsk.internal.options.SoulseekClientOptionsPatch;
 import dev.slsk.internal.search.DefaultSearchResponder;
 import dev.slsk.internal.search.SearchInternal;
 import dev.slsk.internal.search.SearchResponder;
@@ -110,7 +109,7 @@ final class SoulseekEngine implements AutoCloseable {
     private static final String DEFAULT_ADDRESS = "server.slsknet.org";
     private static final int DEFAULT_PORT = 2271;
 
-    volatile SoulseekClientOptions options;
+    final SoulseekClientOptions options;
     private final int minorVersion;
     final Waiter waiter;
     private final TokenFactory tokenFactory;
@@ -613,68 +612,6 @@ final class SoulseekEngine implements AutoCloseable {
                 CancellationSignals.orNone(cancellationSignal));
     }
 
-    /**
-     * Applies a patch to the current client options.
-     *
-     * @param patch the option substitutions
-     * @return whether reconnecting is required for full effect
-     */
-    private boolean reconfigureOptionsOperation(SoulseekClientOptionsPatch patch) {
-        return reconfigureOptionsOperation(patch, CancellationSignal.none());
-    }
-
-    /**
-     * Applies a patch to the current client options.
-     *
-     * @param patch the option substitutions
-     * @param cancellationSignal the cancellation signal
-     * @return whether reconnecting is required for full effect
-     */
-    private boolean reconfigureOptionsOperation(
-            SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
-        Objects.requireNonNull(patch, "patch");
-        boolean addressChanged = patch.listenIpAddress()
-                .filter(value -> !value.equals(options.listenIpAddress()))
-                .isPresent();
-        boolean portChanged = patch.listenPort()
-                .filter(value -> value != options.listenPort())
-                .isPresent();
-        if (addressChanged || portChanged) {
-            InetAddress newAddress = patch.listenIpAddress().orElse(options.listenIpAddress());
-            int newPort = patch.listenPort().orElse(options.listenPort());
-            Listener probe = null;
-            try {
-                probe = clientListenerFactory.create(newAddress, newPort, options.incomingConnectionOptions());
-                probe.start();
-            } catch (Throwable failure) {
-                throw new ListenException("Failed to start listening on "
-                        + newAddress + ":" + newPort
-                        + "; the IP and/or port may be in use or "
-                        + "are otherwise unavailable");
-            } finally {
-                if (probe != null) {
-                    probe.stop();
-                }
-            }
-        }
-        CancellationSignal token = CancellationSignals.orNone(cancellationSignal);
-        try {
-            // Never held on the failing path, so nothing to unlock.
-            Locks.acquire(stateLock, token);
-        } catch (InterruptedException interrupted) {
-            throw new InterruptedOperationException("The reconfiguration invocation was interrupted", interrupted);
-        } catch (RuntimeException failure) {
-            throw reportReconfigureFailure(failure);
-        }
-        try {
-            return performReconfigureOptions(patch, token);
-        } catch (Throwable failure) {
-            throw reportReconfigureFailure(failure);
-        } finally {
-            stateLock.unlock();
-        }
-    }
-
     /** Disconnects with the default reason. */
     public void disconnect() {
         disconnect(null, null);
@@ -1063,124 +1000,6 @@ final class SoulseekEngine implements AutoCloseable {
         distributedConnectionManager.updateStatus(cancellationSignal);
     }
 
-    // ---- reconfiguration --------------------------------------------------
-    //
-    // Applying an option patch to a running client: swapping the listener,
-    // resizing the rate-limit buckets, and deciding whether the change needs a
-    // reconnect. This lived in a class of its own that took the client whole,
-    // because routing it through a seam interface would have meant a dozen
-    // accessors for one caller. Now that the client is an engine rather than an
-    // API, it is simply the engine's own work.
-    //
-    // No facet exposes this: options are set at build time. It stays because it
-    // is the machinery a runtime speed limit needs, and Downloads.policy will.
-
-    private boolean performReconfigureOptions(SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal)
-            throws InterruptedException, TimeoutException {
-        boolean connected = isConnectedAndLoggedIn();
-        boolean enableDistributedNetworkChanged = patch.enableDistributedNetwork()
-                .filter(value -> value != options.enableDistributedNetwork())
-                .isPresent();
-        boolean acceptDistributedChildrenChanged = patch.acceptDistributedChildren()
-                .filter(value -> value != options.acceptDistributedChildren())
-                .isPresent();
-        boolean distributedConnectionOptionsChanged = patch.distributedConnectionOptions()
-                .filter(value -> value != options.distributedConnectionOptions())
-                .isPresent();
-        boolean distributedNetworkWasDisabled = enableDistributedNetworkChanged
-                && !patch.enableDistributedNetwork().orElseThrow();
-        boolean distributedChildrenWereDisabled = acceptDistributedChildrenChanged
-                && !patch.acceptDistributedChildren().orElseThrow();
-        boolean reconnectRequired = connected
-                && (distributedNetworkWasDisabled
-                        || distributedChildrenWereDisabled
-                        || distributedConnectionOptionsChanged);
-        boolean serverConnectionOptionsChanged = patch.serverConnectionOptions()
-                .filter(value -> value != options.serverConnectionOptions())
-                .isPresent();
-        if (connected && serverConnectionOptionsChanged) {
-            reconnectRequired = true;
-        }
-
-        boolean enableListenerChanged = patch.enableListener()
-                .filter(value -> value != options.enableListener())
-                .isPresent();
-        boolean listenAddressChanged = patch.listenIpAddress()
-                .filter(value -> !value.equals(options.listenIpAddress()))
-                .isPresent();
-        boolean listenPortChanged = patch.listenPort()
-                .filter(value -> value != options.listenPort())
-                .isPresent();
-        boolean incomingConnectionOptionsChanged = patch.incomingConnectionOptions()
-                .filter(value -> value != options.incomingConnectionOptions())
-                .isPresent();
-
-        if (enableListenerChanged || listenAddressChanged || listenPortChanged || incomingConnectionOptionsChanged) {
-            boolean wasListening = listener != null && listener.isListening();
-            if (listener != null) {
-                listener.stop();
-            }
-            listener = null;
-            options = options.with(listenerPatch(patch));
-            if (wasListening && options.enableListener()) {
-                listener = clientListenerFactory.create(
-                        options.listenIpAddress(), options.listenPort(), options.incomingConnectionOptions());
-                listener.subscribe(listenerHandler::handleConnection);
-                listener.start();
-            }
-        }
-
-        boolean maximumUploadSpeedChanged = patch.maximumUploadSpeed()
-                .filter(value -> value != options.maximumUploadSpeed())
-                .isPresent();
-        boolean maximumDownloadSpeedChanged = patch.maximumDownloadSpeed()
-                .filter(value -> value != options.maximumDownloadSpeed())
-                .isPresent();
-        options = options.with(patch);
-
-        if (maximumUploadSpeedChanged) {
-            uploadTokenBucket.setCapacity((options.maximumUploadSpeed() * 1024L) / 10);
-        }
-        if (maximumDownloadSpeedChanged) {
-            downloadTokenBucket.setCapacity((options.maximumDownloadSpeed() * 1024L) / 10);
-        }
-
-        diagnostic.info("Options reconfigured successfully");
-        if (!isConnectedAndLoggedIn()) {
-            return false;
-        }
-        diagnostic.debug("Updating server with latest configuration");
-        sendConfigurationMessages(cancellationSignal);
-        if (reconnectRequired) {
-            diagnostic.warning("Server reconnect required for options " + "to fully take effect");
-        }
-        return reconnectRequired;
-    }
-
-    /** Classifies a reconfiguration failure, which is never rolled back. */
-    private RuntimeException reportReconfigureFailure(Throwable cause) {
-        if (cause instanceof CancellationException || cause instanceof TimeoutException) {
-            throw Failures.surface(cause);
-        }
-        throw new SoulseekClientException(
-                "Failed to reconfigure options: "
-                        + Failures.message(cause)
-                        + ".  Any successful reconfiguration has not "
-                        + "been rolled back; retry with the same patch "
-                        + "until successful or consider this as a "
-                        + "fatal Exception",
-                cause);
-    }
-
-    private static SoulseekClientOptionsPatch listenerPatch(SoulseekClientOptionsPatch patch) {
-        SoulseekClientOptionsPatch.Builder builder = SoulseekClientOptionsPatch.builder();
-        patch.enableListener().ifPresent(builder::enableListener);
-        patch.listenIpAddress().ifPresent(builder::listenIpAddress);
-        patch.listenPort().ifPresent(builder::listenPort);
-        patch.incomingConnectionOptions().ifPresent(builder::incomingConnectionOptions);
-        return builder.build();
-    }
-
     boolean isConnectedAndLoggedIn() {
         return state.isLoggedIn();
     }
@@ -1275,14 +1094,6 @@ final class SoulseekEngine implements AutoCloseable {
     public void connect(
             String address, int port, String username, String password, CancellationSignal cancellationSignal) {
         connectOperation(address, port, username, password, cancellationSignal);
-    }
-
-    public Boolean reconfigureOptions(SoulseekClientOptionsPatch patch) {
-        return reconfigureOptionsOperation(patch);
-    }
-
-    public Boolean reconfigureOptions(SoulseekClientOptionsPatch patch, CancellationSignal cancellationSignal) {
-        return reconfigureOptionsOperation(patch, cancellationSignal);
     }
 
     RoomRegistry rooms() {
