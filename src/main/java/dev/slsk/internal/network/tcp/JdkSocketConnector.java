@@ -11,8 +11,6 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 
 /** JDK-socket implementation of {@link SocketConnector}. */
@@ -159,13 +157,17 @@ final class JdkSocketConnector implements SocketConnector {
                     if (!usingCredentials) {
                         throw new ProxyException("Server requests authorization but none " + "was provided");
                     }
-                    List<Byte> credentials = new ArrayList<>();
-                    credentials.add(AUTH_VERSION);
-                    credentials.add((byte) username.length());
-                    addAll(credentials, username.getBytes(StandardCharsets.US_ASCII));
-                    credentials.add((byte) password.length());
-                    addAll(credentials, password.getBytes(StandardCharsets.US_ASCII));
-                    write(transport, toByteArray(credentials), cancellationSignal);
+                    byte[] usernameBytes = username.getBytes(StandardCharsets.US_ASCII);
+                    byte[] passwordBytes = password.getBytes(StandardCharsets.US_ASCII);
+                    byte[] credentials = new byte[3 + usernameBytes.length + passwordBytes.length];
+                    int cursor = 0;
+                    credentials[cursor++] = AUTH_VERSION;
+                    credentials[cursor++] = (byte) usernameBytes.length;
+                    System.arraycopy(usernameBytes, 0, credentials, cursor, usernameBytes.length);
+                    cursor += usernameBytes.length;
+                    credentials[cursor++] = (byte) passwordBytes.length;
+                    System.arraycopy(passwordBytes, 0, credentials, cursor, passwordBytes.length);
+                    write(transport, credentials, cancellationSignal);
 
                     byte[] response = read(transport, buffer, 2, cancellationSignal);
                     if (response.length != 2) {
@@ -189,15 +191,16 @@ final class JdkSocketConnector implements SocketConnector {
                     throw new ProxyException("Unknown auth METHOD response from server: " + unsigned(authResponse[1]));
             }
 
-            List<Byte> connection = new ArrayList<>();
-            connection.add(SOCKS_5);
-            connection.add(CONNECT);
-            connection.add(EMPTY);
-            connection.add(IPV4);
-            addAll(connection, destinationAddress.getAddress());
-            connection.add((byte) (destinationPort >>> 8));
-            connection.add((byte) destinationPort);
-            write(transport, toByteArray(connection), cancellationSignal);
+            byte[] address = destinationAddress.getAddress();
+            byte[] connection = new byte[6 + address.length];
+            connection[0] = SOCKS_5;
+            connection[1] = CONNECT;
+            connection[2] = EMPTY;
+            connection[3] = address.length == 4 ? IPV4 : IPV6;
+            System.arraycopy(address, 0, connection, 4, address.length);
+            connection[connection.length - 2] = (byte) (destinationPort >>> 8);
+            connection[connection.length - 1] = (byte) destinationPort;
+            write(transport, connection, cancellationSignal);
 
             byte[] connectionResponse = read(transport, buffer, 4, CancellationSignal.none());
             if (connectionResponse[0] != SOCKS_5) {
@@ -269,20 +272,6 @@ final class JdkSocketConnector implements SocketConnector {
             throws IOException {
         cancellationSignal.throwIfCancellationRequested();
         transport.write(data, 0, data.length);
-    }
-
-    private static void addAll(List<Byte> list, byte[] bytes) {
-        for (byte value : bytes) {
-            list.add(value);
-        }
-    }
-
-    private static byte[] toByteArray(List<Byte> bytes) {
-        byte[] result = new byte[bytes.size()];
-        for (int index = 0; index < bytes.size(); index++) {
-            result[index] = bytes.get(index);
-        }
-        return result;
     }
 
     private static String connectionFailure(byte code) {
