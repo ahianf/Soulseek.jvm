@@ -16,10 +16,10 @@ import dev.slsk.internal.network.tcp.ConnectionMonitor;
 import dev.slsk.internal.network.tcp.SocketConnection;
 import dev.slsk.internal.network.tcp.SocketConnector;
 import dev.slsk.internal.options.ConnectionOptions;
-import java.io.ByteArrayOutputStream;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
@@ -212,20 +212,18 @@ public final class DefaultMessageConnection extends SocketConnection implements 
                 event -> publishMessageDataRead(codeHolder[0], event.currentLength(), event.totalLength());
         try {
             while (!isClosed()) {
-                ByteArrayOutputStream message = new ByteArrayOutputStream();
-                // Read on this thread. Each of these used to dispatch onto
-                // a fresh virtual thread and block on the future, three
-                // times per frame, on the path that carries distributed
-                // search traffic.
-                byte[] lengthBytes = read(4, null, CancellationSignal.none());
-                int length = ByteBuffer.wrap(lengthBytes)
-                        .order(ByteOrder.LITTLE_ENDIAN)
-                        .getInt();
-                message.writeBytes(lengthBytes);
-
-                byte[] codeBytes = read(codeLength, null, CancellationSignal.none());
+                // Length and code are one fixed-size header. Reading them
+                // together removes one socket read per frame without adding a
+                // persistent connection buffer.
+                byte[] header = new byte[4 + codeLength];
+                readExactly(header, 0, header.length, null, CancellationSignal.none());
+                int length = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN).getInt();
+                if (length < codeLength) {
+                    throw new MessageException(
+                            "Invalid frame length " + length + " for a " + codeLength + "-byte message code");
+                }
+                byte[] codeBytes = Arrays.copyOfRange(header, 4, header.length);
                 codeHolder[0] = codeBytes;
-                message.writeBytes(codeBytes);
 
                 publishMessageDataRead(codeBytes, 0, length - codeLength);
                 publishMessageReceived(length, codeBytes);
@@ -233,9 +231,20 @@ public final class DefaultMessageConnection extends SocketConnection implements 
                 // Passed to the read rather than added to the shared
                 // listener list and removed afterwards, which cost two
                 // CopyOnWriteArrayList copies per message.
-                byte[] payload = read(length - codeLength, payloadProgress, CancellationSignal.none());
-                message.writeBytes(payload);
-                publishMessageRead(message.toByteArray());
+                byte[] message;
+                try {
+                    message = new byte[Math.addExact(4, length)];
+                } catch (ArithmeticException | NegativeArraySizeException invalidLength) {
+                    throw new MessageException("Invalid frame length: " + length, invalidLength);
+                }
+                System.arraycopy(header, 0, message, 0, header.length);
+                readExactly(
+                        message,
+                        header.length,
+                        length - codeLength,
+                        payloadProgress,
+                        CancellationSignal.none());
+                publishMessageRead(message);
             }
         } finally {
             readingContinuously = false;

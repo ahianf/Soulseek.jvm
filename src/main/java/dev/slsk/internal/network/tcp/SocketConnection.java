@@ -17,13 +17,11 @@ import dev.slsk.internal.concurrent.InterruptedOperationException;
 import dev.slsk.internal.events.Subscriptions;
 import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.ProxyOptions;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
-import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.time.Duration;
@@ -439,10 +437,60 @@ public class SocketConnection implements TransportConnection {
             long length, Consumer<ConnectionDataEvent> scopedProgress, CancellationSignal cancellationSignal)
             throws InterruptedException, TimeoutException {
         validateRead(length);
+        if (length > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("length exceeds the largest byte array: " + length);
+        }
         CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        readTo(length, Channels.newChannel(output), SocketConnection::grantAll, null, scopedProgress, token);
-        return output.toByteArray();
+        byte[] result = new byte[(int) length];
+        readExactly(result, 0, result.length, scopedProgress, token);
+        return result;
+    }
+
+    /**
+     * Fills one byte-array range exactly, without adapting it through a channel.
+     *
+     * <p>The framed protocol path already knows the final array and its offsets.
+     * Reading into that array directly avoids a temporary buffer, a channel
+     * wrapper, and the final {@code ByteArrayOutputStream} copy. Transfer reads
+     * retain the governed channel path below.
+     */
+    protected final void readExactly(
+            byte[] destination,
+            int offset,
+            int length,
+            Consumer<ConnectionDataEvent> scopedProgress,
+            CancellationSignal cancellationSignal)
+            throws TimeoutException {
+        Objects.requireNonNull(destination, "destination");
+        Objects.checkFromIndexSize(offset, length, destination.length);
+        validateRead(length);
+        CancellationSignal token = cancellationSignal == null ? CancellationSignal.none() : cancellationSignal;
+        resetInactivityTime();
+        int totalBytesRead = 0;
+
+        try {
+            applyReadTimeout(token);
+            while (!closeStarted.get() && totalBytesRead < length) {
+                token.throwIfCancellationRequested();
+                int bytesRead;
+                try {
+                    int bytesRequested = Math.min(length - totalBytesRead, Math.max(1, options.readBufferSize()));
+                    bytesRead = transport.read(destination, offset + totalBytesRead, bytesRequested);
+                } catch (SocketTimeoutException timeout) {
+                    continue;
+                }
+                if (bytesRead == 0) {
+                    throw new ConnectionException("Remote connection closed");
+                }
+                token.throwIfCancellationRequested();
+                totalBytesRead += bytesRead;
+                emitProgress(dataReadListeners, scopedProgress, totalBytesRead, length, token);
+                resetInactivityTime();
+            }
+            token.throwIfCancellationRequested();
+        } catch (Exception actual) {
+            throw mapReadFailure(length, actual);
+        }
     }
 
     @Override
@@ -682,19 +730,24 @@ public class SocketConnection implements TransportConnection {
             }
             cancellationSignal.throwIfCancellationRequested();
         } catch (Exception actual) {
-            disconnect("Read error: " + actual.getMessage(), actual);
-            if (actual instanceof TimeoutException timeout) {
-                throw timeout;
-            }
-            if (actual instanceof CancellationException cancelled) {
-                throw cancelled;
-            }
-            throw new ConnectionReadException(
-                    "Failed to read " + length + " bytes from "
-                            + formatEndpoint(ipEndpoint) + ": "
-                            + actual.getMessage(),
-                    actual);
+            throw mapReadFailure(length, actual);
         }
+    }
+
+    /** Disconnects and translates one failure shared by both read paths. */
+    private RuntimeException mapReadFailure(long length, Exception actual) throws TimeoutException {
+        disconnect("Read error: " + actual.getMessage(), actual);
+        if (actual instanceof TimeoutException timeout) {
+            throw timeout;
+        }
+        if (actual instanceof CancellationException cancelled) {
+            return cancelled;
+        }
+        return new ConnectionReadException(
+                "Failed to read " + length + " bytes from "
+                        + formatEndpoint(ipEndpoint) + ": "
+                        + actual.getMessage(),
+                actual);
     }
 
     /**

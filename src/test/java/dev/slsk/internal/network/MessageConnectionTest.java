@@ -164,6 +164,24 @@ class MessageConnectionTest {
     }
 
     @Test
+    @DisplayName("Continuous read uses one header read and one payload read per complete frame")
+    void readsFrameInTwoExactRanges() throws Exception {
+        byte[] frame = frame(new byte[] {9, 8, 7, 6}, new byte[] {1, 2, 3});
+        FakeStream stream = new FakeStream(frame);
+        stream.blockWhenExhausted = true;
+        DefaultMessageConnection connection = new DefaultMessageConnection(
+                "alice", ENDPOINT, OPTIONS, 4, new FakeSocketConnector(stream, true), Monitors.shared());
+        CountDownLatch complete = new CountDownLatch(1);
+        connection.<MessageEvent>subscribe(MessageConnection.MessageKind.READ, event -> complete.countDown());
+
+        connection.startReadingContinuously();
+        assertTrue(complete.await(1, TimeUnit.SECONDS));
+
+        assertEquals(List.of(8, 3), stream.readSizes().subList(0, 2));
+        connection.close();
+    }
+
+    @Test
     @DisplayName("Read-loop failure disconnects and reports the cause")
     void readLoopFailureDisconnectsWithCause() throws Exception {
         // A throwing message-received listener is the cleanest way to inject a
@@ -375,7 +393,9 @@ class MessageConnectionTest {
         private int position;
         private int maxRead = Integer.MAX_VALUE;
         private boolean blockReads;
+        private boolean blockWhenExhausted;
         private CompletableFuture<Integer> blockedRead;
+        private final List<Integer> readSizes = new ArrayList<>();
         private Exception writeFailure;
         private AtomicReference<CancellationSignal> tokenSeen;
 
@@ -391,7 +411,8 @@ class MessageConnectionTest {
         public int read(byte[] buffer, int offset, int size) throws IOException {
             CompletableFuture<Integer> gate;
             synchronized (this) {
-                if (!blockReads) {
+                readSizes.add(size);
+                if (!blockReads && !(blockWhenExhausted && position == input.length)) {
                     int count = Math.min(Math.min(size, maxRead), input.length - position);
                     if (count <= 0) {
                         return 0;
@@ -411,6 +432,10 @@ class MessageConnectionTest {
             } catch (RuntimeException closed) {
                 throw new IOException("stream closed", closed);
             }
+        }
+
+        private synchronized List<Integer> readSizes() {
+            return List.copyOf(readSizes);
         }
 
         @Override
