@@ -8,9 +8,6 @@ import dev.slsk.Subscription;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.concurrent.CancellationSignal;
-import dev.slsk.internal.diagnostics.DiagnosticMessage;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
-import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.events.SearchRequestEvent;
 import dev.slsk.internal.events.SearchRequestResponseEvent;
 import dev.slsk.internal.events.Subscriptions;
@@ -24,9 +21,12 @@ import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Responds to incoming search requests. */
 public final class DefaultSearchResponder implements SearchResponder {
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultSearchResponder.class);
 
     /** The most files worth answering one peer's search with; shared with the direct-request path. */
     private static final int MAXIMUM_MATCHES = Catalogs.MAXIMUM_SEARCH_MATCHES;
@@ -59,9 +59,6 @@ public final class DefaultSearchResponder implements SearchResponder {
      */
     private final java.util.function.IntSupplier advertisedUploadSpeed;
 
-    private final DiagnosticSink diagnostic;
-    private final CopyOnWriteArrayList<Consumer<? super DiagnosticMessage>> diagnosticListeners =
-            new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<Consumer<? super SearchRequestEvent>> requestListeners =
             new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<Consumer<? super SearchRequestResponseEvent>> responseDeliveredListeners =
@@ -71,18 +68,6 @@ public final class DefaultSearchResponder implements SearchResponder {
     private final Object evictionBinding = new Object();
     private volatile SearchResponseCache evictionBoundTo;
 
-    /** Creates a responder with its default diagnostic factory. */
-    public DefaultSearchResponder(
-            Supplier<SoulseekClientOptions> options,
-            Supplier<PeerConnectionManager> peers,
-            TokenFactory tokens,
-            Endpoints endpoints,
-            Supplier<dev.slsk.spi.ShareCatalog> catalog,
-            Supplier<String> loggedInUsername,
-            java.util.function.IntSupplier advertisedUploadSpeed) {
-        this(options, peers, tokens, endpoints, catalog, loggedInUsername, advertisedUploadSpeed, null);
-    }
-
     /** Creates a responder. */
     public DefaultSearchResponder(
             Supplier<SoulseekClientOptions> options,
@@ -91,8 +76,7 @@ public final class DefaultSearchResponder implements SearchResponder {
             Endpoints endpoints,
             Supplier<dev.slsk.spi.ShareCatalog> catalog,
             Supplier<String> loggedInUsername,
-            java.util.function.IntSupplier advertisedUploadSpeed,
-            DiagnosticSink diagnosticFactory) {
+            java.util.function.IntSupplier advertisedUploadSpeed) {
         this.options = Objects.requireNonNull(options, "options");
         this.peers = Objects.requireNonNull(peers, "peers");
         this.tokens = Objects.requireNonNull(tokens, "tokens");
@@ -100,14 +84,6 @@ public final class DefaultSearchResponder implements SearchResponder {
         this.catalog = Objects.requireNonNull(catalog, "catalog");
         this.loggedInUsername = Objects.requireNonNull(loggedInUsername, "loggedInUsername");
         this.advertisedUploadSpeed = Objects.requireNonNull(advertisedUploadSpeed, "advertisedUploadSpeed");
-        diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
-                : DiagnosticSink.forSource(diagnosticFactory, DefaultSearchResponder.class);
-    }
-
-    @Override
-    public Subscription subscribe(Consumer<? super DiagnosticMessage> listener) {
-        return Subscriptions.add(diagnosticListeners, listener);
     }
 
     @Override
@@ -135,15 +111,20 @@ public final class DefaultSearchResponder implements SearchResponder {
             Optional<SearchResponseCacheRecord> result = cache.remove(responseToken);
             if (result.isPresent()) {
                 SearchResponseCacheRecord record = result.get();
-                diagnostic.debug(() -> "Discarded cached search response " + responseToken
-                        + " to " + record.username() + " for query '"
-                        + record.query() + "' with token " + record.token());
+                LOG.debug(
+                        "Discarded cached search response {} to {} for query '{}' with token {}",
+                        responseToken,
+                        record.username(),
+                        record.query(),
+                        record.token());
                 publishResponseFailed(record);
                 return true;
             }
         } catch (Throwable failure) {
-            diagnostic.warning(
-                    () -> "Error removing cached search response " + responseToken + ": " + Failures.message(failure),
+            LOG.warn(
+                    "Error removing cached search response {}: {}",
+                    responseToken,
+                    Failures.message(failure),
                     failure);
         }
         return false;
@@ -187,8 +168,10 @@ public final class DefaultSearchResponder implements SearchResponder {
         try {
             lookup = cache.remove(responseToken);
         } catch (Throwable failure) {
-            diagnostic.warning(
-                    () -> "Error retrieving cached search response " + responseToken + ": " + Failures.message(failure),
+            LOG.warn(
+                    "Error retrieving cached search response {}: {}",
+                    responseToken,
+                    Failures.message(failure),
                     failure);
             return false;
         }
@@ -200,34 +183,37 @@ public final class DefaultSearchResponder implements SearchResponder {
         try {
             MessageConnection connection = peers.get().getCachedMessageConnection(record.username());
             connection.write(record.searchResponse().toByteArray());
-            diagnostic.debug(() -> "Sent cached response " + responseToken
-                    + " containing "
-                    + totalFiles(record.searchResponse())
-                    + " files to " + record.username()
-                    + " for query '" + record.query()
-                    + "' with token " + record.token());
+            LOG.debug(
+                    "Sent cached response {} containing {} files to {} for query '{}' with token {}",
+                    responseToken,
+                    totalFiles(record.searchResponse()),
+                    record.username(),
+                    record.query(),
+                    record.token());
             publishResponseDelivered(record);
             return true;
         } catch (Throwable failure) {
             Throwable cause = failure;
-            diagnostic.debug(
-                    () -> "Failed to send cached search response " + responseToken
-                            + " to " + record.username() + " for query '"
-                            + record.query() + "' with token " + record.token()
-                            + ": " + Failures.message(cause),
+            LOG.debug(
+                    "Failed to send cached search response {} to {} for query '{}' with token {}: {}",
+                    responseToken,
+                    record.username(),
+                    record.query(),
+                    record.token(),
+                    Failures.message(cause),
                     cause);
             publishResponseFailed(record);
             return false;
         }
     }
 
-    DiagnosticSink getDiagnostic() {
-        return diagnostic;
-    }
-
     private boolean deliverResolvedResponse(String username, int token, String query, SearchResponseMessage response) {
-        diagnostic.debug(() -> "Resolved " + response.fileCount() + " files for query '" + query + "' with token "
-                + token + " from " + username);
+        LOG.debug(
+                "Resolved {} files for query '{}' with token {} from {}",
+                response.fileCount(),
+                query,
+                token,
+                username);
 
         try {
             InetSocketAddress endpoint = endpoints.resolve(username, CancellationSignal.none());
@@ -244,17 +230,22 @@ public final class DefaultSearchResponder implements SearchResponder {
                 throw failure;
             }
             writeResponse(connection, response);
-            diagnostic.debug(() -> "Sent response containing " + totalFiles(response)
-                    + " files to " + username + " for query '" + query
-                    + "' with token " + token);
+            LOG.debug(
+                    "Sent response containing {} files to {} for query '{}' with token {}",
+                    totalFiles(response),
+                    username,
+                    query,
+                    token);
             publishResponseDelivered(new SearchResponseCacheRecord(username, token, query, response));
             return true;
         } catch (Throwable failure) {
             Throwable cause = failure;
-            diagnostic.debug(
-                    () -> "Failed to send search response to " + username
-                            + " for query '" + query + "' with token " + token
-                            + ": " + Failures.message(cause),
+            LOG.debug(
+                    "Failed to send search response to {} for query '{}' with token {}: {}",
+                    username,
+                    query,
+                    token,
+                    Failures.message(cause),
                     cause);
             return false;
         }
@@ -268,9 +259,9 @@ public final class DefaultSearchResponder implements SearchResponder {
      * Registers the eviction listener on the cache currently in force.
      *
      * <p>Bound here rather than in the constructor because the cache arrives
-     * through an options supplier and options can be patched at runtime; a
-     * response can only be evicted from a cache it was first put into, so
-     * binding on the way in covers every instance that will ever hold one.
+     * through an options supplier. A response can only be evicted from a cache
+     * it was first put into, so binding on the way in covers the configured
+     * instance without adding constructor coupling.
      */
     private void bindEvictionListener(SearchResponseCache cache) {
         if (evictionBoundTo == cache) {
@@ -294,8 +285,11 @@ public final class DefaultSearchResponder implements SearchResponder {
      * event reported a small fraction of the responses that were actually lost.
      */
     private void onEvicted(SearchResponseCacheRecord record) {
-        diagnostic.debug(() -> "Expired undelivered search response to " + record.username() + " for query '"
-                + record.query() + "' with token " + record.token());
+        LOG.debug(
+                "Expired undelivered search response to {} for query '{}' with token {}",
+                record.username(),
+                record.query(),
+                record.token());
         publishResponseFailed(record);
     }
 
@@ -308,31 +302,33 @@ public final class DefaultSearchResponder implements SearchResponder {
         bindEvictionListener(cache);
         try {
             cache.put(responseToken, new SearchResponseCacheRecord(username, token, query, response));
-            diagnostic.debug(() -> "Failed to connect to " + username
-                    + " with solicitation token " + responseToken
-                    + " to deliver search results for query '" + query
-                    + "' with token " + token
-                    + ".  Cached response for potential delayed delivery.");
+            LOG.debug(
+                    "Failed to connect to {} with solicitation token {} to deliver search results for query '{}' "
+                            + "with token {}. Cached response for potential delayed delivery.",
+                    username,
+                    responseToken,
+                    query,
+                    token);
         } catch (Throwable failure) {
-            diagnostic.warning(
-                    () -> "Error caching undelivered search response "
-                            + responseToken + " for query '" + query
-                            + "' requested by " + username + " with token "
-                            + token + ": " + Failures.message(failure),
+            LOG.warn(
+                    "Error caching undelivered search response {} for query '{}' requested by {} with token {}: {}",
+                    responseToken,
+                    query,
+                    username,
+                    token,
+                    Failures.message(failure),
                     failure);
         }
     }
 
     private void warnResolution(String username, int token, String query, Throwable failure) {
-        diagnostic.warning(
-                () -> "Error resolving search response for query '" + query
-                        + "' requested by " + username + " with token " + token
-                        + ": " + Failures.message(failure),
+        LOG.warn(
+                "Error resolving search response for query '{}' requested by {} with token {}: {}",
+                query,
+                username,
+                token,
+                Failures.message(failure),
                 failure);
-    }
-
-    private void publishDiagnostic(DiagnosticMessage eventData) {
-        diagnosticListeners.forEach(listener -> listener.accept(eventData));
     }
 
     private void publishRequestReceived(SearchRequestEvent eventData) {

@@ -28,8 +28,6 @@ import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.concurrent.InterruptedOperationException;
 import dev.slsk.internal.connection.ServerSessionInfo;
 import dev.slsk.internal.connection.SoulseekClientState;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
-import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.events.BrowseProgressUpdatedEvent;
 import dev.slsk.internal.events.DownloadDeniedEvent;
 import dev.slsk.internal.events.DownloadFailedEvent;
@@ -82,6 +80,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * What runs underneath the facets.
@@ -104,6 +104,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * declares it, and it shrinks as each of them takes its own ports.
  */
 final class SoulseekEngine implements AutoCloseable {
+    private static final Logger LOG = LoggerFactory.getLogger(SoulseekEngine.class);
 
     private static final int MAJOR_VERSION = 170;
     private static final String DEFAULT_ADDRESS = "server.slsknet.org";
@@ -125,12 +126,7 @@ final class SoulseekEngine implements AutoCloseable {
     final PeerConnectionManager peerConnectionManager;
     final DistributedConnectionManager distributedConnectionManager;
     private final ServerMessageHandler serverMessageHandler;
-    final DiagnosticSink diagnostic;
-    /**
-     * What the engine tells the facets. Constructed before the diagnostic sink,
-     * because the sink raises through it.
-     */
-    private final EngineEvents events = new EngineEvents(this::reportListenerFault);
+    private final EngineEvents events = new EngineEvents();
     /**
      * Sweeps every connection this client opens, on this client's scheduler.
      *
@@ -210,7 +206,6 @@ final class SoulseekEngine implements AutoCloseable {
                 null,
                 null,
                 null,
-                null,
                 null);
     }
 
@@ -229,7 +224,6 @@ final class SoulseekEngine implements AutoCloseable {
             SearchResponder searchResponder,
             Waiter waiter,
             TokenFactory tokenFactory,
-            DiagnosticSink diagnosticFactory,
             FileSystemAccess files,
             TokenBucket uploadTokenBucket,
             TokenBucket downloadTokenBucket) {
@@ -244,14 +238,7 @@ final class SoulseekEngine implements AutoCloseable {
         this.networkExecutor = new NetworkExecutor();
         this.scheduler = new Scheduler("soulseek-client-timer", networkExecutor.executor());
         this.waiter = waiter == null ? new DefaultWaiter(this.options.messageTimeout(), scheduler) : waiter;
-        // Before every component that writes to the server, because they are
-        // built with it rather than reaching back through the engine for it.
-        diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(
-                        this.options.minimumDiagnosticLevel(),
-                        eventData -> events.publish(Kind.DIAGNOSTIC_GENERATED, eventData))
-                : DiagnosticSink.forSource(diagnosticFactory, SoulseekEngine.class);
-        this.server = new ServerLink(this.waiter, diagnostic, () -> state);
+        this.server = new ServerLink(this.waiter, () -> state);
         this.server.connection(serverConnection);
         this.rooms = new RoomRegistry(this.waiter, server);
         this.users = new UserDirectory(this, server);
@@ -269,7 +256,6 @@ final class SoulseekEngine implements AutoCloseable {
         // manager is a supplier because it is built after this.
         this.transfers = new TransferDomain(
                 this::getOptions,
-                diagnostic,
                 this.waiter,
                 this::getPeerConnectionManager,
                 users::getUserEndpoint,
@@ -317,7 +303,6 @@ final class SoulseekEngine implements AutoCloseable {
                         this::getDownloadRegistry,
                         server::username,
                         this.transfers,
-                        null,
                         networkExecutor.executor())
                 : peerMessageHandler;
         this.distributedMessageHandler = distributedMessageHandler == null
@@ -328,7 +313,6 @@ final class SoulseekEngine implements AutoCloseable {
                         this.waiter,
                         this::getDistributedConnectionManager,
                         this::getSearchResponder,
-                        null,
                         networkExecutor)
                 : distributedMessageHandler;
         this.peerConnectionManager = peerConnectionManager == null
@@ -339,7 +323,6 @@ final class SoulseekEngine implements AutoCloseable {
                         this.tokenFactory,
                         this.peerMessageHandler,
                         this.connectionFactory,
-                        null,
                         scheduler)
                 : peerConnectionManager;
         this.distributedConnectionManager = distributedConnectionManager == null
@@ -350,7 +333,6 @@ final class SoulseekEngine implements AutoCloseable {
                         this.tokenFactory,
                         this::getDistributedMessageHandler,
                         this.connectionFactory,
-                        null,
                         scheduler)
                 : distributedConnectionManager;
         this.serverMessageHandler = serverMessageHandler == null
@@ -364,7 +346,6 @@ final class SoulseekEngine implements AutoCloseable {
                         this::getDistributedConnectionManager,
                         this::getDistributedMessageHandler,
                         this::getSearchResponder,
-                        null,
                         networkExecutor)
                 : serverMessageHandler;
 
@@ -372,19 +353,6 @@ final class SoulseekEngine implements AutoCloseable {
 
         scheduler.scheduleAtFixedRate(users::cleanupUserEndpointSemaphores, 5, 5, TimeUnit.MINUTES);
         scheduler.scheduleAtFixedRate(transfers::cleanupUploadSemaphores, 15, 15, TimeUnit.MINUTES);
-    }
-
-    /**
-     * Where a contained listener fault goes.
-     *
-     * <p>These events are raised on read loops. Before containment a facet that
-     * threw while translating one took the connection down with it.
-     */
-    private void reportListenerFault(EngineEvents.Kind kind, Throwable failure) {
-        if (diagnostic != null) {
-            diagnostic.warning(
-                    "A listener for " + kind + " threw; the event was still delivered " + "to the rest", failure);
-        }
     }
 
     /** The channel the facets subscribe to. */
@@ -747,9 +715,11 @@ final class SoulseekEngine implements AutoCloseable {
         synchronized (stateChangeLock) {
             SoulseekClientState previousState = state;
             state = newState;
-            diagnostic.debug("Client state changed from " + previousState + " to "
-                    + newState
-                    + (message == null ? "" : "; message: " + message));
+            if (message == null) {
+                LOG.debug("Client state changed from {} to {}", previousState, newState);
+            } else {
+                LOG.debug("Client state changed from {} to {}; message: {}", previousState, newState, message);
+            }
             events.publish(
                     Kind.STATE_CHANGED, new SoulseekClientStateChangedEvent(previousState, state, message, exception));
             if (state.equals(SoulseekClientState.CONNECTED)) {
@@ -763,8 +733,6 @@ final class SoulseekEngine implements AutoCloseable {
     }
 
     private void bindEvents() {
-        listenerHandler.subscribe(eventData -> events.publish(Kind.DIAGNOSTIC_GENERATED, eventData));
-        searchResponder.subscribe(eventData -> events.publish(Kind.DIAGNOSTIC_GENERATED, eventData));
         searchResponder.subscribe(
                 SearchResponder.Kind.REQUEST_RECEIVED,
                 eventData -> events.publish(Kind.SEARCH_REQUEST_RECEIVED, eventData));
@@ -775,12 +743,8 @@ final class SoulseekEngine implements AutoCloseable {
                 SearchResponder.Kind.RESPONSE_DELIVERY_FAILED,
                 eventData -> events.publish(Kind.SEARCH_RESPONSE_DELIVERY_FAILED, eventData));
 
-        peerMessageHandler.subscribe(eventData -> events.publish(Kind.DIAGNOSTIC_GENERATED, eventData));
         peerMessageHandler.subscribe(PeerMessageHandler.Kind.DOWNLOAD_DENIED, this::downloadDenied);
         peerMessageHandler.subscribe(PeerMessageHandler.Kind.DOWNLOAD_FAILED, this::downloadFailed);
-        distributedMessageHandler.subscribe(eventData -> events.publish(Kind.DIAGNOSTIC_GENERATED, eventData));
-        peerConnectionManager.subscribe(eventData -> events.publish(Kind.DIAGNOSTIC_GENERATED, eventData));
-        distributedConnectionManager.subscribe(eventData -> events.publish(Kind.DIAGNOSTIC_GENERATED, eventData));
         distributedConnectionManager.subscribe(
                 DistributedConnectionManager.Kind.PROMOTED_TO_BRANCH_ROOT,
                 eventData -> events.publish(Kind.PROMOTED_TO_DISTRIBUTED_BRANCH_ROOT, null));
@@ -803,7 +767,6 @@ final class SoulseekEngine implements AutoCloseable {
                 DistributedConnectionManager.Kind.STATE_CHANGED,
                 eventData -> events.publish(Kind.DISTRIBUTED_NETWORK_STATE_CHANGED, eventData));
 
-        serverMessageHandler.subscribe(eventData -> events.publish(Kind.DIAGNOSTIC_GENERATED, eventData));
         bindServerEvents();
     }
 
@@ -856,7 +819,7 @@ final class SoulseekEngine implements AutoCloseable {
             events.publish(Kind.SERVER_INFO_RECEIVED, serverInfo);
         });
         serverMessageHandler.<Void>subscribe(ServerMessageEvent.KICKED_FROM_SERVER, eventData -> {
-            diagnostic.info("Kicked from server.");
+            LOG.info("Kicked from server.");
             events.publish(Kind.KICKED_FROM_SERVER, null);
             disconnect("Kicked from server", new KickedFromServerException());
         });
@@ -870,7 +833,7 @@ final class SoulseekEngine implements AutoCloseable {
         try {
             transfers.deniedByPeer(eventData.username(), eventData.filename(), eventData.message());
         } catch (Throwable failure) {
-            diagnostic.warning("Failed to mark download(s) rejected: " + Failures.message(failure), failure);
+            LOG.warn("Failed to mark download(s) rejected: {}", Failures.message(failure), failure);
         } finally {
             events.publish(Kind.DOWNLOAD_DENIED, eventData);
         }
@@ -880,7 +843,7 @@ final class SoulseekEngine implements AutoCloseable {
         try {
             transfers.failedByPeer(eventData.username(), eventData.filename());
         } catch (Throwable failure) {
-            diagnostic.warning("Failed to mark download(s) failed: " + Failures.message(failure), failure);
+            LOG.warn("Failed to mark download(s) failed: {}", Failures.message(failure), failure);
         } finally {
             events.publish(Kind.DOWNLOAD_FAILED, eventData);
         }
@@ -1068,10 +1031,6 @@ final class SoulseekEngine implements AutoCloseable {
 
     SoulseekClientOptions getClientOptions() {
         return options;
-    }
-
-    DiagnosticSink getDiagnostic() {
-        return diagnostic;
     }
 
     @FunctionalInterface

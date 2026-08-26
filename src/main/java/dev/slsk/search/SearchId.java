@@ -15,7 +15,7 @@ import java.util.Objects;
  *
  * <p>The value is the string form of the protocol token the search was issued
  * with. Keeping the two aligned means a response arriving off the wire maps back
- * to a search without a side table, and a token that shows up in a diagnostic
+ * to a search without a side table, and a token that shows up in a log message
  * log can be matched against what the consumer is holding. The consumer should
  * still treat it as opaque — that it is a number today is an implementation
  * detail of how searches are correlated.

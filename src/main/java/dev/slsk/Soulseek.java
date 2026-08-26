@@ -69,7 +69,7 @@ public interface Soulseek extends AutoCloseable {
     Users users();
 
     /**
-     * What the library is doing, and where it sits on the network.
+     * Operational counters and distributed-network placement.
      *
      * @return the diagnostics facet
      */

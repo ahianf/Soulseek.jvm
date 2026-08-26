@@ -992,7 +992,6 @@ class EngineUploadTest {
                 null,
                 null,
                 null,
-                null,
                 null);
 
         private Fixture() {

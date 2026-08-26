@@ -18,7 +18,6 @@ import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationSignal;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.DownloadDeniedEvent;
 import dev.slsk.internal.events.DownloadFailedEvent;
 import dev.slsk.internal.messaging.MessageBuilder;
@@ -147,7 +146,6 @@ class PeerMessageHandlerTest {
                         .writeByte(1)
                         .build());
         assertInstanceOf(MessageReadException.class, fixture.waiter.failures.get(key));
-        assertTrue(fixture.diagnostic.containsWarning("Error handling peer message"));
     }
 
     @Test
@@ -184,7 +182,6 @@ class PeerMessageHandlerTest {
         assertArrayEquals(
                 new UserInfoMessage("resolved", 2, 3, true, new byte[] {7}).toByteArray(),
                 fixture.connection.bytes.getFirst());
-        assertTrue(fixture.diagnostic.contains("User info sent to"));
     }
 
     @Test
@@ -282,7 +279,6 @@ class PeerMessageHandlerTest {
             throw new IllegalStateException("search catalog");
         }));
         failed.handler.handleMessageRead(failed.connection.proxy, peerSearchRequest(TOKEN, "failed"));
-        assertTrue(failed.diagnostic.containsWarning("Error resolving search response"));
     }
 
     @Test
@@ -310,7 +306,6 @@ class PeerMessageHandlerTest {
         failed.handler.handleMessageRead(failed.connection.proxy, new BrowseRequestMessage().toByteArray());
         assertEquals(1, failed.connection.bytes.size());
         assertArrayEquals(new BrowseResponseMessage().toByteArray(), failed.connection.bytes.getFirst());
-        assertTrue(failed.diagnostic.containsWarning("The share catalog failed to answer a browse"));
     }
 
     @Test
@@ -336,7 +331,6 @@ class PeerMessageHandlerTest {
         failed.handler.handleMessageRead(
                 failed.connection.proxy, new FolderContentsRequest(TOKEN, "shared").toByteArray());
         assertTrue(failed.connection.outgoing.isEmpty());
-        assertTrue(failed.diagnostic.containsWarning("The share catalog failed to answer a folder request"));
     }
 
     /**
@@ -529,7 +523,7 @@ class PeerMessageHandlerTest {
     }
 
     @Test
-    void receiptAndWrittenCallbacksCorrelateBrowseAndLogCodes() {
+    void receiptCallbackCorrelatesBrowse() {
         Fixture fixture = new Fixture(new SoulseekClientOptions());
         byte[] response = new BrowseResponseMessage(List.of()).toByteArray();
         MessageReceivedEvent received =
@@ -543,9 +537,6 @@ class PeerMessageHandlerTest {
 
         fixture.handler.handleMessageReceived(new MessageReceivedEvent(
                 fixture.connection.proxy, 8, Arrays.copyOfRange(new BrowseRequestMessage().toByteArray(), 4, 8)));
-        fixture.handler.handleMessageWritten(
-                new MessageEvent(fixture.connection.proxy, new BrowseRequestMessage().toByteArray()));
-        assertTrue(fixture.diagnostic.contains("Peer message sent: BROWSE_REQUEST"));
     }
 
     /**
@@ -607,7 +598,6 @@ class PeerMessageHandlerTest {
     }
 
     private static final class Fixture {
-        private final RecordingDiagnostic diagnostic = new RecordingDiagnostic();
         private final RecordingWaiter waiter = new RecordingWaiter();
         private final FakeClient client;
         private final ConnectionProbe connection = new ConnectionProbe();
@@ -649,7 +639,6 @@ class PeerMessageHandlerTest {
                     () -> client.downloads,
                     () -> "me",
                     client,
-                    diagnostic,
                     Runnable::run);
         }
     }
@@ -666,14 +655,11 @@ class PeerMessageHandlerTest {
          * much as the handler is: bans, the queue a place refers to, and the
          * guard around a policy that throws all live there.
          */
-        /** Where a misbehaving policy is reported; asserted on by the tests. */
-        private final RecordingDiagnostic admissionDiagnostic = new RecordingDiagnostic();
-
         private final java.util.concurrent.atomic.AtomicInteger nextToken =
                 new java.util.concurrent.atomic.AtomicInteger(900);
 
         private final dev.slsk.internal.UploadAdmission admission = new dev.slsk.internal.UploadAdmission(
-                this::uploadPolicy, Map::of, username -> false, nextToken::getAndIncrement, admissionDiagnostic);
+                this::uploadPolicy, Map::of, username -> false, nextToken::getAndIncrement);
         private final Map<Integer, SearchInternal> searches = new HashMap<>();
         private final Map<Integer, TransferInternal> downloads = new HashMap<>();
 
@@ -844,56 +830,6 @@ class PeerMessageHandlerTest {
         public void close() throws IOException {
             closed = true;
             super.close();
-        }
-    }
-
-    private static final class RecordingDiagnostic implements DiagnosticSink {
-        private final List<String> messages = new ArrayList<>();
-        private final List<String> warnings = new ArrayList<>();
-
-        private boolean contains(String value) {
-            return messages.stream().anyMatch(message -> message.toLowerCase().contains(value.toLowerCase()));
-        }
-
-        private boolean containsWarning(String value) {
-            return warnings.stream().anyMatch(message -> message.toLowerCase().contains(value.toLowerCase()));
-        }
-
-        @Override
-        public void trace(String message) {
-            messages.add(message);
-        }
-
-        @Override
-        public void trace(String message, Throwable exception) {
-            messages.add(message);
-        }
-
-        @Override
-        public void debug(String message) {
-            messages.add(message);
-        }
-
-        @Override
-        public void debug(String message, Throwable exception) {
-            messages.add(message);
-        }
-
-        @Override
-        public void info(String message) {
-            messages.add(message);
-        }
-
-        @Override
-        public void warning(String message) {
-            messages.add(message);
-            warnings.add(message);
-        }
-
-        @Override
-        public void warning(String message, Throwable exception) {
-            messages.add(message);
-            warnings.add(message);
         }
     }
 

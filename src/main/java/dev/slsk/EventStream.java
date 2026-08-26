@@ -15,7 +15,7 @@ import java.util.function.Consumer;
  * stream with a {@code switch} is told by the compiler that it has appeared.
  *
  * <p><strong>A listener that throws is contained.</strong> The exception is
- * reported to the diagnostic sink at warning level and the remaining listeners
+ * logged at warning level and the remaining listeners
  * still run. It never propagates into a read loop or a message handler, because
  * a consumer's rendering bug must not be able to take the connection down. The
  * single exception is the private-message acknowledgement, where whether a

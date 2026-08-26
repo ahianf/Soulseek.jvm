@@ -15,6 +15,8 @@
  * signature.
  */
 module dev.slsk.soulseek {
+    requires org.slf4j;
+
     exports dev.slsk;
     exports dev.slsk.connection;
     exports dev.slsk.diagnostics;

@@ -12,7 +12,6 @@ import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.connection.SoulseekClientState;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.messages.AcknowledgePrivateMessageCommand;
 import dev.slsk.internal.messaging.messages.AcknowledgePrivilegeNotificationCommand;
@@ -31,6 +30,8 @@ import dev.slsk.internal.user.WireUserPresence;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The connection to the server, and everything said over it.
@@ -59,9 +60,9 @@ import java.util.function.Supplier;
  * facets' and stays where only they can reach it.
  */
 public final class ServerLink {
+    private static final Logger LOG = LoggerFactory.getLogger(ServerLink.class);
 
     private final Waiter waiter;
-    private final DiagnosticSink diagnostic;
     private final Supplier<SoulseekClientState> clientState;
 
     /**
@@ -83,9 +84,8 @@ public final class ServerLink {
      */
     private volatile String username;
 
-    ServerLink(Waiter waiter, DiagnosticSink diagnostic, Supplier<SoulseekClientState> clientState) {
+    ServerLink(Waiter waiter, Supplier<SoulseekClientState> clientState) {
         this.waiter = java.util.Objects.requireNonNull(waiter, "waiter");
-        this.diagnostic = DiagnosticSink.forSource(diagnostic, ServerLink.class);
         this.clientState = java.util.Objects.requireNonNull(clientState, "clientState");
     }
 
@@ -237,7 +237,7 @@ public final class ServerLink {
                 new AcknowledgePrivateMessageCommand(privateMessageId),
                 cancellationSignal,
                 "Failed to acknowledge private message with ID " + privateMessageId + ": ");
-        diagnostic.debug("Acknowledged private message ID " + privateMessageId);
+        LOG.debug("Acknowledged private message ID {}", privateMessageId);
     }
 
     void acknowledgePrivilegeNotification(int privilegeNotificationId) throws InterruptedException {

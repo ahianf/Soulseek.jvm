@@ -6,7 +6,6 @@ package dev.slsk.internal.events;
 import dev.slsk.Attachment;
 import dev.slsk.EventStream;
 import dev.slsk.Subscription;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -16,6 +15,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The one implementation of {@link EventStream}. One per facet.
@@ -23,7 +24,7 @@ import java.util.function.Supplier;
  * <p>Two things here are load-bearing and neither is visible from the interface.
  *
  * <p><strong>Containment.</strong> {@link #dispatch} invokes every listener
- * inside a {@code try}, reports a throw to the diagnostic sink, and carries on
+ * inside a {@code try}, logs a throw, and carries on
  * to the next. The dispatch this replaces did not: it iterated the listener list
  * and called straight through, so the first consumer to throw unwound the stack
  * of whatever raised the event — a message handler, or a connection read loop. A
@@ -77,6 +78,7 @@ import java.util.function.Supplier;
  * @param <T> the facet's event type
  */
 public final class EventBus<T> implements EventStream<T>, AutoCloseable {
+    private static final Logger LOG = LoggerFactory.getLogger(EventBus.class);
 
     /**
      * How many events may be waiting before a publisher blocks.
@@ -92,7 +94,6 @@ public final class EventBus<T> implements EventStream<T>, AutoCloseable {
     private static final long CLOSE_TIMEOUT_MILLIS = 2_000;
 
     private final String name;
-    private final DiagnosticSink diagnostics;
 
     /** Guards the listener list, and pairs it with facet state changes. */
     private final Object gate = new Object();
@@ -106,13 +107,11 @@ public final class EventBus<T> implements EventStream<T>, AutoCloseable {
     /**
      * Creates a bus.
      *
-     * @param name the facet name, used in diagnostic messages and the delivery
+     * @param name the facet name, used in log messages and the delivery
      *     thread's name
-     * @param diagnostics where a throwing listener is reported
      */
-    public EventBus(String name, DiagnosticSink diagnostics) {
+    public EventBus(String name) {
         this.name = Objects.requireNonNull(name, "name");
-        this.diagnostics = DiagnosticSink.forSource(diagnostics, EventBus.class);
         this.deliveryThread = Thread.ofVirtual().name("soulseek-events-" + name).start(this::deliverContinuously);
     }
 
@@ -227,7 +226,7 @@ public final class EventBus<T> implements EventStream<T>, AutoCloseable {
     }
 
     /**
-     * Returns how many listeners are registered. For tests and diagnostics; a
+     * Returns how many listeners are registered. For tests and metrics; a
      * leaked subscription shows up here.
      *
      * @return the listener count
@@ -337,9 +336,10 @@ public final class EventBus<T> implements EventStream<T>, AutoCloseable {
         try {
             continuation.accept(delivered);
         } catch (RuntimeException | Error exception) {
-            diagnostics.warning(
-                    "The continuation for a " + name + " event threw "
-                            + exception.getClass().getName() + "; it was contained",
+            LOG.warn(
+                    "The continuation for a {} event threw {}; it was contained",
+                    name,
+                    exception.getClass().getName(),
                     exception);
         }
     }
@@ -361,11 +361,12 @@ public final class EventBus<T> implements EventStream<T>, AutoCloseable {
                 registration.listener().accept(event);
                 delivered++;
             } catch (RuntimeException | Error exception) {
-                diagnostics.warning(
-                        "A " + name + " event listener threw "
-                                + exception.getClass().getName()
-                                + " handling " + event.getClass().getSimpleName()
-                                + "; it was contained and the remaining listeners still ran",
+                LOG.warn(
+                        "A {} event listener threw {} handling {}; it was contained and the remaining listeners "
+                                + "still ran",
+                        name,
+                        exception.getClass().getName(),
+                        event.getClass().getSimpleName(),
                         exception);
             }
         }

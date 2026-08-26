@@ -35,6 +35,8 @@ import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Searches: issuing a query, the registry of the ones in flight, routing
@@ -49,6 +51,7 @@ import java.util.function.Consumer;
  * too.
  */
 final class SearchDomain {
+    private static final Logger LOG = LoggerFactory.getLogger(SearchDomain.class);
 
     private final SoulseekEngine context;
     private final ServerLink server;
@@ -250,16 +253,13 @@ final class SearchDomain {
                         "An active search with token " + search.getToken() + " is already in progress");
             }
             updateState.accept(SearchPhase.REQUESTED);
-            context.getDiagnostic()
-                    .debug("Attempting to acquire search semaphore for search '"
-                            + invocation.query().searchText() + "' ("
-                            + searchSemaphore.availablePermits()
-                            + " available)");
+            LOG.debug(
+                    "Attempting to acquire search semaphore for search '{}' ({} available)",
+                    invocation.query().searchText(),
+                    searchSemaphore.availablePermits());
             updateState.accept(SearchPhase.QUEUED);
             acquireSearchPermit(cancellationSignal);
-            context.getDiagnostic()
-                    .debug("Acquired search semaphore for search '"
-                            + invocation.query().searchText() + "'");
+            LOG.debug("Acquired search semaphore for search '{}'", invocation.query().searchText());
             try {
                 byte[] message = buildSearchMessage(invocation.scope(), search);
                 search.setResponseReceived(response -> {
@@ -278,20 +278,17 @@ final class SearchDomain {
                 updateState.accept(SearchPhase.IN_PROGRESS);
                 search.waitForCompletion(cancellationSignal);
                 updateState.accept(search.getState());
-                context.getDiagnostic()
-                        .debug("SearchStateSnapshot for '"
-                                + invocation.query().searchText()
-                                + "' completed: "
-                                + search.getState());
+                LOG.debug(
+                        "SearchStateSnapshot for '{}' completed: {}",
+                        invocation.query().searchText(),
+                        search.getState());
                 return search.toSearch();
             } finally {
                 searchSemaphore.release();
-                context.getDiagnostic()
-                        .debug("Released search semaphore for search '"
-                                + invocation.query().searchText()
-                                + "' ("
-                                + searchSemaphore.availablePermits()
-                                + " available)");
+                LOG.debug(
+                        "Released search semaphore for search '{}' ({} available)",
+                        invocation.query().searchText(),
+                        searchSemaphore.availablePermits());
             }
         } catch (Throwable cause) {
             if (cause instanceof CancellationException) {

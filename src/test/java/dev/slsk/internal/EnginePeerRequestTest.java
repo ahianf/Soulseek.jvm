@@ -25,7 +25,6 @@ import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationController;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.connection.SoulseekClientState;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.BrowseProgressUpdatedEvent;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.handlers.BrowseResponseConnection;
@@ -106,12 +105,10 @@ class EnginePeerRequestTest {
         // what is under test is that a no-op invalidation stays quiet.
         String invalidated = "Invalidated message connection cache for alice";
         assertEquals(1, fixture.peerManager.invalidations);
-        assertFalse(fixture.diagnostic.debugMessages.contains(invalidated));
 
         fixture.peerManager.invalidationResult = true;
         fixture.client.users().connectToUser("alice", true);
         assertEquals(2, fixture.peerManager.invalidations);
-        assertTrue(fixture.diagnostic.debugMessages.contains(invalidated));
         fixture.close();
     }
 
@@ -599,7 +596,6 @@ class EnginePeerRequestTest {
         private final ConnectionProbe peer = new ConnectionProbe();
         private final WaiterProbe waiter = new WaiterProbe();
         private final PeerManagerProbe peerManager = new PeerManagerProbe(peer.proxy);
-        private final DiagnosticProbe diagnostic = new DiagnosticProbe();
         private final SoulseekEngine client = new SoulseekEngine(
                 9999,
                 null,
@@ -615,7 +611,6 @@ class EnginePeerRequestTest {
                 null,
                 waiter.proxy,
                 null,
-                diagnostic.proxy,
                 null,
                 null,
                 null);
@@ -769,16 +764,4 @@ class EnginePeerRequestTest {
         }
     }
 
-    private static final class DiagnosticProbe {
-        private final List<String> debugMessages = new ArrayList<>();
-        private final DiagnosticSink proxy = (DiagnosticSink) Proxy.newProxyInstance(
-                DiagnosticSink.class.getClassLoader(), new Class<?>[] {DiagnosticSink.class}, this::invoke);
-
-        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
-            if (method.getName().equals("debug") && arguments.length == 1) {
-                debugMessages.add((String) arguments[0]);
-            }
-            return null;
-        }
-    }
 }

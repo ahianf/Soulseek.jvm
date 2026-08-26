@@ -13,7 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.slsk.connection.ConnectionState;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.exceptions.LoginRejectedException;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -37,32 +36,8 @@ class ReconnectSupervisorTest {
 
     private static final Duration QUICK_FLOOR = Duration.ofMillis(1);
 
-    /** Swallows everything; these tests assert behaviour, not logging. */
-    private static final class SilentSink implements DiagnosticSink {
-        @Override
-        public void trace(String message) {}
-
-        @Override
-        public void trace(String message, Throwable exception) {}
-
-        @Override
-        public void debug(String message) {}
-
-        @Override
-        public void debug(String message, Throwable exception) {}
-
-        @Override
-        public void info(String message) {}
-
-        @Override
-        public void warning(String message) {}
-
-        @Override
-        public void warning(String message, Throwable exception) {}
-    }
-
     private static ReconnectSupervisor supervisor(ReconnectSupervisor.Connector connector, Runnable onStateChanged) {
-        return new ReconnectSupervisor(connector, onStateChanged, new SilentSink(), QUICK, QUICK, QUICK_FLOOR);
+        return new ReconnectSupervisor(connector, onStateChanged, QUICK, QUICK, QUICK_FLOOR);
     }
 
     @Test
@@ -121,7 +96,6 @@ class ReconnectSupervisorTest {
                     throw new ConnectionException("still down");
                 },
                 () -> {},
-                new SilentSink(),
                 Duration.ofMillis(400),
                 Duration.ofMillis(400),
                 Duration.ofMillis(400));
@@ -183,7 +157,6 @@ class ReconnectSupervisorTest {
                     throw new ConnectionException("still down");
                 },
                 () -> {},
-                new SilentSink(),
                 Duration.ofMillis(60),
                 Duration.ofMillis(60),
                 Duration.ofMillis(60))) {
@@ -300,7 +273,7 @@ class ReconnectSupervisorTest {
     @Test
     @DisplayName("backoff doubles from two seconds to a sixty-second ceiling, then holds")
     void backoffDoublesToTheCeiling() {
-        ReconnectSupervisor supervisor = new ReconnectSupervisor(() -> {}, () -> {}, new SilentSink());
+        ReconnectSupervisor supervisor = new ReconnectSupervisor(() -> {}, () -> {});
         try (supervisor) {
             // Attempt two is the first retry, so the ceilings run 2, 4, 8, …
             assertCeiling(supervisor, 2, 2_000);

@@ -18,9 +18,6 @@ import dev.slsk.internal.common.DefaultWaiter;
 import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
-import dev.slsk.internal.diagnostics.DiagnosticMessage;
-import dev.slsk.internal.diagnostics.DiagnosticSeverity;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.messaging.messages.PeerInit;
 import dev.slsk.internal.messaging.messages.PierceFirewall;
 import dev.slsk.internal.network.tcp.Listener;
@@ -45,16 +42,9 @@ import org.junit.jupiter.api.Test;
 
 class ListenerHandlerTest {
     @Test
-    void constructorValidatesClientAndDefaultDiagnosticRaisesEvents() throws Exception {
+    void constructorValidatesClient() throws Exception {
         try (Fixture nulls = fixture(null)) {
             assertThrows(NullPointerException.class, () -> handler(nulls, null));
-        }
-        try (Fixture fixture = fixture(null)) {
-            ListenerHandler handler = handler(fixture, fixture.options);
-            AtomicReference<DiagnosticMessage> event = new AtomicReference<>();
-            handler.subscribe(args -> event.set(args));
-            handler.getDiagnostic().info("test");
-            assertEquals("test", event.get().message());
         }
     }
 
@@ -65,7 +55,6 @@ class ListenerHandlerTest {
             fixture.handler.handleConnection(readFailure.proxy);
             assertNotNull(readFailure.disconnectedException);
             assertTrue(readFailure.closed);
-            assertTrue(fixture.diagnostic.debug.stream().anyMatch(text -> text.contains("Failed to initialize")));
 
             ConnectionProbe unknown = ConnectionProbe.message(new byte[] {1});
             fixture.handler.handleConnection(unknown.proxy);
@@ -222,33 +211,23 @@ class ListenerHandlerTest {
         DefaultWaiter waiter = new DefaultWaiter();
         SoulseekClientOptions options = options(cache);
         TestListener listener = new TestListener();
-        RecordingDiagnostic diagnostic = new RecordingDiagnostic();
-        Fixture fixture = new Fixture(options, listener, peer, distributed, search, waiter, diagnostic, null);
-        return fixture.with(handler(fixture, options, diagnostic));
+        Fixture fixture = new Fixture(options, listener, peer, distributed, search, waiter, null);
+        return fixture.with(handler(fixture, options));
     }
 
     /** Builds a handler over a fixture's probes. */
     private static ListenerHandler handler(Fixture fixture, SoulseekClientOptions options) {
-        return handler(fixture, options, null);
-    }
-
-    private static ListenerHandler handler(
-            Fixture fixture, SoulseekClientOptions options, RecordingDiagnostic diagnostic) {
         return new ListenerHandler(
                 options == null ? null : () -> options,
                 fixture::listener,
                 () -> fixture.peer().proxy,
                 () -> fixture.distributed().proxy,
                 fixture.waiter(),
-                () -> fixture.searchResponder().proxy,
-                diagnostic);
+                () -> fixture.searchResponder().proxy);
     }
 
     private static SoulseekClientOptions options(SearchResponseCache cache) {
-        return SoulseekClientOptions.builder()
-                .minimumDiagnosticLevel(DiagnosticSeverity.TRACE)
-                .searchResponseCache(cache)
-                .build();
+        return SoulseekClientOptions.builder().searchResponseCache(cache).build();
     }
 
     private record Fixture(
@@ -258,12 +237,11 @@ class ListenerHandlerTest {
             DistributedProbe distributed,
             SearchResponderProbe searchResponder,
             DefaultWaiter waiter,
-            RecordingDiagnostic diagnostic,
             ListenerHandler handler)
             implements AutoCloseable {
 
         private Fixture with(ListenerHandler value) {
-            return new Fixture(options, listener, peer, distributed, searchResponder, waiter, diagnostic, value);
+            return new Fixture(options, listener, peer, distributed, searchResponder, waiter, value);
         }
 
         @Override
@@ -446,35 +424,6 @@ class ListenerHandlerTest {
         public java.util.Optional<SearchResponseCacheRecord> remove(int responseToken) {
             return java.util.Optional.empty();
         }
-    }
-
-    private static final class RecordingDiagnostic implements DiagnosticSink {
-        private final java.util.ArrayList<String> debug = new java.util.ArrayList<>();
-
-        @Override
-        public void trace(String message) {}
-
-        @Override
-        public void trace(String message, Throwable exception) {}
-
-        @Override
-        public void debug(String message) {
-            debug.add(message);
-        }
-
-        @Override
-        public void debug(String message, Throwable exception) {
-            debug.add(message);
-        }
-
-        @Override
-        public void info(String message) {}
-
-        @Override
-        public void warning(String message) {}
-
-        @Override
-        public void warning(String message, Throwable exception) {}
     }
 
     private static Object defaultValue(Class<?> type) {

@@ -9,7 +9,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.connection.SoulseekClientState;
-import dev.slsk.internal.diagnostics.DiagnosticSeverity;
 import dev.slsk.internal.events.SoulseekClientStateChangedEvent;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import java.util.ArrayList;
@@ -114,7 +113,6 @@ class EngineLiveIT {
 
     private static SoulseekClientOptions optionsStartingAtMaximumToken() {
         return SoulseekClientOptions.builder()
-                .minimumDiagnosticLevel(DiagnosticSeverity.INFO)
                 .startingToken(Integer.MAX_VALUE)
                 .build();
     }

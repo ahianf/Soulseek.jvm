@@ -6,7 +6,6 @@ package dev.slsk.internal.network;
 
 import dev.slsk.Subscription;
 import dev.slsk.internal.concurrent.CancellationSignal;
-import dev.slsk.internal.diagnostics.DiagnosticSource;
 import dev.slsk.internal.messaging.messages.ConnectToPeerResponse;
 import dev.slsk.internal.network.tcp.TransportConnection;
 import java.util.List;
@@ -14,7 +13,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /** Manages distributed-network parent and child connections. */
-public interface DistributedConnectionManager extends AutoCloseable, DiagnosticSource {
+public interface DistributedConnectionManager extends AutoCloseable {
     enum Kind {
         CHILD_ADDED,
         CHILD_DISCONNECTED,

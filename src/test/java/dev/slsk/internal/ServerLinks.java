@@ -5,7 +5,6 @@ package dev.slsk.internal;
 
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.connection.SoulseekClientState;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.network.MessageConnection;
 
 /**
@@ -27,21 +26,18 @@ public final class ServerLinks {
      * connection.
      *
      * @param waiter the correlator
-     * @param diagnostic where the link's own diagnostics go
      * @param connection what a write goes out on
      * @param username who the link is logged in as
      * @return the link
      */
-    public static ServerLink loggedIn(
-            Waiter waiter, DiagnosticSink diagnostic, MessageConnection connection, String username) {
-        return over(waiter, diagnostic, connection, username, () -> SoulseekClientState.LOGGED_IN);
+    public static ServerLink loggedIn(Waiter waiter, MessageConnection connection, String username) {
+        return over(waiter, connection, username, () -> SoulseekClientState.LOGGED_IN);
     }
 
     /**
      * Returns a link whose state the caller decides, call by call.
      *
      * @param waiter the correlator
-     * @param diagnostic where the link's own diagnostics go
      * @param connection what a write goes out on
      * @param username who the link is logged in as
      * @param state what state the client is in
@@ -49,11 +45,10 @@ public final class ServerLinks {
      */
     public static ServerLink over(
             Waiter waiter,
-            DiagnosticSink diagnostic,
             MessageConnection connection,
             String username,
             java.util.function.Supplier<SoulseekClientState> state) {
-        ServerLink link = new ServerLink(waiter, diagnostic, state);
+        ServerLink link = new ServerLink(waiter, state);
         link.connection(connection);
         link.username(username);
         return link;

@@ -22,6 +22,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * What happens when a peer asks for a file.
@@ -36,6 +38,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * everyone. That is the difference between a default and an invariant.
  */
 public final class UploadAdmission {
+    private static final Logger LOG = LoggerFactory.getLogger(UploadAdmission.class);
 
     /**
      * The things an admission reads, named rather than "the engine".
@@ -55,7 +58,6 @@ public final class UploadAdmission {
      */
     private final java.util.function.IntSupplier tokens;
 
-    private final dev.slsk.internal.diagnostics.DiagnosticSink diagnostic;
 
     /** Who is refused outright, and what they are told. */
     private final Map<Username, String> bans = new ConcurrentHashMap<>();
@@ -102,13 +104,11 @@ public final class UploadAdmission {
             java.util.function.Supplier<UploadPolicy> uploadPolicy,
             java.util.function.Supplier<Map<Integer, dev.slsk.internal.transfer.TransferInternal>> uploads,
             java.util.function.Predicate<String> privileged,
-            java.util.function.IntSupplier tokens,
-            dev.slsk.internal.diagnostics.DiagnosticSink diagnostic) {
+            java.util.function.IntSupplier tokens) {
         this.uploadPolicy = Objects.requireNonNull(uploadPolicy, "uploadPolicy");
         this.uploads = Objects.requireNonNull(uploads, "uploads");
         this.privileged = Objects.requireNonNull(privileged, "privileged");
         this.tokens = Objects.requireNonNull(tokens, "tokens");
-        this.diagnostic = dev.slsk.internal.diagnostics.DiagnosticSink.forSource(diagnostic, UploadAdmission.class);
     }
 
     /** Refuses a user until they are unbanned. Idempotent. */
@@ -176,7 +176,7 @@ public final class UploadAdmission {
         try {
             decision = uploadPolicy.get().decide(new UploadRequest(user, path, 0), context(user));
         } catch (RuntimeException failure) {
-            diagnostic.warning("The upload policy threw; refusing the request", failure);
+            LOG.warn("The upload policy threw; refusing the request", failure);
             return new UploadPolicy.Decision.Deny(RejectionReason.UNKNOWN, "Upload policy failed.");
         }
         if (decision == null) {

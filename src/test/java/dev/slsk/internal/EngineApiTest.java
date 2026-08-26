@@ -6,7 +6,6 @@ package dev.slsk.internal;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -134,7 +133,7 @@ class EngineApiTest {
                                 (name.startsWith("add") || name.startsWith("remove")) && name.endsWith("Listener")),
                 "the engine still carries named listener registrations: " + names);
 
-        assertEquals(45, Kind.values().length, "44 client events plus DiagnosticGenerated");
+        assertEquals(44, Kind.values().length, "every remaining client event has one kind");
     }
 
     @Test
@@ -166,21 +165,6 @@ class EngineApiTest {
             assertTrue(
                     implemented == AutoCloseable.class || implemented.getName().startsWith("dev.slsk.internal."),
                     "the engine implements " + implemented.getName() + ", which is not internal");
-        }
-    }
-
-    @Test
-    @DisplayName("diagnostics are decided per client, never per process")
-    void twoClientsDoNotShareDiagnostics() {
-        // This replaces two tests that covered a static dispatch flag and a
-        // static diagnostic factory. Both were write-only in production, so the
-        // only readers those globals ever had were the tests defending them.
-        // The dispatch flag itself is gone now: one delivery thread per event
-        // bus is what keeps consumer code off a read loop, and the transport
-        // has no decision left to take.
-        try (SoulseekEngine first = new SoulseekEngine(9999);
-                SoulseekEngine second = new SoulseekEngine(9999)) {
-            assertNotSame(first.getDiagnostic(), second.getDiagnostic());
         }
     }
 

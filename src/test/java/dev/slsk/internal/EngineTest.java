@@ -13,7 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.Soulseek;
-import dev.slsk.Subscription;
 import dev.slsk.diagnostics.MeshState;
 import dev.slsk.exceptions.KickedFromServerException;
 import dev.slsk.exceptions.TransferRejectedException;
@@ -25,7 +24,6 @@ import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.connection.ServerSessionInfo;
 import dev.slsk.internal.connection.SoulseekClientState;
-import dev.slsk.internal.diagnostics.DiagnosticMessage;
 import dev.slsk.internal.events.DistributedChildEvent;
 import dev.slsk.internal.events.DownloadDeniedEvent;
 import dev.slsk.internal.events.DownloadFailedEvent;
@@ -256,22 +254,8 @@ class EngineTest {
     }
 
     @Test
-    void subsystemEventsForwardPayloadAndSubscriptionsCanBeClosed() {
+    void subsystemEventsForwardPayload() {
         Fixture fixture = new Fixture();
-        AtomicReference<DiagnosticMessage> diagnostic = new AtomicReference<>();
-        Subscription subscription = fixture.client.events().on(Kind.DIAGNOSTIC_GENERATED, diagnostic::set);
-
-        DiagnosticMessage expected = new DiagnosticMessage(
-                dev.slsk.internal.diagnostics.DiagnosticSeverity.INFO, EngineTest.class.getName(), "message");
-        fixture.search.publishDiagnostic(expected);
-        assertSame(expected, diagnostic.get());
-
-        subscription.close();
-        diagnostic.set(null);
-        fixture.search.publishDiagnostic(new DiagnosticMessage(
-                dev.slsk.internal.diagnostics.DiagnosticSeverity.INFO, EngineTest.class.getName(), "after"));
-        assertNull(diagnostic.get(), "a closed subscription receives nothing");
-
         AtomicReference<DistributedChildEvent> child = new AtomicReference<>();
         fixture.client
                 .events()
@@ -332,7 +316,7 @@ class EngineTest {
     }
 
     /**
-     * The ninety-four named add/remove methods collapsed into one kind and one
+     * The named add/remove methods collapsed into one kind and one
      * {@code Consumer}. Nothing may have been dropped in the collapse, so every
      * event the client used to name still has to be a kind.
      */
@@ -342,7 +326,6 @@ class EngineTest {
             "BrowseProgressUpdated",
             "Connected",
             "DemotedFromDistributedBranchRoot",
-            "DiagnosticGenerated",
             "Disconnected",
             "DistributedChildAdded",
             "DistributedChildDisconnected",
@@ -481,7 +464,6 @@ class EngineTest {
                     new RecordingWaiter(),
                     new TokenFactory(),
                     null,
-                    null,
                     new TokenBucket(1, Duration.ofMillis(100)),
                     new TokenBucket(1, Duration.ofMillis(100)));
         }
@@ -567,21 +549,11 @@ class EngineTest {
     }
 
     private static final class SearchResponderProbe {
-        private java.util.function.Consumer<dev.slsk.internal.diagnostics.DiagnosticMessage> diagnostic;
         private final SearchResponder proxy = (SearchResponder) Proxy.newProxyInstance(
                 SearchResponder.class.getClassLoader(), new Class<?>[] {SearchResponder.class}, this::invoke);
 
         private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("subscribe") && arguments.length == 1) {
-                diagnostic =
-                        (java.util.function.Consumer<dev.slsk.internal.diagnostics.DiagnosticMessage>) arguments[0];
-                return (dev.slsk.Subscription) () -> diagnostic = null;
-            }
             return defaultValue(method.getReturnType());
-        }
-
-        private void publishDiagnostic(DiagnosticMessage eventData) {
-            diagnostic.accept(eventData);
         }
     }
 

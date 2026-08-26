@@ -374,7 +374,6 @@ class EngineConnectTest {
                     null,
                     null,
                     null,
-                    null,
                     null);
         }
 

@@ -20,7 +20,6 @@ import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationController;
 import dev.slsk.internal.concurrent.CancellationSignal;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.handlers.PeerServices;
 import dev.slsk.internal.messaging.messages.PlaceInQueueRequest;
@@ -57,6 +56,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Everything about moving bytes to and from a peer, and everything a peer can
@@ -87,7 +88,7 @@ final class TransferDomain implements PeerServices {
     /** What the transfer path reads its context from, named rather than "the engine". */
     private final Supplier<SoulseekClientOptions> options;
 
-    final DiagnosticSink diagnostic;
+    final Logger log = LoggerFactory.getLogger(TransferDomain.class);
     final Waiter waiter;
     private final Supplier<PeerConnectionManager> peers;
     private final EndpointResolver endpoints;
@@ -213,7 +214,6 @@ final class TransferDomain implements PeerServices {
 
     TransferDomain(
             Supplier<SoulseekClientOptions> options,
-            DiagnosticSink diagnostic,
             Waiter waiter,
             Supplier<PeerConnectionManager> peers,
             EndpointResolver endpoints,
@@ -228,7 +228,6 @@ final class TransferDomain implements PeerServices {
             Scheduler scheduler,
             NetworkExecutor networkExecutor) {
         this.options = Objects.requireNonNull(options, "options");
-        this.diagnostic = DiagnosticSink.forSource(diagnostic, TransferDomain.class);
         this.waiter = Objects.requireNonNull(waiter, "waiter");
         this.peers = Objects.requireNonNull(peers, "peers");
         this.endpoints = Objects.requireNonNull(endpoints, "endpoints");
@@ -248,14 +247,12 @@ final class TransferDomain implements PeerServices {
                 this::uploadPolicy,
                 this::uploads,
                 Objects.requireNonNull(privileged, "privileged"),
-                tokens::nextToken,
-                diagnostic);
+                tokens::nextToken);
         this.uploadRetry = new UploadRetry(
                 Objects.requireNonNull(scheduler, "scheduler"),
                 UploadRetry.DELAY,
                 UploadRetry.MAX_ATTEMPTS,
-                this::reofferFailedUpload,
-                diagnostic);
+                this::reofferFailedUpload);
     }
 
     // --- what the runs read ------------------------------------------------
@@ -363,7 +360,7 @@ final class TransferDomain implements PeerServices {
                 return null;
             });
             if (removed[0]) {
-                diagnostic.debug("Cleaned up upload semaphore for " + username);
+                log.debug("Cleaned up upload semaphore for " + username);
             }
         }
     }
@@ -545,7 +542,7 @@ final class TransferDomain implements PeerServices {
                     try {
                         resolved = catalog().resolve(user, path);
                     } catch (RuntimeException failure) {
-                        diagnostic.warning("The share catalog failed to resolve " + path, failure);
+                        log.warn("The share catalog failed to resolve " + path, failure);
                         return;
                     }
                     if (resolved.isEmpty()) {
@@ -592,7 +589,7 @@ final class TransferDomain implements PeerServices {
                             uploadRetry.failed(user, path);
                         }
                     } catch (RuntimeException failure) {
-                        diagnostic.warning("Failed to serve an upload of " + path + " to " + user, failure);
+                        log.warn("Failed to serve an upload of " + path + " to " + user, failure);
                     } finally {
                         uploadCancellations.remove(id);
                         admission.forget(user, path);
@@ -603,7 +600,7 @@ final class TransferDomain implements PeerServices {
                         startNextQueued();
                     }
                 },
-                failure -> diagnostic.warning("Failed to serve " + path + " to " + user, failure));
+                failure -> log.warn("Failed to serve " + path + " to " + user, failure));
     }
 
     /**
@@ -617,7 +614,7 @@ final class TransferDomain implements PeerServices {
      *
      * <p>Best-effort: the upload finished, and a failure to talk about it —
      * the server dropped between the last byte and here — must not turn a
-     * served file into a diagnostic-worthy problem for the serve path.
+     * served file into a failure for the serve path.
      *
      * @param succeeded how the upload ended
      */
@@ -639,7 +636,7 @@ final class TransferDomain implements PeerServices {
             if (failure instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            diagnostic.debug("Failed to report the upload speed to the server: " + failure.getMessage());
+            log.debug("Failed to report the upload speed to the server: " + failure.getMessage());
         }
     }
 
@@ -660,7 +657,7 @@ final class TransferDomain implements PeerServices {
         try {
             candidate = admission.next();
         } catch (RuntimeException failure) {
-            diagnostic.warning("Failed to pick the next queued upload", failure);
+            log.warn("Failed to pick the next queued upload", failure);
             return;
         }
         if (candidate.isEmpty()) {
@@ -698,7 +695,7 @@ final class TransferDomain implements PeerServices {
         try {
             decision = admission.decide(user, path);
         } catch (RuntimeException failure) {
-            diagnostic.warning("Failed to re-offer " + path + " to " + user, failure);
+            log.warn("Failed to re-offer " + path + " to " + user, failure);
             return;
         }
         if (decision instanceof UploadPolicy.Decision.Allow) {
@@ -754,7 +751,7 @@ final class TransferDomain implements PeerServices {
     void deniedByPeer(String username, String filename, String message) {
         for (TransferInternal download : matching(downloads, username, filename)) {
             download.settlement().fail(new dev.slsk.exceptions.TransferRejectedException(message));
-            diagnostic.debug("Download of " + download.getFilename() + " from "
+            log.debug("Download of " + download.getFilename() + " from "
                     + download.getUsername() + " rejected by remote client (token: "
                     + download.getToken() + ")");
         }
@@ -771,7 +768,7 @@ final class TransferDomain implements PeerServices {
             download.settlement()
                     .fail(new dev.slsk.exceptions.TransferReportedFailedException(
                             "Download reported as failed by remote client"));
-            diagnostic.debug("Download of " + download.getFilename() + " from "
+            log.debug("Download of " + download.getFilename() + " from "
                     + download.getUsername() + " reported as failed by remote client (token: "
                     + download.getToken() + ")");
         }

@@ -10,7 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.events.ChatEvent;
 import dev.slsk.internal.connection.SoulseekClientState;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.events.PrivateMessageReceivedEvent;
 import dev.slsk.internal.messaging.messages.AcknowledgePrivateMessageCommand;
@@ -74,8 +73,6 @@ class DefaultChatAckTest {
             assertTrue(await(seen));
             fixture.settle();
             assertEquals(List.of(), fixture.acknowledged());
-            assertTrue(
-                    fixture.diagnostic.warnings.stream().anyMatch(warning -> warning.contains("was not acknowledged")));
         }
     }
 
@@ -155,7 +152,6 @@ class DefaultChatAckTest {
     /** A chat facet over an engine whose server writes are recorded. */
     private static final class Fixture implements AutoCloseable {
 
-        private final DiagnosticProbe diagnostic = new DiagnosticProbe();
         private final ConcurrentLinkedQueue<OutgoingMessage> written = new ConcurrentLinkedQueue<>();
         private final AtomicReference<Thread> writingThread = new AtomicReference<>();
         private volatile Runnable onWrite = () -> {};
@@ -183,13 +179,12 @@ class DefaultChatAckTest {
                     null,
                     null,
                     null,
-                    diagnostic.proxy,
                     null,
                     null,
                     null);
             client.setStateForTest(SoulseekClientState.LOGGED_IN);
-            events = new EventBus<>("chat", diagnostic.proxy);
-            chat = new DefaultChat(client, events, diagnostic.proxy);
+            events = new EventBus<>("chat");
+            chat = new DefaultChat(client, events);
         }
 
         /** Publishes an inbound private message the way the server read loop does. */
@@ -261,19 +256,4 @@ class DefaultChatAckTest {
         return null;
     }
 
-    private static final class DiagnosticProbe {
-        private final ConcurrentLinkedQueue<String> messages = new ConcurrentLinkedQueue<>();
-        private final List<String> warnings = new java.util.concurrent.CopyOnWriteArrayList<>();
-        private final DiagnosticSink proxy = (DiagnosticSink) Proxy.newProxyInstance(
-                DiagnosticSink.class.getClassLoader(), new Class<?>[] {DiagnosticSink.class}, this::invoke);
-
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("warning") && arguments != null && arguments[0] instanceof String message) {
-                warnings.add(message);
-            } else if (arguments != null && arguments.length > 0 && arguments[0] instanceof String message) {
-                messages.add(message);
-            }
-            return defaultValue(method.getReturnType());
-        }
-    }
 }

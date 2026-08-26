@@ -6,11 +6,12 @@ package dev.slsk.internal;
 import dev.slsk.connection.ConnectionState;
 import dev.slsk.exceptions.LoginRejectedException;
 import dev.slsk.internal.common.Failures;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Gets the server connection back after it drops, without the consumer asking.
@@ -57,6 +58,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * is refusing instantly.
  */
 final class ReconnectSupervisor implements AutoCloseable {
+    private static final Logger LOG = LoggerFactory.getLogger(ReconnectSupervisor.class);
 
     /** The first delay, and the base the doubling starts from. */
     private static final Duration INITIAL_DELAY = Duration.ofSeconds(2);
@@ -75,7 +77,6 @@ final class ReconnectSupervisor implements AutoCloseable {
 
     private final Connector connector;
     private final Runnable onStateChanged;
-    private final DiagnosticSink diagnostics;
 
     private final Duration initialDelay;
     private final Duration maxDelay;
@@ -108,8 +109,8 @@ final class ReconnectSupervisor implements AutoCloseable {
     /** Which attempt is in flight, so a {@code Connecting} can carry its number. */
     private int attempt = 1;
 
-    ReconnectSupervisor(Connector connector, Runnable onStateChanged, DiagnosticSink diagnostics) {
-        this(connector, onStateChanged, diagnostics, INITIAL_DELAY, MAX_DELAY, MIN_DELAY);
+    ReconnectSupervisor(Connector connector, Runnable onStateChanged) {
+        this(connector, onStateChanged, INITIAL_DELAY, MAX_DELAY, MIN_DELAY);
     }
 
     /**
@@ -119,13 +120,11 @@ final class ReconnectSupervisor implements AutoCloseable {
     ReconnectSupervisor(
             Connector connector,
             Runnable onStateChanged,
-            DiagnosticSink diagnostics,
             Duration initialDelay,
             Duration maxDelay,
             Duration minDelay) {
         this.connector = Objects.requireNonNull(connector, "connector");
         this.onStateChanged = Objects.requireNonNull(onStateChanged, "onStateChanged");
-        this.diagnostics = DiagnosticSink.forSource(diagnostics, ReconnectSupervisor.class);
         this.initialDelay = Objects.requireNonNull(initialDelay, "initialDelay");
         this.maxDelay = Objects.requireNonNull(maxDelay, "maxDelay");
         this.minDelay = Objects.requireNonNull(minDelay, "minDelay");
@@ -228,8 +227,11 @@ final class ReconnectSupervisor implements AutoCloseable {
                             number, Instant.now().plus(delay), cause);
                 }
                 onStateChanged.run();
-                diagnostics.info("Reconnecting to the server in " + delay.toMillis() + " ms (attempt " + number + "): "
-                        + Failures.message(cause));
+                LOG.info(
+                        "Reconnecting to the server in {} ms (attempt {}): {}",
+                        delay.toMillis(),
+                        number,
+                        Failures.message(cause));
 
                 Thread.sleep(delay);
 
@@ -244,20 +246,21 @@ final class ReconnectSupervisor implements AutoCloseable {
                 }
                 try {
                     connector.connect();
-                    diagnostics.info("Reconnected to the server on attempt " + number);
+                    LOG.info("Reconnected to the server on attempt {}", number);
                     return;
                 } catch (LoginRejectedException rejected) {
-                    diagnostics.warning("The server rejected the login; not reconnecting again", rejected);
+                    LOG.warn("The server rejected the login; not reconnecting again", rejected);
                     return;
                 } catch (IllegalStateException conflict) {
                     // The engine refuses a connect while one is in flight or
                     // already up. Either way someone else now owns the socket.
-                    diagnostics.debug(
-                            "Stopped reconnecting; the connection is no longer ours: " + Failures.message(conflict));
+                    LOG.debug(
+                            "Stopped reconnecting; the connection is no longer ours: {}",
+                            Failures.message(conflict));
                     return;
                 } catch (RuntimeException failure) {
                     cause = failure;
-                    diagnostics.debug("Reconnect attempt " + number + " failed: " + Failures.message(failure), failure);
+                    LOG.debug("Reconnect attempt {} failed: {}", number, Failures.message(failure), failure);
                 }
             }
         } catch (InterruptedException interrupted) {

@@ -54,7 +54,7 @@ overload instead (see [3.2](#32-blocking-calls-virtual-threads-interruption)).
 | Distribution | Local Maven repository only. Run `mvn install` in the library checkout. Not published to Maven Central. |
 | Java version | 25 or later |
 | JPMS module | `dev.slsk.soulseek` |
-| Runtime dependencies | None |
+| Runtime dependencies | SLF4J API 2.0.17. The application supplies the logging provider. |
 | License | GPL-3.0-only, based on Soulseek.NET 10.0.2 |
 | Root package | `dev.slsk` |
 | Threading model | Blocking calls, designed for virtual threads |
@@ -66,7 +66,7 @@ The module exports these architectural packages:
 |---|---|
 | [`dev.slsk`](../src/main/java/dev/slsk/package-info.java) | What you call. The root type, ten facets, subscriptions, and attachments. |
 | [`dev.slsk.connection`](../src/main/java/dev/slsk/connection/package-info.java) | Server addresses, metadata, and connection state. |
-| [`dev.slsk.diagnostics`](../src/main/java/dev/slsk/diagnostics/package-info.java) | Diagnostic levels, metrics, and distributed-mesh snapshots. |
+| [`dev.slsk.diagnostics`](../src/main/java/dev/slsk/diagnostics/package-info.java) | Operational metrics and distributed-mesh snapshots. |
 | [`dev.slsk.download`](../src/main/java/dev/slsk/download/package-info.java) | Download requests, policies, and snapshots. |
 | [`dev.slsk.events`](../src/main/java/dev/slsk/events/package-info.java) | What you receive. One sealed event hierarchy per facet. |
 | [`dev.slsk.exceptions`](../src/main/java/dev/slsk/exceptions/package-info.java) | What can go wrong. An unchecked exception hierarchy. |
@@ -189,7 +189,7 @@ everywhere. Learn them here and every facet becomes predictable.
 | `chat()` | Private messages |
 | `shares()` | What we offer to the network |
 | `me()` | This account |
-| `diagnostics()` | What the library is doing |
+| `diagnostics()` | Operational counters and distributed-mesh placement |
 
 A method lives on the facet that owns **the state it changes**, not the noun it
 mentions. `ban(user)` names a user but changes our upload policy, so it is on
@@ -312,8 +312,8 @@ Every event type is a record in a **sealed** hierarchy rooted at
 `SoulseekEvent`, and every event carries `at()` (an `Instant`). Handle a stream
 with one `switch` and the compiler tells you when a new event type appears.
 
-**A listener that throws is contained.** The exception is reported on the
-diagnostics stream at `WARNING` level, and the remaining listeners still run.
+**A listener that throws is contained.** The exception is logged through SLF4J
+at `WARN`, and the remaining listeners still run.
 It never reaches the library's read loops. The single exception to this rule is
 private-message acknowledgement (see [5.7](#57-chat)).
 
@@ -375,7 +375,6 @@ Soulseek slsk = Soulseek.builder()
         .uploads(UploadPolicy.standard(2, 1))
         .transferStore(TransferStore.inMemory())
         .profile(UserProfile.of("Running Soulseek.jvm"))
-        .diagnostics(DiagnosticLevel.INFO)
         .peerTimeout(Duration.ofSeconds(60))
         .transferTimeout(Duration.ofSeconds(60))
         .messageTimeout(Duration.ofSeconds(10))
@@ -394,7 +393,6 @@ Soulseek slsk = Soulseek.builder()
 | `transferStore(TransferStore)` | `TransferStore.inMemory()` | Where the download queue survives a restart. See [6.2](#62-transferstore). |
 | `catalog(ShareCatalog)` | built-in index | Serves browses, searches, and uploads from your own catalog. See [6.3](#63-sharecatalog-and-resolvedfile). |
 | `profile(UserProfile)` | `UserProfile.empty()` | What peers see when they ask about this account. |
-| `diagnostics(DiagnosticLevel)` | `INFO` | How much the library reports on the diagnostics stream. |
 | `peerTimeout(Duration)` | 60 s | How long a peer connection may sit idle before it is dropped. Also bounds the wait for a peer's transfer acknowledgement. Must be positive. |
 | `transferTimeout(Duration)` | 60 s | How long an established transfer may move no bytes before it is dropped. Generous on purpose: a congested uploader can stall for a long time and still be working. Must be positive. |
 | `messageTimeout(Duration)` | 10 s | How long to wait for a server response before giving up on it. Must be positive. |
@@ -429,7 +427,7 @@ underneath. The application never rebuilds the client to reconnect.
 |---|---|---|
 | `connect()` | Blocks | Connects to the public server (`vps.slsknet.org:2271`) and logs in. Returns when online. Throws on failure (`ConnectionException`, `LoginRejectedException`, ...). A transient failure also arms the automatic reconnect, so a failed startup connect recovers on its own. The `Duration` form races the caller's deadline against the configured connect timeout; whichever fires first wins, each with its own exception. |
 | `connect(ServerAddress)` | Blocks | Same, against a named server. |
-| `disconnect(String reason)` | Cheap | Disconnects and stops reconnecting. Idempotent. The reason is recorded in diagnostics. |
+| `disconnect(String reason)` | Cheap | Disconnects and stops reconnecting. Idempotent. The reason is logged. |
 | `state()` | Cheap | The current `ConnectionState`. |
 | `server()` | Cheap | `Optional<ServerInfo>` — what the server has said about itself. Empty when not logged in. |
 | `ping()` | Blocks | Measures the round trip to the server. Returns a `Duration`. |
@@ -945,33 +943,22 @@ the upload policy is what makes them true.
 
 ### 5.10 `diagnostics()`
 
-What the library is doing, and where it sits on the network. Read-only, except
-for `protocolTrace`, which changes only how much it says.
+Operational counters and the client's position in the distributed search mesh.
+This facet is read-only; logging is configured by the application through its
+SLF4J provider.
 
 | Method | Kind | Behaviour |
 |---|---|---|
-| `events()` | Cheap | `EventStream<DiagnosticEvent>` — the library's log, including contained listener faults at `WARNING`. |
 | `metrics()` | Cheap | A `Metrics` snapshot of current counters. |
 | `mesh()` | Cheap | A `MeshState` snapshot of our position in the distributed search mesh. |
 | `meshEvents()` | Cheap | `EventStream<MeshEvent>`. |
-| `protocolTrace(boolean)` | Cheap | Turns per-message protocol tracing on or off. Expensive and very loud. Idempotent. |
 
-**`DiagnosticEvent`** — a record, not a hierarchy: `level`
-(`DiagnosticLevel`), `source` (the fully qualified emitter class name),
-`message`, `exception` (`Optional<Throwable>`), `at`. Wire it to your logger
-using `source` as the category, so the logging framework can filter the
-library by package or class:
-
-```java
-slsk.diagnostics().events().subscribe(e ->
-        org.slf4j.LoggerFactory.getLogger(e.source())
-                .atLevel(map(e.level()))
-                .setCause(e.exception().orElse(null))
-                .log(e.message()));
-```
-
-**`DiagnosticLevel`** — `NONE`, `WARNING`, `INFO`, `DEBUG`, `TRACE`. Ordered
-from silent to loudest, so a filter is a comparison.
+The library depends on the SLF4J 2 API and does not ship or select a provider.
+Normal loggers use their emitting class under `dev.slsk`. Wire-message logs use
+the dedicated `dev.slsk.protocol` category at `TRACE`, so an application can
+enable protocol traffic independently of normal library logs. Wire logging is
+high-volume and may expose protocol contents; leave that category below
+`TRACE` unless actively troubleshooting.
 
 **`Metrics`** — all-`long`/`int` counters: `bytesDownloaded`, `bytesUploaded`,
 `activeDownloads`, `activeUploads`, `queuedDownloads`, `queuedUploads`,
@@ -1166,7 +1153,7 @@ path-safety boundary the built-in index uses.
 Opaque string ids (see [3.3](#33-ids-and-snapshots)). Both have `of(String)`
 and expose `value()`. `SearchId.ofToken(int)` wraps the protocol token a
 search was issued with — the string form is aligned with the wire token so
-diagnostics correlate, but treat it as opaque.
+logs correlate, but treat it as opaque.
 
 ---
 
@@ -1283,8 +1270,8 @@ browse trees: the library hands you flat, ordered, complete data and takes no
 position.
 
 **Contain your own faults.** A throwing listener cannot take the connection
-down — it is contained and reported on `diagnostics().events()` at `WARNING`.
-Watch that stream during development: your rendering bugs appear there. The
+down — it is contained and logged through SLF4J at `WARN`. Watch application
+logs during development: your rendering bugs appear there. The
 one intentional exception: a throwing chat listener leaves the message
 unacknowledged for redelivery ([5.7](#57-chat)).
 
@@ -1417,7 +1404,7 @@ capability models live in the package listed in [section 1](#1-the-library-at-a-
 | `Chat` | facet | Send and receive private messages. |
 | `Shares` | facet | Configure, rescan, and replace what we share. |
 | `Me` | facet | This account: presence, profile, privileges, password. |
-| `Diagnostics` | facet | Log stream, metrics, mesh state, protocol trace. |
+| `Diagnostics` | facet | Metrics and distributed-mesh state. |
 | `EventStream<T>` | interface | Subscribe to a facet's events, whole stream or one type. |
 | `Subscription` | interface | Unregisters a listener. Idempotent close. |
 | `Attachment<S>` | record | A snapshot and a subscription, taken atomically. |
@@ -1470,7 +1457,6 @@ capability models live in the package listed in [section 1](#1-the-library-at-a-
 | `ShareIndex` | record | What we share: counts, last scan, scan status. |
 | `MeshState` | record | Our position in the distributed search mesh. |
 | `Metrics` | record | Counter snapshot for exporters. |
-| `DiagnosticLevel` | enum | NONE → TRACE, ordered. |
 
 **`dev.slsk.events` — what you receive**
 
@@ -1487,7 +1473,6 @@ capability models live in the package listed in [section 1](#1-the-library-at-a-
 | `MeEvent` | LoggedIn, PrivilegeNotificationReceived, PrivilegedUserListReceived, PresenceChanged |
 | `ShareEvent` | ScanStarted, ScanProgressed, ScanCompleted, BrowseServed |
 | `MeshEvent` | StateChanged |
-| `DiagnosticEvent` | (record, not sealed) level, source, message, exception, at |
 
 **`dev.slsk.spi` — what you implement**
 

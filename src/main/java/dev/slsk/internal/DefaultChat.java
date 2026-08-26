@@ -9,7 +9,6 @@ import dev.slsk.events.ChatEvent;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Usernames;
 import dev.slsk.internal.concurrent.BlockingInvocation;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.events.PrivateMessageReceivedEvent;
 import dev.slsk.user.Username;
@@ -17,6 +16,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.concurrent.TimeoutException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * {@link Chat}, over the engine.
@@ -36,17 +37,16 @@ import java.util.concurrent.TimeoutException;
  * merely reported.
  */
 final class DefaultChat implements Chat {
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultChat.class);
 
     private final ServerLink server;
     private final SoulseekEngine client;
     private final EventBus<ChatEvent> events;
-    private final DiagnosticSink diagnostics;
 
-    DefaultChat(SoulseekEngine client, EventBus<ChatEvent> events, DiagnosticSink diagnostics) {
+    DefaultChat(SoulseekEngine client, EventBus<ChatEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
         this.server = client.server();
         this.events = Objects.requireNonNull(events, "events");
-        this.diagnostics = DiagnosticSink.forSource(diagnostics, DefaultChat.class);
         client.events().on(Kind.PRIVATE_MESSAGE_RECEIVED, (PrivateMessageReceivedEvent event) -> onMessage(event));
     }
 
@@ -59,8 +59,9 @@ final class DefaultChat implements Chat {
             // Unrepresentable sender. Throwing here used to leave the message
             // both undelivered and unacknowledged, so the server redelivered it
             // at every login forever; skipping keeps the redelivery but names it.
-            diagnostics.warning("Private message " + event.id()
-                    + " carries a sender no username can represent and was not delivered");
+            LOG.warn(
+                    "Private message {} carries a sender no username can represent and was not delivered",
+                    event.id());
             return;
         }
         // The acknowledgement is a continuation rather than the next statement,
@@ -82,9 +83,11 @@ final class DefaultChat implements Chat {
      */
     private void acknowledge(PrivateMessageReceivedEvent event, int delivered) {
         if (delivered == 0) {
-            diagnostics.warning("Private message " + event.id() + " from " + event.username()
-                    + " reached no listener cleanly and was not acknowledged; "
-                    + "the server will deliver it again at the next login");
+            LOG.warn(
+                    "Private message {} from {} reached no listener cleanly and was not acknowledged; "
+                            + "the server will deliver it again at the next login",
+                    event.id(),
+                    event.username());
             return;
         }
         try {
@@ -93,9 +96,9 @@ final class DefaultChat implements Chat {
             // The bus's delivery thread was asked to stop; the message stays
             // unacknowledged and the server redelivers it at the next login.
             Thread.currentThread().interrupt();
-            diagnostics.warning("Interrupted acknowledging private message " + event.id(), interrupted);
+            LOG.warn("Interrupted acknowledging private message {}", event.id(), interrupted);
         } catch (RuntimeException exception) {
-            diagnostics.warning("Failed to acknowledge private message " + event.id(), exception);
+            LOG.warn("Failed to acknowledge private message {}", event.id(), exception);
         }
     }
 

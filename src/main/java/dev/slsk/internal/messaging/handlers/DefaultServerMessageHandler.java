@@ -15,9 +15,6 @@ import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.connection.ServerSessionInfo;
-import dev.slsk.internal.diagnostics.DiagnosticMessage;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
-import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.events.PrivateMessageReceivedEvent;
 import dev.slsk.internal.events.PrivilegeNotificationReceivedEvent;
 import dev.slsk.internal.events.PublicChatMessageReceivedEvent;
@@ -95,9 +92,13 @@ import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Handles incoming messages from the server connection. */
 public final class DefaultServerMessageHandler implements ServerMessageHandler {
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultServerMessageHandler.class);
+    private static final Logger PROTOCOL = LoggerFactory.getLogger("dev.slsk.protocol");
     private final Supplier<SoulseekClientOptions> options;
     private final ServerLink server;
     private final Waiter waiter;
@@ -108,13 +109,10 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     private final Supplier<DistributedMessageHandler> distributedMessages;
     private final Supplier<SearchResponder> searchResponses;
     private final NetworkExecutor networkExecutor;
-    private final DiagnosticSink diagnostic;
-    private final CopyOnWriteArrayList<Consumer<? super DiagnosticMessage>> diagnosticListeners =
-            new CopyOnWriteArrayList<>();
     private final Map<ServerMessageEvent, CopyOnWriteArrayList<Consumer<?>>> listeners =
             new EnumMap<>(ServerMessageEvent.class);
 
-    /** Creates a handler with its default diagnostic factory. */
+    /** Creates a handler. */
     public DefaultServerMessageHandler(
             Supplier<SoulseekClientOptions> options,
             ServerLink server,
@@ -135,32 +133,6 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 distributed,
                 distributedMessages,
                 searchResponses,
-                null);
-    }
-
-    /** Creates a handler. */
-    public DefaultServerMessageHandler(
-            Supplier<SoulseekClientOptions> options,
-            ServerLink server,
-            Waiter waiter,
-            Supplier<Map<Integer, SearchInternal>> searches,
-            Supplier<Map<Integer, TransferInternal>> downloads,
-            Supplier<PeerConnectionManager> peers,
-            Supplier<DistributedConnectionManager> distributed,
-            Supplier<DistributedMessageHandler> distributedMessages,
-            Supplier<SearchResponder> searchResponses,
-            DiagnosticSink diagnosticFactory) {
-        this(
-                options,
-                server,
-                waiter,
-                searches,
-                downloads,
-                peers,
-                distributed,
-                distributedMessages,
-                searchResponses,
-                diagnosticFactory,
                 new NetworkExecutor());
     }
 
@@ -175,7 +147,6 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
             Supplier<DistributedConnectionManager> distributed,
             Supplier<DistributedMessageHandler> distributedMessages,
             Supplier<SearchResponder> searchResponses,
-            DiagnosticSink diagnosticFactory,
             NetworkExecutor networkExecutor) {
         this.options = Objects.requireNonNull(options, "options");
         this.server = Objects.requireNonNull(server, "server");
@@ -187,17 +158,9 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         this.distributedMessages = Objects.requireNonNull(distributedMessages, "distributedMessages");
         this.searchResponses = Objects.requireNonNull(searchResponses, "searchResponses");
         this.networkExecutor = Objects.requireNonNull(networkExecutor, "networkExecutor");
-        diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
-                : DiagnosticSink.forSource(diagnosticFactory, DefaultServerMessageHandler.class);
         for (ServerMessageEvent event : ServerMessageEvent.values()) {
             listeners.put(event, new CopyOnWriteArrayList<>());
         }
-    }
-
-    @Override
-    public Subscription subscribe(Consumer<? super DiagnosticMessage> listener) {
-        return Subscriptions.add(diagnosticListeners, listener);
     }
 
     @Override
@@ -221,11 +184,11 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
             // A code outside the table is a protocol addition or a newer
             // server, not a broken connection. Throwing here would kill the
             // read loop — for this connection, the whole client.
-            diagnostic.debug(() -> "Ignored an unknown server message: " + unknown.getMessage());
+            LOG.debug("Ignored an unknown server message: {}", unknown.getMessage());
             return;
         }
         if (code != MessageCode.Server.EMBEDDED_MESSAGE) {
-            diagnostic.debug(() -> "Server message received: " + code);
+            PROTOCOL.trace("Server message received: {}", code);
         }
 
         try {
@@ -316,7 +279,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                 }
                 case NET_INFO -> handleNetInfo(message);
                 case DISTRIBUTED_RESET -> {
-                    diagnostic.info("Distributed network reset received from the server");
+                    LOG.info("Distributed network reset received from the server");
                     publish(ServerMessageEvent.DISTRIBUTED_NETWORK_RESET, null);
                     distributed.get().removeAndCloseAll();
                     distributed.get().resetStatus();
@@ -421,12 +384,12 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                     distributedMessages.get().handleEmbeddedMessage(message);
                 }
                 default -> {
-                    diagnostic.debug(() -> "Unhandled server message: " + code + "; " + message.length + " bytes");
+                    LOG.debug("Unhandled server message: {}; {} bytes", code, message.length);
                 }
             }
         } catch (Throwable failure) {
             Throwable cause = failure;
-            diagnostic.warning(() -> "Error handling server message: " + code + "; " + failureMessage(cause), cause);
+            LOG.warn("Error handling server message: {}; {}", code, failureMessage(cause), cause);
         }
     }
 
@@ -434,7 +397,7 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     public void handleMessageWritten(MessageEvent eventData) {
         MessageConnection connection = eventData.connection();
         MessageCode.Server code = new MessageReader<>(eventData.message(), MessageCode.Server.class).readCode();
-        diagnostic.debug("Server message sent: " + code);
+        PROTOCOL.trace("Server message sent: {}", code);
     }
 
     private void handlePrivilegeNotification(byte[] message) {
@@ -473,17 +436,19 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         // it returns, and the server has more to say meanwhile.
         networkExecutor.dispatch(
                 () -> distributed.get().addParentConnection(parents),
-                failure -> diagnostic.debug("Error handling NetInfo message: " + failureMessage(failure)));
+                failure -> LOG.debug("Error handling NetInfo message: {}", failureMessage(failure)));
     }
 
     private void handleCannotConnect(byte[] message) {
         CannotConnect cannotConnect = CannotConnect.fromByteArray(message);
-        diagnostic.debug("Received CannotConnect message for token "
-                + cannotConnect.getToken()
-                + (cannotConnect.getUsername() == null
-                                || cannotConnect.getUsername().isEmpty()
-                        ? ""
-                        : " from user " + cannotConnect.getUsername()));
+        if (cannotConnect.getUsername() == null || cannotConnect.getUsername().isEmpty()) {
+            LOG.debug("Received CannotConnect message for token {}", cannotConnect.getToken());
+        } else {
+            LOG.debug(
+                    "Received CannotConnect message for token {} from user {}",
+                    cannotConnect.getToken(),
+                    cannotConnect.getUsername());
+        }
         searchResponses.get().tryDiscard(cannotConnect.getToken());
         if (cannotConnect.getUsername() != null && !cannotConnect.getUsername().isEmpty()) {
             publish(ServerMessageEvent.USER_CANNOT_CONNECT, new UserCannotConnectEvent(cannotConnect));
@@ -496,9 +461,10 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
             switch (response.getType()) {
                 case Constants.ConnectionType.TRANSFER -> handleTransferConnection(response);
                 case Constants.ConnectionType.PEER -> {
-                    diagnostic.debug("Received message ConnectToPeer request from "
-                            + response.getUsername() + " ("
-                            + response.getIpEndpoint() + ")");
+                    LOG.debug(
+                            "Received message ConnectToPeer request from {} ({})",
+                            response.getUsername(),
+                            response.getIpEndpoint());
                     // Off the server read loop: establishing this connects to
                     // a peer and writes to it, and the server has more to say
                     // meanwhile.
@@ -507,9 +473,10 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                             failure -> debugConnectToPeer(response, failure));
                 }
                 case Constants.ConnectionType.DISTRIBUTED -> {
-                    diagnostic.debug("Received distributed ConnectToPeer request from "
-                            + response.getUsername() + " ("
-                            + response.getIpEndpoint() + ")");
+                    LOG.debug(
+                            "Received distributed ConnectToPeer request from {} ({})",
+                            response.getUsername(),
+                            response.getIpEndpoint());
                     // Off the server read loop, as above.
                     networkExecutor.dispatch(
                             () -> distributed.get().getOrAddChildConnection(response),
@@ -524,10 +491,11 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
     }
 
     private void handleTransferConnection(ConnectToPeerResponse response) {
-        diagnostic.debug("Received transfer ConnectToPeer request from "
-                + response.getUsername() + " ("
-                + response.getIpEndpoint() + ") for remote token "
-                + response.getToken());
+        LOG.debug(
+                "Received transfer ConnectToPeer request from {} ({}) for remote token {}",
+                response.getUsername(),
+                response.getIpEndpoint(),
+                response.getToken());
         boolean expected = downloads.get().values().stream()
                 .anyMatch(transfer -> Objects.equals(transfer.getUsername(), response.getUsername()));
         if (!expected) {
@@ -547,22 +515,24 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
                         && Objects.equals(transfer.getUsername(), response.getUsername()))
                 .findFirst();
         if (matchingDownload.isEmpty()) {
-            diagnostic.debug("Transfer ConnectToPeer request from "
-                    + response.getUsername() + " ("
-                    + response.getIpEndpoint() + ") for remote token "
-                    + response.getToken()
-                    + " does not match any waiting downloads, discarding.");
+            LOG.debug(
+                    "Transfer ConnectToPeer request from {} ({}) for remote token {} does not match any waiting "
+                            + "downloads, discarding.",
+                    response.getUsername(),
+                    response.getIpEndpoint(),
+                    response.getToken());
             result.connection().disconnect("Unknown transfer");
             return;
         }
         TransferInternal download = matchingDownload.get();
         TransportConnection connection = result.connection();
-        diagnostic.debug("Solicited inbound transfer connection to "
-                + download.getUsername() + " ("
-                + connection.getIpEndpoint() + ") for token "
-                + download.getToken() + " (remote: "
-                + download.getRemoteToken() + ") established. (id: "
-                + connection.getId() + ")");
+        LOG.debug(
+                "Solicited inbound transfer connection to {} ({}) for token {} (remote: {}) established. (id: {})",
+                download.getUsername(),
+                connection.getIpEndpoint(),
+                download.getToken(),
+                download.getRemoteToken(),
+                connection.getId());
         waiter.complete(
                 new WaitKey.IndirectTransfer(download.getUsername(), download.getFilename(), download.getRemoteToken()),
                 connection);
@@ -604,10 +574,6 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
         }
     }
 
-    private void publishDiagnostic(DiagnosticMessage eventData) {
-        diagnosticListeners.forEach(listener -> listener.accept(eventData));
-    }
-
     private static int integer(byte[] message) {
         return IntegerResponse.fromByteArray(message, MessageCode.Server.class);
     }
@@ -618,14 +584,15 @@ public final class DefaultServerMessageHandler implements ServerMessageHandler {
 
     private void warnServerMessage(MessageCode.Server code, Throwable failure) {
         Throwable cause = failure;
-        diagnostic.warning("Error handling server message: " + code + "; " + failureMessage(cause), cause);
+        LOG.warn("Error handling server message: {}; {}", code, failureMessage(cause), cause);
     }
 
     private void debugConnectToPeer(ConnectToPeerResponse response, Throwable failure) {
-        diagnostic.debug("Error handling ConnectToPeer response from "
-                + response.getUsername() + " ("
-                + response.getIpEndpoint() + "): "
-                + failureMessage(failure));
+        LOG.debug(
+                "Error handling ConnectToPeer response from {} ({}): {}",
+                response.getUsername(),
+                response.getIpEndpoint(),
+                failureMessage(failure));
     }
 
     private static String failureMessage(Throwable failure) {

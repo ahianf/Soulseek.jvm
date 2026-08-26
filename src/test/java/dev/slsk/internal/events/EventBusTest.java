@@ -11,7 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.Attachment;
 import dev.slsk.Subscription;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -31,42 +30,8 @@ class EventBusTest {
         record Removed(int value) implements Signal {}
     }
 
-    /** Captures what containment reports, so the test can assert it was reported. */
-    private static final class RecordingSink implements DiagnosticSink {
-        final List<String> warnings = new CopyOnWriteArrayList<>();
-        final List<Throwable> causes = new CopyOnWriteArrayList<>();
-
-        @Override
-        public void trace(String message) {}
-
-        @Override
-        public void trace(String message, Throwable exception) {}
-
-        @Override
-        public void debug(String message) {}
-
-        @Override
-        public void debug(String message, Throwable exception) {}
-
-        @Override
-        public void info(String message) {}
-
-        @Override
-        public void warning(String message) {
-            warnings.add(message);
-        }
-
-        @Override
-        public void warning(String message, Throwable exception) {
-            warnings.add(message);
-            causes.add(exception);
-        }
-    }
-
-    private final RecordingSink sink = new RecordingSink();
-
     private EventBus<Signal> bus() {
-        return new EventBus<>("test", sink);
+        return new EventBus<>("test");
     }
 
     @Test
@@ -150,10 +115,6 @@ class EventBusTest {
         // or a connection read loop.
         assertEquals(0, deliver(bus, new Signal.Added(1)));
 
-        assertEquals(1, sink.warnings.size());
-        assertTrue(sink.warnings.get(0).contains("IllegalStateException"));
-        assertTrue(sink.warnings.get(0).contains("Added"));
-        assertEquals("consumer bug", sink.causes.get(0).getMessage());
     }
 
     @Test
@@ -182,7 +143,6 @@ class EventBusTest {
             throw new StackOverflowError("deep");
         });
         assertEquals(0, deliver(bus, new Signal.Added(1)));
-        assertEquals(1, sink.warnings.size());
     }
 
     @Test
@@ -554,6 +514,5 @@ class EventBusTest {
 
         assertEquals(0, bus.listenerCount());
         assertEquals(0, deliver(bus, new Signal.Added(1)));
-        assertTrue(sink.warnings.isEmpty());
     }
 }

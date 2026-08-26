@@ -10,7 +10,6 @@ import dev.slsk.events.UserEvent;
 import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.connection.SoulseekClientState;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.messaging.messages.WatchUserResponse;
 import dev.slsk.internal.network.MessageConnection;
@@ -110,10 +109,6 @@ class DefaultUsersStatusTest {
      */
     private static final class Fixture implements AutoCloseable {
 
-        private final DiagnosticSink diagnostics = (DiagnosticSink) Proxy.newProxyInstance(
-                DiagnosticSink.class.getClassLoader(),
-                new Class<?>[] {DiagnosticSink.class},
-                (proxy, method, arguments) -> defaultValue(method.getReturnType()));
         private final SoulseekEngine client;
         private final DefaultUsers users;
 
@@ -139,12 +134,11 @@ class DefaultUsersStatusTest {
                     null,
                     waiter,
                     null,
-                    diagnostics,
                     null,
                     null,
                     null);
             client.setStateForTest(SoulseekClientState.LOGGED_IN);
-            users = new DefaultUsers(client, new EventBus<>("users", diagnostics), diagnostics);
+            users = new DefaultUsers(client, new EventBus<>("users"));
         }
 
         private Object answerWatch(Object ignored, Method method, Object[] arguments) {

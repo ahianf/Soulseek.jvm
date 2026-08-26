@@ -22,7 +22,6 @@ import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.connection.ServerSessionInfo;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.PrivateMessageReceivedEvent;
 import dev.slsk.internal.events.PrivilegeNotificationReceivedEvent;
 import dev.slsk.internal.events.PublicChatMessageReceivedEvent;
@@ -52,7 +51,6 @@ import dev.slsk.internal.network.PeerEndpoint;
 import dev.slsk.internal.network.TransferConnectionResult;
 import dev.slsk.internal.network.tcp.TransportConnection;
 import dev.slsk.internal.options.SoulseekClientOptions;
-import dev.slsk.internal.options.SoulseekClientOptionsPatch;
 import dev.slsk.internal.room.RoomData;
 import dev.slsk.internal.room.RoomInfoMessage;
 import dev.slsk.internal.room.RoomListMessage;
@@ -104,45 +102,6 @@ class ServerMessageHandlerTest {
                         () -> fixture.client.distributed,
                         fixture.client::distributedMessages,
                         () -> fixture.client.responder));
-    }
-
-    @Test
-    void diagnosticsCoverReadUnhandledFailureAndWrite() {
-        Fixture fixture = new Fixture(options(false, false));
-        fixture.handler.handleMessageRead(
-                null,
-                new MessageBuilder()
-                        .writeCode(MessageCode.Server.ASK_PUBLIC_CHAT)
-                        .build());
-        assertTrue(fixture.diagnostic.contains("Server message received: ASK_PUBLIC_CHAT"));
-        assertTrue(fixture.diagnostic.contains("Unhandled server message"));
-
-        fixture.handler.handleMessageRead(
-                null,
-                new MessageBuilder().writeCode(MessageCode.Server.ROOM_LIST).build());
-        assertTrue(fixture.diagnostic.containsWarning("Error handling server message"));
-
-        fixture.handler.handleMessageWritten(new MessageEvent(null, searchRequest(USERNAME, TOKEN, "query")));
-        assertTrue(fixture.diagnostic.contains("Server message sent: FILE_SEARCH"));
-
-        AtomicInteger generated = new AtomicInteger();
-        DefaultServerMessageHandler defaultDiagnostic = new DefaultServerMessageHandler(
-                () -> fixture.client.options,
-                fixture.client.server,
-                fixture.client.waiter,
-                () -> fixture.client.searches,
-                () -> fixture.client.downloads,
-                () -> fixture.client.peer,
-                () -> fixture.client.distributed,
-                fixture.client::distributedMessages,
-                () -> fixture.client.responder);
-        defaultDiagnostic.subscribe(eventData -> generated.incrementAndGet());
-        defaultDiagnostic.handleMessageRead(
-                null,
-                new MessageBuilder()
-                        .writeCode(MessageCode.Server.DISTRIBUTED_RESET)
-                        .build());
-        assertEquals(1, generated.get());
     }
 
     @Test
@@ -465,8 +424,6 @@ class ServerMessageHandlerTest {
 
         fixture.distributed.addParent = new RuntimeException("parent failure");
         fixture.handle(netInfo());
-        assertTrue(
-                Eventually.holds(() -> fixture.diagnostic.contains("Error handling NetInfo message: parent failure")));
     }
 
     @Test
@@ -526,8 +483,6 @@ class ServerMessageHandlerTest {
         Fixture unexpected = new Fixture(options(false, false));
         unexpected.handle(connectToPeer(USERNAME, Constants.ConnectionType.TRANSFER, TOKEN));
         unexpected.handle(connectToPeer(USERNAME, "X", TOKEN));
-        assertTrue(unexpected.diagnostic.contains("Unexpected transfer request"));
-        assertTrue(unexpected.diagnostic.contains("Unknown Connect To Peer connection type"));
     }
 
     @Test
@@ -573,7 +528,6 @@ class ServerMessageHandlerTest {
         fixture.handle(message);
 
         assertSame(message, fixture.client.embedded);
-        assertFalse(fixture.diagnostic.contains("Server message received: EMBEDDED_MESSAGE"));
     }
 
     private static byte[] integer(MessageCode.Server code, int value) {
@@ -717,11 +671,10 @@ class ServerMessageHandlerTest {
     }
 
     private static SoulseekClientOptions options(boolean autoPrivate, boolean autoPrivilege) {
-        SoulseekClientOptionsPatch patch = SoulseekClientOptionsPatch.builder()
+        return SoulseekClientOptions.builder()
                 .autoAcknowledgePrivateMessages(autoPrivate)
                 .autoAcknowledgePrivilegeNotifications(autoPrivilege)
                 .build();
-        return new SoulseekClientOptions().with(patch);
     }
 
     private static InetSocketAddress endpoint(int port) {
@@ -760,7 +713,6 @@ class ServerMessageHandlerTest {
     }
 
     private static final class Fixture {
-        private final RecordingDiagnostic diagnostic = new RecordingDiagnostic();
         private final RecordingWaiter waiter = new RecordingWaiter();
         private final PeerManagerProbe peer = new PeerManagerProbe();
         private final DistributedManagerProbe distributed = new DistributedManagerProbe();
@@ -769,7 +721,7 @@ class ServerMessageHandlerTest {
         private final DefaultServerMessageHandler handler;
 
         private Fixture(SoulseekClientOptions options) {
-            client = new FakeClient(options, waiter, peer.proxy, distributed.proxy, responder.proxy, diagnostic);
+            client = new FakeClient(options, waiter, peer.proxy, distributed.proxy, responder.proxy);
             handler = new DefaultServerMessageHandler(
                     () -> client.options,
                     client.server,
@@ -779,8 +731,7 @@ class ServerMessageHandlerTest {
                     () -> client.peer,
                     () -> client.distributed,
                     client::distributedMessages,
-                    () -> client.responder,
-                    diagnostic);
+                    () -> client.responder);
         }
 
         private void handle(byte[] message) {
@@ -813,8 +764,7 @@ class ServerMessageHandlerTest {
                 Waiter waiter,
                 PeerConnectionManager peer,
                 DistributedConnectionManager distributed,
-                SearchResponder responder,
-                DiagnosticSink diagnostic) {
+                SearchResponder responder) {
             this.options = options;
             this.waiter = waiter;
             this.peer = peer;
@@ -831,7 +781,7 @@ class ServerMessageHandlerTest {
                         }
                         return defaultValue(method.getReturnType());
                     });
-            server = ServerLinks.loggedIn(waiter, diagnostic, connection, LOCAL_USER);
+            server = ServerLinks.loggedIn(waiter, connection, LOCAL_USER);
         }
 
         /** The ids acknowledged, in order, of the given command type. */
@@ -1024,58 +974,6 @@ class ServerMessageHandlerTest {
                 case "toString" -> "ConnectionProbe";
                 default -> defaultValue(method.getReturnType());
             };
-        }
-    }
-
-    private static final class RecordingDiagnostic implements DiagnosticSink {
-        // Copy-on-write: a handler's dispatched work reports its own failures
-        // now, from a thread of its own, while the test thread is reading.
-        private final List<String> messages = new CopyOnWriteArrayList<>();
-        private final List<String> warnings = new CopyOnWriteArrayList<>();
-
-        private boolean contains(String value) {
-            return messages.stream().anyMatch(message -> message.toLowerCase().contains(value.toLowerCase()));
-        }
-
-        private boolean containsWarning(String value) {
-            return warnings.stream().anyMatch(message -> message.toLowerCase().contains(value.toLowerCase()));
-        }
-
-        @Override
-        public void trace(String message) {
-            messages.add(message);
-        }
-
-        @Override
-        public void trace(String message, Throwable exception) {
-            messages.add(message);
-        }
-
-        @Override
-        public void debug(String message) {
-            messages.add(message);
-        }
-
-        @Override
-        public void debug(String message, Throwable exception) {
-            messages.add(message);
-        }
-
-        @Override
-        public void info(String message) {
-            messages.add(message);
-        }
-
-        @Override
-        public void warning(String message) {
-            messages.add(message);
-            warnings.add(message);
-        }
-
-        @Override
-        public void warning(String message, Throwable exception) {
-            messages.add(message);
-            warnings.add(message);
         }
     }
 

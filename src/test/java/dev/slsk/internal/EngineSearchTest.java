@@ -520,7 +520,6 @@ class EngineSearchTest {
                 null,
                 null,
                 null,
-                null,
                 null);
 
         private Fixture() {

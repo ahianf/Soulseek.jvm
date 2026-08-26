@@ -38,6 +38,7 @@
     <maven.compiler.release>25</maven.compiler.release>
     <junit.version>5.14.3</junit.version>
     <jmh.version>1.37</jmh.version>
+    <slf4j.version>2.0.17</slf4j.version>
     <exec.plugin.version>3.5.0</exec.plugin.version>
     <build.helper.version>3.6.1</build.helper.version>
     <maven.clean.version>3.2.0</maven.clean.version>
@@ -65,6 +66,17 @@
   </dependencyManagement>
 
   <dependencies>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>${slf4j.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-nop</artifactId>
+      <version>${slf4j.version}</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-api</artifactId>
@@ -155,18 +167,16 @@
                 <requireMavenVersion>
                   <version>[3.9,)</version>
                 </requireMavenVersion>
-                <!--
-                  The runtime artifact is dependency-free by policy. The soak
-                  harness and the JMH benchmarks add test-scoped dependencies
-                  only; this rule is what stops one of them leaking into the
-                  shipped jar.
-                -->
+                <!-- SLF4J API is the sole allowed shipped dependency. -->
                 <bannedDependencies>
                   <searchTransitive>true</searchTransitive>
                   <excludes>
                     <exclude>*:*:*:*:compile</exclude>
                     <exclude>*:*:*:*:runtime</exclude>
                   </excludes>
+                  <includes>
+                    <include>org.slf4j:slf4j-api</include>
+                  </includes>
                 </bannedDependencies>
               </rules>
             </configuration>

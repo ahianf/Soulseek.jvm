@@ -9,7 +9,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.events.UploadEvent;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.network.MessageConnection;
 import dev.slsk.internal.options.TransferStateChange;
@@ -127,10 +126,6 @@ class DefaultUploadsEventTest {
     /** An uploads facet over an engine whose server connection is a stub. */
     private static final class Fixture implements AutoCloseable {
 
-        private final DiagnosticSink diagnostics = (DiagnosticSink) Proxy.newProxyInstance(
-                DiagnosticSink.class.getClassLoader(),
-                new Class<?>[] {DiagnosticSink.class},
-                (proxy, method, arguments) -> defaultValue(method.getReturnType()));
         private final SoulseekEngine client;
         private final DefaultUploads uploads;
 
@@ -154,11 +149,10 @@ class DefaultUploadsEventTest {
                     null,
                     null,
                     null,
-                    diagnostics,
                     null,
                     null,
                     null);
-            uploads = new DefaultUploads(client, new EventBus<>("uploads", diagnostics));
+            uploads = new DefaultUploads(client, new EventBus<>("uploads"));
         }
 
         @Override

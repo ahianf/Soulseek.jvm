@@ -57,6 +57,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Everything the client knows about other users: info, statistics, presence,
@@ -70,6 +72,7 @@ import java.util.function.Consumer;
  * machinery.
  */
 final class UserDirectory {
+    private static final Logger LOG = LoggerFactory.getLogger(UserDirectory.class);
 
     private final SoulseekEngine context;
     private final ServerLink server;
@@ -323,7 +326,7 @@ final class UserDirectory {
             InetSocketAddress endpoint = getUserEndpoint(requestedUsername, token);
             if (invalidateCache
                     && context.getPeerConnectionManager().tryInvalidateMessageConnectionCache(requestedUsername)) {
-                context.getDiagnostic().debug("Invalidated message connection cache for " + requestedUsername);
+                LOG.debug("Invalidated message connection cache for {}", requestedUsername);
             }
             context.getPeerConnectionManager().getOrAddMessageConnection(requestedUsername, endpoint, token);
         } catch (Throwable failure) {
@@ -348,7 +351,7 @@ final class UserDirectory {
 
         Optional<InetSocketAddress> cached = tryCacheGet(cache, requestedUsername);
         if (cached.isPresent()) {
-            context.getDiagnostic().debug("Endpoint cache HIT for " + requestedUsername + ": " + cached.get());
+            LOG.debug("Endpoint cache HIT for {}: {}", requestedUsername, cached.get());
             return cached.get();
         }
 
@@ -378,7 +381,7 @@ final class UserDirectory {
         try {
             Optional<InetSocketAddress> second = tryCacheGet(cache, requestedUsername);
             if (second.isPresent()) {
-                context.getDiagnostic().debug("Endpoint cache HIT for " + requestedUsername + ": " + second.get());
+                LOG.debug("Endpoint cache HIT for {}: {}", requestedUsername, second.get());
                 return second.get();
             }
             return retrieveUserEndpoint(requestedUsername, token, cache);
@@ -413,7 +416,7 @@ final class UserDirectory {
                             "Exception retrieving or updating user " + "endpoint cache: " + Failures.message(failure),
                             failure);
                 }
-                context.getDiagnostic().debug("Endpoint cache MISS for " + requestedUsername + ": " + result);
+                LOG.debug("Endpoint cache MISS for {}: {}", requestedUsername, result);
             }
             return result;
         } catch (Throwable failure) {
@@ -515,7 +518,7 @@ final class UserDirectory {
                 return null;
             });
             if (removed[0]) {
-                context.getDiagnostic().debug("Cleaned up user endpoint semaphore for " + username);
+                LOG.debug("Cleaned up user endpoint semaphore for {}", username);
             }
         }
     }

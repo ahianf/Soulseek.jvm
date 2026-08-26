@@ -11,7 +11,6 @@ import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Usernames;
 import dev.slsk.internal.concurrent.BlockingInvocation;
 import dev.slsk.internal.concurrent.CancellationSignal;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.events.PrivilegeNotificationReceivedEvent;
 import dev.slsk.user.UserPresence;
@@ -23,6 +22,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * {@link Me}, over the engine.
@@ -41,24 +42,23 @@ import java.util.concurrent.atomic.AtomicReference;
  * already been handed.
  */
 final class DefaultMe implements Me {
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultMe.class);
 
     private final SoulseekEngine client;
     private final ServerLink server;
     private final UserDirectory users;
     private final EventBus<MeEvent> events;
-    private final DiagnosticSink diagnostics;
     private final Username username;
 
     /** The last presence we published; the protocol offers no way to read it back. */
     private final AtomicReference<UserPresence> presence = new AtomicReference<>(UserPresence.ONLINE);
 
-    DefaultMe(SoulseekEngine client, Username username, EventBus<MeEvent> events, DiagnosticSink diagnostics) {
+    DefaultMe(SoulseekEngine client, Username username, EventBus<MeEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
         this.server = client.server();
         this.users = client.users();
         this.username = Objects.requireNonNull(username, "username");
         this.events = Objects.requireNonNull(events, "events");
-        this.diagnostics = DiagnosticSink.forSource(diagnostics, DefaultMe.class);
         wire();
     }
 
@@ -100,9 +100,9 @@ final class DefaultMe implements Me {
                 server.acknowledgePrivilegeNotification(event.id());
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
-                diagnostics.warning("Interrupted acknowledging privilege notification " + event.id(), interrupted);
+                LOG.warn("Interrupted acknowledging privilege notification {}", event.id(), interrupted);
             } catch (RuntimeException exception) {
-                diagnostics.warning("Failed to acknowledge privilege notification " + event.id(), exception);
+                LOG.warn("Failed to acknowledge privilege notification {}", event.id(), exception);
             }
         }
     }

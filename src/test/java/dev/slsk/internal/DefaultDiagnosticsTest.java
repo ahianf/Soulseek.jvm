@@ -17,9 +17,6 @@ import dev.slsk.user.Username;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -46,44 +43,6 @@ class DefaultDiagnosticsTest {
             Metrics metrics = slsk.diagnostics().metrics();
             assertEquals(0, metrics.bytesDownloaded());
             assertEquals(0, metrics.activeDownloads());
-        }
-    }
-
-    @Test
-    @DisplayName("protocolTrace is an idempotent intent")
-    void protocolTraceIsIdempotent() {
-        try (Soulseek slsk = client()) {
-            slsk.diagnostics().protocolTrace(true);
-            slsk.diagnostics().protocolTrace(true);
-            slsk.diagnostics().protocolTrace(false);
-            slsk.diagnostics().protocolTrace(false);
-        }
-    }
-
-    @Test
-    void exposesDiagnosticAndMeshStreams() {
-        try (Soulseek slsk = client()) {
-            try (var first = slsk.diagnostics().events().subscribe(event -> {});
-                    var second = slsk.diagnostics().meshEvents().subscribe(event -> {})) {
-                assertTrue(true);
-            }
-        }
-    }
-
-    @Test
-    void diagnosticEventsUseTheOwningClassForLoggerSelection() throws InterruptedException {
-        try (Soulseek slsk = client()) {
-            AtomicReference<dev.slsk.events.DiagnosticEvent> observed = new AtomicReference<>();
-            CountDownLatch received = new CountDownLatch(1);
-            try (var subscription = slsk.diagnostics().events().subscribe(event -> {
-                observed.set(event);
-                received.countDown();
-            })) {
-                ((DefaultSoulseek) slsk).client().getDiagnostic().info("select this logger by class");
-
-                assertTrue(received.await(5, TimeUnit.SECONDS), "the diagnostic was never published");
-                assertEquals(SoulseekEngine.class.getName(), observed.get().source());
-            }
         }
     }
 

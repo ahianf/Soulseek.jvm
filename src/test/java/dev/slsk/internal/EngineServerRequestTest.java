@@ -499,7 +499,6 @@ class EngineServerRequestTest {
                 null,
                 null,
                 null,
-                null,
                 null);
         client.setStateForTest(SoulseekClientState.LOGGED_IN);
         return client;

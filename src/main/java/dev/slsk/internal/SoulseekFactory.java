@@ -4,11 +4,9 @@
 package dev.slsk.internal;
 
 import dev.slsk.Soulseek;
-import dev.slsk.diagnostics.DiagnosticLevel;
 import dev.slsk.download.DownloadPolicy;
 import dev.slsk.internal.options.ConnectionOptions;
 import dev.slsk.internal.options.SoulseekClientOptions;
-import dev.slsk.internal.options.SoulseekClientOptionsPatch;
 import dev.slsk.share.SharedFolder;
 import dev.slsk.spi.ShareCatalog;
 import dev.slsk.spi.TransferStore;
@@ -35,7 +33,6 @@ public final class SoulseekFactory {
      * @param password the account password
      * @param minorVersion the application minor version
      * @param listenPort the port peers connect to us on
-     * @param diagnostics how much the library says
      * @param shares what to share
      * @param downloads how the download queue is run
      * @param uploads who we serve and in what order
@@ -52,7 +49,6 @@ public final class SoulseekFactory {
             String password,
             int minorVersion,
             int listenPort,
-            DiagnosticLevel diagnostics,
             List<SharedFolder> shares,
             DownloadPolicy downloads,
             UploadPolicy uploads,
@@ -62,7 +58,7 @@ public final class SoulseekFactory {
             java.time.Duration peerTimeout,
             java.time.Duration transferTimeout,
             java.time.Duration messageTimeout) {
-        SoulseekClientOptions base = SoulseekClientOptions.builder()
+        SoulseekClientOptions options = SoulseekClientOptions.builder()
                 .enableListener(true)
                 // Every address, which is what a listener peers are told to
                 // connect to has to be. This bound the loopback address from
@@ -76,14 +72,9 @@ public final class SoulseekFactory {
                 // connect to us on" — is only true now.
                 .listenPort(listenPort)
                 .messageTimeout(messageTimeout)
-                .minimumDiagnosticLevel(level(diagnostics))
-                .build();
-        // The peer and transfer budgets are per-connection rather than global,
-        // so they arrive as connection options rather than as top-level ones.
-        SoulseekClientOptions options = base.with(SoulseekClientOptionsPatch.builder()
                 .peerConnectionOptions(connection(peerTimeout))
                 .transferConnectionOptions(connection(transferTimeout))
-                .build());
+                .build();
         Soulseek client = DefaultSoulseek.create(username, password, minorVersion, options, store);
 
         client.me().profile(profile);
@@ -101,16 +92,5 @@ public final class SoulseekFactory {
     /** A connection's options, with only its idle budget changed. */
     private static ConnectionOptions connection(java.time.Duration idle) {
         return ConnectionOptions.builder().inactivityTimeout(idle).build();
-    }
-
-    /** The public level, as the internal sink spells it. */
-    private static dev.slsk.internal.diagnostics.DiagnosticSeverity level(DiagnosticLevel level) {
-        return switch (level) {
-            case NONE -> dev.slsk.internal.diagnostics.DiagnosticSeverity.NONE;
-            case WARNING -> dev.slsk.internal.diagnostics.DiagnosticSeverity.WARNING;
-            case INFO -> dev.slsk.internal.diagnostics.DiagnosticSeverity.INFO;
-            case DEBUG -> dev.slsk.internal.diagnostics.DiagnosticSeverity.DEBUG;
-            case TRACE -> dev.slsk.internal.diagnostics.DiagnosticSeverity.TRACE;
-        };
     }
 }

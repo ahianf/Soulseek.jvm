@@ -19,7 +19,6 @@ import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationSignal;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.messaging.MessageBuilder;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.messages.DistributedBranchLevel;
@@ -38,7 +37,6 @@ import dev.slsk.internal.network.tcp.ConnectionKey;
 import dev.slsk.internal.network.tcp.ConnectionType;
 import dev.slsk.internal.network.tcp.TransportState;
 import dev.slsk.internal.options.SoulseekClientOptions;
-import dev.slsk.internal.options.SoulseekClientOptionsPatch;
 import dev.slsk.internal.search.SearchResponder;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
@@ -187,38 +185,6 @@ class DistributedMessageHandlerTest {
         assertEquals(TOKEN, response.getToken());
     }
 
-    @Test
-    void failuresAndUnhandledMessagesProduceSourceDiagnostics() {
-        Fixture fixture = new Fixture(true);
-        ConnectionProbe child = new ConnectionProbe(USERNAME, ENDPOINT);
-        child.writeFuture = CompletableFuture.failedFuture(new RuntimeException("write"));
-        fixture.handler.handleChildMessageRead(child.proxy, new DistributedPingRequest().toByteArray());
-        // The dispatched write reports its own failure now; the future that
-        // used to carry it back to this handler is gone.
-        assertTrue(
-                Eventually.holds(() -> fixture.diagnostic.containsWarning("Error handling distributed child message")));
-
-        fixture.handler.handleMessageRead(
-                child.proxy,
-                new MessageBuilder().writeCode(MessageCode.Distributed.UNKNOWN).build());
-        assertTrue(fixture.diagnostic.contains("Unhandled distributed message"));
-
-        fixture.handler.handleEmbeddedMessage(new byte[] {1});
-        assertTrue(fixture.diagnostic.containsWarning("Error handling embedded message"));
-    }
-
-    @Test
-    void writtenMessageCallbacksLogNonPingCodes() {
-        Fixture fixture = new Fixture(true);
-        ConnectionProbe connection = new ConnectionProbe(USERNAME, ENDPOINT);
-        MessageEvent branch = new MessageEvent(connection.proxy, new DistributedBranchLevel(1).toByteArray());
-        fixture.handler.handleChildMessageWritten(branch);
-        fixture.handler.handleMessageWritten(branch);
-
-        assertTrue(fixture.diagnostic.contains("Distributed child message sent"));
-        assertTrue(fixture.diagnostic.contains("Distributed message sent"));
-    }
-
     private static byte[] embeddedSearch(String username, int token, String query) {
         return new MessageBuilder()
                 .writeCode(MessageCode.Server.EMBEDDED_MESSAGE)
@@ -231,13 +197,9 @@ class DistributedMessageHandlerTest {
     }
 
     private static SoulseekClientOptions options(boolean deduplicate) {
-        if (deduplicate) {
-            return new SoulseekClientOptions();
-        }
-        SoulseekClientOptionsPatch patch = SoulseekClientOptionsPatch.builder()
-                .deduplicateSearchRequests(false)
+        return SoulseekClientOptions.builder()
+                .deduplicateSearchRequests(deduplicate)
                 .build();
-        return new SoulseekClientOptions().with(patch);
     }
 
     private static InetSocketAddress endpoint(int port) {
@@ -269,11 +231,10 @@ class DistributedMessageHandlerTest {
     }
 
     private static final class Fixture {
-        private final RecordingDiagnostic diagnostic = new RecordingDiagnostic();
         private final FakeWaiter waiter = new FakeWaiter();
         private final ManagerProbe manager = new ManagerProbe();
         private final ResponderProbe responder = new ResponderProbe();
-        private final ServerLink server = ServerLinks.loggedIn(waiter, diagnostic, null, LOCAL_USER);
+        private final ServerLink server = ServerLinks.loggedIn(waiter, null, LOCAL_USER);
         private final DefaultDistributedMessageHandler handler;
 
         private Fixture(boolean deduplicate) {
@@ -284,8 +245,7 @@ class DistributedMessageHandlerTest {
                     new TokenFactory(TOKEN),
                     waiter,
                     () -> manager.proxy,
-                    () -> responder.proxy,
-                    diagnostic);
+                    () -> responder.proxy);
         }
     }
 
@@ -453,58 +413,6 @@ class DistributedMessageHandlerTest {
                 case "toString" -> "ConnectionProbe";
                 default -> defaultValue(method.getReturnType());
             };
-        }
-    }
-
-    private static final class RecordingDiagnostic implements DiagnosticSink {
-        // Copy-on-write: a handler's dispatched work reports its own failures
-        // now, from a thread of its own, while the test thread is reading.
-        private final List<String> messages = new CopyOnWriteArrayList<>();
-        private final List<String> warnings = new CopyOnWriteArrayList<>();
-
-        private boolean contains(String value) {
-            return messages.stream().anyMatch(message -> message.toLowerCase().contains(value.toLowerCase()));
-        }
-
-        private boolean containsWarning(String value) {
-            return warnings.stream().anyMatch(message -> message.toLowerCase().contains(value.toLowerCase()));
-        }
-
-        @Override
-        public void trace(String message) {
-            messages.add(message);
-        }
-
-        @Override
-        public void trace(String message, Throwable exception) {
-            messages.add(message);
-        }
-
-        @Override
-        public void debug(String message) {
-            messages.add(message);
-        }
-
-        @Override
-        public void debug(String message, Throwable exception) {
-            messages.add(message);
-        }
-
-        @Override
-        public void info(String message) {
-            messages.add(message);
-        }
-
-        @Override
-        public void warning(String message) {
-            messages.add(message);
-            warnings.add(message);
-        }
-
-        @Override
-        public void warning(String message, Throwable exception) {
-            messages.add(message);
-            warnings.add(message);
         }
     }
 

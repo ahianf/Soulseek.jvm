@@ -5,11 +5,10 @@
 package dev.slsk.internal.search;
 
 import dev.slsk.Subscription;
-import dev.slsk.internal.diagnostics.DiagnosticSource;
 import java.util.function.Consumer;
 
 /** Responds to incoming search requests. */
-public interface SearchResponder extends DiagnosticSource {
+public interface SearchResponder {
     enum Kind {
         REQUEST_RECEIVED,
         RESPONSE_DELIVERED,

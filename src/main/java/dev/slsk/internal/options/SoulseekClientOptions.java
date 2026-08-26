@@ -4,7 +4,6 @@
 
 package dev.slsk.internal.options;
 
-import dev.slsk.internal.diagnostics.DiagnosticSeverity;
 import dev.slsk.internal.search.BoundedSearchResponseCache;
 import dev.slsk.internal.search.SearchResponseCache;
 import dev.slsk.internal.user.BoundedUserEndpointCache;
@@ -32,7 +31,6 @@ public record SoulseekClientOptions(
         boolean autoAcknowledgePrivateMessages,
         boolean autoAcknowledgePrivilegeNotifications,
         boolean acceptPrivateRoomInvitations,
-        DiagnosticSeverity minimumDiagnosticLevel,
         int startingToken,
         ConnectionOptions serverConnectionOptions,
         ConnectionOptions peerConnectionOptions,
@@ -74,8 +72,6 @@ public record SoulseekClientOptions(
         if (!messageTimeout.isPositive()) {
             throw new IllegalArgumentException("messageTimeout must be greater than zero");
         }
-        minimumDiagnosticLevel = Objects.requireNonNull(minimumDiagnosticLevel, "minimumDiagnosticLevel");
-
         serverConnectionOptions = (serverConnectionOptions == null ? new ConnectionOptions() : serverConnectionOptions)
                 .withoutInactivityTimeout();
         peerConnectionOptions = peerConnectionOptions == null ? new ConnectionOptions() : peerConnectionOptions;
@@ -115,7 +111,6 @@ public record SoulseekClientOptions(
                 true,
                 true,
                 false,
-                DiagnosticSeverity.INFO,
                 0,
                 null,
                 null,
@@ -187,7 +182,6 @@ public record SoulseekClientOptions(
         private int maximumDownloadSpeed = Integer.MAX_VALUE;
         private int maximumUploadSpeed = Integer.MAX_VALUE;
         private Duration messageTimeout = DEFAULT_MESSAGE_TIMEOUT;
-        private DiagnosticSeverity minimumDiagnosticLevel = DiagnosticSeverity.INFO;
         private ConnectionOptions peerConnectionOptions;
         private SearchResponseCache searchResponseCache;
         private ConnectionOptions serverConnectionOptions;
@@ -306,11 +300,6 @@ public record SoulseekClientOptions(
             return this;
         }
 
-        public Builder minimumDiagnosticLevel(DiagnosticSeverity value) {
-            minimumDiagnosticLevel = value;
-            return this;
-        }
-
         public Builder startingToken(int value) {
             startingToken = value;
             return this;
@@ -369,7 +358,6 @@ public record SoulseekClientOptions(
                     autoAcknowledgePrivateMessages,
                     autoAcknowledgePrivilegeNotifications,
                     acceptPrivateRoomInvitations,
-                    minimumDiagnosticLevel,
                     startingToken,
                     serverConnectionOptions,
                     peerConnectionOptions,

@@ -108,7 +108,7 @@ public final class TokenBucket implements AutoCloseable {
     }
 
     /**
-     * Returns the current token count for diagnostics and tests.
+     * Returns the current token count for metrics and tests.
      *
      * @return the current count
      */

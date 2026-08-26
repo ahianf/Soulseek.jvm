@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import dev.slsk.diagnostics.DiagnosticLevel;
 import dev.slsk.download.DownloadPolicy;
 import dev.slsk.share.SharedFolder;
 import dev.slsk.spi.ShareCatalog;
@@ -73,7 +72,6 @@ class SoulseekBuilderTest {
                 .uploads(uploads)
                 .profile(profile)
                 .share(directory)
-                .diagnostics(DiagnosticLevel.TRACE)
                 .listenPort(2235)
                 .build()) {
             assertEquals(downloads, slsk.downloads().policy());

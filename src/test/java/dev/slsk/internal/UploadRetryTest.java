@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.slsk.internal.common.Eventually;
 import dev.slsk.internal.common.Scheduler;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.user.Username;
 import java.time.Duration;
 import java.util.List;
@@ -27,28 +26,7 @@ class UploadRetryTest {
     private final Scheduler scheduler = new Scheduler("upload-retry-test");
     private final List<String> reoffered = new CopyOnWriteArrayList<>();
     private final UploadRetry retry = new UploadRetry(
-            scheduler, DELAY, 2, (user, path) -> reoffered.add(user.value() + ":" + path), new DiagnosticSink() {
-                @Override
-                public void trace(String message) {}
-
-                @Override
-                public void trace(String message, Throwable exception) {}
-
-                @Override
-                public void debug(String message) {}
-
-                @Override
-                public void debug(String message, Throwable exception) {}
-
-                @Override
-                public void info(String message) {}
-
-                @Override
-                public void warning(String message) {}
-
-                @Override
-                public void warning(String message, Throwable exception) {}
-            });
+            scheduler, DELAY, 2, (user, path) -> reoffered.add(user.value() + ":" + path));
 
     @AfterEach
     void closeScheduler() {

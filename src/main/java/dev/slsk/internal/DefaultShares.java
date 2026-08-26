@@ -24,6 +24,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * {@link Shares}, over the engine.
@@ -46,6 +48,7 @@ import java.util.stream.Stream;
  * way — but what a peer sees comes from the installed catalog.
  */
 final class DefaultShares implements Shares {
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultShares.class);
 
     private final SoulseekEngine client;
     private final EventBus<ShareEvent> events;
@@ -82,9 +85,9 @@ final class DefaultShares implements Shares {
             client.server().setSharedCounts(current.directoryCount(), current.fileCount());
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            client.getDiagnostic().warning("Interrupted announcing the share counts", interrupted);
+            LOG.warn("Interrupted announcing the share counts", interrupted);
         } catch (RuntimeException failure) {
-            client.getDiagnostic().warning("Failed to announce the share counts", failure);
+            LOG.warn("Failed to announce the share counts", failure);
         }
     }
 
@@ -179,7 +182,7 @@ final class DefaultShares implements Shares {
             if (interrupted != null) {
                 throw interrupted;
             }
-            client.getDiagnostic().warning("Failed to announce the share counts", failure);
+            LOG.warn("Failed to announce the share counts", failure);
         }
         events.publish(new ShareEvent.ScanCompleted(scanned, Instant.now()));
         return scanned;

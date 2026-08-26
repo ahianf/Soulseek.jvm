@@ -17,9 +17,6 @@ import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationController;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.concurrent.CancellationSubscription;
-import dev.slsk.internal.diagnostics.DiagnosticMessage;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
-import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.events.Subscriptions;
 import dev.slsk.internal.messaging.handlers.PeerMessageHandler;
 import dev.slsk.internal.messaging.messages.ConnectToPeerRequest;
@@ -44,6 +41,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Everything this client's connections to peers are.
@@ -61,6 +60,7 @@ import java.util.function.Supplier;
  * is gone.
  */
 public final class PeerNetwork implements PeerConnectionManager {
+    private static final Logger LOG = LoggerFactory.getLogger(PeerNetwork.class);
 
     /**
      * How long a lapsed solicitation stays resolvable, in milliseconds.
@@ -85,11 +85,8 @@ public final class PeerNetwork implements PeerConnectionManager {
     private final TokenFactory tokens;
     private final PeerMessageHandler peerMessages;
     private final ConnectionFactory connectionFactory;
-    private final DiagnosticSink diagnostic;
     private final Scheduler scheduler;
     private final boolean ownsScheduler;
-    private final CopyOnWriteArrayList<Consumer<? super DiagnosticMessage>> diagnosticListeners =
-            new CopyOnWriteArrayList<>();
     private final ConcurrentHashMap<String, ConnectionCell> messageConnections = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, CancellationController> pendingInboundIndirectConnections =
             new ConcurrentHashMap<>();
@@ -114,18 +111,6 @@ public final class PeerNetwork implements PeerConnectionManager {
         this(options, server, waiter, tokens, peerMessages, connectionFactory, null);
     }
 
-    /** Creates a peer network. */
-    public PeerNetwork(
-            Supplier<SoulseekClientOptions> options,
-            ServerLink server,
-            Waiter waiter,
-            TokenFactory tokens,
-            PeerMessageHandler peerMessages,
-            ConnectionFactory connectionFactory,
-            DiagnosticSink diagnosticFactory) {
-        this(options, server, waiter, tokens, peerMessages, connectionFactory, diagnosticFactory, null);
-    }
-
     /** Creates a peer network sharing a caller-owned scheduler. */
     public PeerNetwork(
             Supplier<SoulseekClientOptions> options,
@@ -134,7 +119,6 @@ public final class PeerNetwork implements PeerConnectionManager {
             TokenFactory tokens,
             PeerMessageHandler peerMessages,
             ConnectionFactory connectionFactory,
-            DiagnosticSink diagnosticFactory,
             Scheduler scheduler) {
         this.options = Objects.requireNonNull(options, "options");
         this.server = Objects.requireNonNull(server, "server");
@@ -144,14 +128,6 @@ public final class PeerNetwork implements PeerConnectionManager {
         this.connectionFactory = Objects.requireNonNull(connectionFactory, "connectionFactory");
         ownsScheduler = scheduler == null;
         this.scheduler = scheduler == null ? new Scheduler("soulseek-peer-network") : scheduler;
-        diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
-                : DiagnosticSink.forSource(diagnosticFactory, PeerNetwork.class);
-    }
-
-    @Override
-    public Subscription subscribe(Consumer<? super DiagnosticMessage> listener) {
-        return Subscriptions.add(diagnosticListeners, listener);
     }
 
     /**
@@ -163,7 +139,7 @@ public final class PeerNetwork implements PeerConnectionManager {
      * as much as making a connection, and throw when one failed.
      *
      * <p>That is the wrong shape for something whose only callers are a metrics
-     * gauge and a diagnostic. A connection that has not been established is not
+     * gauge and logging. A connection that has not been established is not
      * a connection, and asking how many there are must never be the thing that
      * waits for one. It is also why this deviates from the C# property it was
      * ported from, which blocks on {@code .Result} the same way.
@@ -207,11 +183,12 @@ public final class PeerNetwork implements PeerConnectionManager {
             String message = "Failed to establish an inbound message connection to "
                     + username + " (" + incomingConnection.getIpEndpoint()
                     + "): " + Failures.message(cause);
-            diagnostic.debug(
-                    message + " (type: " + incomingConnection.getType() + ", id: " + incomingConnection.getId() + ")");
-            diagnostic.debug("Purging message connection cache of failed connection "
-                    + "to " + username + " ("
-                    + incomingConnection.getIpEndpoint() + ").");
+            LOG.debug(
+                    "{} (type: {}, id: {})", message, incomingConnection.getType(), incomingConnection.getId());
+            LOG.debug(
+                    "Purging message connection cache of failed connection to {} ({}).",
+                    username,
+                    incomingConnection.getIpEndpoint());
             messageConnections.remove(username, cell);
             throw new ConnectionException(message, cause);
         }
@@ -222,9 +199,11 @@ public final class PeerNetwork implements PeerConnectionManager {
             String username, String filename, int remoteToken, CancellationSignal cancellationSignal) {
         LinkedCancellation directCancellation = new LinkedCancellation(cancellationSignal);
         LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationSignal);
-        diagnostic.debug("Waiting for a direct or indirect transfer connection from "
-                + username + " with remote token " + remoteToken + " for "
-                + filename);
+        LOG.debug(
+                "Waiting for a direct or indirect transfer connection from {} with remote token {} for {}",
+                username,
+                remoteToken,
+                filename);
 
         // Both waits are registered before either is awaited, so a peer that
         // arrives on one path while the other is still being set up is caught.
@@ -261,27 +240,32 @@ public final class PeerNetwork implements PeerConnectionManager {
                     + "connection to " + username
                     + " with remote token " + remoteToken + " for "
                     + filename;
-            diagnostic.debug(message);
+            LOG.debug(message);
             throw new ConnectionException(message);
         }
 
         boolean directWon = winner.first();
         TransportConnection connection = winner.value();
-        diagnostic.debug((directWon ? "Direct" : "Indirect")
-                + " transfer connection to " + username + " ("
-                + connection.getIpEndpoint()
-                + ") with remote token " + remoteToken + " for " + filename
-                + " established first, attempting to cancel "
-                + (directWon ? "indirect" : "direct") + " connection.");
+        LOG.debug(
+                "{} transfer connection to {} ({}) with remote token {} for {} established first, attempting to "
+                        + "cancel {} connection.",
+                directWon ? "Direct" : "Indirect",
+                username,
+                connection.getIpEndpoint(),
+                remoteToken,
+                filename,
+                directWon ? "indirect" : "direct");
         (directWon ? indirectCancellation : directCancellation).cancel();
         directCancellation.close();
         indirectCancellation.close();
-        diagnostic.debug("Transfer connection to " + username + " ("
-                + connection.getIpEndpoint()
-                + ") with remote token " + remoteToken + " for "
-                + filename + " established. (type: "
-                + connection.getType() + ", id: "
-                + connection.getId() + ")");
+        LOG.debug(
+                "Transfer connection to {} ({}) with remote token {} for {} established. (type: {}, id: {})",
+                username,
+                connection.getIpEndpoint(),
+                remoteToken,
+                filename,
+                connection.getType(),
+                connection.getId());
         return connection;
     }
 
@@ -296,15 +280,18 @@ public final class PeerNetwork implements PeerConnectionManager {
         try {
             connection = cell.await();
         } catch (Throwable failure) {
-            diagnostic.debug(
-                    "Failed to retrieve cached message connection to " + username + ": " + Failures.message(failure));
+            LOG.debug(
+                    "Failed to retrieve cached message connection to {}: {}",
+                    username,
+                    Failures.message(failure));
             return null;
         }
-        diagnostic.debug("Retrieved cached message connection to "
-                + connection.getUsername() + " ("
-                + connection.getIpEndpoint() + ") (type: "
-                + connection.getType() + ", id: "
-                + connection.getId() + ")");
+        LOG.debug(
+                "Retrieved cached message connection to {} ({}) (type: {}, id: {})",
+                connection.getUsername(),
+                connection.getIpEndpoint(),
+                connection.getType(),
+                connection.getId());
         return connection;
     }
 
@@ -319,11 +306,12 @@ public final class PeerNetwork implements PeerConnectionManager {
             guardOpen(username, entry);
             if (cached != null) {
                 MessageConnection connection = entry.await();
-                diagnostic.debug("Retrieved cached message connection to "
-                        + username + " ("
-                        + connectToPeerResponse.getIpEndpoint() + ") (type: "
-                        + connection.getType() + ", id: "
-                        + connection.getId() + ")");
+                LOG.debug(
+                        "Retrieved cached message connection to {} ({}) (type: {}, id: {})",
+                        username,
+                        connectToPeerResponse.getIpEndpoint(),
+                        connection.getType(),
+                        connection.getId());
                 return connection;
             }
             MessageConnection connection = establishInboundIndirectMessageConnection(connectToPeerResponse);
@@ -336,11 +324,12 @@ public final class PeerNetwork implements PeerConnectionManager {
             String message = "Failed to establish an inbound indirect message "
                     + "connection to " + username + " ("
                     + connectToPeerResponse.getIpEndpoint() + "): " + Failures.message(cause);
-            diagnostic.debug(message);
+            LOG.debug(message);
             if (!(cause instanceof CancellationException)) {
-                diagnostic.debug("Purging message connection cache of failed connection "
-                        + "to " + username + " ("
-                        + connectToPeerResponse.getIpEndpoint() + ").");
+                LOG.debug(
+                        "Purging message connection cache of failed connection to {} ({}).",
+                        username,
+                        connectToPeerResponse.getIpEndpoint());
                 // Only ever the entry this attempt was waiting on. A direct
                 // connection that superseded it has already replaced the entry,
                 // and purging that one is what the cache used to have to detect
@@ -379,10 +368,12 @@ public final class PeerNetwork implements PeerConnectionManager {
             guardOpen(username, entry);
             if (cached != null) {
                 MessageConnection connection = entry.await();
-                diagnostic.debug("Retrieved cached message connection to " + username
-                        + " (" + ipEndpoint + ") (type: "
-                        + connection.getType() + ", id: "
-                        + connection.getId() + ")");
+                LOG.debug(
+                        "Retrieved cached message connection to {} ({}) (type: {}, id: {})",
+                        username,
+                        ipEndpoint,
+                        connection.getType(),
+                        connection.getId());
                 return connection;
             }
             MessageConnection connection =
@@ -393,8 +384,7 @@ public final class PeerNetwork implements PeerConnectionManager {
             return connection;
         } catch (Throwable failure) {
             entry.fail(failure);
-            diagnostic.debug("Purging message connection cache of failed connection " + "to " + username + " ("
-                    + ipEndpoint + ").");
+            LOG.debug("Purging message connection cache of failed connection to {} ({}).", username, ipEndpoint);
             messageConnections.remove(username, entry);
             throw Failures.rethrow(failure);
         }
@@ -405,8 +395,8 @@ public final class PeerNetwork implements PeerConnectionManager {
             String username, InetSocketAddress ipEndpoint, int token, CancellationSignal cancellationSignal) {
         LinkedCancellation directCancellation = new LinkedCancellation(cancellationSignal);
         LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationSignal);
-        diagnostic.debug("Attempting simultaneous direct and indirect transfer " + "connections to " + username + " ("
-                + ipEndpoint + ")");
+        LOG.debug(
+                "Attempting simultaneous direct and indirect transfer connections to {} ({})", username, ipEndpoint);
 
         FirstSuccess.Winner<TransportConnection> winner;
         try {
@@ -425,16 +415,18 @@ public final class PeerNetwork implements PeerConnectionManager {
             String message = "Failed to establish a direct or indirect transfer "
                     + "connection to " + username + " (" + ipEndpoint
                     + ")";
-            diagnostic.debug(message);
+            LOG.debug(message);
             throw new ConnectionException(message);
         }
 
         boolean directWon = winner.first();
         TransportConnection connection = winner.value();
-        diagnostic.debug((directWon ? "Direct" : "Indirect")
-                + " transfer connection to " + username + " (" + ipEndpoint
-                + ") established first, attempting to cancel "
-                + (directWon ? "indirect" : "direct") + " connection.");
+        LOG.debug(
+                "{} transfer connection to {} ({}) established first, attempting to cancel {} connection.",
+                directWon ? "Direct" : "Indirect",
+                username,
+                ipEndpoint,
+                directWon ? "indirect" : "direct");
         (directWon ? indirectCancellation : directCancellation).cancel();
         try {
             if (directWon) {
@@ -447,27 +439,32 @@ public final class PeerNetwork implements PeerConnectionManager {
             String message = "Failed to negotiate transfer connection to "
                     + username + " (" + ipEndpoint + "): "
                     + Failures.message(cause);
-            diagnostic.debug(message + " (type: " + connection.getType() + ", id: " + connection.getId() + ")");
+            LOG.debug("{} (type: {}, id: {})", message, connection.getType(), connection.getId());
             connection.close();
             throw new ConnectionException(message, cause);
         } finally {
             directCancellation.close();
             indirectCancellation.close();
         }
-        diagnostic.debug("Transfer connection to " + username + " ("
-                + ipEndpoint + ") established. (type: "
-                + connection.getType() + ", id: "
-                + connection.getId() + ")");
+        LOG.debug(
+                "Transfer connection to {} ({}) established. (type: {}, id: {})",
+                username,
+                ipEndpoint,
+                connection.getType(),
+                connection.getId());
         return connection;
     }
 
     @Override
     public TransferConnectionResult getTransferConnection(
             String username, int token, TransportConnection incomingConnection) {
-        diagnostic.debug("Inbound transfer connection to " + username + " ("
-                + incomingConnection.getIpEndpoint() + ") for token " + token
-                + " accepted. (type: " + incomingConnection.getType()
-                + ", id: " + incomingConnection.getId());
+        LOG.debug(
+                "Inbound transfer connection to {} ({}) for token {} accepted. (type: {}, id: {})",
+                username,
+                incomingConnection.getIpEndpoint(),
+                token,
+                incomingConnection.getType(),
+                incomingConnection.getId());
         TransportConnection connection = connectionFactory.getTransferConnection(
                 incomingConnection.getIpEndpoint(),
                 options.get().transferConnectionOptions(),
@@ -475,15 +472,21 @@ public final class PeerNetwork implements PeerConnectionManager {
         connection.setType(ConnectionType.INBOUND_DIRECT);
         connection.<ConnectionDisconnectedEvent>subscribe(
                 TransportConnection.Kind.DISCONNECTED,
-                eventData -> diagnostic.debug("Transfer connection to " + username + " ("
-                        + connection.getIpEndpoint() + ") for token " + token
-                        + " disconnected: " + disconnectMessage(eventData)
-                        + ". (type: " + connection.getType() + ", id: "
-                        + connection.getId() + ")"));
-        diagnostic.debug("Inbound transfer connection to " + username + " ("
-                + connection.getIpEndpoint() + ") for token " + token
-                + " handed off. (old: " + incomingConnection.getId()
-                + ", new: " + connection.getId() + ")");
+                eventData -> LOG.debug(
+                        "Transfer connection to {} ({}) for token {} disconnected: {}. (type: {}, id: {})",
+                        username,
+                        connection.getIpEndpoint(),
+                        token,
+                        disconnectMessage(eventData),
+                        connection.getType(),
+                        connection.getId()));
+        LOG.debug(
+                "Inbound transfer connection to {} ({}) for token {} handed off. (old: {}, new: {})",
+                username,
+                connection.getIpEndpoint(),
+                token,
+                incomingConnection.getId(),
+                connection.getId());
 
         byte[] bytes;
         try {
@@ -493,35 +496,41 @@ public final class PeerNetwork implements PeerConnectionManager {
                     + username + " ("
                     + incomingConnection.getIpEndpoint()
                     + ") for token " + token + ": " + Failures.message(cause);
-            diagnostic.debug(message + " (type: " + connection.getType() + ", id: " + connection.getId() + ")");
+            LOG.debug("{} (type: {}, id: {})", message, connection.getType(), connection.getId());
             connection.close();
             throw new ConnectionException(message, cause);
         }
         int remoteToken = littleEndianInteger(bytes);
-        diagnostic.debug("Transfer connection to " + username + " ("
-                + connection.getIpEndpoint() + ") for token "
-                + remoteToken + " established. (type: "
-                + connection.getType() + ", id: "
-                + connection.getId() + ")");
+        LOG.debug(
+                "Transfer connection to {} ({}) for token {} established. (type: {}, id: {})",
+                username,
+                connection.getIpEndpoint(),
+                remoteToken,
+                connection.getType(),
+                connection.getId());
         return new TransferConnectionResult(connection, remoteToken);
     }
 
     @Override
     public TransferConnectionResult getTransferConnection(ConnectToPeerResponse response) {
-        diagnostic.debug("Attempting inbound indirect transfer connection to "
-                + response.getUsername() + " (" + response.getIpEndpoint()
-                + ") for token " + response.getToken());
+        LOG.debug(
+                "Attempting inbound indirect transfer connection to {} ({}) for token {}",
+                response.getUsername(),
+                response.getIpEndpoint(),
+                response.getToken());
         TransportConnection connection = connectionFactory.getTransferConnection(
                 response.getIpEndpoint(), options.get().transferConnectionOptions());
         connection.setType(ConnectionType.INBOUND_INDIRECT);
         connection.<ConnectionDisconnectedEvent>subscribe(
                 TransportConnection.Kind.DISCONNECTED,
-                eventData -> diagnostic.debug("Transfer connection to " + response.getUsername() + " ("
-                        + response.getIpEndpoint() + ") for token "
-                        + response.getToken() + " disconnected: "
-                        + disconnectMessage(eventData) + ". (type: "
-                        + connection.getType() + ", id: "
-                        + connection.getId() + ")"));
+                eventData -> LOG.debug(
+                        "Transfer connection to {} ({}) for token {} disconnected: {}. (type: {}, id: {})",
+                        response.getUsername(),
+                        response.getIpEndpoint(),
+                        response.getToken(),
+                        disconnectMessage(eventData),
+                        connection.getType(),
+                        connection.getId()));
 
         byte[] bytes;
         try {
@@ -533,16 +542,18 @@ public final class PeerNetwork implements PeerConnectionManager {
                     + "connection to " + response.getUsername() + " ("
                     + response.getIpEndpoint() + "): "
                     + Failures.message(cause);
-            diagnostic.debug(message);
+            LOG.debug(message);
             connection.close();
             throw new ConnectionException(message, cause);
         }
         int remoteToken = littleEndianInteger(bytes);
-        diagnostic.debug("Transfer connection to " + response.getUsername() + " ("
-                + response.getIpEndpoint() + ") for token "
-                + response.getToken() + " established. (type: "
-                + connection.getType() + ", id: "
-                + connection.getId() + ")");
+        LOG.debug(
+                "Transfer connection to {} ({}) for token {} established. (type: {}, id: {})",
+                response.getUsername(),
+                response.getIpEndpoint(),
+                response.getToken(),
+                connection.getType(),
+                connection.getId());
         return new TransferConnectionResult(connection, remoteToken);
     }
 
@@ -575,19 +586,23 @@ public final class PeerNetwork implements PeerConnectionManager {
     private MessageConnection establishIncomingMessageConnection(
             String username, TransportConnection incomingConnection, ConnectionCell superseded)
             throws InterruptedException {
-        diagnostic.debug("Inbound message connection to " + username + " ("
-                + incomingConnection.getIpEndpoint()
-                + ") accepted. (type: " + incomingConnection.getType()
-                + ", id: " + incomingConnection.getId() + ")");
+        LOG.debug(
+                "Inbound message connection to {} ({}) accepted. (type: {}, id: {})",
+                username,
+                incomingConnection.getIpEndpoint(),
+                incomingConnection.getType(),
+                incomingConnection.getId());
         MessageConnection connection = connectionFactory.getMessageConnection(
                 username,
                 incomingConnection.getIpEndpoint(),
                 options.get().peerConnectionOptions(),
                 incomingConnection.handoffConnector());
-        diagnostic.debug("Inbound message connection to " + username + " ("
-                + connection.getIpEndpoint() + ") handed off. (old: "
-                + incomingConnection.getId() + ", new: "
-                + connection.getId() + ")");
+        LOG.debug(
+                "Inbound message connection to {} ({}) handed off. (old: {}, new: {})",
+                username,
+                connection.getIpEndpoint(),
+                incomingConnection.getId(),
+                connection.getId());
         incomingConnection.close();
         connection.setType(ConnectionType.INBOUND_DIRECT);
         attachPeerMessageListeners(connection);
@@ -596,7 +611,7 @@ public final class PeerNetwork implements PeerConnectionManager {
         if (superseded != null) {
             CancellationController pending = pendingInboundIndirectConnections.get(username);
             if (pending != null) {
-                diagnostic.debug("Cancelling pending inbound indirect message connection " + "to " + username);
+                LOG.debug("Cancelling pending inbound indirect message connection to {}", username);
                 pending.cancel();
             }
             // An attempt still in flight owns the connection it is about to
@@ -610,10 +625,12 @@ public final class PeerNetwork implements PeerConnectionManager {
                 if (oldSubscription != null) {
                     oldSubscription.close();
                 }
-                diagnostic.debug("Superseding cached message connection to "
-                        + username + " (" + old.getIpEndpoint()
-                        + ") (old: " + old.getId() + ", new: "
-                        + connection.getId());
+                LOG.debug(
+                        "Superseding cached message connection to {} ({}) (old: {}, new: {})",
+                        username,
+                        old.getIpEndpoint(),
+                        old.getId(),
+                        connection.getId());
             }
         }
 
@@ -623,18 +640,22 @@ public final class PeerNetwork implements PeerConnectionManager {
             connection.close();
             throw failure;
         }
-        diagnostic.debug("Message connection to " + username + " ("
-                + connection.getIpEndpoint() + ") established. (type: "
-                + connection.getType() + ", id: "
-                + connection.getId() + ")");
+        LOG.debug(
+                "Message connection to {} ({}) established. (type: {}, id: {})",
+                username,
+                connection.getIpEndpoint(),
+                connection.getType(),
+                connection.getId());
         return connection;
     }
 
     private MessageConnection establishInboundIndirectMessageConnection(ConnectToPeerResponse response)
             throws InterruptedException, TimeoutException {
-        diagnostic.debug("Attempting inbound indirect message connection to "
-                + response.getUsername() + " (" + response.getIpEndpoint()
-                + ") for token " + response.getToken());
+        LOG.debug(
+                "Attempting inbound indirect message connection to {} ({}) for token {}",
+                response.getUsername(),
+                response.getIpEndpoint(),
+                response.getToken());
         MessageConnection connection = connectionFactory.getMessageConnection(
                 response.getUsername(), response.getIpEndpoint(), options.get().peerConnectionOptions());
         connection.setType(ConnectionType.INBOUND_INDIRECT);
@@ -653,10 +674,12 @@ public final class PeerNetwork implements PeerConnectionManager {
             cancellation.close();
         }
         subscribeToDisconnect(connection);
-        diagnostic.debug("Message connection to " + response.getUsername() + " ("
-                + response.getIpEndpoint()
-                + ") established. (type: " + connection.getType()
-                + ", id: " + connection.getId() + ")");
+        LOG.debug(
+                "Message connection to {} ({}) established. (type: {}, id: {})",
+                response.getUsername(),
+                response.getIpEndpoint(),
+                connection.getType(),
+                connection.getId());
         return connection;
     }
 
@@ -667,8 +690,8 @@ public final class PeerNetwork implements PeerConnectionManager {
             CancellationSignal cancellationSignal) {
         LinkedCancellation directCancellation = new LinkedCancellation(cancellationSignal);
         LinkedCancellation indirectCancellation = new LinkedCancellation(cancellationSignal);
-        diagnostic.debug("Attempting simultaneous direct and indirect message " + "connections to " + username + " ("
-                + ipEndpoint + ")");
+        LOG.debug(
+                "Attempting simultaneous direct and indirect message connections to {} ({})", username, ipEndpoint);
 
         FirstSuccess.Winner<MessageConnection> winner;
         try {
@@ -686,7 +709,7 @@ public final class PeerNetwork implements PeerConnectionManager {
             String message = "Failed to establish a direct or indirect message "
                     + "connection to " + username + " (" + ipEndpoint
                     + ")";
-            diagnostic.debug(message);
+            LOG.debug(message);
             throw new ConnectionException(message);
         }
 
@@ -697,10 +720,12 @@ public final class PeerNetwork implements PeerConnectionManager {
             provisionalSubscription.close();
         }
         boolean directWon = winner.first();
-        diagnostic.debug((directWon ? "Direct" : "Indirect")
-                + " message connection to " + username + " (" + ipEndpoint
-                + ") established first, attempting to cancel "
-                + (directWon ? "indirect" : "direct") + " connection.");
+        LOG.debug(
+                "{} message connection to {} ({}) established first, attempting to cancel {} connection.",
+                directWon ? "Direct" : "Indirect",
+                username,
+                ipEndpoint,
+                directWon ? "indirect" : "direct");
         (directWon ? indirectCancellation : directCancellation).cancel();
 
         try {
@@ -716,23 +741,26 @@ public final class PeerNetwork implements PeerConnectionManager {
             String message = "Failed to negotiate message connection to "
                     + username + " (" + ipEndpoint + "): "
                     + Failures.message(cause);
-            diagnostic.debug(message + " (type: " + connection.getType() + ", id: " + connection.getId() + ")");
+            LOG.debug("{} (type: {}, id: {})", message, connection.getType(), connection.getId());
             connection.close();
             throw new ConnectionException(message, cause);
         } finally {
             directCancellation.close();
             indirectCancellation.close();
         }
-        diagnostic.debug("Message connection to " + username + " (" + ipEndpoint
-                + ") established. (type: " + connection.getType()
-                + ", id: " + connection.getId() + ")");
+        LOG.debug(
+                "Message connection to {} ({}) established. (type: {}, id: {})",
+                username,
+                ipEndpoint,
+                connection.getType(),
+                connection.getId());
         return connection;
     }
 
     private MessageConnection establishOutboundDirectMessageConnection(
             String username, InetSocketAddress ipEndpoint, CancellationSignal cancellationSignal)
             throws InterruptedException, TimeoutException {
-        diagnostic.debug("Attempting direct message connection to " + username + " (" + ipEndpoint + ")");
+        LOG.debug("Attempting direct message connection to {} ({})", username, ipEndpoint);
         MessageConnection connection = connectionFactory.getMessageConnection(
                 username, ipEndpoint, options.get().peerConnectionOptions());
         connection.setType(ConnectionType.OUTBOUND_DIRECT);
@@ -741,23 +769,27 @@ public final class PeerNetwork implements PeerConnectionManager {
         try {
             connection.connect(cancellationSignal);
         } catch (Throwable failure) {
-            diagnostic.debug("Failed to establish a direct message connection to "
-                    + username + " (" + ipEndpoint + "): "
-                    + Failures.message(failure));
+            LOG.debug(
+                    "Failed to establish a direct message connection to {} ({}): {}",
+                    username,
+                    ipEndpoint,
+                    Failures.message(failure));
             connection.close();
             throw Failures.rethrow(failure);
         }
-        diagnostic.debug("Direct message connection to " + username + " ("
-                + ipEndpoint + ") established. (type: "
-                + connection.getType() + ", id: "
-                + connection.getId() + ")");
+        LOG.debug(
+                "Direct message connection to {} ({}) established. (type: {}, id: {})",
+                username,
+                ipEndpoint,
+                connection.getType(),
+                connection.getId());
         return connection;
     }
 
     private MessageConnection establishOutboundIndirectMessageConnection(
             String username, int solicitationToken, CancellationSignal cancellationSignal)
             throws InterruptedException, TimeoutException {
-        diagnostic.debug("Soliciting indirect message connection to " + username + " with token " + solicitationToken);
+        LOG.debug("Soliciting indirect message connection to {} with token {}", username, solicitationToken);
         pendingSolicitations.putIfAbsent(solicitationToken, username);
         boolean answered = false;
         try {
@@ -779,25 +811,31 @@ public final class PeerNetwork implements PeerConnectionManager {
                         accepted.getIpEndpoint(),
                         options.get().peerConnectionOptions(),
                         accepted.handoffConnector());
-                diagnostic.debug("Indirect message connection to " + username + " ("
-                        + accepted.getIpEndpoint()
-                        + ") handed off. (old: " + accepted.getId()
-                        + ", new: " + connection.getId() + ")");
+                LOG.debug(
+                        "Indirect message connection to {} ({}) handed off. (old: {}, new: {})",
+                        username,
+                        accepted.getIpEndpoint(),
+                        accepted.getId(),
+                        connection.getId());
                 connection.setType(ConnectionType.OUTBOUND_INDIRECT);
                 attachPeerMessageListeners(connection);
                 subscribeToProvisionalDisconnect(connection);
-                diagnostic.debug("Indirect message connection to " + username + " ("
-                        + connection.getIpEndpoint()
-                        + ") established. (type: " + connection.getType()
-                        + ", id: " + connection.getId() + ")");
+                LOG.debug(
+                        "Indirect message connection to {} ({}) established. (type: {}, id: {})",
+                        username,
+                        connection.getIpEndpoint(),
+                        connection.getType(),
+                        connection.getId());
                 return connection;
             } finally {
                 accepted.close();
             }
         } catch (Throwable failure) {
-            diagnostic.debug("Failed to establish an indirect message connection to "
-                    + username + " with token " + solicitationToken
-                    + ": " + Failures.message(failure));
+            LOG.debug(
+                    "Failed to establish an indirect message connection to {} with token {}: {}",
+                    username,
+                    solicitationToken,
+                    Failures.message(failure));
             throw Failures.rethrow(failure);
         } finally {
             if (answered) {
@@ -844,37 +882,43 @@ public final class PeerNetwork implements PeerConnectionManager {
     private TransportConnection establishOutboundDirectTransferConnection(
             InetSocketAddress ipEndpoint, int token, CancellationSignal cancellationSignal)
             throws InterruptedException, TimeoutException {
-        diagnostic.debug("Attempting direct transfer connection for token " + token + " to " + ipEndpoint);
+        LOG.debug("Attempting direct transfer connection for token {} to {}", token, ipEndpoint);
         TransportConnection connection = connectionFactory.getTransferConnection(
                 ipEndpoint, options.get().transferConnectionOptions());
         connection.setType(ConnectionType.OUTBOUND_DIRECT);
         connection.<ConnectionDisconnectedEvent>subscribe(
                 TransportConnection.Kind.DISCONNECTED,
-                eventData -> diagnostic.debug("Transfer connection for token " + token + " to "
-                        + ipEndpoint + " disconnected: "
-                        + disconnectMessage(eventData) + ". (type: "
-                        + connection.getType() + ", id: "
-                        + connection.getId() + ")"));
+                eventData -> LOG.debug(
+                        "Transfer connection for token {} to {} disconnected: {}. (type: {}, id: {})",
+                        token,
+                        ipEndpoint,
+                        disconnectMessage(eventData),
+                        connection.getType(),
+                        connection.getId()));
         try {
             connection.connect(cancellationSignal);
         } catch (Throwable failure) {
-            diagnostic.debug("Failed to establish a direct transfer connection "
-                    + "for token " + token + " to (" + ipEndpoint
-                    + "): " + Failures.message(failure));
+            LOG.debug(
+                    "Failed to establish a direct transfer connection for token {} to ({}): {}",
+                    token,
+                    ipEndpoint,
+                    Failures.message(failure));
             connection.close();
             throw Failures.rethrow(failure);
         }
-        diagnostic.debug("Direct transfer connection for " + token + " to "
-                + connection.getIpEndpoint()
-                + " established. (type: " + connection.getType()
-                + ", id: " + connection.getId() + ")");
+        LOG.debug(
+                "Direct transfer connection for {} to {} established. (type: {}, id: {})",
+                token,
+                connection.getIpEndpoint(),
+                connection.getType(),
+                connection.getId());
         return connection;
     }
 
     private TransportConnection establishOutboundIndirectTransferConnection(
             String username, int token, CancellationSignal cancellationSignal)
             throws InterruptedException, TimeoutException {
-        diagnostic.debug("Soliciting indirect transfer connection to " + username + " with token " + token);
+        LOG.debug("Soliciting indirect transfer connection to {} with token {}", username, token);
         int solicitationToken = tokens.nextToken();
         pendingSolicitations.putIfAbsent(solicitationToken, username);
         try {
@@ -892,32 +936,38 @@ public final class PeerNetwork implements PeerConnectionManager {
                         accepted.getIpEndpoint(),
                         options.get().transferConnectionOptions(),
                         accepted.handoffConnector());
-                diagnostic.debug("Indirect transfer connection to " + username + " ("
-                        + accepted.getIpEndpoint()
-                        + ") handed off. (old: " + accepted.getId()
-                        + ", new: " + connection.getId() + ")");
+                LOG.debug(
+                        "Indirect transfer connection to {} ({}) handed off. (old: {}, new: {})",
+                        username,
+                        accepted.getIpEndpoint(),
+                        accepted.getId(),
+                        connection.getId());
                 connection.setType(ConnectionType.OUTBOUND_INDIRECT);
                 connection.<ConnectionDisconnectedEvent>subscribe(
                         TransportConnection.Kind.DISCONNECTED,
-                        eventData -> diagnostic.debug("Transfer connection for token " + token + " ("
-                                + accepted.getIpEndpoint()
-                                + ") disconnected: "
-                                + disconnectMessage(eventData) + ". (type: "
-                                + connection.getType() + ", id: "
-                                + connection.getId() + ")"));
-                diagnostic.debug("Indirect transfer connection for " + token + " ("
-                        + connection.getIpEndpoint()
-                        + ") established. (type: "
-                        + connection.getType() + ", id: "
-                        + connection.getId() + ")");
+                        eventData -> LOG.debug(
+                                "Transfer connection for token {} ({}) disconnected: {}. (type: {}, id: {})",
+                                token,
+                                accepted.getIpEndpoint(),
+                                disconnectMessage(eventData),
+                                connection.getType(),
+                                connection.getId()));
+                LOG.debug(
+                        "Indirect transfer connection for {} ({}) established. (type: {}, id: {})",
+                        token,
+                        connection.getIpEndpoint(),
+                        connection.getType(),
+                        connection.getId());
                 return connection;
             } finally {
                 accepted.close();
             }
         } catch (Throwable failure) {
-            diagnostic.debug("Failed to establish an indirect transfer "
-                    + "connection to " + username + " with token "
-                    + token + ": " + Failures.message(failure));
+            LOG.debug(
+                    "Failed to establish an indirect transfer connection to {} with token {}: {}",
+                    username,
+                    token,
+                    Failures.message(failure));
             throw Failures.rethrow(failure);
         } finally {
             pendingSolicitations.remove(solicitationToken, username);
@@ -962,9 +1012,11 @@ public final class PeerNetwork implements PeerConnectionManager {
     private void evictIfDeadOnArrival(String username, ConnectionCell entry, MessageConnection connection) {
         if (connection.getState() != dev.slsk.internal.network.tcp.TransportState.CONNECTED
                 && messageConnections.remove(username, entry)) {
-            diagnostic.debug("Removed message connection record for " + username
-                    + "; the connection dropped before its cache entry settled (id: "
-                    + connection.getId() + ")");
+            LOG.debug(
+                    "Removed message connection record for {}; the connection dropped before its cache entry "
+                            + "settled (id: {})",
+                    username,
+                    connection.getId());
         }
     }
 
@@ -974,23 +1026,26 @@ public final class PeerNetwork implements PeerConnectionManager {
         if (subscription != null) {
             subscription.close();
         }
-        diagnostic.debug("Message connection to " + connection.getUsername() + " ("
-                + connection.getIpEndpoint() + ") disconnected. (type: "
-                + connection.getType() + ", id: " + connection.getId()
-                + ")");
+        LOG.debug(
+                "Message connection to {} ({}) disconnected. (type: {}, id: {})",
+                connection.getUsername(),
+                connection.getIpEndpoint(),
+                connection.getType(),
+                connection.getId());
         // Only if this is still the connection on record. A peer that
         // reconnects has already replaced the entry, and the disconnect of the
         // connection it replaced must not evict its successor.
         ConnectionCell cell = messageConnections.get(connection.getUsername());
         if (cell != null && cell.peek() == connection && messageConnections.remove(connection.getUsername(), cell)) {
-            diagnostic.debug("Removed message connection record for "
-                    + connection.getKey().getUsername() + " ("
-                    + connection.getIpEndpoint() + ") (type: "
-                    + connection.getType() + ", id: "
-                    + connection.getId() + ")");
+            LOG.debug(
+                    "Removed message connection record for {} ({}) (type: {}, id: {})",
+                    connection.getKey().getUsername(),
+                    connection.getIpEndpoint(),
+                    connection.getType(),
+                    connection.getId());
         }
         connection.close();
-        diagnostic.debug("Message connection cache now contains " + messageConnections.size() + " connections.");
+        LOG.debug("Message connection cache now contains {} connections.", messageConnections.size());
     }
 
     private void messageConnectionProvisionalDisconnected(ConnectionDisconnectedEvent eventData) {
@@ -1000,10 +1055,6 @@ public final class PeerNetwork implements PeerConnectionManager {
             subscription.close();
         }
         connection.close();
-    }
-
-    private void publishDiagnostic(DiagnosticMessage eventData) {
-        diagnosticListeners.forEach(listener -> listener.accept(eventData));
     }
 
     private void subscribeToDisconnect(MessageConnection connection) {

@@ -5,13 +5,14 @@
 package dev.slsk.internal;
 
 import dev.slsk.internal.common.Scheduler;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.user.Username;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Re-offers an upload whose peer never came back for it.
@@ -50,6 +51,7 @@ import java.util.concurrent.TimeUnit;
  * class decides only <em>when</em> to ask again, never whether it is allowed.
  */
 final class UploadRetry {
+    private static final Logger LOG = LoggerFactory.getLogger(UploadRetry.class);
 
     /** How long after a retryable failure the file is re-offered. */
     static final Duration DELAY = Duration.ofSeconds(180);
@@ -68,17 +70,15 @@ final class UploadRetry {
     private final Duration delay;
     private final int maxAttempts;
     private final Reoffer reoffer;
-    private final DiagnosticSink diagnostic;
 
     /** Failed attempts per file, cleared on success or on giving up. */
     private final Map<PeerFile, Integer> attempts = new ConcurrentHashMap<>();
 
-    UploadRetry(Scheduler scheduler, Duration delay, int maxAttempts, Reoffer reoffer, DiagnosticSink diagnostic) {
+    UploadRetry(Scheduler scheduler, Duration delay, int maxAttempts, Reoffer reoffer) {
         this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
         this.delay = Objects.requireNonNull(delay, "delay");
         this.maxAttempts = maxAttempts;
         this.reoffer = Objects.requireNonNull(reoffer, "reoffer");
-        this.diagnostic = DiagnosticSink.forSource(diagnostic, UploadRetry.class);
     }
 
     /**
@@ -97,11 +97,16 @@ final class UploadRetry {
         int made = attempts.merge(file, 1, Integer::sum);
         if (made > maxAttempts) {
             attempts.remove(file);
-            diagnostic.debug("Giving up on re-offering " + path + " to " + user + " after " + made + " attempts");
+            LOG.debug("Giving up on re-offering {} to {} after {} attempts", path, user, made);
             return;
         }
-        diagnostic.debug("Re-offering " + path + " to " + user + " in " + delay.toSeconds() + "s (attempt " + made
-                + " of " + maxAttempts + ")");
+        LOG.debug(
+                "Re-offering {} to {} in {}s (attempt {} of {})",
+                path,
+                user,
+                delay.toSeconds(),
+                made,
+                maxAttempts);
         scheduler.schedule(() -> reoffer.reoffer(user, path), delay.toMillis(), TimeUnit.MILLISECONDS);
     }
 

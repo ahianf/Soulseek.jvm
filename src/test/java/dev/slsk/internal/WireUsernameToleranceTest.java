@@ -11,7 +11,6 @@ import dev.slsk.events.ChatEvent;
 import dev.slsk.events.MeEvent;
 import dev.slsk.internal.common.Usernames;
 import dev.slsk.internal.connection.SoulseekClientState;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.events.PrivateMessageReceivedEvent;
 import dev.slsk.internal.network.MessageConnection;
@@ -80,9 +79,6 @@ class WireUsernameToleranceTest {
 
             assertTrue(received.await(5, TimeUnit.SECONDS), "the well-formed message never arrived");
             assertEquals(1, chat.size(), "the malformed message was dropped, the well-formed one delivered");
-            assertTrue(
-                    fixture.diagnostics.warnings.stream().anyMatch(warning -> warning.contains("not delivered")),
-                    "the drop is named in the diagnostics: " + fixture.diagnostics.warnings);
         }
     }
 
@@ -117,7 +113,6 @@ class WireUsernameToleranceTest {
     /** A me and chat facet over an engine whose server connection is a stub. */
     private static final class Fixture implements AutoCloseable {
 
-        private final DiagnosticProbe diagnostics = new DiagnosticProbe();
         private final SoulseekEngine client;
         private final DefaultMe me;
         private final DefaultChat chat;
@@ -142,13 +137,12 @@ class WireUsernameToleranceTest {
                     null,
                     null,
                     null,
-                    diagnostics.proxy,
                     null,
                     null,
                     null);
             client.setStateForTest(SoulseekClientState.LOGGED_IN);
-            me = new DefaultMe(client, Username.of("me"), new EventBus<>("me", diagnostics.proxy), diagnostics.proxy);
-            chat = new DefaultChat(client, new EventBus<>("chat", diagnostics.proxy), diagnostics.proxy);
+            me = new DefaultMe(client, Username.of("me"), new EventBus<>("me"));
+            chat = new DefaultChat(client, new EventBus<>("chat"));
         }
 
         @Override
@@ -157,16 +151,4 @@ class WireUsernameToleranceTest {
         }
     }
 
-    private static final class DiagnosticProbe {
-        private final List<String> warnings = new CopyOnWriteArrayList<>();
-        private final DiagnosticSink proxy = (DiagnosticSink) Proxy.newProxyInstance(
-                DiagnosticSink.class.getClassLoader(), new Class<?>[] {DiagnosticSink.class}, this::invoke);
-
-        private Object invoke(Object ignored, Method method, Object[] arguments) {
-            if (method.getName().equals("warning") && arguments != null && arguments[0] instanceof String message) {
-                warnings.add(message);
-            }
-            return defaultValue(method.getReturnType());
-        }
-    }
 }

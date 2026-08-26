@@ -14,7 +14,6 @@ import dev.slsk.Shares;
 import dev.slsk.Soulseek;
 import dev.slsk.Uploads;
 import dev.slsk.Users;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.options.SoulseekClientOptions;
 import java.util.Objects;
@@ -46,34 +45,33 @@ public final class DefaultSoulseek implements Soulseek {
 
     /**
      * Every bus this client owns, so {@link #close()} can stop every delivery
-     * thread. One per facet, plus the mesh bus the diagnostics facet holds
-     * alongside its own.
+     * thread. One per event-producing facet, including the diagnostics facet's
+     * mesh bus.
      */
     private final java.util.List<EventBus<?>> buses = new java.util.ArrayList<>();
 
     private DefaultSoulseek(
             SoulseekEngine client, DefaultConnection.Credentials credentials, dev.slsk.spi.TransferStore store) {
         this.client = Objects.requireNonNull(client, "client");
-        DiagnosticSink diagnostics = client.getDiagnostic();
-        this.connection = new DefaultConnection(client, credentials, bus("connection", diagnostics));
-        this.chat = new DefaultChat(client, bus("chat", diagnostics), diagnostics);
+        this.connection = new DefaultConnection(client, credentials, bus("connection"));
+        this.chat = new DefaultChat(client, bus("chat"));
         this.me = new DefaultMe(
-                client, dev.slsk.user.Username.of(credentials.username()), bus("me", diagnostics), diagnostics);
-        this.users = new DefaultUsers(client, bus("users", diagnostics), diagnostics);
-        this.diagnostics = new DefaultDiagnostics(client, bus("diagnostics", diagnostics), bus("mesh", diagnostics));
-        this.rooms = new DefaultRooms(client, bus("rooms", diagnostics));
-        this.search = new DefaultSearch(client, bus("search", diagnostics));
-        this.downloads = new DefaultDownloads(client, bus("downloads", diagnostics), store);
-        this.uploads = new DefaultUploads(client, bus("uploads", diagnostics));
-        this.shares = new DefaultShares(client, bus("shares", diagnostics));
+                client, dev.slsk.user.Username.of(credentials.username()), bus("me"));
+        this.users = new DefaultUsers(client, bus("users"));
+        this.diagnostics = new DefaultDiagnostics(client, bus("mesh"));
+        this.rooms = new DefaultRooms(client, bus("rooms"));
+        this.search = new DefaultSearch(client, bus("search"));
+        this.downloads = new DefaultDownloads(client, bus("downloads"), store);
+        this.uploads = new DefaultUploads(client, bus("uploads"));
+        this.shares = new DefaultShares(client, bus("shares"));
         // Metrics counts transfers, and the facets that hold them are built
         // after the one that reports on them.
         this.diagnostics.bind(downloads, uploads);
     }
 
     /** Creates a bus and records it, so close() can stop its delivery thread. */
-    private <T> EventBus<T> bus(String name, DiagnosticSink diagnostics) {
-        EventBus<T> created = new EventBus<>(name, diagnostics);
+    private <T> EventBus<T> bus(String name) {
+        EventBus<T> created = new EventBus<>(name);
         buses.add(created);
         return created;
     }

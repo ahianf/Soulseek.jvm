@@ -98,7 +98,7 @@ final class DefaultConnection implements Connection {
         this.credentials = Objects.requireNonNull(credentials, "credentials");
         this.events = Objects.requireNonNull(events, "events");
         this.defaultAddress = Objects.requireNonNull(defaultAddress, "defaultAddress");
-        this.reconnects = new ReconnectSupervisor(this::connectOnce, this::onStateChanged, client.getDiagnostic());
+        this.reconnects = new ReconnectSupervisor(this::connectOnce, this::onStateChanged);
         wire();
     }
 

@@ -5,10 +5,8 @@ package dev.slsk.internal;
 
 import dev.slsk.Diagnostics;
 import dev.slsk.EventStream;
-import dev.slsk.diagnostics.DiagnosticLevel;
 import dev.slsk.diagnostics.MeshState;
 import dev.slsk.diagnostics.Metrics;
-import dev.slsk.events.DiagnosticEvent;
 import dev.slsk.events.MeshEvent;
 import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.events.DistributedChildEvent;
@@ -21,7 +19,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -55,19 +52,16 @@ final class DefaultDiagnostics implements Diagnostics {
     private final AtomicReference<dev.slsk.Downloads> downloads = new AtomicReference<>();
 
     private final AtomicReference<dev.slsk.Uploads> uploads = new AtomicReference<>();
-    private final EventBus<DiagnosticEvent> events;
     private final EventBus<MeshEvent> meshEvents;
     private final AtomicReference<MeshState> published = new AtomicReference<>(empty());
-    private final AtomicBoolean tracing = new AtomicBoolean();
 
-    DefaultDiagnostics(SoulseekEngine client, EventBus<DiagnosticEvent> events, EventBus<MeshEvent> meshEvents) {
+    DefaultDiagnostics(SoulseekEngine client, EventBus<MeshEvent> meshEvents) {
         this.mesh = Objects.requireNonNull(client, "client").getDistributedConnectionManager();
         this.peerConnections = () -> client.getPeerConnectionManager() == null
                         || client.getPeerConnectionManager().getMessageConnections() == null
                 ? 0
                 : client.getPeerConnectionManager().getMessageConnections().size();
         this.activeSearches = () -> client.getSearches().size();
-        this.events = Objects.requireNonNull(events, "events");
         this.meshEvents = Objects.requireNonNull(meshEvents, "meshEvents");
         wire(client);
     }
@@ -77,8 +71,6 @@ final class DefaultDiagnostics implements Diagnostics {
     }
 
     private void wire(SoulseekEngine client) {
-        client.events().on(Kind.DIAGNOSTIC_GENERATED, this::onDiagnostic);
-
         client.events().on(Kind.DISTRIBUTED_PARENT_ADOPTED, (DistributedParentEvent event) -> onMeshChanged());
         client.events().on(Kind.DISTRIBUTED_PARENT_DISCONNECTED, (DistributedParentEvent event) -> onMeshChanged());
         client.events().on(Kind.DISTRIBUTED_CHILD_ADDED, (DistributedChildEvent event) -> onMeshChanged());
@@ -86,19 +78,6 @@ final class DefaultDiagnostics implements Diagnostics {
         client.events().on(Kind.PROMOTED_TO_DISTRIBUTED_BRANCH_ROOT, (Void event) -> onMeshChanged());
         client.events().on(Kind.DEMOTED_FROM_DISTRIBUTED_BRANCH_ROOT, (Void event) -> onMeshChanged());
         client.events().on(Kind.DISTRIBUTED_NETWORK_RESET, (Void event) -> onMeshChanged());
-    }
-
-    /** The internal record carries boxed nulls; the published one does not. */
-    private void onDiagnostic(dev.slsk.internal.diagnostics.DiagnosticMessage event) {
-        if (event == null) {
-            return;
-        }
-        events.publish(new DiagnosticEvent(
-                level(event.level()),
-                event.source(),
-                event.message(),
-                Optional.ofNullable(event.exception()),
-                event.timestamp() == null ? Instant.now() : event.timestamp()));
     }
 
     /**
@@ -118,24 +97,6 @@ final class DefaultDiagnostics implements Diagnostics {
             MeshState previous = published.getAndSet(current);
             return previous.equals(current) ? null : new MeshEvent.StateChanged(previous, current, Instant.now());
         });
-    }
-
-    private static DiagnosticLevel level(dev.slsk.internal.diagnostics.DiagnosticSeverity source) {
-        if (source == null) {
-            return DiagnosticLevel.INFO;
-        }
-        return switch (source) {
-            case NONE -> DiagnosticLevel.NONE;
-            case WARNING -> DiagnosticLevel.WARNING;
-            case INFO -> DiagnosticLevel.INFO;
-            case DEBUG -> DiagnosticLevel.DEBUG;
-            case TRACE -> DiagnosticLevel.TRACE;
-        };
-    }
-
-    @Override
-    public EventStream<DiagnosticEvent> events() {
-        return events;
     }
 
     /**
@@ -252,8 +213,4 @@ final class DefaultDiagnostics implements Diagnostics {
         return meshEvents;
     }
 
-    @Override
-    public void protocolTrace(boolean enabled) {
-        tracing.set(enabled);
-    }
 }

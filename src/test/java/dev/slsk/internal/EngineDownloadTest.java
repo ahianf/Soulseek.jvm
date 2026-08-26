@@ -25,7 +25,6 @@ import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.connection.SoulseekClientState;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.messaging.messages.OutgoingMessage;
 import dev.slsk.internal.messaging.messages.QueueDownloadRequest;
 import dev.slsk.internal.messaging.messages.TransferRequest;
@@ -797,9 +796,8 @@ class EngineDownloadTest {
     }
 
     @Test
-    void cleanupFailuresAreWarningsAndDoNotChangeSuccess() {
-        DiagnosticProbe diagnostic = new DiagnosticProbe();
-        try (Fixture fixture = new Fixture(diagnostic.proxy)) {
+    void cleanupFailuresDoNotChangeSuccess() {
+        try (Fixture fixture = new Fixture()) {
             fixture.transfer.data = new byte[] {1};
             fixture.waiter.startRequest =
                     CompletableFuture.completedFuture(new TransferRequest(TransferDirection.UPLOAD, 32, "file", 1));
@@ -816,11 +814,6 @@ class EngineDownloadTest {
                             .build());
 
             assertInstanceOf(TransferOutcome.Succeeded.class, outcome);
-            assertTrue(diagnostic.warnings.stream().anyMatch(warning -> warning.contains("Failed to cancel wait")));
-            assertTrue(diagnostic.warnings.stream()
-                    .anyMatch(warning -> warning.contains("Failed to close transfer connection")));
-            assertTrue(diagnostic.warnings.stream()
-                    .anyMatch(warning -> warning.contains("Failed to finalize output stream")));
         }
     }
 
@@ -1024,10 +1017,6 @@ class EngineDownloadTest {
         private final SoulseekEngine client;
 
         private Fixture() {
-            this(null);
-        }
-
-        private Fixture(DiagnosticSink diagnostic) {
             client = new SoulseekEngine(
                     9999,
                     null,
@@ -1043,7 +1032,6 @@ class EngineDownloadTest {
                     null,
                     waiter.proxy,
                     null,
-                    diagnostic,
                     null,
                     null,
                     null);
@@ -1361,16 +1349,4 @@ class EngineDownloadTest {
         }
     }
 
-    private static final class DiagnosticProbe {
-        private final List<String> warnings = new ArrayList<>();
-        private final DiagnosticSink proxy = (DiagnosticSink) Proxy.newProxyInstance(
-                DiagnosticSink.class.getClassLoader(), new Class<?>[] {DiagnosticSink.class}, this::invoke);
-
-        private Object invoke(Object ignored, Method method, Object[] arguments) throws Exception {
-            if (method.getName().equals("warning")) {
-                warnings.add((String) arguments[0]);
-            }
-            return defaultValue(method.getReturnType());
-        }
-    }
 }

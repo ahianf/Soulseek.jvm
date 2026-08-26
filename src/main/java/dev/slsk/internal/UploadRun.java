@@ -111,7 +111,7 @@ final class UploadRun {
 
             Permits.acquire(perUserSemaphore, cancellationSignal);
             perUserPermit = true;
-            domain.diagnostic.debug("Upload semaphore for file "
+            domain.log.debug("Upload semaphore for file "
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + " acquired");
 
@@ -121,20 +121,20 @@ final class UploadRun {
             // one rule; the try/catch that guarded the pluggable one went with
             // it, because setting a flag cannot fail.
             slot = true;
-            domain.diagnostic.debug("Upload slot for file "
+            domain.log.debug("Upload slot for file "
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + " acquired");
 
             Permits.acquire(domain.globalUploadSemaphore(), cancellationSignal);
             globalPermit = true;
-            domain.diagnostic.debug("Global upload semaphore for file "
+            domain.log.debug("Global upload semaphore for file "
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + " acquired");
 
             endpoint = domain.endpoint(upload.getUsername(), cancellationSignal);
             MessageConnection messageConnection =
                     domain.peers().getOrAddMessageConnection(upload.getUsername(), endpoint, cancellationSignal);
-            domain.diagnostic.debug("Fetched peer connection for upload of "
+            domain.log.debug("Fetched peer connection for upload of "
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + " (id: " + messageConnection.getId()
                     + ", state: " + messageConnection.getState() + ")");
@@ -148,14 +148,14 @@ final class UploadRun {
                     new TransferRequest(
                             TransferDirection.UPLOAD, upload.getToken(), upload.getFilename(), upload.getSize()),
                     CancellationSignals.orNone(cancellationSignal));
-            domain.diagnostic.debug("Wrote transfer request for upload of "
+            domain.log.debug("Wrote transfer request for upload of "
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + " (id: " + messageConnection.getId()
                     + ", state: " + messageConnection.getState() + ")");
             updateState(TransferPhase.REQUESTED);
 
             TransferResponse acknowledgement = transferRequestAcknowledged.await();
-            domain.diagnostic.debug("Received transfer request ACK for upload of "
+            domain.log.debug("Received transfer request ACK for upload of "
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + ": allowed: " + acknowledgement.isAllowed()
                     + ", message: " + acknowledgement.getMessage()
@@ -167,7 +167,7 @@ final class UploadRun {
             updateState(TransferPhase.INITIALIZING);
             connection = domain.peers()
                     .getTransferConnection(upload.getUsername(), endpoint, upload.getToken(), cancellationSignal);
-            domain.diagnostic.debug("Fetched transfer connection for upload of "
+            domain.log.debug("Fetched transfer connection for upload of "
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + " (id: " + connection.getId()
                     + ", state: " + connection.getState() + ")");
@@ -182,7 +182,7 @@ final class UploadRun {
                         + upload.getSize() + " bytes");
             }
 
-            domain.diagnostic.debug("Resolving input channel for upload of " + filenameOnly(upload.getFilename())
+            domain.log.debug("Resolving input channel for upload of " + filenameOnly(upload.getFilename())
                     + " to " + upload.getUsername());
             source = Objects.requireNonNull(
                     sourceFactory.open(upload.getStartOffset(), transferOptions.seekInputStreamAutomatically()),
@@ -226,7 +226,7 @@ final class UploadRun {
             upload.setStartOffset(
                     ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).getLong());
         } catch (Throwable cause) {
-            domain.diagnostic.debug("Failed to read start offset for upload of "
+            domain.log.debug("Failed to read start offset for upload of "
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + ": " + Failures.message(cause));
             if (cause instanceof CancellationException || cause instanceof TimeoutException) {
@@ -394,10 +394,10 @@ final class UploadRun {
         if (failure instanceof TransferRejectedException
                 || failure instanceof CancellationException
                 || failure instanceof TimeoutException) {
-            domain.diagnostic.debug(summary);
+            domain.log.debug(summary);
             return;
         }
-        domain.diagnostic.warning(
+        domain.log.warn(
                 summary, failure instanceof Exception exception ? exception : new RuntimeException(failure));
     }
 
@@ -490,13 +490,13 @@ final class UploadRun {
         if (perUserPermit) {
             perUserPermit = false;
             perUserSemaphore.release();
-            domain.diagnostic.debug("Upload semaphore for file "
+            domain.log.debug("Upload semaphore for file "
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + " released");
         }
         if (slot) {
             slot = false;
-            domain.diagnostic.debug("Upload slot for file "
+            domain.log.debug("Upload slot for file "
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + " released");
             if (transferOptions.slotReleased() != null) {
@@ -510,7 +510,7 @@ final class UploadRun {
         if (globalPermit) {
             globalPermit = false;
             domain.globalUploadSemaphore().release();
-            domain.diagnostic.debug("Global upload semaphore for file "
+            domain.log.debug("Global upload semaphore for file "
                     + filenameOnly(upload.getFilename()) + " to "
                     + upload.getUsername() + " released");
         }

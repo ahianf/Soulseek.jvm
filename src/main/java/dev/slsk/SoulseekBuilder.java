@@ -3,7 +3,6 @@
 
 package dev.slsk;
 
-import dev.slsk.diagnostics.DiagnosticLevel;
 import dev.slsk.download.DownloadPolicy;
 import dev.slsk.share.SharedFolder;
 import dev.slsk.spi.ShareCatalog;
@@ -35,7 +34,6 @@ public final class SoulseekBuilder {
     private String password;
     private int applicationMinorVersion = -1;
     private int listenPort = 2234;
-    private DiagnosticLevel diagnostics = DiagnosticLevel.INFO;
     private final List<SharedFolder> shares = new ArrayList<>();
     private DownloadPolicy downloads = DownloadPolicy.defaults();
     private UploadPolicy uploads = UploadPolicy.standard(2, 1);
@@ -224,17 +222,6 @@ public final class SoulseekBuilder {
     }
 
     /**
-     * Sets how much the library says about what it is doing.
-     *
-     * @param level the level
-     * @return this builder
-     */
-    public SoulseekBuilder diagnostics(DiagnosticLevel level) {
-        this.diagnostics = Objects.requireNonNull(level, "level");
-        return this;
-    }
-
-    /**
      * Builds the client. It does not connect; {@code connection().connect(...)}
      * does that.
      *
@@ -252,7 +239,6 @@ public final class SoulseekBuilder {
                 password,
                 applicationMinorVersion,
                 listenPort,
-                diagnostics,
                 List.copyOf(shares),
                 downloads,
                 uploads,

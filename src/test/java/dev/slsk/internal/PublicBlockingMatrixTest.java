@@ -16,8 +16,6 @@ import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Monitors;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.connection.SoulseekClientState;
-import dev.slsk.internal.diagnostics.DiagnosticSeverity;
-import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.events.RoomJoinedEvent;
 import dev.slsk.internal.network.ConnectionFactory;
@@ -461,7 +459,6 @@ class PublicBlockingMatrixTest {
                     null,
                     null,
                     null,
-                    null,
                     null);
             engine.setStateForTest(SoulseekClientState.LOGGED_IN);
             slsk = DefaultSoulseek.over(engine, "alice", "password");
@@ -621,7 +618,7 @@ class PublicBlockingMatrixTest {
                 new InetSocketAddress("127.0.0.1", 1), new ConnectionOptions(), Integer.BYTES, tcp, Monitors.shared());
         private final SoulseekEngine engine;
         private final EventBus<ConnectionEvent> events =
-                new EventBus<>("connect-matrix", new FilteringDiagnosticSink(DiagnosticSeverity.NONE, ignored -> {}));
+                new EventBus<>("connect-matrix");
         private final DefaultConnection connection;
 
         private ConnectFixture() {
@@ -631,7 +628,6 @@ class PublicBlockingMatrixTest {
                     SoulseekClientOptions.builder().enableListener(false).build(),
                     null,
                     factory,
-                    null,
                     null,
                     null,
                     null,

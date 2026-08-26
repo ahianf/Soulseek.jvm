@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.transfer.TransferDirection;
 import dev.slsk.internal.transfer.TransferInternal;
 import dev.slsk.spi.UploadPolicy;
@@ -31,7 +30,6 @@ class UploadAdmissionTest {
 
     private final AtomicReference<UploadPolicy> policy = new AtomicReference<>(UploadPolicy.standard(2, 1));
     private final AtomicReference<Map<Integer, TransferInternal>> uploads = new AtomicReference<>(Map.of());
-    private final AtomicReference<String> warned = new AtomicReference<>();
 
     /** Stands in for the client's token factory: a counter, as that one is. */
     private final java.util.concurrent.atomic.AtomicInteger nextToken =
@@ -41,33 +39,7 @@ class UploadAdmissionTest {
             policy::get,
             uploads::get,
             username -> "vip".equals(username),
-            nextToken::getAndIncrement,
-            new DiagnosticSink() {
-                @Override
-                public void trace(String message) {}
-
-                @Override
-                public void trace(String message, Throwable exception) {}
-
-                @Override
-                public void debug(String message) {}
-
-                @Override
-                public void debug(String message, Throwable exception) {}
-
-                @Override
-                public void info(String message) {}
-
-                @Override
-                public void warning(String message) {
-                    warned.set(message);
-                }
-
-                @Override
-                public void warning(String message, Throwable exception) {
-                    warned.set(message);
-                }
-            });
+            nextToken::getAndIncrement);
 
     /**
      * A ban is an invariant rather than a default. Checking it inside the
@@ -220,7 +192,6 @@ class UploadAdmissionTest {
         UploadPolicy.Decision.Deny denied =
                 assertInstanceOf(UploadPolicy.Decision.Deny.class, admission.decide(ALICE, "music\\song.mp3"));
         assertEquals(RejectionReason.UNKNOWN, denied.reason());
-        assertTrue(warned.get() != null && warned.get().contains("upload policy"));
     }
 
     @Test

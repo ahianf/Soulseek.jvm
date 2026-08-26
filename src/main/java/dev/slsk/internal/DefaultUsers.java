@@ -10,7 +10,6 @@ import dev.slsk.internal.EngineEvents.Kind;
 import dev.slsk.internal.common.Usernames;
 import dev.slsk.internal.concurrent.BlockingInvocation;
 import dev.slsk.internal.concurrent.CancellationSignal;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.EventBus;
 import dev.slsk.internal.options.BrowseOptions;
 import dev.slsk.search.FileAttributes;
@@ -38,6 +37,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * {@link Users}, over the engine.
@@ -56,20 +57,19 @@ import java.util.function.Consumer;
  * told to stop only when the last one closes.
  */
 final class DefaultUsers implements Users {
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultUsers.class);
 
     private final SoulseekEngine client;
     private final UserDirectory directory;
     private final EventBus<UserEvent> events;
-    private final DiagnosticSink diagnostics;
 
     /** Watched users, and how many holders each has. */
     private final Map<Username, Registration> watches = new ConcurrentHashMap<>();
 
-    DefaultUsers(SoulseekEngine client, EventBus<UserEvent> events, DiagnosticSink diagnostics) {
+    DefaultUsers(SoulseekEngine client, EventBus<UserEvent> events) {
         this.client = Objects.requireNonNull(client, "client");
         this.directory = client.users();
         this.events = Objects.requireNonNull(events, "events");
-        this.diagnostics = DiagnosticSink.forSource(diagnostics, DefaultUsers.class);
         client.events().on(Kind.LOGGED_IN, (Void ignored) -> reregister());
         client.events()
                 .on(
@@ -142,10 +142,10 @@ final class DefaultUsers implements Users {
                 directory.watchUser(user.value());
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
-                diagnostics.warning("Interrupted re-registering watches after login", interrupted);
+                LOG.warn("Interrupted re-registering watches after login", interrupted);
                 return;
             } catch (RuntimeException exception) {
-                diagnostics.warning("Failed to re-register the watch on " + user + " after login", exception);
+                LOG.warn("Failed to re-register the watch on {} after login", user, exception);
             }
         }
     }
@@ -403,9 +403,9 @@ final class DefaultUsers implements Users {
                     directory.unwatchUser(user.value());
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
-                    diagnostics.warning("Interrupted releasing the watch on " + user, interrupted);
+                    LOG.warn("Interrupted releasing the watch on {}", user, interrupted);
                 } catch (RuntimeException exception) {
-                    diagnostics.warning("Failed to release the watch on " + user, exception);
+                    LOG.warn("Failed to release the watch on {}", user, exception);
                 }
             }
         }

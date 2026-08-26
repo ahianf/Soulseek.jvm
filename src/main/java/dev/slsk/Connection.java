@@ -52,7 +52,7 @@ public interface Connection {
      * <p>Idempotent: disconnecting an already-disconnected client does nothing
      * rather than throwing.
      *
-     * @param reason recorded in diagnostics and reported to listeners
+     * @param reason logged and reported to listeners
      */
     void disconnect(String reason);
 

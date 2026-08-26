@@ -4,17 +4,12 @@
 
 package dev.slsk.internal.messaging.handlers;
 
-import dev.slsk.Subscription;
 import dev.slsk.internal.ServerLink;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.NetworkExecutor;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
-import dev.slsk.internal.diagnostics.DiagnosticMessage;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
-import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
-import dev.slsk.internal.events.Subscriptions;
 import dev.slsk.internal.messaging.MessageCode;
 import dev.slsk.internal.messaging.MessageReader;
 import dev.slsk.internal.messaging.messages.DistributedBranchLevel;
@@ -31,9 +26,9 @@ import dev.slsk.internal.options.SoulseekClientOptions;
 import dev.slsk.internal.search.SearchResponder;
 import java.util.Base64;
 import java.util.Objects;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Handles incoming messages from distributed connections.
@@ -42,6 +37,8 @@ import java.util.function.Supplier;
  * before the mesh, because the mesh attaches this to every connection it makes.
  */
 public final class DefaultDistributedMessageHandler implements DistributedMessageHandler {
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultDistributedMessageHandler.class);
+    private static final Logger PROTOCOL = LoggerFactory.getLogger("dev.slsk.protocol");
     private final Supplier<SoulseekClientOptions> options;
     private final ServerLink server;
     private final TokenFactory tokens;
@@ -49,21 +46,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     private final Supplier<DistributedConnectionManager> mesh;
     private final Supplier<SearchResponder> searchResponses;
     private final NetworkExecutor networkExecutor;
-    private final DiagnosticSink diagnostic;
-    private final CopyOnWriteArrayList<Consumer<? super DiagnosticMessage>> diagnosticListeners =
-            new CopyOnWriteArrayList<>();
     private volatile String deduplicationHash;
-
-    /** Creates a handler with its default diagnostic factory. */
-    public DefaultDistributedMessageHandler(
-            Supplier<SoulseekClientOptions> options,
-            ServerLink server,
-            TokenFactory tokens,
-            Waiter waiter,
-            Supplier<DistributedConnectionManager> mesh,
-            Supplier<SearchResponder> searchResponses) {
-        this(options, server, tokens, waiter, mesh, searchResponses, null);
-    }
 
     /** Creates a handler. */
     public DefaultDistributedMessageHandler(
@@ -72,9 +55,8 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
             TokenFactory tokens,
             Waiter waiter,
             Supplier<DistributedConnectionManager> mesh,
-            Supplier<SearchResponder> searchResponses,
-            DiagnosticSink diagnosticFactory) {
-        this(options, server, tokens, waiter, mesh, searchResponses, diagnosticFactory, new NetworkExecutor());
+            Supplier<SearchResponder> searchResponses) {
+        this(options, server, tokens, waiter, mesh, searchResponses, new NetworkExecutor());
     }
 
     /** Creates a handler sharing its client's network executor. */
@@ -85,7 +67,6 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
             Waiter waiter,
             Supplier<DistributedConnectionManager> mesh,
             Supplier<SearchResponder> searchResponses,
-            DiagnosticSink diagnosticFactory,
             NetworkExecutor networkExecutor) {
         this.options = Objects.requireNonNull(options, "options");
         this.server = Objects.requireNonNull(server, "server");
@@ -94,14 +75,6 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
         this.mesh = Objects.requireNonNull(mesh, "mesh");
         this.searchResponses = Objects.requireNonNull(searchResponses, "searchResponses");
         this.networkExecutor = Objects.requireNonNull(networkExecutor, "networkExecutor");
-        diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
-                : DiagnosticSink.forSource(diagnosticFactory, DefaultDistributedMessageHandler.class);
-    }
-
-    @Override
-    public Subscription subscribe(Consumer<? super DiagnosticMessage> listener) {
-        return Subscriptions.add(diagnosticListeners, listener);
     }
 
     @Override
@@ -116,15 +89,19 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
             code = new MessageReader<>(message, MessageCode.Distributed.class).readCode();
         } catch (IllegalArgumentException unknown) {
             // A newer client's message, not a broken connection.
-            diagnostic.debug(() -> "Ignored an unknown distributed child message from " + connection.getUsername()
-                    + ": " + unknown.getMessage());
+            LOG.debug(
+                    "Ignored an unknown distributed child message from {}: {}",
+                    connection.getUsername(),
+                    unknown.getMessage());
             return;
         }
         if (code != MessageCode.Distributed.PING) {
-            diagnostic.debug(() -> "Distributed child message received: " + code + " from "
-                    + connection.getUsername() + " ("
-                    + connection.getIpEndpoint() + ") (id: "
-                    + connection.getId() + ")");
+            PROTOCOL.trace(
+                    "Distributed child message received: {} from {} ({}) (id: {})",
+                    code,
+                    connection.getUsername(),
+                    connection.getIpEndpoint(),
+                    connection.getId());
         }
 
         try {
@@ -140,10 +117,12 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                             () -> connection.write(new DistributedPingResponse(tokens.nextToken())),
                             failure -> warnChild(code, connection, failure));
                 default ->
-                    diagnostic.debug(() -> "Unhandled distributed child message: " + code
-                            + " from " + connection.getUsername() + " ("
-                            + connection.getIpEndpoint() + "); "
-                            + message.length + " bytes");
+                    LOG.debug(
+                            "Unhandled distributed child message: {} from {} ({}); {} bytes",
+                            code,
+                            connection.getUsername(),
+                            connection.getIpEndpoint(),
+                            message.length);
             }
         } catch (Throwable failure) {
             warnChild(code, connection, failure);
@@ -156,10 +135,12 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
         MessageCode.Distributed code =
                 new MessageReader<>(eventData.message(), MessageCode.Distributed.class).readCode();
         if (code != MessageCode.Distributed.PING) {
-            diagnostic.debug("Distributed child message sent: " + code + " to "
-                    + connection.getUsername() + " ("
-                    + connection.getIpEndpoint() + ") (id: "
-                    + connection.getId() + ")");
+            PROTOCOL.trace(
+                    "Distributed child message sent: {} to {} ({}) (id: {})",
+                    code,
+                    connection.getUsername(),
+                    connection.getIpEndpoint(),
+                    connection.getId());
         }
     }
 
@@ -176,17 +157,21 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
         } catch (IllegalArgumentException unknown) {
             // A newer client's message, not a broken connection. This is the
             // parent's read loop — every inbound search travels on it.
-            diagnostic.debug(() -> "Ignored an unknown distributed message from " + connection.getUsername() + ": "
-                    + unknown.getMessage());
+            LOG.debug(
+                    "Ignored an unknown distributed message from {}: {}",
+                    connection.getUsername(),
+                    unknown.getMessage());
             return;
         }
         if (code != MessageCode.Distributed.SEARCH_REQUEST
                 && code != MessageCode.Distributed.EMBEDDED_MESSAGE
                 && code != MessageCode.Distributed.PING) {
-            diagnostic.debug(() -> "Distributed message received: " + code + " from "
-                    + connection.getUsername() + " ("
-                    + connection.getIpEndpoint() + ") (id: "
-                    + connection.getId() + ")");
+            PROTOCOL.trace(
+                    "Distributed message received: {} from {} ({}) (id: {})",
+                    code,
+                    connection.getUsername(),
+                    connection.getIpEndpoint(),
+                    connection.getId());
         } else if (options.get().deduplicateSearchRequests()) {
             String current = Base64.getEncoder().encodeToString(message);
             if (Objects.equals(deduplicationHash, current)) {
@@ -221,18 +206,21 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                     waiter.complete(new WaitKey.ChildDepth(connection.getKey()), depth.getDepth());
                 }
                 default ->
-                    diagnostic.debug(() -> "Unhandled distributed message: " + code + " from "
-                            + connection.getUsername() + " ("
-                            + connection.getIpEndpoint() + "); "
-                            + message.length + " bytes");
+                    LOG.debug(
+                            "Unhandled distributed message: {} from {} ({}); {} bytes",
+                            code,
+                            connection.getUsername(),
+                            connection.getIpEndpoint(),
+                            message.length);
             }
         } catch (Throwable failure) {
             Throwable cause = failure;
-            diagnostic.warning(
-                    () -> "Error handling distributed message: " + code + " from "
-                            + connection.getUsername() + " ("
-                            + connection.getIpEndpoint() + "); "
-                            + Failures.message(cause),
+            LOG.warn(
+                    "Error handling distributed message: {} from {} ({}); {}",
+                    code,
+                    connection.getUsername(),
+                    connection.getIpEndpoint(),
+                    Failures.message(cause),
                     cause);
         }
     }
@@ -242,7 +230,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
         MessageConnection connection = eventData.connection();
         MessageCode.Distributed code =
                 new MessageReader<>(eventData.message(), MessageCode.Distributed.class).readCode();
-        diagnostic.debug("Distributed message sent: " + code);
+        PROTOCOL.trace("Distributed message sent: {}", code);
     }
 
     @Override
@@ -253,7 +241,7 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
             code = embedded.getDistributedCode();
             byte[] distributed = embedded.getDistributedMessage();
             if (code != MessageCode.Distributed.SEARCH_REQUEST) {
-                diagnostic.debug("Unhandled embedded message: " + code + "; " + message.length + " bytes");
+                LOG.debug("Unhandled embedded message: {}; {} bytes", code, message.length);
                 return;
             }
             mesh.get().promoteToBranchRoot();
@@ -261,18 +249,19 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
             broadcastAndRespond(distributed, search);
         } catch (Throwable failure) {
             Throwable cause = failure;
-            diagnostic.warning("Error handling embedded message: " + code + "; " + Failures.message(cause), cause);
+            LOG.warn("Error handling embedded message: {}; {}", code, Failures.message(cause), cause);
         }
     }
 
     private void handleParentEmbeddedMessage(MessageConnection connection, byte[] message) {
         EmbeddedMessage embedded = EmbeddedMessage.fromByteArray(message);
         if (embedded.getDistributedCode() != MessageCode.Distributed.SEARCH_REQUEST) {
-            diagnostic.debug("Unhandled embedded message: "
-                    + MessageCode.Distributed.EMBEDDED_MESSAGE + " from "
-                    + connection.getUsername() + " ("
-                    + connection.getIpEndpoint() + "); "
-                    + message.length + " bytes");
+            LOG.debug(
+                    "Unhandled embedded message: {} from {} ({}); {} bytes",
+                    MessageCode.Distributed.EMBEDDED_MESSAGE,
+                    connection.getUsername(),
+                    connection.getIpEndpoint(),
+                    message.length);
             return;
         }
         byte[] distributed = embedded.getDistributedMessage();
@@ -295,28 +284,33 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
     private void broadcastAndRespond(byte[] distributed, DistributedSearchRequest search) {
         networkExecutor.dispatch(
                 () -> mesh.get().broadcastMessage(distributed),
-                failure -> diagnostic.warning(
-                        "Error broadcasting search request from " + search.getUsername() + " with token "
-                                + search.getToken() + ": " + Failures.message(failure),
+                failure -> LOG.warn(
+                        "Error broadcasting search request from {} with token {}: {}",
+                        search.getUsername(),
+                        search.getToken(),
+                        Failures.message(failure),
                         failure));
         if (Objects.equals(search.getUsername(), server.username())) {
             return;
         }
         networkExecutor.dispatch(
                 () -> searchResponses.get().tryRespond(search.getUsername(), search.getToken(), search.getQuery()),
-                failure -> diagnostic.warning(
-                        "Error responding to search request from " + search.getUsername() + " with token "
-                                + search.getToken() + ": " + Failures.message(failure),
+                failure -> LOG.warn(
+                        "Error responding to search request from {} with token {}: {}",
+                        search.getUsername(),
+                        search.getToken(),
+                        Failures.message(failure),
                         failure));
     }
 
     private void warnChild(MessageCode.Distributed code, MessageConnection connection, Throwable failure) {
         Throwable cause = failure;
-        diagnostic.warning(
-                "Error handling distributed child message: " + code
-                        + " from " + connection.getUsername() + " ("
-                        + connection.getIpEndpoint() + "); "
-                        + Failures.message(cause),
+        LOG.warn(
+                "Error handling distributed child message: {} from {} ({}); {}",
+                code,
+                connection.getUsername(),
+                connection.getIpEndpoint(),
+                Failures.message(cause),
                 cause);
     }
 
@@ -326,7 +320,4 @@ public final class DefaultDistributedMessageHandler implements DistributedMessag
                 mesh.get().getParent());
     }
 
-    private void publishDiagnostic(DiagnosticMessage eventData) {
-        diagnosticListeners.forEach(listener -> listener.accept(eventData));
-    }
 }

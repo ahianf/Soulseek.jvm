@@ -25,7 +25,6 @@ import dev.slsk.internal.common.Wait;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationSignal;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.messaging.handlers.PeerMessageHandler;
 import dev.slsk.internal.messaging.messages.ConnectToPeerRequest;
 import dev.slsk.internal.messaging.messages.ConnectToPeerResponse;
@@ -69,7 +68,7 @@ class PeerNetworkTest {
     private static final int TOKEN = 0x12345678;
 
     @Test
-    void constructionDiagnosticsAndClosePreserveSourceLifecycle() {
+    void constructionAndClosePreserveLifecycle() {
         Fixture nulls = new Fixture();
         assertThrows(
                 NullPointerException.class,
@@ -78,25 +77,10 @@ class PeerNetworkTest {
 
         Fixture fixture = new Fixture();
         PeerNetwork manager = fixture.manager();
-        AtomicInteger events = new AtomicInteger();
-        java.util.function.Consumer<dev.slsk.internal.diagnostics.DiagnosticMessage> listener =
-                args -> events.incrementAndGet();
-        manager.subscribe(listener);
-
-        // The supplied diagnostic remains usable and close is idempotent.
-        fixture.diagnostic.info("test");
-        assertEquals(0, events.get());
         assertTrue(manager.getMessageConnections().isEmpty());
         assertTrue(manager.getPendingSolicitations().isEmpty());
         assertDoesNotThrow(manager::close);
         assertDoesNotThrow(manager::close);
-
-        PeerNetwork defaultDiagnostic = new PeerNetwork(
-                fixture.options, fixture.server, fixture.waiter, fixture.tokens, fixture.peerMessages, fixture.factory);
-        defaultDiagnostic.subscribe(listener);
-        // The default factory is covered through a debug-producing failure.
-        defaultDiagnostic.getCachedMessageConnection("missing");
-        defaultDiagnostic.close();
     }
 
     @Test
@@ -138,7 +122,6 @@ class PeerNetworkTest {
 
         assertEquals(0, first.closeCount);
         assertSame(second.messageConnection(), fixture.manager().getCachedMessageConnection(USERNAME));
-        assertTrue(fixture.diagnostic.contains("Superseding cached"));
     }
 
     @Test
@@ -159,7 +142,6 @@ class PeerNetworkTest {
         assertSame(expected, mapped.getCause());
         assertEquals(1, message.closeCount);
         assertNull(fixture.manager().getCachedMessageConnection(USERNAME));
-        assertTrue(fixture.diagnostic.contains("Purging message connection cache"));
     }
 
     @Test
@@ -251,7 +233,6 @@ class PeerNetworkTest {
                 new PeerInit(LOCAL_USER, Constants.ConnectionType.TRANSFER, TOKEN).toByteArray(),
                 direct.byteWrites.get(0));
         assertArrayEquals(littleEndian(TOKEN), direct.byteWrites.get(1));
-        assertTrue(fixture.diagnostic.contains("established first"));
     }
 
     @Test
@@ -390,7 +371,6 @@ class PeerNetworkTest {
                         .getOrAddMessageConnection(USERNAME, DIRECT_ENDPOINT, TOKEN, CancellationSignal.none()));
 
         assertNull(fixture.manager().getCachedMessageConnection(USERNAME));
-        assertTrue(fixture.diagnostic.contains("Purging message connection cache"));
     }
 
     @Test
@@ -547,7 +527,6 @@ class PeerNetworkTest {
         second.fireDisconnected("closed", null);
         assertNull(fixture.manager().getCachedMessageConnection(USERNAME));
         assertEquals(1, second.closeCount);
-        assertTrue(fixture.diagnostic.contains("Removed message connection record"));
 
         ConnectionProbe third = ConnectionProbe.message(USERNAME, DIRECT_ENDPOINT);
         fixture.factory.messageHandoff = third;
@@ -648,20 +627,17 @@ class PeerNetworkTest {
     }
 
     private static final class Fixture {
-        private final RecordingDiagnostic diagnostic = new RecordingDiagnostic();
         private final FakeWaiter waiter = new FakeWaiter();
         private final ConnectionProbe serverConnection = ConnectionProbe.message("", endpoint(2242));
         private final FakeFactory factory = new FakeFactory();
         private final Supplier<SoulseekClientOptions> options = SoulseekClientOptions::new;
-        private final ServerLink server =
-                ServerLinks.loggedIn(waiter, diagnostic, serverConnection.messageConnection(), LOCAL_USER);
+        private final ServerLink server = ServerLinks.loggedIn(waiter, serverConnection.messageConnection(), LOCAL_USER);
         private final TokenFactory tokens = new TokenFactory(TOKEN);
         private final PeerMessageHandler peerMessages = (PeerMessageHandler) Proxy.newProxyInstance(
                 PeerMessageHandler.class.getClassLoader(),
                 new Class<?>[] {PeerMessageHandler.class},
                 (proxy, method, arguments) -> defaultValue(method.getReturnType()));
-        private final PeerNetwork manager =
-                new PeerNetwork(options, server, waiter, tokens, peerMessages, factory, diagnostic);
+        private final PeerNetwork manager = new PeerNetwork(options, server, waiter, tokens, peerMessages, factory);
 
         private PeerNetwork manager() {
             return manager;
@@ -789,49 +765,6 @@ class PeerNetworkTest {
         @Override
         public void close() {
             cancelAll();
-        }
-    }
-
-    private static final class RecordingDiagnostic implements DiagnosticSink {
-        private final List<String> messages = new ArrayList<>();
-
-        private boolean contains(String value) {
-            return messages.stream().anyMatch(message -> message.toLowerCase().contains(value.toLowerCase()));
-        }
-
-        @Override
-        public void trace(String message) {
-            messages.add(message);
-        }
-
-        @Override
-        public void trace(String message, Throwable exception) {
-            messages.add(message);
-        }
-
-        @Override
-        public void debug(String message) {
-            messages.add(message);
-        }
-
-        @Override
-        public void debug(String message, Throwable exception) {
-            messages.add(message);
-        }
-
-        @Override
-        public void info(String message) {
-            messages.add(message);
-        }
-
-        @Override
-        public void warning(String message) {
-            messages.add(message);
-        }
-
-        @Override
-        public void warning(String message, Throwable exception) {
-            messages.add(message);
         }
     }
 

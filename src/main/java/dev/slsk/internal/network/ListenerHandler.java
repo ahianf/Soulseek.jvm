@@ -4,17 +4,11 @@
 
 package dev.slsk.internal.network;
 
-import dev.slsk.Subscription;
 import dev.slsk.exceptions.ConnectionException;
 import dev.slsk.internal.common.Constants;
 import dev.slsk.internal.common.Failures;
 import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
-import dev.slsk.internal.diagnostics.DiagnosticMessage;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
-import dev.slsk.internal.diagnostics.DiagnosticSource;
-import dev.slsk.internal.diagnostics.FilteringDiagnosticSink;
-import dev.slsk.internal.events.Subscriptions;
 import dev.slsk.internal.messaging.messages.PeerInit;
 import dev.slsk.internal.messaging.messages.PierceFirewall;
 import dev.slsk.internal.network.tcp.Listener;
@@ -27,39 +21,25 @@ import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Handles incoming connections established by the TCP listener.
  *
- * <p>Everything here is supplied rather than fetched: the listener is replaced
- * when the client is reconfigured, and the two connection managers and the
- * responder are built after this is, because they are what an accepted
- * connection is handed to.
+ * <p>Everything here is supplied rather than fetched because the listener, the
+ * two connection managers, and the responder are wired around one another and
+ * are not all available when this handler is constructed.
  */
-public final class ListenerHandler implements DiagnosticSource {
+public final class ListenerHandler {
+    private static final Logger LOG = LoggerFactory.getLogger(ListenerHandler.class);
     private final Supplier<SoulseekClientOptions> options;
     private final Supplier<Listener> listener;
     private final Supplier<PeerConnectionManager> peers;
     private final Supplier<DistributedConnectionManager> distributed;
     private final Waiter waiter;
     private final Supplier<SearchResponder> searchResponses;
-    private final DiagnosticSink diagnostic;
-    private final CopyOnWriteArrayList<Consumer<? super DiagnosticMessage>> diagnosticListeners =
-            new CopyOnWriteArrayList<>();
-
-    /** Creates a handler with its default diagnostic factory. */
-    public ListenerHandler(
-            Supplier<SoulseekClientOptions> options,
-            Supplier<Listener> listener,
-            Supplier<PeerConnectionManager> peers,
-            Supplier<DistributedConnectionManager> distributed,
-            Waiter waiter,
-            Supplier<SearchResponder> searchResponses) {
-        this(options, listener, peers, distributed, waiter, searchResponses, null);
-    }
 
     /** Creates a handler. */
     public ListenerHandler(
@@ -68,30 +48,22 @@ public final class ListenerHandler implements DiagnosticSource {
             Supplier<PeerConnectionManager> peers,
             Supplier<DistributedConnectionManager> distributed,
             Waiter waiter,
-            Supplier<SearchResponder> searchResponses,
-            DiagnosticSink diagnosticFactory) {
+            Supplier<SearchResponder> searchResponses) {
         this.options = Objects.requireNonNull(options, "options");
         this.listener = Objects.requireNonNull(listener, "listener");
         this.peers = Objects.requireNonNull(peers, "peers");
         this.distributed = Objects.requireNonNull(distributed, "distributed");
         this.waiter = Objects.requireNonNull(waiter, "waiter");
         this.searchResponses = Objects.requireNonNull(searchResponses, "searchResponses");
-        diagnostic = diagnosticFactory == null
-                ? new FilteringDiagnosticSink(options.get().minimumDiagnosticLevel(), this::publishDiagnostic)
-                : DiagnosticSink.forSource(diagnosticFactory, ListenerHandler.class);
-    }
-
-    @Override
-    public Subscription subscribe(Consumer<? super DiagnosticMessage> listener) {
-        return Subscriptions.add(diagnosticListeners, listener);
     }
 
     public void handleConnection(TransportConnection connection) {
-        diagnostic.debug("Accepted incoming connection from "
-                + connection.getIpEndpoint().getAddress().getHostAddress()
-                + " on " + listener.get().getIpAddress()
-                + ":" + listener.get().getPort()
-                + " (id: " + connection.getId() + ")");
+        LOG.debug(
+                "Accepted incoming connection from {} on {}:{} (id: {})",
+                connection.getIpEndpoint().getAddress().getHostAddress(),
+                listener.get().getIpAddress(),
+                listener.get().getPort(),
+                connection.getId());
 
         try {
             // Everything here runs on this thread: the listener hands each
@@ -106,17 +78,14 @@ public final class ListenerHandler implements DiagnosticSource {
             routeInitialization(connection, message);
         } catch (Throwable failure) {
             Throwable cause = failure;
-            diagnostic.debug("Failed to initialize direct connection from "
-                    + connection.getIpEndpoint().getAddress().getHostAddress()
-                    + ":" + connection.getIpEndpoint().getPort()
-                    + ": " + Failures.message(cause));
+            LOG.debug(
+                    "Failed to initialize direct connection from {}:{}: {}",
+                    connection.getIpEndpoint().getAddress().getHostAddress(),
+                    connection.getIpEndpoint().getPort(),
+                    Failures.message(cause));
             connection.disconnect(null, asException(cause));
             connection.close();
         }
-    }
-
-    DiagnosticSink getDiagnostic() {
-        return diagnostic;
     }
 
     private void routeInitialization(TransportConnection connection, byte[] message) {
@@ -138,11 +107,13 @@ public final class ListenerHandler implements DiagnosticSource {
     }
 
     private void handlePeerInit(TransportConnection connection, PeerInit peerInit) {
-        diagnostic.debug("PeerInit for connection type " + peerInit.getConnectionType()
-                + " received from " + peerInit.getUsername() + " ("
-                + connection.getIpEndpoint().getAddress().getHostAddress()
-                + ":" + listener.get().getPort()
-                + ") (id: " + connection.getId() + ")");
+        LOG.debug(
+                "PeerInit for connection type {} received from {} ({}:{}) (id: {})",
+                peerInit.getConnectionType(),
+                peerInit.getUsername(),
+                connection.getIpEndpoint().getAddress().getHostAddress(),
+                listener.get().getPort(),
+                connection.getId());
 
         if (Constants.ConnectionType.PEER.equals(peerInit.getConnectionType())) {
             peers.get().addOrUpdateMessageConnection(peerInit.getUsername(), connection);
@@ -155,12 +126,13 @@ public final class ListenerHandler implements DiagnosticSource {
             if (waiter.hasWait(waitKey)) {
                 waiter.complete(waitKey, result.connection());
             } else {
-                diagnostic.debug("Unexpected transfer connection for token "
-                        + peerInit.getToken() + " from "
-                        + peerInit.getUsername() + " ("
-                        + connection.getIpEndpoint().getAddress().getHostAddress()
-                        + ":" + listener.get().getPort()
-                        + ") (id: " + connection.getId() + ")");
+                LOG.debug(
+                        "Unexpected transfer connection for token {} from {} ({}:{}) (id: {})",
+                        peerInit.getToken(),
+                        peerInit.getUsername(),
+                        connection.getIpEndpoint().getAddress().getHostAddress(),
+                        listener.get().getPort(),
+                        connection.getId());
                 result.connection().disconnect("Transfer connection rejected: unknown token");
             }
             return;
@@ -174,11 +146,13 @@ public final class ListenerHandler implements DiagnosticSource {
         int token = pierce.getToken();
         String username = peers.get().getPendingSolicitations().get(token);
         if (username != null) {
-            diagnostic.debug("Peer PierceFirewall with token " + token
-                    + " received from " + username + " ("
-                    + connection.getIpEndpoint().getAddress().getHostAddress()
-                    + ":" + listener.get().getPort()
-                    + ") (id: " + connection.getId() + ")");
+            LOG.debug(
+                    "Peer PierceFirewall with token {} received from {} ({}:{}) (id: {})",
+                    token,
+                    username,
+                    connection.getIpEndpoint().getAddress().getHostAddress(),
+                    listener.get().getPort(),
+                    connection.getId());
             WaitKey waitKey = new WaitKey.SolicitedPeer(username, token);
             if (waiter.hasWait(waitKey)) {
                 waiter.complete(waitKey, connection);
@@ -189,10 +163,12 @@ public final class ListenerHandler implements DiagnosticSource {
                 // only kind there is. Caching it is what makes the next attempt
                 // cost nothing; closing it, as this used to, made the next
                 // attempt solicit all over again.
-                diagnostic.debug("Peer PierceFirewall with token " + token
-                        + " from " + username + " arrived after its solicitation "
-                        + "lapsed; caching the connection (id: "
-                        + connection.getId() + ")");
+                LOG.debug(
+                        "Peer PierceFirewall with token {} from {} arrived after its solicitation lapsed; caching "
+                                + "the connection (id: {})",
+                        token,
+                        username,
+                        connection.getId());
                 peers.get().addOrUpdateMessageConnection(username, connection);
             }
             return;
@@ -200,11 +176,13 @@ public final class ListenerHandler implements DiagnosticSource {
 
         username = distributed.get().getPendingSolicitations().get(token);
         if (username != null) {
-            diagnostic.debug("Distributed PierceFirewall with token " + token
-                    + " received from " + username + " ("
-                    + connection.getIpEndpoint().getAddress().getHostAddress()
-                    + ":" + listener.get().getPort()
-                    + ") (id: " + connection.getId() + ")");
+            LOG.debug(
+                    "Distributed PierceFirewall with token {} received from {} ({}:{}) (id: {})",
+                    token,
+                    username,
+                    connection.getIpEndpoint().getAddress().getHostAddress(),
+                    listener.get().getPort(),
+                    connection.getId());
             waiter.complete(new WaitKey.SolicitedDistributed(username, token), connection);
             return;
         }
@@ -214,11 +192,12 @@ public final class ListenerHandler implements DiagnosticSource {
                     options.get().searchResponseCache().lookup(token);
             if (lookup.isPresent()) {
                 SearchResponseCacheRecord record = lookup.get();
-                diagnostic.debug("PierceFirewall matching pending search response "
-                        + "received from " + record.username() + " ("
-                        + connection.getIpEndpoint().getAddress().getHostAddress()
-                        + ":" + listener.get().getPort()
-                        + ") (id: " + connection.getId() + ")");
+                LOG.debug(
+                        "PierceFirewall matching pending search response received from {} ({}:{}) (id: {})",
+                        record.username(),
+                        connection.getIpEndpoint().getAddress().getHostAddress(),
+                        listener.get().getPort(),
+                        connection.getId());
                 peers.get().addOrUpdateMessageConnection(record.username(), connection);
                 searchResponses.get().tryRespond(token);
                 return;
@@ -230,10 +209,6 @@ public final class ListenerHandler implements DiagnosticSource {
                 + connection.getIpEndpoint().getAddress().getHostAddress()
                 + ":" + connection.getIpEndpoint().getPort()
                 + " (id: " + connection.getId() + ")");
-    }
-
-    private void publishDiagnostic(DiagnosticMessage eventData) {
-        diagnosticListeners.forEach(listener -> listener.accept(eventData));
     }
 
     private static String toHex(byte[] bytes) {

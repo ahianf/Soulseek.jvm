@@ -10,8 +10,8 @@
  * protocol and state types live under the subsystem that owns them, including
  * {@code connection}, {@code events}, {@code messaging}, {@code network},
  * {@code room}, {@code search}, {@code share}, {@code transfer}, and {@code
- * user}. Cross-cutting implementation primitives live under {@code common},
- * {@code diagnostics}, and {@code options}.
+ * user}. Cross-cutting implementation primitives live under {@code common}
+ * and {@code options}.
  *
  * <p>Because nothing here is exported, the no-prune rule does not apply:
  * unexported code with no caller is ordinary dead code. What is <em>not</em>

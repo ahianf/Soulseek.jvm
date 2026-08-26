@@ -39,6 +39,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * {@link Downloads}, over the managed queue.
@@ -54,6 +56,7 @@ import java.util.function.Consumer;
  * hundred open files, and one that is refused leaves nothing behind.
  */
 final class DefaultDownloads implements Downloads {
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultDownloads.class);
 
     private final SoulseekEngine client;
     private final EventBus<DownloadEvent> events;
@@ -293,7 +296,7 @@ final class DefaultDownloads implements Downloads {
                 channel.commit();
                 return;
             } catch (IOException failure) {
-                client.getDiagnostic().warning("Failed to commit a completed download", failure);
+                LOG.warn("Failed to commit a completed download", failure);
             }
         }
         channel.discard();

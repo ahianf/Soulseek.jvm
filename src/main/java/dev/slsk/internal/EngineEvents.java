@@ -9,8 +9,9 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * What the engine tells the facets, keyed by kind.
@@ -26,23 +27,19 @@ import java.util.function.Consumer;
  * <p><strong>Dispatch is contained.</strong> These events are published from
  * message handlers running on read loops. A listener that throws used to
  * propagate straight back into the loop it came from and take the connection
- * with it. Now the fault is handed to the engine's diagnostic sink and the
+ * with it. Now the fault is logged and the
  * remaining listeners still run. This is the same rule the public {@code
  * EventBus} applies to consumer listeners, and for the same reason; it applies
  * here because a facet's own translation code is not infallible either.
- *
- * <p><strong>Diagnostic faults are swallowed rather than reported.</strong>
- * There is nowhere to report the failure of a diagnostic listener except the
- * diagnostic channel, which is the thing that just failed.
  */
 final class EngineEvents {
+    private static final Logger LOG = LoggerFactory.getLogger(EngineEvents.class);
 
     /** Everything the engine publishes. */
     enum Kind {
         BROWSE_PROGRESS_UPDATED,
         CONNECTED,
         DEMOTED_FROM_DISTRIBUTED_BRANCH_ROOT,
-        DIAGNOSTIC_GENERATED,
         DISCONNECTED,
         DISTRIBUTED_CHILD_ADDED,
         DISTRIBUTED_CHILD_DISCONNECTED,
@@ -88,16 +85,7 @@ final class EngineEvents {
 
     private final Map<Kind, CopyOnWriteArrayList<Consumer<?>>> listeners = new EnumMap<>(Kind.class);
 
-    /**
-     * Where a contained fault goes. Supplied rather than read from a field
-     * because the engine's diagnostic sink publishes {@link
-     * Kind#DIAGNOSTIC_GENERATED} through this object, so it cannot exist before
-     * it.
-     */
-    private final BiConsumer<Kind, Throwable> onListenerFault;
-
-    EngineEvents(BiConsumer<Kind, Throwable> onListenerFault) {
-        this.onListenerFault = Objects.requireNonNull(onListenerFault, "onListenerFault");
+    EngineEvents() {
         for (Kind kind : Kind.values()) {
             listeners.put(kind, new CopyOnWriteArrayList<>());
         }
@@ -142,9 +130,7 @@ final class EngineEvents {
             try {
                 ((Consumer<T>) listener).accept(payload);
             } catch (Throwable failure) {
-                if (kind != Kind.DIAGNOSTIC_GENERATED) {
-                    onListenerFault.accept(kind, failure);
-                }
+                LOG.warn("A listener for {} threw; the event was still delivered to the rest", kind, failure);
             }
         }
     }

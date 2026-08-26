@@ -137,7 +137,7 @@ final class DownloadRun {
             endpoint = domain.endpoint(download.getUsername(), cancellationSignal);
             MessageConnection peerConnection =
                     domain.peers().getOrAddMessageConnection(download.getUsername(), endpoint, cancellationSignal);
-            domain.diagnostic.debug("Fetched peer connection for download of "
+            domain.log.debug("Fetched peer connection for download of "
                     + filenameOnly(download.getFilename()) + " from "
                     + download.getUsername() + " (id: " + peerConnection.getId()
                     + ", state: " + peerConnection.getState() + ")");
@@ -147,7 +147,7 @@ final class DownloadRun {
                 // ask for. Asking anyway would send a fresh request against the
                 // queue we have just reached the front of, and a peer with one
                 // free slot would answer the second request with "Queued".
-                domain.diagnostic.debug("Download of " + filenameOnly(download.getFilename())
+                domain.log.debug("Download of " + filenameOnly(download.getFilename())
                         + " from " + download.getUsername()
                         + " is taking up an offer already made (remote token: "
                         + offer.getToken() + ")");
@@ -172,7 +172,7 @@ final class DownloadRun {
             // wait registered above.
             peerConnection.write(
                     new QueueDownloadRequest(download.getFilename()), CancellationSignals.orNone(cancellationSignal));
-            domain.diagnostic.debug("Asked " + download.getUsername() + " to queue "
+            domain.log.debug("Asked " + download.getUsername() + " to queue "
                     + filenameOnly(download.getFilename()) + " (id: " + peerConnection.getId()
                     + ", state: " + peerConnection.getState() + ")");
             updateState(TransferPhase.REQUESTED);
@@ -208,7 +208,7 @@ final class DownloadRun {
 
         updateProgress(currentOutputPosition());
         complete(TransferTermination.SUCCEEDED);
-        domain.diagnostic.info("Download of " + filenameOnly(download.getFilename())
+        domain.log.info("Download of " + filenameOnly(download.getFilename())
                 + " from " + download.getUsername() + " complete ("
                 + currentOutputPosition() + " of " + download.getSize() + " bytes).");
         connection.disconnect("Transfer complete");
@@ -232,7 +232,7 @@ final class DownloadRun {
         java.util.concurrent.Semaphore overall = domain.globalDownloadSemaphore();
         Permits.acquire(overall, cancellationSignal);
         globalPermit = overall;
-        domain.diagnostic.debug("Download slots for file "
+        domain.log.debug("Download slots for file "
                 + filenameOnly(download.getFilename()) + " from "
                 + download.getUsername() + " acquired");
 
@@ -245,7 +245,7 @@ final class DownloadRun {
 
         MessageConnection refreshed =
                 domain.peers().getOrAddMessageConnection(download.getUsername(), endpoint, cancellationSignal);
-        domain.diagnostic.debug("Fetched peer connection for download of "
+        domain.log.debug("Fetched peer connection for download of "
                 + filenameOnly(download.getFilename()) + " from "
                 + download.getUsername() + " (id: " + refreshed.getId()
                 + ", state: " + refreshed.getState() + ")");
@@ -274,7 +274,7 @@ final class DownloadRun {
         Throwable failure = establishment.failure();
         if (failure == null) {
             connection = establishment.value();
-            domain.diagnostic.debug("Fetched transfer connection for download of "
+            domain.log.debug("Fetched transfer connection for download of "
                     + filenameOnly(download.getFilename()) + " from "
                     + download.getUsername() + " (id: " + connection.getId()
                     + ", state: " + connection.getState() + ")");
@@ -284,12 +284,12 @@ final class DownloadRun {
             }
             // The remote client never initiated the transfer connection, so initiate one from
             // this end. The remote client in this scenario is most likely Nicotine+.
-            domain.diagnostic.warning("Attempting to initiate a second-chance transfer connection to "
+            domain.log.warn("Attempting to initiate a second-chance transfer connection to "
                     + download.getUsername() + " for download of " + download.getFilename());
             connection = domain.peers()
                     .getTransferConnection(
                             download.getUsername(), endpoint, download.getRemoteToken(), cancellationSignal);
-            domain.diagnostic.warning("Successfully established a second-chance transfer connection to "
+            domain.log.warn("Successfully established a second-chance transfer connection to "
                     + download.getUsername() + " for download of " + download.getFilename());
         }
         download.setConnection(connection);
@@ -325,7 +325,7 @@ final class DownloadRun {
         try (CancellationController linkedController = new CancellationController();
                 CancellationSubscription registration = cancellationSignal.register(linkedController::cancel)) {
             CancellationSignal linkedToken = linkedController.getSignal();
-            domain.diagnostic.debug("Seeking download of " + filenameOnly(download.getFilename())
+            domain.log.debug("Seeking download of " + filenameOnly(download.getFilename())
                     + " from " + download.getUsername() + " to starting offset of "
                     + download.getStartOffset() + " bytes");
             byte[] offset = ByteBuffer.allocate(8)
@@ -438,10 +438,10 @@ final class DownloadRun {
         if (failure instanceof TransferRejectedException
                 || failure instanceof CancellationException
                 || failure instanceof TimeoutException) {
-            domain.diagnostic.debug(summary);
+            domain.log.debug(summary);
             return;
         }
-        domain.diagnostic.warning(
+        domain.log.warn(
                 summary, failure instanceof Exception exception ? exception : new RuntimeException(failure));
     }
 
@@ -457,7 +457,7 @@ final class DownloadRun {
             try {
                 domain.waiter.cancel(transferStartRequestedWaitKey);
             } catch (Throwable failure) {
-                domain.diagnostic.warning(
+                domain.log.warn(
                         "Failed to cancel wait for key "
                                 + transferStartRequestedWaitKey
                                 + ": " + Failures.message(failure),
@@ -466,7 +466,7 @@ final class DownloadRun {
             try {
                 unbindConnectionEvents();
             } catch (Throwable failure) {
-                domain.diagnostic.warning(
+                domain.log.warn(
                         "Failed to remove transfer connection "
                                 + "listeners for file "
                                 + download.getFilename() + " from user "
@@ -478,7 +478,7 @@ final class DownloadRun {
                 try {
                     connection.close();
                 } catch (Throwable failure) {
-                    domain.diagnostic.warning(
+                    domain.log.warn(
                             "Failed to close transfer connection "
                                     + "for file "
                                     + download.getFilename()
@@ -496,7 +496,7 @@ final class DownloadRun {
                         destination.close();
                     }
                 } catch (Throwable failure) {
-                    domain.diagnostic.warning(
+                    domain.log.warn(
                             "Failed to finalize output stream for "
                                     + "file "
                                     + filenameOnly(download.getFilename())
@@ -522,7 +522,7 @@ final class DownloadRun {
         try {
             permit.release();
         } catch (Throwable failure) {
-            domain.diagnostic.warning(
+            domain.log.warn(
                     "Failed to release the " + which + " download slot for file "
                             + filenameOnly(download.getFilename())
                             + " from " + download.getUsername() + ": "

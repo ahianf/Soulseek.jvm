@@ -12,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.slsk.internal.diagnostics.DiagnosticSeverity;
 import dev.slsk.internal.search.SearchResponseCache;
 import dev.slsk.internal.search.SearchResponseCacheRecord;
 import dev.slsk.internal.user.UserEndpointCache;
@@ -55,7 +54,6 @@ class SoulseekClientOptionsTest {
                 .autoAcknowledgePrivateMessages(false)
                 .autoAcknowledgePrivilegeNotifications(false)
                 .acceptPrivateRoomInvitations(true)
-                .minimumDiagnosticLevel(DiagnosticSeverity.TRACE)
                 .startingToken(13)
                 .serverConnectionOptions(server)
                 .peerConnectionOptions(peer)
@@ -82,7 +80,6 @@ class SoulseekClientOptionsTest {
         assertFalse(options.autoAcknowledgePrivateMessages());
         assertFalse(options.autoAcknowledgePrivilegeNotifications());
         assertTrue(options.acceptPrivateRoomInvitations());
-        assertEquals(DiagnosticSeverity.TRACE, options.minimumDiagnosticLevel());
         assertEquals(13, options.startingToken());
         assertNull(options.serverConnectionOptions().inactivityTimeout());
         assertSame(peer, options.peerConnectionOptions());
@@ -114,7 +111,6 @@ class SoulseekClientOptionsTest {
         assertTrue(options.autoAcknowledgePrivateMessages());
         assertTrue(options.autoAcknowledgePrivilegeNotifications());
         assertFalse(options.acceptPrivateRoomInvitations());
-        assertEquals(DiagnosticSeverity.INFO, options.minimumDiagnosticLevel());
         assertNotNull(options.serverConnectionOptions());
         assertNull(options.serverConnectionOptions().inactivityTimeout());
         assertNotNull(options.peerConnectionOptions());
@@ -139,13 +135,6 @@ class SoulseekClientOptionsTest {
                         .listenPort(50_001)
                         .messageTimeout(Duration.ZERO)
                         .build());
-
-        SoulseekClientOptions traced = SoulseekClientOptions.builder()
-                .listenPort(50_001)
-                .messageTimeout(Duration.ofSeconds(15))
-                .minimumDiagnosticLevel(DiagnosticSeverity.DEBUG)
-                .build();
-        assertEquals(DiagnosticSeverity.DEBUG, traced.minimumDiagnosticLevel());
     }
 
     @Test
@@ -256,7 +245,6 @@ class SoulseekClientOptionsTest {
                 .maximumConcurrentSearches(searches)
                 .maximumConcurrentUploads(uploads)
                 .maximumConcurrentDownloads(downloads)
-                .minimumDiagnosticLevel(DiagnosticSeverity.NONE)
                 .build();
     }
 

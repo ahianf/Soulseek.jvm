@@ -16,9 +16,6 @@ import dev.slsk.Subscription;
 import dev.slsk.internal.common.Outcomes;
 import dev.slsk.internal.common.TokenFactory;
 import dev.slsk.internal.concurrent.CancellationSignal;
-import dev.slsk.internal.diagnostics.DiagnosticMessage;
-import dev.slsk.internal.diagnostics.DiagnosticSeverity;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.SearchRequestEvent;
 import dev.slsk.internal.events.SearchRequestResponseEvent;
 import dev.slsk.internal.messaging.messages.ConnectToPeerResponse;
@@ -58,7 +55,7 @@ class SearchResponderTest {
             new SearchResponseMessage("local", 7, true, 1, 0, List.of(new File(1, "file", 2, "ext")));
 
     @Test
-    void constructorValidatesPortsAndUsesSuppliedDiagnostic() {
+    void constructorValidatesPorts() {
         Fixture nulls = fixture(null);
         assertThrows(
                 NullPointerException.class,
@@ -70,23 +67,6 @@ class SearchResponderTest {
                         nulls.client::getShareCatalog,
                         () -> "me",
                         () -> ADVERTISED_SPEED));
-        Fixture fixture = fixture(null);
-        RecordingDiagnostic diagnostic = new RecordingDiagnostic();
-        DefaultSearchResponder responder = responder(fixture.client, diagnostic);
-        assertSame(diagnostic, responder.getDiagnostic());
-    }
-
-    @Test
-    void defaultDiagnosticRaisesTypedEventsAndAllowsNoListeners() {
-        Fixture fixture = fixture(null);
-        DefaultSearchResponder responder = responder(fixture.client, null);
-        AtomicReference<DiagnosticMessage> event = new AtomicReference<>();
-        Consumer<dev.slsk.internal.diagnostics.DiagnosticMessage> listener = args -> event.set(args);
-        Subscription subscription = responder.subscribe(listener);
-        responder.getDiagnostic().info("test");
-        assertEquals("test", event.get().message());
-        subscription.close();
-        responder.getDiagnostic().info("unbound");
     }
 
     @Test
@@ -104,11 +84,9 @@ class SearchResponderTest {
         assertEquals(9, cache.lastRemovedToken);
         assertEquals("alice", failed.get().username());
         assertSame(RESPONSE, failed.get().searchResponse());
-        assertTrue(fixture.diagnostic.debug.stream().anyMatch(text -> text.contains("Discarded cached")));
 
         cache.throwOnRemove = new RuntimeException("cache");
         assertFalse(fixture.responder.tryDiscard(10));
-        assertSame(cache.throwOnRemove, fixture.diagnostic.lastThrowable);
     }
 
     @Test
@@ -128,7 +106,6 @@ class SearchResponderTest {
     void aCatalogThatFailsOrMatchesNothingAnswersNothing() {
         Fixture throwing = catalogFixture(null, null);
         assertFalse(throwing.responder.tryRespond("alice", 1, "q"));
-        assertEquals("resolver", throwing.diagnostic.lastThrowable.getMessage());
 
         Fixture empty = catalogFixture(List.of(), null);
         assertFalse(empty.responder.tryRespond("alice", 1, "q"));
@@ -151,8 +128,6 @@ class SearchResponderTest {
         assertArrayEquals(
                 expectedResponse(3).toByteArray(),
                 delivered.get().searchResponse().toByteArray());
-        assertTrue(fixture.diagnostic.debug.stream().anyMatch(text -> text.startsWith("Resolved")));
-        assertTrue(fixture.diagnostic.debug.stream().anyMatch(text -> text.startsWith("Sent response containing")));
     }
 
     @Test
@@ -171,7 +146,6 @@ class SearchResponderTest {
         RuntimeException cacheFailure = new RuntimeException("cache");
         cache.throwOnAdd = cacheFailure;
         assertFalse(fixture.responder.tryRespond("alice", 3, "query"));
-        assertSame(cacheFailure, fixture.diagnostic.lastWarningThrowable);
     }
 
     @Test
@@ -193,8 +167,6 @@ class SearchResponderTest {
         assertNotNull(failed.get(), "an evicted response raised no failure event");
         assertEquals("alice", failed.get().username());
         assertEquals(3, failed.get().token());
-        assertTrue(fixture.diagnostic.debug.stream()
-                .anyMatch(text -> text.startsWith("Expired undelivered search response to alice")));
     }
 
     @Test
@@ -222,7 +194,6 @@ class SearchResponderTest {
         RuntimeException failure = new RuntimeException("cache");
         cache.throwOnRemove = failure;
         assertFalse(missing.responder.tryRespond(3));
-        assertSame(failure, missing.diagnostic.lastThrowable);
     }
 
     @Test
@@ -239,7 +210,6 @@ class SearchResponderTest {
         assertTrue(fixture.responder.tryRespond(44));
         assertArrayEquals(RESPONSE.toByteArray(), written.get());
         assertEquals(1, delivered.get());
-        assertTrue(fixture.diagnostic.debug.stream().anyMatch(text -> text.contains("Sent cached response 44")));
     }
 
     @Test
@@ -256,7 +226,6 @@ class SearchResponderTest {
 
         assertFalse(fixture.responder.tryRespond(44));
         assertSame(RESPONSE, failed.get().searchResponse());
-        assertSame(failure, fixture.diagnostic.lastThrowable);
     }
 
     private static Fixture fixture(TestCache cache) {
@@ -264,8 +233,7 @@ class SearchResponderTest {
         SoulseekClientOptions options = options(actualCache);
         TestPeerManager manager = new TestPeerManager();
         TestClient client = new TestClient(options, manager, actualCache);
-        RecordingDiagnostic diagnostic = new RecordingDiagnostic();
-        return new Fixture(responder(client, diagnostic), client, manager, diagnostic);
+        return new Fixture(responder(client), client, manager);
     }
 
     /**
@@ -311,10 +279,7 @@ class SearchResponderTest {
     }
 
     private static SoulseekClientOptions options(SearchResponseCache cache) {
-        return SoulseekClientOptions.builder()
-                .minimumDiagnosticLevel(DiagnosticSeverity.TRACE)
-                .searchResponseCache(cache)
-                .build();
+        return SoulseekClientOptions.builder().searchResponseCache(cache).build();
     }
 
     private static MessageConnection messageConnection(
@@ -351,11 +316,7 @@ class SearchResponderTest {
         return null;
     }
 
-    private record Fixture(
-            DefaultSearchResponder responder,
-            TestClient client,
-            TestPeerManager manager,
-            RecordingDiagnostic diagnostic) {}
+    private record Fixture(DefaultSearchResponder responder, TestClient client, TestPeerManager manager) {}
 
     /** The values the responder is built from, kept together for the tests. */
     private static final class TestClient {
@@ -386,7 +347,7 @@ class SearchResponderTest {
     }
 
     /** Builds a responder over a test client's values. */
-    private static DefaultSearchResponder responder(TestClient client, RecordingDiagnostic diagnostic) {
+    private static DefaultSearchResponder responder(TestClient client) {
         return new DefaultSearchResponder(
                 () -> client.options,
                 () -> client.manager,
@@ -394,8 +355,7 @@ class SearchResponderTest {
                 client::endpoint,
                 client::getShareCatalog,
                 () -> "me",
-                () -> ADVERTISED_SPEED,
-                diagnostic);
+                () -> ADVERTISED_SPEED);
     }
 
     private static final class TestCache implements SearchResponseCache {
@@ -435,41 +395,6 @@ class SearchResponderTest {
             }
             lastRemovedToken = responseToken;
             return removed;
-        }
-    }
-
-    private static final class RecordingDiagnostic implements DiagnosticSink {
-        private final java.util.ArrayList<String> debug = new java.util.ArrayList<>();
-        private Throwable lastThrowable;
-        private Throwable lastWarningThrowable;
-
-        @Override
-        public void trace(String message) {}
-
-        @Override
-        public void trace(String message, Throwable exception) {}
-
-        @Override
-        public void debug(String message) {
-            debug.add(message);
-        }
-
-        @Override
-        public void debug(String message, Throwable exception) {
-            debug.add(message);
-            lastThrowable = exception;
-        }
-
-        @Override
-        public void info(String message) {}
-
-        @Override
-        public void warning(String message) {}
-
-        @Override
-        public void warning(String message, Throwable exception) {
-            lastThrowable = exception;
-            lastWarningThrowable = exception;
         }
     }
 
@@ -554,11 +479,6 @@ class SearchResponderTest {
         @Override
         public boolean tryInvalidateMessageConnectionCache(String username) {
             return false;
-        }
-
-        @Override
-        public Subscription subscribe(Consumer<? super DiagnosticMessage> listener) {
-            return () -> {};
         }
 
         @Override

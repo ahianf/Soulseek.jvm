@@ -259,7 +259,7 @@ public final class DefaultWaiter implements Waiter {
     }
 
     /**
-     * Returns the pending count for a key for diagnostics and tests.
+     * Returns the pending count for a key for metrics and tests.
      */
     synchronized int getWaitCount(WaitKey key) {
         ArrayDeque<PendingWait<?>> queue = waits.get(key);
@@ -267,7 +267,7 @@ public final class DefaultWaiter implements Waiter {
     }
 
     /**
-     * Returns the number of correlation keys for diagnostics and tests.
+     * Returns the number of correlation keys for metrics and tests.
      */
     synchronized int getKeyCount() {
         return waits.size();

@@ -1,7 +1,7 @@
 # Soulseek.jvm
 
 Soulseek.jvm is a Java library for the Soulseek peer-to-peer network. It offers
-a blocking, dependency-free API for connecting, searching, browsing shares,
+a blocking API for connecting, searching, browsing shares,
 transferring files, chatting, and observing network state.
 
 The [complete public API reference](docs/public-api.md) documents every facet,
@@ -99,12 +99,24 @@ overload that throws `TimeoutException` when the caller's deadline expires.
 The library keeps all socket I/O on threads it owns — your thread only ever
 parks on `java.util.concurrent` primitives, which is what makes interrupting
 it safe. State is exposed as immutable snapshots, while sealed event streams
-carry deltas. The runtime artifact has no third-party dependencies.
+carry deltas.
 
 Although the programming model starts with Java 21, the current runtime
 baseline is Java 25. The implementation uses monitors on network hot paths, and
 Java 25's JEP 491 prevents those monitors from pinning virtual-thread carrier
 threads.
+
+## Logging
+
+Soulseek.jvm logs through the SLF4J 2 API. The artifact depends on
+`org.slf4j:slf4j-api` but does not select a logging backend; the application
+supplies and configures its preferred SLF4J provider. Ordinary library logs use
+categories under `dev.slsk`.
+
+Wire-message logging uses the dedicated `dev.slsk.protocol` category at
+`TRACE`. It is intentionally separate and disabled by normal `INFO` or `DEBUG`
+configuration because it is high-volume and can reveal protocol contents.
+Enable that category explicitly when troubleshooting the wire protocol.
 
 ## License and lineage
 

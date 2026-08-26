@@ -26,7 +26,6 @@ import dev.slsk.internal.common.WaitKey;
 import dev.slsk.internal.common.Waiter;
 import dev.slsk.internal.concurrent.CancellationSignal;
 import dev.slsk.internal.connection.SoulseekClientState;
-import dev.slsk.internal.diagnostics.DiagnosticSink;
 import dev.slsk.internal.events.DistributedChildEvent;
 import dev.slsk.internal.events.DistributedParentEvent;
 import dev.slsk.internal.messaging.handlers.DistributedMessageHandler;
@@ -149,7 +148,6 @@ class DistributedNetworkTest {
         assertEquals(1, incoming.closeCount);
         assertTrue(fixture.manager.getChildren().isEmpty());
         assertEquals(1, fixture.serverConnection.byteWrites.size());
-        assertTrue(fixture.diagnostic.contains("rejected"));
     }
 
     @Test
@@ -199,7 +197,6 @@ class DistributedNetworkTest {
         assertEquals(1, first.closeCount);
         assertEquals(1, fixture.manager.getChildren().size());
         assertEquals(endpoint(42002), fixture.manager.getChildren().getFirst().ipEndpoint());
-        assertTrue(fixture.diagnostic.contains("Updated child"));
     }
 
     @Test
@@ -243,7 +240,6 @@ class DistributedNetworkTest {
         assertEquals(ConnectionType.INBOUND_INDIRECT, child.type);
         assertEquals(1, added.get());
         assertTrue(fixture.manager.getPendingSolicitations().isEmpty());
-        assertTrue(fixture.diagnostic.contains("already exists"));
     }
 
     @Test
@@ -286,7 +282,6 @@ class DistributedNetworkTest {
         // The source retains its provisional close callback, so an
         // established child's disconnect invokes both close handlers.
         assertEquals(2, child.closeCount);
-        assertTrue(fixture.diagnostic.contains("disconnected."));
     }
 
     @Test
@@ -345,7 +340,6 @@ class DistributedNetworkTest {
         assertArrayEquals(expected, fixture.serverConnection.byteWrites.getFirst());
         fixture.manager.updateStatus();
         assertEquals(1, fixture.serverConnection.byteWrites.size());
-        assertTrue(fixture.diagnostic.contains("Update skipped"));
     }
 
     @Test
@@ -358,7 +352,6 @@ class DistributedNetworkTest {
         Fixture failed = fixture();
         failed.serverConnection.writeFuture = CompletableFuture.failedFuture(new RuntimeException("server"));
         failed.manager.updateStatus();
-        assertTrue(failed.diagnostic.containsWarning("Failed to update distributed status"));
     }
 
     @Test
@@ -417,7 +410,6 @@ class DistributedNetworkTest {
 
         assertEquals(1, parent.disconnectCount);
         assertEquals(1, parent.closeCount);
-        assertTrue(fixture.diagnostic.contains("Failed to handle message from parent candidate"));
     }
 
     @Test
@@ -483,7 +475,6 @@ class DistributedNetworkTest {
         assertFalse(fixture.manager.hasParent());
         assertTrue(parent.disconnectCount >= 1);
         assertTrue(parent.closeCount >= 1);
-        assertTrue(fixture.diagnostic.containsWarning("Failed to connect to any"));
     }
 
     @Test
@@ -502,7 +493,6 @@ class DistributedNetworkTest {
             fixture.manager.addParentConnection(List.of(new PeerEndpoint(USERNAME, ENDPOINT)));
 
             assertFalse(fixture.manager.hasParent());
-            assertTrue(fixture.diagnostic.containsWarning("Failed to connect to any"));
 
             // The single-flight gate must have cleared despite the hang above:
             // a later, healthy candidate can still be adopted. Before the join
@@ -569,7 +559,6 @@ class DistributedNetworkTest {
         assertFalse(fixture.manager.hasParent());
         assertEquals(1, disconnected.get());
         assertEquals(1, parent.closeCount);
-        assertTrue(fixture.diagnostic.contains("Parent connection"));
     }
 
     @Test
@@ -577,13 +566,11 @@ class DistributedNetworkTest {
         Fixture fixture = fixture();
         fixture.serverConnection.byteWrites.clear();
         fixture.manager.watchdogElapsed();
-        assertTrue(fixture.diagnostic.containsWarning("No distributed parent connected"));
         assertEquals(1, fixture.serverConnection.byteWrites.size());
 
         Fixture disconnected = fixture();
         disconnected.state = SoulseekClientState.DISCONNECTED;
         disconnected.manager.watchdogElapsed();
-        assertFalse(disconnected.diagnostic.containsWarning("No distributed parent connected"));
     }
 
     @Test
@@ -641,7 +628,6 @@ class DistributedNetworkTest {
     }
 
     private static final class Fixture {
-        private final RecordingDiagnostic diagnostic = new RecordingDiagnostic();
         private final FakeWaiter waiter = new FakeWaiter();
         private final ConnectionProbe serverConnection = ConnectionProbe.message("", endpoint(2242));
         private final FakeFactory factory = new FakeFactory();
@@ -653,9 +639,9 @@ class DistributedNetworkTest {
                         (proxy, method, arguments) -> defaultValue(method.getReturnType()));
         private SoulseekClientState state = SoulseekClientState.LOGGED_IN;
         private final ServerLink server =
-                ServerLinks.over(waiter, diagnostic, serverConnection.messageConnection(), LOCAL_USER, () -> state);
+                ServerLinks.over(waiter, serverConnection.messageConnection(), LOCAL_USER, () -> state);
         private final DistributedNetwork manager = new DistributedNetwork(
-                SoulseekClientOptions::new, server, waiter, tokens, () -> distributedMessages, factory, diagnostic);
+                SoulseekClientOptions::new, server, waiter, tokens, () -> distributedMessages, factory);
     }
 
     private static final class FakeFactory implements ConnectionFactory {
@@ -780,56 +766,6 @@ class DistributedNetworkTest {
         @Override
         public void close() {
             cancelAll();
-        }
-    }
-
-    private static final class RecordingDiagnostic implements DiagnosticSink {
-        private final List<String> messages = new CopyOnWriteArrayList<>();
-        private final List<String> warnings = new CopyOnWriteArrayList<>();
-
-        private boolean contains(String value) {
-            return messages.stream().anyMatch(message -> message.toLowerCase().contains(value.toLowerCase()));
-        }
-
-        private boolean containsWarning(String value) {
-            return warnings.stream().anyMatch(message -> message.toLowerCase().contains(value.toLowerCase()));
-        }
-
-        @Override
-        public void trace(String message) {
-            messages.add(message);
-        }
-
-        @Override
-        public void trace(String message, Throwable exception) {
-            messages.add(message);
-        }
-
-        @Override
-        public void debug(String message) {
-            messages.add(message);
-        }
-
-        @Override
-        public void debug(String message, Throwable exception) {
-            messages.add(message);
-        }
-
-        @Override
-        public void info(String message) {
-            messages.add(message);
-        }
-
-        @Override
-        public void warning(String message) {
-            messages.add(message);
-            warnings.add(message);
-        }
-
-        @Override
-        public void warning(String message, Throwable exception) {
-            messages.add(message);
-            warnings.add(message);
         }
     }
 
